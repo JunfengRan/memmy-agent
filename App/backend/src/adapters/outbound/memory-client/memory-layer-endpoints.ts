@@ -27,7 +27,8 @@ export const MEMORY_LAYER_PATHS = Object.freeze({
   panelAnalysis: "/api/v1/panel/analysis",
   panelItems: "/api/v1/panel/items",
   panelTasks: "/api/v1/panel/tasks",
-  deletePanelTask: "/api/v1/panel/tasks/:id"
+  deletePanelTask: "/api/v1/panel/tasks/:id",
+  projectTopics: "/api/v1/projects/topics"
 } as const);
 
 /** Builds build memory layer url. */

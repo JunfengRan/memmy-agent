@@ -82,6 +82,7 @@ import {
   type WebuiProject,
   type WebuiSessionTarget,
 } from "../../entrypoints/frontend-bridge/projects.js";
+import { ProjectBoardStore } from "../../entrypoints/frontend-bridge/project-boards.js";
 import {
   GuiSessionProjection,
   GuiSessionProjectionError,
@@ -709,6 +710,7 @@ export class WebSocketChannel extends BaseChannel {
   channelAdmin: ChannelAdminApi | null = null;
   webuiTitleService: WebuiTitleService | null = null;
   projectStore: ProjectStore | null = null;
+  private projectBoardStore: ProjectBoardStore | null = null;
   inflightWebuiMessageRequests = new Map<string, InflightWebuiMessageRequest>();
   queueProjectionChains = new Map<string, Promise<void>>();
   sessionDeletionServices: SessionDeletionServices | null = null;
@@ -1628,6 +1630,16 @@ export class WebSocketChannel extends BaseChannel {
     );
   }
 
+  private requireProjectBoardStore(): ProjectBoardStore {
+    const projects = this.requireProjectStore();
+    if (!this.projectBoardStore) {
+      this.projectBoardStore = new ProjectBoardStore({
+        filePath: path.join(path.dirname(projects.filePath), "project-boards.json"),
+      });
+    }
+    return this.projectBoardStore;
+  }
+
   private requireProjectStore(): ProjectStore {
     if (!this.projectStore) {
       throw new WebuiProjectError("project_operation_failed", 503, "project store unavailable");
@@ -1710,6 +1722,22 @@ export class WebSocketChannel extends BaseChannel {
         ? this.requireProjectStore().rename(id, body.name)
         : this.requireProjectStore().setPinned(id, body.pinned);
       return httpJsonResponse({ project, snapshot: this.webuiSessionSnapshot() });
+    } catch (error) {
+      return this.projectErrorResponse(error);
+    }
+  }
+
+  async handleProjectBoard(request: HttpRequestLike, rawId: string): Promise<HttpLikeResponse> {
+    if (!this.checkApiToken(request)) return httpError(401, "Unauthorized");
+    const method = (request.method ?? "GET").toUpperCase();
+    if (method !== "GET" && method !== "PUT") return httpError(405, "method not allowed");
+    try {
+      const id = decodeApiKey(rawId);
+      if (!id) throw new WebuiProjectError("project_not_found", 404);
+      this.activeProject(id);
+      const store = this.requireProjectBoardStore();
+      if (method === "GET") return httpJsonResponse({ board: store.get(id) });
+      return httpJsonResponse({ board: store.save(id, this.parseProjectBody(request)) });
     } catch (error) {
       return this.projectErrorResponse(error);
     }
@@ -2981,6 +3009,8 @@ export class WebSocketChannel extends BaseChannel {
     if (match) return this.handleProjectWorkspaceEnvironment(request, match[1], "diff");
     match = got.match(/^\/api\/projects\/([^/]+)\/environment\/branch$/);
     if (match) return this.handleProjectWorkspaceEnvironment(request, match[1], "branch");
+    match = got.match(/^\/api\/projects\/([^/]+)\/board$/);
+    if (match) return this.handleProjectBoard(request, match[1]);
     match = got.match(/^\/api\/projects\/([^/]+)\/reveal$/);
     if (match) return this.handleProjectReveal(request, match[1]);
     match = got.match(/^\/api\/projects\/([^/]+)$/);

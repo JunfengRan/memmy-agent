@@ -5,6 +5,7 @@ import {
   resolveWorkspaceIdentity,
   type ResolvedWorkspaceIdentity
 } from "./workspace-identity.js";
+import { canonicalFileWorkspace } from "../project/identity.js";
 
 export function normalizeNamespace(namespace?: RuntimeNamespace): RuntimeNamespace & { userId: string; source: string; profileId: string } {
   return {
@@ -33,11 +34,15 @@ export function sessionScopeForOpenRequest(request: SessionOpenRequest, namespac
 export function resolveV2WorkspaceIdentityForOpenRequest(
   request: SessionOpenRequest,
   namespace: RuntimeNamespace & { userId: string }
-): ResolvedWorkspaceIdentity {
-  return resolveWorkspaceIdentity(namespace.userId, {
-    workspaceUri: request.workspaceUri,
-    workspaceHostId: request.workspaceHostId
-  });
+): ResolvedWorkspaceIdentity & { rootPath: string | null } {
+  const rewritten = canonicalFileWorkspace(request.workspaceUri);
+  return {
+    ...resolveWorkspaceIdentity(namespace.userId, {
+      workspaceUri: rewritten?.workspaceUri ?? request.workspaceUri,
+      workspaceHostId: request.workspaceHostId
+    }),
+    rootPath: rewritten?.rootPath ?? null
+  };
 }
 
 export function namespaceForSession(session: SessionRecord): RuntimeNamespace {

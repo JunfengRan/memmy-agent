@@ -313,7 +313,7 @@ describe("MemoryService / REST contract", () => {
     expect(body.storage.fullText).toBe("fts5");
     expect(body.storage.vector).toBe("native");
     expect(body.features).toEqual({
-      l3WorldModelProtocolVersions: [2]
+      l3WorldModelProtocolVersions: [2, 3]
     });
     const client = new MemoryRestClient({
       endpoint: `http://127.0.0.1:${address.port}`

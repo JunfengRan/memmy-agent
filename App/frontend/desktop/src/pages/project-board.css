@@ -1,0 +1,154 @@
+.project-board {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--color-content-bg, transparent);
+}
+
+.project-board__header,
+.project-board__tabs,
+.project-board__row,
+.project-board__config-head,
+.project-board__composer,
+.project-topic-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-board__header,
+.project-board__tabs,
+.project-board__composer {
+  padding: 12px 16px;
+}
+
+.project-board__header {
+  justify-content: space-between;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text-ink) 8%, transparent);
+}
+
+.project-board__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.project-board__body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.project-board__main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.project-board__list,
+.project-board__detail {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 8px 16px 16px;
+}
+
+.project-board__tab,
+.project-board__text-button,
+.project-board__title-button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.project-board__tab {
+  padding: 6px 2px;
+  color: color-mix(in srgb, var(--color-text-ink) 62%, transparent);
+}
+
+.project-board__tab.is-active {
+  color: var(--color-text-ink);
+  box-shadow: inset 0 -2px 0 var(--color-text-ink);
+}
+
+.project-board__row {
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text-ink) 8%, transparent);
+  text-align: left;
+}
+
+.project-board__row-main {
+  min-width: 0;
+}
+
+.project-board__row-title,
+.project-board__detail h2 {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.project-board__meta,
+.project-board__empty {
+  color: color-mix(in srgb, var(--color-text-ink) 55%, transparent);
+  font-size: 13px;
+}
+
+.project-board__config {
+  width: 280px;
+  min-width: 240px;
+  overflow: auto;
+  border-left: 1px solid color-mix(in srgb, var(--color-text-ink) 8%, transparent);
+  padding: 12px;
+}
+
+.project-board__config label,
+.project-board__check {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.project-board__config textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+}
+
+.project-board__composer {
+  border-top: 1px solid color-mix(in srgb, var(--color-text-ink) 8%, transparent);
+}
+
+.project-board__composer textarea {
+  min-width: 0;
+  flex: 1;
+  resize: none;
+}
+
+.project-topic-hint {
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-action-sky) 12%, transparent);
+  font-size: 13px;
+}
+
+.app-frame-project-title-button {
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}

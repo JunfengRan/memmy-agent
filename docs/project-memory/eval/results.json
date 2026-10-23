@@ -1,0 +1,91 @@
+{
+  "generatedAt": "2026-10-23T02:53:33.607Z",
+  "baselineSha": "8684cb570f1b54debcdd45da45f0f02661a76a42",
+  "wallClockMs": 1054,
+  "arms": [
+    {
+      "name": "project-memory",
+      "round": 0,
+      "ingestMs": 168,
+      "recallMs": 3,
+      "dbBytes": 1953792,
+      "score": 0.525,
+      "recallP95": 5,
+      "openP50": 0,
+      "openP95": 2,
+      "relay": 0.567,
+      "conflict": 0.4
+    },
+    {
+      "name": "original-memmy",
+      "round": 0,
+      "ingestMs": 39,
+      "recallMs": 3,
+      "dbBytes": 1867776,
+      "score": 0.475,
+      "recallP95": 3,
+      "openP50": 0,
+      "openP95": 1,
+      "relay": 0.5,
+      "conflict": 0.4
+    },
+    {
+      "name": "attribute-tree",
+      "round": 3,
+      "ingestMs": 30,
+      "recallMs": 2,
+      "dbBytes": 1863680,
+      "score": 0.525,
+      "recallP95": 3,
+      "openP50": 0,
+      "openP95": 1,
+      "relay": 0.533,
+      "conflict": 0.5
+    }
+  ],
+  "attributeTreeRounds": [
+    {
+      "name": "attribute-tree",
+      "round": 1,
+      "ingestMs": 38,
+      "recallMs": 2,
+      "dbBytes": 1867776,
+      "score": 0.5,
+      "recallP95": 3,
+      "openP50": 0,
+      "openP95": 1,
+      "relay": 0.533,
+      "conflict": 0.4
+    },
+    {
+      "name": "attribute-tree",
+      "round": 2,
+      "ingestMs": 37,
+      "recallMs": 2,
+      "dbBytes": 1867776,
+      "score": 0.525,
+      "recallP95": 3,
+      "openP50": 0,
+      "openP95": 1,
+      "relay": 0.533,
+      "conflict": 0.5
+    },
+    {
+      "name": "attribute-tree",
+      "round": 3,
+      "ingestMs": 30,
+      "recallMs": 2,
+      "dbBytes": 1863680,
+      "score": 0.525,
+      "recallP95": 3,
+      "openP50": 0,
+      "openP95": 1,
+      "relay": 0.533,
+      "conflict": 0.5
+    }
+  ],
+  "datasets": [
+    "relay",
+    "conflict"
+  ]
+}

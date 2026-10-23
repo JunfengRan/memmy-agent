@@ -70,6 +70,8 @@ export const API_ROUTES = [
   "GET /api/v1/admin/export",
   "DELETE /api/v1/admin/data",
   "POST /api/v1/sessions/open",
+  "POST /api/v1/projects/merge-subdirs",
+  "GET /api/v1/projects/topics",
   "POST /api/v1/sessions/:sessionId/close",
   "GET /api/v1/sessions/:sessionId/l3-world-model-trace-head",
   "POST /api/v1/sessions/:sessionId/l3-world-model-boundary",
@@ -581,10 +583,11 @@ async function routeRequest(
   if (method === "POST" && path === "/api/v1/sessions/open") {
     requireMemoryWrite(principal);
     const rawRequest = asObject(body, "sessions.create");
-    const request = rawRequest.l3WorldModelProtocolVersion === 2
+    const workspaceProtocol = rawRequest.l3WorldModelProtocolVersion === 2 || rawRequest.l3WorldModelProtocolVersion === 3;
+    const request = workspaceProtocol
       ? parseV2OpenSessionRequest(strictEnvelopeWithPrincipal(rawRequest, principal))
       : envelopeWithPrincipal(rawRequest, principal) as SessionOpenRequest;
-    const publicRequest: SessionOpenRequest = request.l3WorldModelProtocolVersion === 2
+    const publicRequest: SessionOpenRequest = workspaceProtocol
       ? request
       : {
           requestId: request.requestId,
@@ -601,8 +604,28 @@ async function routeRequest(
       publicRequest,
       () => service.openSession(publicRequest)
     );
-    if (request.l3WorldModelProtocolVersion === 2 && result.projectId) autoWorker.schedule();
+    if ((request.l3WorldModelProtocolVersion === 2 || request.l3WorldModelProtocolVersion === 3) && result.projectId) autoWorker.schedule();
     return publicOpenSessionResponse(result);
+  }
+  if (method === "GET" && path === "/api/v1/projects/topics") {
+    requireMemoryRead(principal);
+    const workspacePath = url.searchParams.get("workspacePath") ?? "";
+    if (!workspacePath.trim()) {
+      throw new MemoryServiceError("invalid_argument", "workspacePath is required");
+    }
+    const userId = principal.namespace?.userId || "local-user";
+    return service.listProjectTopics({ userId, workspacePath });
+  }
+  if (method === "POST" && path === "/api/v1/projects/merge-subdirs") {
+    requireMemoryWrite(principal);
+    const raw = asObject(body, "projects.mergeSubdirs");
+    const userId = typeof raw.userId === "string" && raw.userId.trim()
+      ? raw.userId.trim()
+      : principal.namespace?.userId || "local-user";
+    return service.mergeProjectSubdirs({
+      userId,
+      dryRun: raw.dryRun !== false
+    });
   }
 
   const sessionClose = match(path, /^\/api\/v1\/sessions\/([^/]+)\/close$/);
@@ -1123,7 +1146,8 @@ function publicOpenSessionResponse(result: unknown): Record<string, unknown> {
     status: record.status,
     resumed: record.resumed,
     projectId: record.projectId ?? null,
-    serverTime: record.serverTime
+    serverTime: record.serverTime,
+    ...(record.projectContext ? { projectContext: record.projectContext } : {})
   };
 }
 

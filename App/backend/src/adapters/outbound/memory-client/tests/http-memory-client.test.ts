@@ -58,7 +58,8 @@ describe("HttpMemoryClient", () => {
       "/api/v1/panel/analysis",
       "/api/v1/panel/items",
       "/api/v1/panel/tasks",
-      "/api/v1/panel/tasks/:id"
+      "/api/v1/panel/tasks/:id",
+      "/api/v1/projects/topics"
     ]);
     expect(
       buildMemoryLayerUrl("http://127.0.0.1:8765/", "closeSession", {
@@ -175,6 +176,11 @@ describe("HttpMemoryClient", () => {
     await expect(client.panelItems(panelItemsInput(), { userId: "account-user-1" })).resolves.toMatchObject({ items: [] });
     await expect(client.panelTasks({ page: 1 })).resolves.toMatchObject({ tasks: [] });
     await expect(client.deletePanelTask("episode-1")).resolves.toMatchObject({ ok: true, id: "episode-1" });
+    await expect(client.listProjectTopics?.({ workspacePath: "/tmp/memmy" })).resolves.toEqual({
+      projectId: null,
+      rootPath: null,
+      topics: []
+    });
 
     expect(requests.map((request) => `${request.method} ${request.path}`)).toEqual([
       "GET /api/v1/health",
@@ -197,7 +203,8 @@ describe("HttpMemoryClient", () => {
       "GET /api/v1/panel/analysis",
       "GET /api/v1/panel/items",
       "GET /api/v1/panel/tasks",
-      "DELETE /api/v1/panel/tasks/episode-1"
+      "DELETE /api/v1/panel/tasks/episode-1",
+      "GET /api/v1/projects/topics"
     ]);
     expect(requests.every((request) => request.authorization === "Bearer memory-token")).toBe(true);
     expect(requests.find((request) => request.path === "/api/v1/panel/overview")?.timeZone)
@@ -542,6 +549,9 @@ function fixtureFor(method: string, path: string, body: unknown): unknown {
   if (method === "GET" && path === "/api/v1/panel/tasks") return panelTasksOutput();
   if (method === "DELETE" && path === "/api/v1/panel/tasks/episode-1") {
     return { ok: true, id: "episode-1", deletedMemoryIds: [], serverTime: now() };
+  }
+  if (method === "GET" && path === "/api/v1/projects/topics") {
+    return { projectId: null, rootPath: null, topics: [] };
   }
 
   throw new Error(`unexpected route ${method} ${path}`);

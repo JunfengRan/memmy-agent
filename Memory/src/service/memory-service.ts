@@ -115,6 +115,11 @@ import { MemoryServiceError } from "../utils/error.js";
 import { newId,stableHash,stableStringify } from "../utils/id.js";
 import { isRecord,stringifyForMemory } from "../utils/json.js";
 import { memoryCaptureQaHash, normalizeMemoryCaptureSource } from "../utils/memory-capture-claim.js";
+import type { WorkspaceHostId } from "../contracts/memory-workspace-identity.js";
+import { mergeSubdirProjects } from "./project/merge-subdirs.js";
+import { defaultWorkspaceHostId } from "./project/host-id.js";
+import { projectIdentityForLocation } from "./project/identity.js";
+import { readProjectTopics, type ProjectTopicRead } from "./project/topics-read.js";
 import { clip,firstLine } from "../utils/text.js";
 import { nowIso, resolveTimeZone } from "../utils/time.js";
 import {
@@ -998,7 +1003,7 @@ export class MemoryService {
       ...(backend.backendId === "sqlite-local" && schema.version >= 6
         ? {
             features: {
-              l3WorldModelProtocolVersions: [2]
+              l3WorldModelProtocolVersions: [2, 3]
             }
           }
         : {}),
@@ -1215,6 +1220,13 @@ export class MemoryService {
     duplicate?: boolean;
     openedAt: string;
     serverTime: string;
+    projectContext?: {
+      markdown: string;
+      topicCount: number;
+      activityCount: number;
+      openConflictCount: number;
+      truncated: boolean;
+    };
   } {
     const response = this.sessionTurns.openSession(this.withTimeZone(request));
     if (this.projectEnvironmentScanEnabled() && response.projectId) {
@@ -1225,6 +1237,44 @@ export class MemoryService {
       }
     }
     return response;
+  }
+
+  mergeProjectSubdirs(input: { userId: string; dryRun?: boolean; workspaceHostId?: string }) {
+    return mergeSubdirProjects(this.repos.db, {
+      userId: input.userId,
+      dryRun: input.dryRun,
+      workspaceHostId: input.workspaceHostId ?? defaultWorkspaceHostId()
+    });
+  }
+
+  /** Reads topic rows already stored for a local project directory. Does not write memories. */
+  listProjectTopics(input: {
+    userId: string;
+    workspacePath: string;
+    workspaceHostId?: WorkspaceHostId;
+  }): { projectId: string | null; rootPath: string | null; topics: ProjectTopicRead[] } {
+    const workspacePath = input.workspacePath.trim();
+    if (!workspacePath) throw new MemoryServiceError("invalid_argument", "workspacePath is required");
+    const identity = projectIdentityForLocation(
+      input.userId,
+      input.workspaceHostId ?? defaultWorkspaceHostId(),
+      workspacePath
+    );
+    if (!identity?.projectId || !identity.rootPath) {
+      return { projectId: null, rootPath: null, topics: [] };
+    }
+    const userIds = [...new Set([input.userId, "local-user"])];
+    const notes = uniqueMemories(userIds.flatMap((userId) =>
+      this.repos.memories.listProjectNotes(userId, identity.projectId!, 50)
+    ));
+    const activity = uniqueMemories(userIds.flatMap((userId) =>
+      this.repos.memories.listProjectActivity(userId, identity.projectId!, 20)
+    ));
+    return {
+      projectId: identity.projectId,
+      rootPath: identity.rootPath,
+      topics: readProjectTopics({ notes, activity })
+    };
   }
 
   closeSession(sessionId: string, request: RequestEnvelope = {}): {
@@ -3187,7 +3237,10 @@ export class MemoryService {
       ...inputInfo,
       tags: uniq([...tags, ...stringArray(inputInfo.tags)]),
       ...(input.projectId ? { project_id: input.projectId } : {}),
-      ...(input.profileId ? { profile_id: input.profileId } : {})
+      ...(input.profileId ? { profile_id: input.profileId } : {}),
+      memory_scope: typeof inputInfo.memory_scope === "string"
+        ? inputInfo.memory_scope
+        : (input.projectId ? "project" : "global")
     };
     return {
       id: input.id ?? newId(memoryIdPrefix(input.layer, input.kind)),
@@ -3959,6 +4012,15 @@ async function probeLlm(client: LlmClient, operation: string): Promise<ModelProb
       error: error instanceof Error ? error.message : String(error)
     };
   }
+}
+
+function uniqueMemories<T extends { id: string }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    if (seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  });
 }
 
 async function probeEmbedding(embedder: Embedder): Promise<ModelProbeResult> {

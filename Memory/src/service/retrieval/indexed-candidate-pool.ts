@@ -44,9 +44,7 @@ export class IndexedCandidatePool {
       memoryLayer: input.layers,
       status: ["activated", "resolving"]
     };
-    const scopedFilter = input.layers.includes("L1") && input.projectId !== undefined
-      ? { ...baseFilter, workMemoryUserId: input.userId, workMemoryProjectId: input.projectId }
-      : baseFilter;
+    const scopedFilter = withProjectRecall(baseFilter, input.userId, input.layers, input.projectId);
     return this.deps.repos.memories.count(input.tags?.length ? { ...scopedFilter, tags: input.tags } : scopedFilter);
   }
 
@@ -61,9 +59,7 @@ export class IndexedCandidatePool {
       memoryLayer: input.layers,
       status: ["activated", "resolving"]
     };
-    const scopedFilter = input.layers.includes("L1") && input.projectId !== undefined
-      ? { ...baseFilter, workMemoryUserId: input.userId, workMemoryProjectId: input.projectId }
-      : baseFilter;
+    const scopedFilter = withProjectRecall(baseFilter, input.userId, input.layers, input.projectId);
     return this.deps.repos.memories.hasVectorRows(input.tags?.length ? { ...scopedFilter, tags: input.tags } : scopedFilter);
   }
 
@@ -96,14 +92,11 @@ export class IndexedCandidatePool {
     };
 
     for (const layer of layers) {
-      const filter: MemoryFilter = {
+      const filter: MemoryFilter = withProjectRecall({
         memoryLayer: layer,
         status: ["activated", "resolving"],
-        ...(layer === "L1" && input.projectId !== undefined
-          ? { workMemoryUserId: input.userId, workMemoryProjectId: input.projectId }
-          : {}),
         ...(input.tags?.length ? { tags: input.tags } : {})
-      };
+      }, input.userId, [layer], input.projectId);
       const vectorPool = this.retrievalVectorPoolSize(layer, input.config);
       const keywordPool = this.retrievalKeywordPoolSize(layer, input.config);
 
@@ -244,6 +237,21 @@ export class IndexedCandidatePool {
     const total = this.deps.repos.memories.count(filter);
     return total <= 0 ? [] : this.deps.repos.memories.list(filter, total);
   }
+}
+
+function withProjectRecall(
+  filter: MemoryFilter,
+  userId: string,
+  layers: readonly MemoryLayer[],
+  projectId?: string | null
+): MemoryFilter {
+  return {
+    ...filter,
+    ...(layers.includes("L1") && projectId !== undefined
+      ? { workMemoryUserId: userId, workMemoryProjectId: projectId }
+      : {}),
+    ...(projectId ? { recallProjectId: projectId } : {})
+  };
 }
 
 function normalizeAgentId(value: string): string {

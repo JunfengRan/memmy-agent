@@ -13,6 +13,7 @@ import { isRecord } from "../../utils/json.js";
 import { redactSensitiveText } from "../../utils/sensitive-data.js";
 import { clip } from "../../utils/text.js";
 import { formatZonedTime } from "../../utils/time.js";
+import { turnDefinesCheckpoint } from "../project/checkpoint.js";
 import type { EnqueueJobInput } from "../worker/job-handlers.js";
 
 export const SPAN_BIG_TURN_ENABLED = true;
@@ -99,6 +100,8 @@ export class BigTurnSpanPipeline {
       ? this.deps.repos.runtime.getRawTurn(rawTurnId)
       : undefined;
     if (!source || !rawTurn || rawTurn.toolCalls.length < SPAN_BIG_TURN_MIN_TOOL_CALLS) return;
+    const session = source.sessionId ? this.deps.repos.runtime.getSession(source.sessionId) : undefined;
+    if (session?.meta.l3_world_model_protocol_version === 3 && turnDefinesCheckpoint(rawTurn.toolCalls)) return;
 
     const lang = steeredPromptLanguage(this.deps.config.language, [
       rawTurn.userText,

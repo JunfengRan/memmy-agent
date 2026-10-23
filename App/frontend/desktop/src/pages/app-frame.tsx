@@ -37,6 +37,7 @@ import type { AgentTaskView } from "../state/agent-chat-slice.js";
 import { decideTaskDoneNotification } from "../state/task-done-notification.js";
 import { maskAccountIdentifier } from "../utils/mask-account-identifier.js";
 import { WindowsTitlebar } from "../components/windows-titlebar.js";
+import { closeProjectBoard, openProjectBoard, useProjectBoardSession } from "./project-board-session.js";
 import { openExternalUrl } from "../utils/open-url.js";
 import { isWindowsDesktopPlatform } from "../utils/window-fullscreen.js";
 import { isComposingKeyboardEvent } from "../utils/keyboard.js";
@@ -68,7 +69,7 @@ import {
 } from "./memory/memory-prototype-icons.js";
 import { AppContentTopbar } from "./app-content-topbar.js";
 import { SETTINGS_BROWSER_EXTENSION_EVENT, SETTINGS_EXCEL_CONNECTION_EVENT, SETTINGS_NAV_ITEMS, writeSettingsMemoryBudgetFocus, type SettingsTabId } from "./settings-nav.js";
-import { ArrowDown, Check, CheckCheck, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Folder, FolderOpen, FolderPlus, ListFilter, MoreHorizontal, MousePointer2, Plus, RotateCcw } from "lucide-react";
+import { ArrowDown, Check, CheckCheck, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Folder, FolderOpen, FolderPlus, ListFilter, MoreHorizontal, MousePointer2, PanelsTopLeft, Plus, RotateCcw } from "lucide-react";
 
 export interface SettingsSidebarNav {
   activeTab: SettingsTabId;
@@ -230,7 +231,7 @@ const taskContextMenuSize: SidebarMenuSize = {
 };
 const projectContextMenuSize: SidebarMenuSize = {
   width: 240,
-  height: 196,
+  height: 232,
   margin: 8,
   gap: 4
 };
@@ -348,7 +349,9 @@ export function AppFrame(props: AppFrameProps) {
     [projectTree, showingArchived]
   );
   const highlightedSessionKey = state.navigation.currentPath === "/main" ? state.agent.currentSessionKey : null;
-  const selectedSidebarProjectId = resolveSelectedSidebarProjectId(state.agent, state.navigation.currentPath);
+  const boardSession = useProjectBoardSession();
+  const selectedSidebarProjectId = boardSession.projectId
+    ?? resolveSelectedSidebarProjectId(state.agent, state.navigation.currentPath);
 
   const removeProject = state.agent.projects.find((project) => project.id === removeProjectId) ?? null;
   const archiveProject = state.agent.projects.find((project) => project.id === archiveProjectId) ?? null;
@@ -511,7 +514,13 @@ export function AppFrame(props: AppFrameProps) {
     taskStateCoordinator.refreshTaskState({ reason: "manual" });
   }
 
+  function showProjectBoard(projectId: string) {
+    openProjectBoard(projectId);
+    dispatch(appActions.navigate("/main"));
+  }
+
   function openNewAgent(target?: WebuiSessionTarget) {
+    closeProjectBoard();
     const nextDraftRequestId = shouldCreateNewAgentDraft(state.agent)
       ? state.agent.newChatRequestId + 1
       : state.agent.newChatRequestId;
@@ -616,6 +625,7 @@ export function AppFrame(props: AppFrameProps) {
   }
 
   async function openAgentTask(task: AgentTaskView) {
+    closeProjectBoard();
     handleFirstSidebarInteraction();
     if (!clients?.memmyAgent) {
       dispatch(appActions.navigate("/main"));
@@ -1262,6 +1272,7 @@ export function AppFrame(props: AppFrameProps) {
                 onDeleteArchivedTask={requestDeleteArchivedTask}
                 onProjectContextMenu={openProjectMenu}
                 onNewProjectTask={(projectId) => openNewAgent({ kind: "project", projectId })}
+                onOpenProject={showProjectBoard}
               />
             ) : null}
 
@@ -1298,6 +1309,7 @@ export function AppFrame(props: AppFrameProps) {
               onDeleteArchivedTask={requestDeleteArchivedTask}
               onProjectContextMenu={openProjectMenu}
               onNewProjectTask={(projectId) => openNewAgent({ kind: "project", projectId })}
+              onOpenProject={showProjectBoard}
               headerLeadingAction={(
                 <div className="relative flex items-center">
                   <button
@@ -1362,6 +1374,7 @@ export function AppFrame(props: AppFrameProps) {
               onDeleteArchivedTask={requestDeleteArchivedTask}
               onProjectContextMenu={openProjectMenu}
               onNewProjectTask={(projectId) => openNewAgent({ kind: "project", projectId })}
+              onOpenProject={showProjectBoard}
               headerAction={(
                 <div className="app-frame-task-section-header__actions-inner">
                   <button
@@ -1398,6 +1411,10 @@ export function AppFrame(props: AppFrameProps) {
               project={state.agent.projects.find((project) => project.id === projectContextMenu.projectId) ?? null}
               archiveTaskCount={countProjectTasksToArchive(state.agent.tasks, projectContextMenu.projectId)}
               onClose={() => setProjectContextMenu(null)}
+              onOpenBoard={(project) => {
+                setProjectContextMenu(null);
+                showProjectBoard(project.id);
+              }}
               onPin={(project) => {
                 setProjectContextMenu(null);
                 void updateProject(project.id, { pinned: !project.pinned });
@@ -1965,6 +1982,7 @@ function ProjectTreeSection(props: {
   onDeleteArchivedTask: (task: AgentTaskView) => void;
   onProjectContextMenu: (event: MouseEvent, projectId: string) => void;
   onNewProjectTask: (projectId: string) => void;
+  onOpenProject: (projectId: string) => void;
 }) {
   const { t } = useTranslation();
   const [expandedProjectTaskIds, setExpandedProjectTaskIds] = useState<Record<string, boolean>>({});
@@ -2052,6 +2070,7 @@ function ProjectTreeSection(props: {
                     selected={props.selectedProjectId === node.project.id}
                     onToggle={() => props.onToggleProject(projectKey)}
                     onContextMenu={(event) => props.onProjectContextMenu(event, node.project.id)}
+                    onOpen={() => props.onOpenProject(node.project.id)}
                     onNewTask={() => props.onNewProjectTask(node.project.id)}
                   />
                   <div
@@ -2213,6 +2232,7 @@ function ProjectRow(props: {
   selected: boolean;
   onToggle: () => void;
   onContextMenu: (event: MouseEvent) => void;
+  onOpen: () => void;
   onNewTask: () => void;
 }) {
   const { t } = useTranslation();
@@ -2221,18 +2241,20 @@ function ProjectRow(props: {
       className={`app-frame-project-row${props.selected ? " app-frame-project-row--selected" : ""}`}
       title={props.project.rootPath}
     >
-      <button
-        type="button"
+      <div
         className="app-frame-project-row__main"
-        aria-expanded={!props.collapsed}
-        aria-label={props.collapsed ? t("appFrame.project.expand") : t("appFrame.project.collapse")}
-        onClick={(event) => {
-          props.onToggle();
-          // Avoid sticky :focus-within fill after mouse expand/collapse.
-          event.currentTarget.blur();
-        }}
         onContextMenu={props.onContextMenu}
       >
+        <button
+          type="button"
+          className="app-frame-project-row__toggle"
+          aria-expanded={!props.collapsed}
+          aria-label={props.collapsed ? t("appFrame.project.expand") : t("appFrame.project.collapse")}
+          onClick={(event) => {
+            props.onToggle();
+            event.currentTarget.blur();
+          }}
+        >
         <span className="app-frame-project-row__folder-stack" aria-hidden="true">
           <Folder
             size={16}
@@ -2251,8 +2273,15 @@ function ProjectRow(props: {
             className={`app-frame-project-row__chevron${!props.collapsed ? " is-active" : ""}`}
           />
         </span>
-        <SidebarMarqueeText text={props.project.name} className="app-frame-project-title" />
-      </button>
+        </button>
+        <button
+          type="button"
+          className="app-frame-project-title-button"
+          onClick={props.onOpen}
+        >
+          <SidebarMarqueeText text={props.project.name} className="app-frame-project-title" />
+        </button>
+      </div>
       <div className="app-frame-project-row__actions">
         <TaskIconButton label={t("appFrame.project.newTask")} tooltip={false} onClick={props.onNewTask}>
           <MessageSquarePlus size={14} />
@@ -2853,6 +2882,7 @@ function ProjectContextMenu(props: {
   menu: ProjectContextMenuState;
   project: MemmyAgentProject | null;
   archiveTaskCount: number;
+  onOpenBoard: (project: MemmyAgentProject) => void;
   onPin: (project: MemmyAgentProject) => void;
   onReveal: (project: MemmyAgentProject) => void;
   onMarkRead: (project: MemmyAgentProject) => void;
@@ -2881,6 +2911,11 @@ function ProjectContextMenu(props: {
       style={overlayStyle}
       onClick={(event) => event.stopPropagation()}
     >
+      <MenuButton
+        icon={<PanelsTopLeft size={13} />}
+        label={t("appFrame.project.board")}
+        onClick={() => run(() => props.onOpenBoard(project))}
+      />
       <MenuButton
         icon={<Pin size={13} />}
         label={project.pinned ? t("appFrame.project.unpin") : t("appFrame.project.pin")}

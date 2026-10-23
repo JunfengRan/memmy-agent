@@ -25,6 +25,7 @@ import type {
   SynthesizeDecisionRepairDraft
 } from "../feedback/feedback-experience.js";
 import type { EnqueueJobInput } from "../worker/job-handlers.js";
+import { turnDefinesCheckpoint } from "../project/checkpoint.js";
 import {
   SPAN_BIG_TURN_ENABLED,
   SPAN_BIG_TURN_MIN_TOOL_CALLS
@@ -272,6 +273,10 @@ export class RewardPipeline {
       const rawTurn = savedTrace?.rawTurnId
         ? this.deps.repos.runtime.getRawTurn(savedTrace.rawTurnId)
         : undefined;
+      const session = saved.sessionId ? this.deps.repos.runtime.getSession(saved.sessionId) : undefined;
+      const checkpointTurn = session?.meta.l3_world_model_protocol_version === 3
+        && rawTurn
+        && turnDefinesCheckpoint(rawTurn.toolCalls);
       if (
         SPAN_BIG_TURN_ENABLED &&
         job.payload.downstreamScheduled !== true &&
@@ -279,6 +284,7 @@ export class RewardPipeline {
         savedTrace &&
         savedTrace.alpha > 0 &&
         rawTurn &&
+        !checkpointTurn &&
         rawTurn.toolCalls.length >= SPAN_BIG_TURN_MIN_TOOL_CALLS
       ) {
         this.deps.enqueueJob({

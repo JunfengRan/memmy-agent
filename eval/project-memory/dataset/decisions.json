@@ -1,0 +1,126 @@
+{
+  "decisions": [
+    {
+      "id": "d_amount",
+      "projectId": "proj_ledger",
+      "extractor": "model",
+      "changedAt": "2026-10-21T08:40:00.000Z",
+      "sourceTraceIds": [
+        "t_journal",
+        "t_column"
+      ],
+      "textBefore": "金额写在 journal 正文里，月报读全文再按客户挑，entries 不加列",
+      "textAfter": "entries 增加 amount 列，月报按这列汇总，不再扫描 journal 全文",
+      "relation": "contradict",
+      "reason": "月报扫全文太慢"
+    },
+    {
+      "id": "d_empty",
+      "projectId": "proj_ledger",
+      "extractor": "model",
+      "changedAt": "2026-10-21T09:40:00.000Z",
+      "sourceTraceIds": [
+        "t_report",
+        "t_bug"
+      ],
+      "textBefore": "没有客户名时这笔不进月报",
+      "textAfter": "空客户但金额还在的会留下，只跳过金额列为空的行",
+      "relation": "contradict",
+      "reason": "客户名为空时整行被丢掉"
+    },
+    {
+      "id": "d_copy",
+      "projectId": "proj_ledger",
+      "extractor": "model",
+      "changedAt": "2026-10-21T11:10:00.000Z",
+      "sourceTraceIds": [
+        "t_wait",
+        "t_dryrun"
+      ],
+      "textBefore": "等 dry-run 报告出来再看要不要把 catalog 的导出搬进来",
+      "textAfter": "月报用不上 export，不把 catalog 的导出抄进 ledger",
+      "relation": "contradict",
+      "reason": "dry-run 报告显示用不上"
+    },
+    {
+      "id": "d_env",
+      "projectId": "proj_ledger",
+      "extractor": "model",
+      "changedAt": null,
+      "sourceTraceIds": [
+        "t_admin_env",
+        "t_env"
+      ],
+      "textBefore": null,
+      "textAfter": "数据库连接串只留在本机 .env，不写进 README 和普通记录",
+      "relation": null,
+      "reason": "密码不能进仓库"
+    },
+    {
+      "id": "d_branch",
+      "projectId": "proj_ledger",
+      "extractor": "model",
+      "changedAt": null,
+      "sourceTraceIds": [
+        "t_admin_branch"
+      ],
+      "textBefore": null,
+      "textAfter": "改动先放 feature 分支，不直接改 main",
+      "relation": null,
+      "reason": "避免直接动主干"
+    },
+    {
+      "id": "d_notify",
+      "projectId": "proj_ledger",
+      "extractor": "model",
+      "changedAt": null,
+      "sourceTraceIds": [
+        "t_tell"
+      ],
+      "textBefore": null,
+      "textAfter": "另一个窗口要到下一次开口才知道 entries 已有 amount 列",
+      "relation": null,
+      "reason": "这次对话送不过去"
+    },
+    {
+      "id": "d_price",
+      "projectId": "proj_catalog",
+      "extractor": "model",
+      "changedAt": null,
+      "sourceTraceIds": [
+        "t_price"
+      ],
+      "textBefore": null,
+      "textAfter": "price 表增加 amount 列，列表直接读这一列",
+      "relation": null,
+      "reason": "价格查询太慢"
+    },
+    {
+      "id": "d_export",
+      "projectId": "proj_catalog",
+      "extractor": "model",
+      "changedAt": null,
+      "sourceTraceIds": [
+        "t_export"
+      ],
+      "textBefore": null,
+      "textAfter": "导出前先创建 output 目录，再写价格表",
+      "relation": null,
+      "reason": "目录可能不存在"
+    },
+    {
+      "id": "d_csv",
+      "projectId": "proj_catalog",
+      "extractor": "model",
+      "changedAt": "2026-10-21T08:20:00.000Z",
+      "sourceTraceIds": [
+        "t_export",
+        "t_csv"
+      ],
+      "textBefore": "导出价格表写成 prices.json",
+      "textAfter": "导出价格表写成 prices.csv",
+      "relation": "contradict",
+      "reason": "导出不再用 json"
+    }
+  ]
+}

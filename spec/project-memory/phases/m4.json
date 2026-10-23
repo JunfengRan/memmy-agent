@@ -1,0 +1,9 @@
+{
+  "phase": "m4",
+  "summary": "三臂评测脚手架与数据集",
+  "requirements": [
+    { "id": "M4-datasets", "summary": "接力、任务族、冲突权限、冷启动四套剧本" },
+    { "id": "M4-metrics", "summary": "记录命中、串扰、延迟、体积和墙钟时间" },
+    { "id": "M4-isolated-db", "summary": "三臂使用各自的 SQLite" }
+  ]
+}

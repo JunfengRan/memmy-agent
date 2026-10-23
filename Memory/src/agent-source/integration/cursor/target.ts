@@ -147,6 +147,13 @@ async function upsertCursorHookConfig(filePath: string, hookScriptPath: string):
   hooks.sessionStart = cursorHookEntries(hooks.sessionStart, hookScriptPath);
   hooks.preCompact = cursorHookEntries(hooks.preCompact, hookScriptPath);
   hooks.sessionEnd = cursorHookEntries(hooks.sessionEnd, hookScriptPath);
+  hooks.afterFileEdit = [
+    ...removeCursorResumeHookEntries(hooks.afterFileEdit),
+    {
+      command: createNodeHookCommand(hookScriptPath),
+      timeout: HOOK_TIMEOUT_SECONDS
+    }
+  ];
   config.version = 1;
   config.hooks = hooks;
   await writeFileAtomically(filePath, `${JSON.stringify(config, null, 2)}\n`);

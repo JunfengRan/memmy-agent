@@ -264,6 +264,7 @@ export async function completeSourceTurn(input: {
   sourceMemoryIds?: string[];
   profileId?: string;
   adapterId?: string;
+  changedFiles?: string[];
 }): Promise<Record<string, unknown>> {
   const config = await readRuntimeConfig(input.configUrl, true);
   const client = new RuntimeHttpClient(config);
@@ -278,6 +279,7 @@ export async function completeSourceTurn(input: {
     },
     sessionId: input.sessionId,
     sourceMemoryIds: input.sourceMemoryIds,
+    changedFiles: input.changedFiles,
     adapterId: input.adapterId || `memmy-${input.turn.source}-hook`,
   })));
 }

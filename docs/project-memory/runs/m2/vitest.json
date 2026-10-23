@@ -1,0 +1,16 @@
+{
+  "numPassedTests": 10,
+  "numFailedTests": 0,
+  "caseIds": [
+    "ADR-012-protocol-v3",
+    "ADR-002-checkpoint-span",
+    "ADR-002-abandoned",
+    "ADR-002-no-llm-summary",
+    "ADR-002-span-filter",
+    "ADR-005-topic-assign",
+    "ADR-008-bounded-view",
+    "ADR-005-policy-scope",
+    "M2-evidence-cap",
+    "ADR-006-rephrase"
+  ]
+}

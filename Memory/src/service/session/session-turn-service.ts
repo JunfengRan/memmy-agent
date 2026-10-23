@@ -54,6 +54,15 @@ import { MemoryServiceError } from "../../utils/error.js";
 import { newId,stableHash,stableStringify } from "../../utils/id.js";
 import { isRecord } from "../../utils/json.js";
 import { memoryCaptureQaHash, normalizeMemoryCaptureSource } from "../../utils/memory-capture-claim.js";
+import { projectCaptureSource } from "../project/capture.js";
+import {
+  displayAgent,
+  renderProjectActivity
+} from "../project/context.js";
+import { boundChangedFiles, changedFilesFromToolCalls } from "../project/changed-files.js";
+import { readGitSnapshot } from "../project/git-status.js";
+import { defaultWorkspaceHostId } from "../project/host-id.js";
+import { projectIdentityForLocation } from "../project/identity.js";
 import { isMemmyRecallToolName } from "../../utils/memmy-context-tags.js";
 import { clip } from "../../utils/text.js";
 import { nowIso } from "../../utils/time.js";
@@ -130,6 +139,14 @@ interface CommittedTurnRoute extends EpisodeTurnRoute {
 }
 
 export interface ToolOutcomeObservation { toolId: string; success?: boolean; reason?: string; }
+
+interface ProjectContextPayload {
+  markdown: string;
+  topicCount: number;
+  activityCount: number;
+  openConflictCount: number;
+  truncated: boolean;
+}
 
 export function toolObservationEvent(input: ToolObserveRequest): { phase: "start" | "complete" | "error"; event: ToolCallPayload; toolCall: ToolCallPayload; toolResult?: ToolCallPayload } {
   const error = errorMessageFromUnknown(input.error);
@@ -478,17 +495,18 @@ export class SessionTurnService {
     userId: string;
     source: string;
     profileId: string;
-    projectId?: string | null;
-    workspaceId?: string;
-    conversationId?: string;
-    status: "open";
-    resumed: boolean;
-    changeSeq?: number;
-    syncCursor?: string;
-    duplicate?: boolean;
-    openedAt: string;
-    serverTime: string;
-  } {
+  projectId?: string | null;
+  workspaceId?: string;
+  conversationId?: string;
+  status: "open";
+  resumed: boolean;
+  changeSeq?: number;
+  syncCursor?: string;
+  duplicate?: boolean;
+  openedAt: string;
+  serverTime: string;
+  projectContext?: ProjectContextPayload;
+} {
     if (!this.deps.memoryAddEnabled()) {
       return this.deps.openSessionNoWrite(request);
     }
@@ -514,7 +532,7 @@ export class SessionTurnService {
     )) {
       throw new MemoryServiceError("invalid_argument", "L3 World Model v2 fields require protocol version 2");
     }
-    if (request.l3WorldModelProtocolVersion === 2) {
+    if (request.l3WorldModelProtocolVersion === 2 || request.l3WorldModelProtocolVersion === 3) {
       const body = this.openV2Session(request, namespace, at);
       if (idempotencyKey) {
         this.deps.repos.runtime.saveIdempotency(idempotencyKey, requestHash, body, at);
@@ -711,7 +729,7 @@ export class SessionTurnService {
         profileLabel: namespace.profileLabel,
         projectId: workspace.projectId ?? undefined,
         workspaceId: workspace.workspaceId ?? undefined,
-        workspacePath: request.workspacePath ?? namespace.workspacePath,
+        workspacePath: workspace.rootPath ?? request.workspacePath ?? namespace.workspacePath,
         hostSessionKey: namespace.sessionKey,
         conversationId: this.deps.stringFromMeta(request.meta, "conversationId"),
         status: "open",
@@ -782,7 +800,7 @@ export class SessionTurnService {
       session.hostSessionKey !== namespace.sessionKey ||
       (requestProjectId !== undefined && requestProjectId !== session.projectId) ||
       (requestWorkspaceId !== undefined && requestWorkspaceId !== session.workspaceId) ||
-      (request.workspaceUri !== undefined && request.workspaceUri !== savedWorkspaceUri) ||
+      (request.workspaceUri !== undefined && workspace.workspaceUri !== savedWorkspaceUri) ||
       (request.workspaceHostId !== undefined && request.workspaceHostId !== savedWorkspaceHostId) ||
       (request.workspaceUri !== undefined && workspace.projectId !== (session.projectId ?? null));
     if (mismatch) {
@@ -838,6 +856,7 @@ export class SessionTurnService {
     session: SessionRecord,
     resumed: boolean
   ): ReturnType<SessionTurnService["openSession"]> {
+    const projectContext = this.projectContextForSession(session);
     return {
       sessionId: session.id,
       userId: session.userId,
@@ -849,7 +868,41 @@ export class SessionTurnService {
       status: "open",
       resumed,
       openedAt: session.openedAt,
-      serverTime: nowIso()
+      serverTime: nowIso(),
+      ...(projectContext ? { projectContext } : {})
+    };
+  }
+
+  private projectContextForSession(session: SessionRecord): ProjectContextPayload | undefined {
+    if (!session.projectId) return undefined;
+    const notes = this.deps.repos.memories.listProjectNotes(session.userId, session.projectId, 20);
+    const decisions = textField(notes, "current_decision");
+    const checkpoints = textField(notes, "checkpoint_summary");
+    const topics = textField(notes, "topic_name");
+    const rows = this.deps.repos.memories.listProjectActivity(session.userId, session.projectId, 8);
+    const events = rows
+      .filter((memory) => memory.agentId !== session.source)
+      .map((memory) => ({
+        agent: displayAgent(memory.agentId),
+        at: memory.updatedAt,
+        summary: activitySummary(memory),
+        changedFiles: stringList(memory.info.changed_files)
+      }));
+    if (events.length === 0 && decisions.length === 0 && checkpoints.length === 0 && topics.length === 0) return undefined;
+    const rendered = renderProjectActivity({
+      projectName: session.workspacePath?.split(/[\\/]/).filter(Boolean).pop() ?? session.projectId,
+      projectId: session.projectId,
+      events,
+      decisions,
+      checkpoints,
+      topics
+    });
+    return {
+      markdown: rendered.markdown,
+      topicCount: topics.length,
+      activityCount: rendered.activityCount,
+      openConflictCount: 0,
+      truncated: rendered.truncated
     };
   }
 
@@ -1452,11 +1505,18 @@ export class SessionTurnService {
     if (this.completedLegacySourceTurn(namespace, scope, sourceTurn.turnId)) {
       return { status: "pending", reason: "legacy_source_turn_already_completed" };
     }
+    const located = projectIdentityForLocation(
+      namespace.userId,
+      defaultWorkspaceHostId(),
+      request.gitRoot || request.workspacePath || ""
+    );
     const opened = this.openSession({
       namespace: { ...namespace, sessionKey: sourceTurn.conversationId },
       source: sourceTurn.source,
       profileId: sourceTurn.profileId,
-      workspacePath: request.workspacePath,
+      projectId: located?.projectId ?? undefined,
+      workspaceId: located?.workspaceId ?? undefined,
+      workspacePath: located?.rootPath ?? request.workspacePath,
       meta: {
         conversationId: sourceTurn.conversationId,
         source_namespace_key: scope.namespaceKey,
@@ -1615,11 +1675,18 @@ export class SessionTurnService {
     if (open[0]) return open[0];
     // The source lookup has already made the strict reuse decision. The legacy host-key
     // lookup does not include every namespace dimension and must not run a second time.
+    const located = projectIdentityForLocation(
+      namespace.userId,
+      defaultWorkspaceHostId(),
+      request.gitRoot || request.workspacePath || ""
+    );
     const opened = this.openSession({
       namespace: { ...namespace, sessionKey: identity.conversationId },
       source: identity.source,
       profileId: identity.profileId,
-      workspacePath: request.workspacePath,
+      projectId: located?.projectId ?? undefined,
+      workspaceId: located?.workspaceId ?? undefined,
+      workspacePath: located?.rootPath ?? request.workspacePath,
       meta: { conversationId: identity.conversationId, source_namespace_key: scope.namespaceKey },
       timeZone: request.timeZone
     }, { createNew: true, at: identity.startedAt });
@@ -2006,7 +2073,8 @@ export class SessionTurnService {
             status: rawTurn.status,
             summary: "",
             time_zone: step.timeZone,
-            ...observation.info
+            ...observation.info,
+            ...projectTraceFields(session, step.toolCalls, request)
           },
           internal: {
             source: "turn.complete",
@@ -2102,6 +2170,7 @@ export class SessionTurnService {
           }
         }
         if (!captureClaimed) continue;
+        markProjectDuplicate(this.deps.repos, session, l1Memory, sourceRawTurn.userText ?? "", sourceRawTurn.assistantText ?? "", at);
 
         const upsert = this.deps.repos.memories.upsertByKey(l1Memory);
         l1MemoryIds.push(upsert.memory.id);
@@ -3726,7 +3795,7 @@ function v2SessionMeta(
 ): Record<string, unknown> {
   return {
     ...sanitizedSessionMeta(request.meta),
-    l3_world_model_protocol_version: 2,
+    l3_world_model_protocol_version: request.l3WorldModelProtocolVersion === 3 ? 3 : 2,
     ...(workspace.workspaceUri ? { workspace_uri: workspace.workspaceUri } : {}),
     ...(workspace.workspaceHostId ? { workspace_host_id: workspace.workspaceHostId } : {}),
     ...(timeZone ? { time_zone: timeZone } : {})
@@ -3783,4 +3852,64 @@ function legacyImportMatchesScope(
   if (requestProject !== memoryProject) return false;
   if (requestWorkspace !== memoryWorkspace) return false;
   return true;
+}
+
+function projectTraceFields(
+  session: SessionRecord,
+  toolCalls: readonly unknown[],
+  request: { changedFiles?: unknown }
+): Record<string, unknown> {
+  const root = session.workspacePath ?? null;
+  const changed = boundChangedFiles([
+    ...changedFilesFromToolCalls(toolCalls, root),
+    ...stringList(request.changedFiles)
+  ], root);
+  const git = readGitSnapshot(root);
+  return {
+    memory_scope: session.projectId ? "project" : "global",
+    ...(changed.length > 0 ? { changed_files: changed } : {}),
+    ...(git.head ? { git_head: git.head, git_branch: git.branch, git_dirty: git.dirty } : {})
+  };
+}
+
+function markProjectDuplicate(
+  repos: Repositories,
+  session: SessionRecord,
+  memory: MemoryRow,
+  query: string,
+  answer: string,
+  at: string
+): void {
+  if (!session.projectId || !query.trim() || !answer.trim()) return;
+  const claim = repos.captureClaims.claim({
+    userId: session.userId,
+    source: projectCaptureSource(session.projectId),
+    qaHash: memoryCaptureQaHash(query, answer),
+    primaryMemoryId: memory.id,
+    capturedBy: "turn_complete",
+    createdAt: at
+  });
+  if (!claim.claimed && claim.claim.primaryMemoryId !== memory.id) {
+    memory.info.duplicate_of = claim.claim.primaryMemoryId;
+  }
+}
+
+function textField(memories: readonly MemoryRow[], key: string): string[] {
+  const values: string[] = [];
+  for (const memory of memories) {
+    const value = memory.info[key];
+    if (typeof value === "string" && value.trim()) values.push(value.trim());
+  }
+  return values;
+}
+
+function activitySummary(memory: MemoryRow): string {
+  const summary = memory.info.summary;
+  if (typeof summary === "string" && summary.trim()) return summary.trim().slice(0, 80);
+  const value = memory.memoryValue.replace(/\s+/g, " ").trim();
+  return value.slice(0, 80) || "更新了项目";
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
 }

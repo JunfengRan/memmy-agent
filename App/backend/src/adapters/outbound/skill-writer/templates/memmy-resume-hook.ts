@@ -10,7 +10,7 @@ export interface RenderMemmyResumeHookScriptOptions {
 /** Renders the Node hook script used by prompt-submit hooks. */
 export function renderMemmyResumeHookScript(options: RenderMemmyResumeHookScriptOptions): string {
   return String.raw`#!/usr/bin/env node
-import { readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -44,6 +44,15 @@ async function main() {
   // Cursor also executes hooks inherited from Claude settings. Its own hook
   // owns these events; recording them as claude_code would duplicate the turn.
   if (MODE === "claude-code" && normalizeText(payload.cursor_version)) return;
+  if (MODE === "cursor" && hookEventName(payload) === "afterfileedit") {
+    try {
+      await rememberCursorEdit(payload);
+    } catch {
+      // File observation must not interrupt the editor.
+    }
+    process.stdout.write("{}");
+    return;
+  }
   if (isL3LifecycleEvent(payload)) {
     try {
       await handleL3LifecycleEvent(payload);
@@ -374,12 +383,14 @@ async function captureClaudeCodeSourceTurn(payload) {
 }
 
 async function submitSourceTurn(turn, pending, payload) {
+  const changedFiles = MODE === "cursor" ? await takeCursorEdits(payload) : undefined;
   const result = await completeSourceTurn({
     configUrl: CONFIG_URL,
     turn,
     sessionId: normalizeText(pending && pending.sessionId) || undefined,
     sourceMemoryIds: Array.isArray(pending && pending.sourceMemoryIds) ? pending.sourceMemoryIds : undefined,
-    adapterId: "memmy-" + SOURCE + "-hook"
+    adapterId: "memmy-" + SOURCE + "-hook",
+    changedFiles
   });
   if (result.status === "stored" || result.status === "existing" || result.status === "rejected") {
     await clearTurnState(payload);
@@ -682,6 +693,30 @@ function failedTurnText(payload) {
   );
 }
 
+async function rememberCursorEdit(payload) {
+  const filePath = normalizeText(payload.file_path || payload.filePath);
+  if (!filePath) return;
+  const bufferPath = await cursorEditBufferPath(payload);
+  const current = parseJson(await readFile(bufferPath, "utf8").catch(() => "[]"));
+  const files = Array.isArray(current) ? current.filter((item) => typeof item === "string") : [];
+  if (!files.includes(filePath)) files.push(filePath);
+  await writeFile(bufferPath, JSON.stringify(files.slice(-50)));
+}
+
+async function takeCursorEdits(payload) {
+  const bufferPath = await cursorEditBufferPath(payload);
+  const current = parseJson(await readFile(bufferPath, "utf8").catch(() => "[]"));
+  await unlink(bufferPath).catch(() => undefined);
+  return Array.isArray(current) ? current.filter((item) => typeof item === "string") : [];
+}
+
+async function cursorEditBufferPath(payload) {
+  const key = (sessionStateKey(payload) || "unknown").replace(/[^a-zA-Z0-9._-]/g, "_");
+  const directory = join(homedir(), ".memmy", "cursor-file-edits");
+  await mkdir(directory, { recursive: true });
+  return join(directory, key + ".json");
+}
+
 function writeAllowOutput() {
   if (MODE === "cursor") {
     process.stdout.write(JSON.stringify({ continue: true }));
@@ -707,7 +742,20 @@ function writeStopOutput() {
 
 function writeTurnStartOutput(started) {
   if (MODE === "cursor") {
-    writeAllowOutput();
+    if (process.env.MEMMY_CURSOR_TURN_INJECTION === "0") {
+      writeAllowOutput();
+      return;
+    }
+    const injected = started && started.injectedContext && typeof started.injectedContext === "object"
+      ? normalizeText(started.injectedContext.markdown)
+      : normalizeText(started && started.injectedContext);
+    if (!injected) {
+      writeAllowOutput();
+      return;
+    }
+    process.stdout.write(JSON.stringify({
+      additional_context: injected.slice(0, 8000)
+    }));
     return;
   }
   const injected = started && started.injectedContext && typeof started.injectedContext === "object"

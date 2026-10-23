@@ -199,6 +199,7 @@ export interface MemoryFilter {
   memoryKind?: MemoryKind | MemoryKind[];
   workMemoryUserId?: string;
   workMemoryProjectId?: string | null;
+  recallProjectId?: string | null;
 }
 
 export interface RecallHit {
@@ -369,6 +370,7 @@ export interface TurnCompleteRequest extends RequestEnvelope {
   sourceMemoryIds?: string[];
   usage?: Record<string, unknown>;
   status?: "succeeded" | "failed" | "cancelled";
+  changedFiles?: string[];
   userMemoryCorrection?: {
     targetMemoryId: string;
     revisedContent: string;
@@ -392,8 +394,8 @@ export interface SourceTurnCompleteRequest extends Omit<TurnCompleteRequest, "se
   sourceTurn: SourceTurnIdentity;
   channel: "hook" | "agent_source_scan";
   workspacePath?: string;
+  gitRoot?: string;
   /**
-   * Set only by initial and full agent-source scans. Those scans backfill history
    * that completed before capture activation. Hooks and incremental scans must omit it.
    */
   captureLegacyHistory?: boolean;

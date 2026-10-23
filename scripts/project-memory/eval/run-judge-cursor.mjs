@@ -1,0 +1,103 @@
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const arm = process.argv[2] ?? "project";
+const repo = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+if (existsSync(join(repo, "eval/project-memory/runs/.hold-cursor-judge"))) {
+  process.stdout.write("cursor judge held until the attribute-tree arm is ready\n");
+  process.exit(0);
+}
+const recall = JSON.parse(readFileSync(join(repo, "eval/project-memory/runs", `${arm}-recall.json`), "utf8"));
+const answersPath = arm === "project"
+  ? join(repo, "eval/project-memory/runs/cursor-answers.json")
+  : join(repo, "eval/project-memory/runs", `cursor-answers-${arm}.json`);
+const cursor = JSON.parse(readFileSync(answersPath, "utf8"));
+const env = Object.fromEntries(
+  readFileSync(join(homedir(), ".env"), "utf8")
+    .split(/\r?\n/)
+    .filter((line) => line && !line.startsWith("#") && line.includes("="))
+    .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)])
+);
+const base = env.OPENAI_API_BASE.replace(/\/$/, "");
+
+async function chat(messages) {
+  let lastError = "";
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      const response = await fetch(`${base}/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${env.OPENAI_API_KEY}` },
+        body: JSON.stringify({ model: env.MODEL, messages }),
+        signal: AbortSignal.timeout(90_000)
+      });
+      const text = await response.text();
+      if (response.ok) return JSON.parse(text).choices?.[0]?.message?.content ?? "";
+      lastError = `http ${response.status} ${text.slice(0, 160)}`;
+      if (response.status !== 429 && response.status !== 502 && response.status !== 503) break;
+    } catch (error) {
+      lastError = String(error);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 8000 * (attempt + 1)));
+  }
+  throw new Error(lastError);
+}
+
+async function judge(question) {
+  const answer = cursor.answers[question.id] ?? "";
+  const judgePrompt = [
+    { role: "system", content: "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。" },
+    { role: "user", content: JSON.stringify({
+      question: question.question,
+      mustInclude: question.mustInclude,
+      mustNotInclude: question.mustNotInclude,
+      answer
+    }) }
+  ];
+  const judgmentText = await chat(judgePrompt);
+  let judgment = { pass: false, errorType: "other", reason: judgmentText.slice(0, 180) };
+  try { judgment = JSON.parse(judgmentText.replace(/^```json\s*|```$/g, "").trim()); } catch { /* keep fallback */ }
+  return {
+    id: question.id,
+    kind: question.kind,
+    question: question.question,
+    context: question.context,
+    answer,
+    judgePrompt,
+    judgmentText,
+    passed: judgment.pass === true,
+    errorType: judgment.pass === true ? "none" : (judgment.errorType || "other"),
+    reason: judgment.reason ?? ""
+  };
+}
+
+const scored = recall.questions.filter((question) => !question.excluded && question.id !== "q21");
+const outPath = join(repo, "eval/project-memory/runs", `cursor-answer-${arm}.json`);
+const done = new Map();
+try {
+  const previous = JSON.parse(readFileSync(outPath, "utf8"));
+  for (const item of previous.questions ?? []) {
+    if (item.id !== "q21" && item.answer) done.set(item.id, item);
+  }
+} catch { /* first run */ }
+const results = [...done.values()];
+for (const question of scored) {
+  if (done.has(question.id)) continue;
+  process.stderr.write(`cursor ${arm} ${question.id}\n`);
+  const item = await judge(question);
+  results.push(item);
+  const passedNow = results.filter((row) => row.passed).length;
+  writeFileSync(outPath, `${JSON.stringify({
+    arm,
+    method: "cursor-model-answer",
+    model: env.MODEL,
+    questionCount: scored.length,
+    excluded: ["q21"],
+    passed: passedNow,
+    accuracy: passedNow / scored.length,
+    questions: results
+  }, null, 2)}\n`);
+}
+const passed = results.filter((item) => item.passed).length;
+process.stdout.write(`cursor answer ${passed}/${scored.length} ${(passed / scored.length * 100).toFixed(1)}%\n`);

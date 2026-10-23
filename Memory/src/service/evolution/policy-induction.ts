@@ -18,6 +18,7 @@ import { kindFromMemory } from "../../storage/repositories.js";
 import type { MemoryRow } from "../../types.js";
 import { isRecord } from "../../utils/json.js";
 import { stableHash } from "../../utils/id.js";
+import { groupByProjectScope, policyMemoryKey, policyScopeKeyFromMemory, truncateEvidence } from "../project/policy-scope.js";
 import { clip } from "../../utils/text.js";
 import type { EnqueueJobInput } from "../worker/job-handlers.js";
 import { logEvolutionDecision } from "./evolution-logging.js";
@@ -193,13 +194,16 @@ export class PolicyInductionEngine {
     );
 
     for (const signature of signatures) {
-      const bucket = uniq(
+      const mixedBucket = uniq(
         pendingCandidates
           .filter((candidate) => candidate.candidateKey === signature)
           .map((candidate) => candidate.sourceMemoryId)
       )
         .map((traceId) => eligibleById.get(traceId))
         .filter((trace): trace is TraceMeta => Boolean(trace));
+      for (const group of groupByProjectScope(mixedBucket, (trace) => trace.memory.info.project_id)) {
+      const bucket = group.traces;
+      const scopeKey = group.scopeKey;
       const distinctEpisodeCount = uniq(
         bucket
           .map((trace) => trace.episodeId)
@@ -225,7 +229,7 @@ export class PolicyInductionEngine {
         }
       }
       const promptEvidenceTraces = [...byEpisode.values()];
-      const matchingPolicy = this.findExistingPolicyForL2Bucket(signature, bucket);
+      const matchingPolicy = this.findExistingPolicyForL2Bucket(signature, bucket, scopeKey);
       if (matchingPolicy) {
         for (const trace of bucket) {
           const similarity = tracePolicySimilarity(trace, matchingPolicy);
@@ -248,8 +252,11 @@ export class PolicyInductionEngine {
         continue;
       }
 
-      const policyKey = `policy:${stableHash(signature).slice(0, 16)}`;
-      const existingPolicyMemory = this.deps.repos.memories.getByKey("L2", policyKey);
+      const hash16 = stableHash(signature).slice(0, 16);
+      const policyKey = policyMemoryKey(hash16, scopeKey);
+      const legacyKey = `policy:${hash16}`;
+      const existingPolicyMemory = this.deps.repos.memories.getByKey("L2", policyKey)
+        ?? (scopeKey === "global" ? this.deps.repos.memories.getByKey("L2", legacyKey) : undefined);
       const existingPolicy = existingPolicyMemory && !this.isArchivedEvolutionMemory(existingPolicyMemory)
         ? policyMetaFromMemory(existingPolicyMemory)
         : null;
@@ -296,9 +303,12 @@ export class PolicyInductionEngine {
         continue;
       }
 
+      const cappedIds = truncateEvidence(enhancement.draft.sourceTraceIds);
       const draft = {
         ...enhancement.draft,
-        key: policyKey
+        key: policyKey,
+        sourceTraceIds: cappedIds,
+        body: enhancement.draft.body.replace(/Evidence:.*$/m, `Evidence: ${cappedIds.join(", ")}`)
       };
       const freshnessClass = draft.freshnessClass ?? inferPolicyFreshness(`${draft.trigger}\n${draft.procedure}`);
       const revalidateAfter = freshnessClass === "dynamic"
@@ -311,7 +321,7 @@ export class PolicyInductionEngine {
         sessionId: source.sessionId,
         agentId: source.agentId,
         appId: source.appId,
-        projectId: this.deps.projectIdFromMemory(source),
+        ...(scopeKey === "global" ? {} : { projectId: scopeKey }),
         profileId: this.deps.profileIdFromMemory(source),
         layer: "L2",
         kind: "policy",
@@ -431,6 +441,7 @@ export class PolicyInductionEngine {
         payload: { signature },
         createdAt: at
       });
+      }
     }
   }
 
@@ -612,13 +623,15 @@ export class PolicyInductionEngine {
 
   private findExistingPolicyForL2Bucket(
     signature: string,
-    evidenceTraces: TraceMeta[]
+    evidenceTraces: TraceMeta[],
+    scopeKey: string
   ): PolicyMeta | null {
     if (evidenceTraces.length === 0) return null;
     const policies = this.deps.repos.memories
       .list({ memoryLayer: "L2", status: ["activated", "resolving"] }, 1000)
       .map((policy) => policyMetaFromMemory(policy))
-      .filter((policy): policy is PolicyMeta => Boolean(policy));
+      .filter((policy): policy is PolicyMeta => Boolean(policy))
+      .filter((policy) => policyScopeKeyFromMemory(policy.memory) === scopeKey);
 
     let best: { policy: PolicyMeta; score: number } | null = null;
 
@@ -875,6 +888,7 @@ export function updatePolicyStats(memory: MemoryRow, input: {
     : {};
 
   const status = memoryStatusForLifecycleStatus(input.status);
+  const sourceTraceIds = truncateEvidence(input.sourceTraceIds);
   const nextPolicy = {
     ...internalPolicy,
     support: input.support,
@@ -882,7 +896,7 @@ export function updatePolicyStats(memory: MemoryRow, input: {
     raw_gain: input.rawGain,
     status: input.status,
     source_episode_ids: input.sourceEpisodeIds,
-    source_trace_ids: input.sourceTraceIds
+    source_trace_ids: sourceTraceIds
   };
 
   const body = currentPolicy
@@ -896,7 +910,7 @@ export function updatePolicyStats(memory: MemoryRow, input: {
         gain: input.gain,
         rawGain: input.rawGain,
         confidence: currentPolicy.confidence,
-        sourceTraceIds: input.sourceTraceIds
+        sourceTraceIds
       })
     : memory.memoryValue;
 
@@ -911,7 +925,7 @@ export function updatePolicyStats(memory: MemoryRow, input: {
       raw_gain: input.rawGain,
       policy_confidence: currentPolicy?.confidence,
       status: input.status,
-      source_memory_ids: input.sourceTraceIds
+      source_memory_ids: sourceTraceIds
     },
     properties: {
       ...memory.properties,
@@ -923,19 +937,19 @@ export function updatePolicyStats(memory: MemoryRow, input: {
         raw_gain: input.rawGain,
         policy_confidence: currentPolicy?.confidence,
         status: input.status,
-        source_memory_ids: input.sourceTraceIds
+        source_memory_ids: sourceTraceIds
       },
       internal_info: {
         ...(memory.properties?.internal_info ?? {}),
-        source_memory_ids: input.sourceTraceIds,
-        source_l1_memory_ids: input.sourceTraceIds,
+        source_memory_ids: sourceTraceIds,
+        source_l1_memory_ids: sourceTraceIds,
         support: input.support,
         gain: input.gain,
         raw_gain: input.rawGain,
         policy_confidence: currentPolicy?.confidence,
         status: input.status,
         source_episode_ids: input.sourceEpisodeIds,
-        source_trace_ids: input.sourceTraceIds,
+        source_trace_ids: sourceTraceIds,
         policy: nextPolicy
       }
     },

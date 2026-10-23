@@ -27,6 +27,7 @@ import type {
   PanelOverviewOutput,
   PanelTasksInput,
   PanelTasksOutput,
+  ProjectTopicsOutput,
   OpenSessionInput,
   OpenSessionOutput,
   SearchInput,
@@ -98,4 +99,8 @@ export interface MemoryClient {
   panelTasks(input: PanelTasksInput, context?: MemoryRequestContext): Promise<PanelTasksOutput>;
   deletePanelTask(taskId: string, context?: MemoryRequestContext): Promise<DeletePanelTaskOutput>;
   memoryApiLogs(input: MemoryApiLogsInput, context?: MemoryRequestContext): Promise<MemoryApiLogsOutput>;
+  listProjectTopics?(
+    input: { workspacePath: string },
+    context?: MemoryRequestContext
+  ): Promise<ProjectTopicsOutput>;
 }

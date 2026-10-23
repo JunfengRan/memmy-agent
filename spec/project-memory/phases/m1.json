@@ -1,0 +1,23 @@
+{
+  "phase": "m1",
+  "summary": "项目归一、作用域加权、改动文件、近况、Cursor 每轮注入、项目级判重",
+  "requirements": [
+    { "id": "ADR-003-subdir-root", "summary": "子目录与仓库根得到同一个 project_id" },
+    { "id": "ADR-003-symlink", "summary": "符号链接先 realpath 再归一" },
+    { "id": "ADR-003-nongit", "summary": "无 git 的目录以工作区根为项目" },
+    { "id": "ADR-003-worktree", "summary": "每个 git worktree 单独一个项目" },
+    { "id": "M1-MERGE-dry-run", "summary": "merge-subdirs 先报告再改挂会话、L1 和 L3" },
+    { "id": "M1-FILES-patch", "summary": "Codex apply_patch 头记入 changed_files" },
+    { "id": "M1-FILES-edit", "summary": "Edit、Write、Memmy path 记入 changed_files" },
+    { "id": "M1-FILES-cap", "summary": "changed_files 去重且最多 50 个" },
+    { "id": "M1-GIT-status", "summary": "轮结束记下 git_head、git_branch、git_dirty" },
+    { "id": "ADR-004-exclude-other-l1", "summary": "项目会话不召回其他项目的 L1" },
+    { "id": "ADR-004-coefficients", "summary": "作用域系数与 ADR-004 初值一致" },
+    { "id": "ADR-004-work-memory", "summary": "work memory 仍按项目过滤" },
+    { "id": "M1-CTX-activity", "summary": "项目头包含其他 Agent 近况、时间和改动文件" },
+    { "id": "M1-CTX-budget", "summary": "近况段不超过 800 字" },
+    { "id": "M1-HOOK-inject", "summary": "Cursor 每轮注入 additional_context" },
+    { "id": "M1-HOOK-off", "summary": "MEMMY_CURSOR_TURN_INJECTION=0 时只回 continue" },
+    { "id": "M1-DEDUP-project", "summary": "同一项目重复问答只在项目视图出现一条" }
+  ]
+}

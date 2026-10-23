@@ -4,8 +4,8 @@ import { resolveCursorDataPaths } from "../../agent-paths.js";
 import { streamConversationWindow, remainingMessageCapacity } from "../conversation-window.js";
 import { redactSecrets } from "../secret-redactor.js";
 import type { ConversationMessage, ScanOptions, SourceAdapter, SourceDescriptor } from "../types.js";
-import { readCursorVscdb, streamCursorVscdb, type RawCursorMessage } from "./vscdb-reader.js";
-import { discoverCursorWorkspaces, type CursorWorkspace } from "./workspace-discovery.js";
+import { readCursorVscdb, streamCursorVscdb, listCursorComposerLocations, type RawCursorMessage } from "./vscdb-reader.js";
+import { discoverCursorWorkspaces, resolveCursorWorkspaceLocation, type CursorWorkspace } from "./workspace-discovery.js";
 
 const CURSOR_SOURCE_ID = "cursor";
 
@@ -83,6 +83,42 @@ export function createCursorSourceAdapter(deps: CreateCursorSourceAdapterDeps = 
           total: targets.length,
           message: target.storageHash
         });
+
+        if (target.storageHash === "globalStorage") {
+          const locations = listCursorComposerLocations(target.stateDbPath);
+          const workspaceByComposer = new Map<string, { workspacePath: string | null; gitRoot: string | null }>();
+          const workspaceCache = new Map<string, { workspacePath: string | null; gitRoot: string | null }>();
+          for (const location of locations) {
+            const key = location.workspaceId ?? "";
+            let resolved = workspaceCache.get(key);
+            if (!resolved) {
+              resolved = await resolveCursorWorkspaceLocation(storageRoot, location.workspaceId);
+              workspaceCache.set(key, resolved);
+            }
+            workspaceByComposer.set(location.composerId, resolved);
+          }
+          for await (const rawMessage of streamConversationWindow(
+            options.fullHistory
+              ? streamCursorVscdb(target.stateDbPath, options.signal)
+              : readCursorVscdb(target.stateDbPath, options.signal),
+            options.since,
+            options.signal,
+            remainingMessageCapacity(options.maxMessages, emittedMessages),
+            options.fullHistory
+          )) {
+            throwIfAborted(options.signal);
+            const located = workspaceByComposer.get(rawMessage.conversationId) ?? { workspacePath: null, gitRoot: null };
+            const message = toConversationMessage(descriptor.sourceId, {
+              ...target,
+              workspacePath: located.workspacePath,
+              gitRoot: located.gitRoot
+            }, rawMessage);
+            emittedMessages += 1;
+            yield message;
+            if (limitReached(emittedMessages, options.maxMessages)) break;
+          }
+          continue;
+        }
 
         for await (const rawMessage of streamConversationWindow(
           options.fullHistory

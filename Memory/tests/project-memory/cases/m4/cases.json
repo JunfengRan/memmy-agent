@@ -1,0 +1,26 @@
+[
+  {
+    "id": "M4-DATA-001",
+    "requirement": "M4-datasets",
+    "kind": "datasets",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M4-METRIC-001",
+    "requirement": "M4-metrics",
+    "kind": "metrics",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M4-DB-001",
+    "requirement": "M4-isolated-db",
+    "kind": "db",
+    "expect": {
+      "ok": true
+    }
+  }
+]

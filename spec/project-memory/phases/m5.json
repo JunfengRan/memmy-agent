@@ -1,0 +1,9 @@
+{
+  "phase": "m5",
+  "summary": "原始 Memmy 上的属性树对照臂",
+  "requirements": [
+    { "id": "M5-baseline-sha", "summary": "属性树从 baselineSha 拉出，不改 RRF 与策略归纳" },
+    { "id": "M5-tree-inject", "summary": "按路径注入决策、约定和最近改动" },
+    { "id": "M5-iterate-cap", "summary": "最多三轮，只改粒度、匹配或注入预算" }
+  ]
+}

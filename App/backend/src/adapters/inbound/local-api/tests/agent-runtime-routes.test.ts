@@ -36,7 +36,8 @@ describe("agent runtime local api routes", () => {
       { method: "GET", url: "/api/v1/panel/analysis" },
       { method: "GET", url: "/api/v1/panel/items?layer=L1&status=activated&page=1" },
       { method: "GET", url: "/api/v1/panel/tasks?page=1" },
-      { method: "DELETE", url: "/api/v1/panel/tasks/episode-1" }
+      { method: "DELETE", url: "/api/v1/panel/tasks/episode-1" },
+      { method: "GET", url: "/api/v1/projects/topics?workspacePath=%2Ftmp%2Fmemmy" }
     ];
 
     for (const request of requests) {
@@ -424,7 +425,8 @@ function createServer(overrides: Record<string, unknown> = {}, timeZone?: string
       async items() { return panelItemsOutput(); },
       async tasks() { return panelTasksOutput(); },
       async deleteTask(id: string) { return { ok: true as const, id, deletedMemoryIds: [], serverTime: now() }; },
-      async memoryApiLogs() { return { logs: [], total: 0, limit: 20, offset: 0, serverTime: now() }; }
+      async memoryApiLogs() { return { logs: [], total: 0, limit: 20, offset: 0, serverTime: now() }; },
+      async projectTopics() { return { projectId: null, rootPath: null, topics: [] }; }
     },
     ...overrides
   } as unknown as BackendServices;

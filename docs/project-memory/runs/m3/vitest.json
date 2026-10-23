@@ -1,0 +1,16 @@
+{
+  "numPassedTests": 10,
+  "numFailedTests": 0,
+  "caseIds": [
+    "ADR-009-effective-level",
+    "ADR-009-default-write",
+    "ADR-009-read-filter",
+    "ADR-009-acl-deny",
+    "ADR-010-same-level-conflict",
+    "ADR-010-higher-level-wins",
+    "ADR-010-user-wins",
+    "ADR-010-deliver-once",
+    "Q18-one-layer",
+    "Q15-dream-claim"
+  ]
+}

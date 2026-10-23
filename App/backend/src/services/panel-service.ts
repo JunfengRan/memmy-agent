@@ -5,6 +5,7 @@ import type {
   PanelItemsOutput,
   PanelTasksInput,
   PanelTasksOutput,
+  ProjectTopicsOutput,
   DeletePanelTaskOutput,
   MemoryApiLogsInput,
   MemoryApiLogsOutput,
@@ -22,6 +23,7 @@ export interface PanelService {
   tasks(input: PanelTasksInput, ctx: RuntimeContext): Promise<PanelTasksOutput>;
   deleteTask(id: string, ctx: RuntimeContext): Promise<DeletePanelTaskOutput>;
   memoryApiLogs(input: MemoryApiLogsInput, ctx: RuntimeContext): Promise<MemoryApiLogsOutput>;
+  projectTopics(workspacePath: string, ctx: RuntimeContext): Promise<ProjectTopicsOutput>;
 }
 
 /** Creates create panel service. */
@@ -49,6 +51,13 @@ export function createPanelService(deps: { memoryClient: MemoryClient; getUserId
 
     async deleteTask(id, ctx) {
       return deps.memoryClient.deletePanelTask(id, context(ctx));
+    },
+
+    async projectTopics(workspacePath, ctx) {
+      if (!deps.memoryClient.listProjectTopics) {
+        return { projectId: null, rootPath: null, topics: [] };
+      }
+      return deps.memoryClient.listProjectTopics({ workspacePath }, context(ctx));
     },
 
     async memoryApiLogs(input, ctx) {

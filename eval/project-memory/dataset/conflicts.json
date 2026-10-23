@@ -1,0 +1,245 @@
+{
+  "resolvedAt": "2026-10-21T12:30:00.000Z",
+  "conflicts": [
+    {
+      "id": "cf_amount",
+      "levelRelation": "same",
+      "sideA": {
+        "agent": "cursor:main",
+        "level": "write",
+        "claim": "金额继续写在 journal 正文里",
+        "evidenceIds": [
+          "t_journal"
+        ]
+      },
+      "sideB": {
+        "agent": "cursor:main",
+        "level": "write",
+        "claim": "给 entries 加上 amount 列",
+        "evidenceIds": [
+          "t_column"
+        ]
+      },
+      "expectOpen": true,
+      "winner": "b",
+      "resolvedBy": "user",
+      "systemUpdateMustContain": "amount 列"
+    },
+    {
+      "id": "cf_copy",
+      "levelRelation": "same",
+      "sideA": {
+        "agent": "cursor:main",
+        "level": "write",
+        "claim": "已经抄进 ledger",
+        "evidenceIds": [
+          "t_copy"
+        ]
+      },
+      "sideB": {
+        "agent": "cursor:main",
+        "level": "write",
+        "claim": "拷贝我撤掉了",
+        "evidenceIds": [
+          "t_wait"
+        ]
+      },
+      "expectOpen": true,
+      "winner": "b",
+      "resolvedBy": "user",
+      "systemUpdateMustContain": "拷贝我撤掉了"
+    },
+    {
+      "id": "cf_verbose",
+      "levelRelation": "same",
+      "sideA": {
+        "agent": "cursor:main",
+        "level": "write",
+        "claim": "按顺序写完每一个步骤",
+        "evidenceIds": [
+          "t_verbose"
+        ]
+      },
+      "sideB": {
+        "agent": "cursor:main",
+        "level": "write",
+        "claim": "步骤记在清单里",
+        "evidenceIds": [
+          "t_short"
+        ]
+      },
+      "expectOpen": true,
+      "winner": "b",
+      "resolvedBy": "user",
+      "systemUpdateMustContain": "步骤记在清单里"
+    },
+    {
+      "id": "cf_silent",
+      "levelRelation": "same",
+      "sideA": {
+        "agent": "cursor:main",
+        "level": "write",
+        "claim": "只留在当前窗口",
+        "evidenceIds": [
+          "t_silent"
+        ]
+      },
+      "sideB": {
+        "agent": "cursor:main",
+        "level": "write",
+        "claim": "下一次开口",
+        "evidenceIds": [
+          "t_tell"
+        ]
+      },
+      "expectOpen": true,
+      "winner": "b",
+      "resolvedBy": "user",
+      "systemUpdateMustContain": "下一次开口"
+    },
+    {
+      "id": "cf_empty",
+      "levelRelation": "same",
+      "sideA": {
+        "agent": "cursor:main",
+        "level": "write",
+        "claim": "没有客户名时这笔不进月报",
+        "evidenceIds": [
+          "t_report"
+        ]
+      },
+      "sideB": {
+        "agent": "cursor:main",
+        "level": "write",
+        "claim": "空客户但金额还在的会留下",
+        "evidenceIds": [
+          "t_bug"
+        ]
+      },
+      "expectOpen": true,
+      "winner": "b",
+      "resolvedBy": "user",
+      "systemUpdateMustContain": "空客户但金额还在的会留下"
+    },
+    {
+      "id": "cf_admin_bug",
+      "levelRelation": "different",
+      "sideA": {
+        "agent": "cursor:main",
+        "level": "admin",
+        "claim": "是 report.ts 的读取问题",
+        "evidenceIds": [
+          "t_admin_bug"
+        ]
+      },
+      "sideB": {
+        "agent": "cursor:main",
+        "level": "write",
+        "claim": "把样例里的金额填上了",
+        "evidenceIds": [
+          "t_sample"
+        ]
+      },
+      "expectOpen": false,
+      "winner": "a",
+      "resolvedBy": "level",
+      "systemUpdateMustContain": "是 report.ts 的读取问题"
+    },
+    {
+      "id": "cf_admin_env",
+      "levelRelation": "different",
+      "sideA": {
+        "agent": "cursor:main",
+        "level": "admin",
+        "claim": "都不放连接串",
+        "evidenceIds": [
+          "t_admin_env"
+        ]
+      },
+      "sideB": {
+        "agent": "cursor:main",
+        "level": "write",
+        "claim": "连接串已经写进 README",
+        "evidenceIds": [
+          "t_write_secret"
+        ]
+      },
+      "expectOpen": false,
+      "winner": "a",
+      "resolvedBy": "level",
+      "systemUpdateMustContain": "都不放连接串"
+    },
+    {
+      "id": "cf_admin_todo",
+      "levelRelation": "different",
+      "sideA": {
+        "agent": "cursor:main",
+        "level": "admin",
+        "claim": "没有拆开",
+        "evidenceIds": [
+          "t_admin_todo"
+        ]
+      },
+      "sideB": {
+        "agent": "cursor:main",
+        "level": "write",
+        "claim": "每句一段",
+        "evidenceIds": [
+          "t_write_split"
+        ]
+      },
+      "expectOpen": false,
+      "winner": "a",
+      "resolvedBy": "level",
+      "systemUpdateMustContain": "没有拆开"
+    },
+    {
+      "id": "cf_admin_claim",
+      "levelRelation": "different",
+      "sideA": {
+        "agent": "cursor:main",
+        "level": "admin",
+        "claim": "改了不同文件不算",
+        "evidenceIds": [
+          "t_admin_claim"
+        ]
+      },
+      "sideB": {
+        "agent": "cursor:main",
+        "level": "write",
+        "claim": "都记成冲突",
+        "evidenceIds": [
+          "t_write_edit"
+        ]
+      },
+      "expectOpen": false,
+      "winner": "a",
+      "resolvedBy": "level",
+      "systemUpdateMustContain": "改了不同文件不算"
+    },
+    {
+      "id": "cf_admin_branch",
+      "levelRelation": "different",
+      "sideA": {
+        "agent": "cursor:main",
+        "level": "admin",
+        "claim": "main 不直接改",
+        "evidenceIds": [
+          "t_admin_branch"
+        ]
+      },
+      "sideB": {
+        "agent": "cursor:main",
+        "level": "write",
+        "claim": "直接在 main 上改了",
+        "evidenceIds": [
+          "t_write_main"
+        ]
+      },
+      "expectOpen": false,
+      "winner": "a",
+      "resolvedBy": "level",
+      "systemUpdateMustContain": "main 不直接改"
+    }
+  ]
+}

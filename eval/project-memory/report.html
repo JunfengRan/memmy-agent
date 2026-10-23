@@ -1,0 +1,2114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem("memtensor-doc-theme");
+        if (theme === "light" || theme === "dark") document.documentElement.setAttribute("data-theme", theme);
+      } catch (e) { /* 读不到本地记录时继续跟随系统 */ }
+    })();
+  </script>
+  <title>项目记忆三种方式对照</title>
+  <style>
+    /* 变量逐个取自 DESIGN.md；改颜色先改 DESIGN.md。 */
+    :root {
+      color-scheme: light dark;
+
+      --primary: light-dark(#4044ED, #7275F7);
+      --primary-soft: light-dark(#EEF0FF, #0F163E);
+      --primary-line: light-dark(#D8DAFB, #20277A);
+      --brand-blue: #408DFC;
+      --brand-violet: #AA75EF;
+      --ink: light-dark(#141D32, #E2E8F0);
+      --body: light-dark(#364153, #CBD5E1);
+      --muted: light-dark(#62748E, #90A1B9);
+      --line: light-dark(#E2E8F0, #1E293B);
+      --line-strong: light-dark(#CAD5E2, #2E3B58);
+      --surface: light-dark(#FFFFFF, #080F21);
+      --panel: light-dark(#F8FAFC, #0A132D);
+      --canvas: light-dark(#FAFAFF, #080F21);
+      --risk: light-dark(#DC2626, #F87171);
+      --risk-ink: light-dark(#B91C1C, #F87171);
+      --risk-soft: light-dark(#FEF2F2, #141D32);
+      --verify: light-dark(#D97706, #FBBF24);
+      --verify-ink: light-dark(#B45309, #FBBF24);
+      --verify-soft: light-dark(#FFFBEB, #141D32);
+      --positive: light-dark(#16A34A, #4ADE80);
+      --positive-ink: light-dark(#15803D, #4ADE80);
+      --positive-soft: light-dark(#F0FDF4, #141D32);
+      --memmy: light-dark(#0E9D88, #5CBFAE);
+      --memmy-ink: light-dark(#0B7D6D, #5CBFAE);
+      --memmy-soft: light-dark(#E7F7F3, #141D32);
+      --clawforce: #F1623D;
+      --clawforce-ink: light-dark(#C2410C, #F1623D);
+      --clawforce-soft: light-dark(#FFF1EC, #141D32);
+
+      --grad-brand: linear-gradient(90deg, var(--brand-blue), var(--primary) 55%, var(--brand-violet));
+      --grad-brand-v: linear-gradient(180deg, var(--brand-blue), var(--primary) 55%, var(--brand-violet));
+      --nav-active-text: light-dark(#4044ED, #E2E8F0);
+
+      --d-group-fill: light-dark(#FFFFFF, #0A132D);
+      --d-group-line: light-dark(#D8DAFB, #1E293B);
+      --d-node-fill: light-dark(#FFFFFF, #0A132D);
+      --d-node-line: light-dark(#E2E8F0, #2E3B58);
+      --d-focus-fill: light-dark(#EEF0FF, #141D32);
+      --d-focus-line: #4044ED;
+      --d-focus-text: light-dark(#4044ED, #01C6FA);
+      --d-chip-fill: light-dark(#FFFFFF, #0A132D);
+      --d-chip-line: light-dark(#D8DAFB, #20277A);
+      --d-chip-text: light-dark(#4044ED, #7275F7);
+      --d-badge-fill: light-dark(#EEF0FF, #0F163E);
+      --d-badge-line: light-dark(transparent, #20277A);
+      --d-risk-fill: light-dark(#FEF2F2, #141D32);
+      --d-risk-line: light-dark(#DC2626, #F87171);
+      --d-risk-text: light-dark(#B91C1C, #F87171);
+      --d-main: light-dark(#4044ED, #01C6FA);
+      --d-edge: light-dark(#62748E, #90A1B9);
+      --d-ext: light-dark(#CAD5E2, #2E3B58);
+      --d-title: light-dark(#141D32, #E2E8F0);
+      --d-sub: light-dark(#62748E, #90A1B9);
+      --d-msg: light-dark(#364153, #CBD5E1);
+
+      --font-display: "Alibaba PuHuiTi 3.0", -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", sans-serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+      --sp-xs: 4px;
+      --sp-sm: 8px;
+      --sp-md: 12px;
+      --sp-base: 16px;
+      --sp-lg: 24px;
+      --sp-xl: 32px;
+      --sp-2xl: 48px;
+      --nav-width: 248px;
+      --content-width: 720px;
+      --page-width: 1160px;
+
+      --r-sm: 4px;
+      --r-md: 8px;
+      --r-lg: 12px;
+      --r-full: 9999px;
+
+      --shadow-card: 0 1px 2px rgba(20, 29, 50, 0.04), 0 8px 24px rgba(64, 68, 237, 0.05);
+      --glow-focus: 0 0 0 transparent;
+    }
+
+    :root[data-theme="light"] { color-scheme: light; }
+    :root[data-theme="dark"] { color-scheme: dark; }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --grad-brand: linear-gradient(90deg, #1D4ED8, #01C6FA);
+        --grad-brand-v: linear-gradient(180deg, #1D4ED8, #01C6FA);
+        --shadow-card: 0 0 0 1px rgba(64, 68, 237, 0.22), 0 0 40px rgba(1, 198, 250, 0.06);
+        --glow-focus: 0 0 10px rgba(1, 198, 250, 0.35);
+      }
+    }
+    :root[data-theme="dark"] {
+      --grad-brand: linear-gradient(90deg, #1D4ED8, #01C6FA);
+      --grad-brand-v: linear-gradient(180deg, #1D4ED8, #01C6FA);
+      --shadow-card: 0 0 0 1px rgba(64, 68, 237, 0.22), 0 0 40px rgba(1, 198, 250, 0.06);
+      --glow-focus: 0 0 10px rgba(1, 198, 250, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-padding-top: var(--sp-lg); }
+    body {
+      margin: 0;
+      background: var(--surface);
+      color: var(--body);
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.75;
+      -webkit-font-smoothing: antialiased;
+    }
+    ::selection { background: var(--primary-soft); color: var(--ink); }
+    a {
+      color: var(--primary);
+      text-decoration: underline;
+      text-decoration-color: var(--primary-line);
+      text-underline-offset: 3px;
+      transition: color 150ms, text-decoration-color 150ms, background-color 150ms;
+    }
+    a:hover { text-decoration-color: var(--primary); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: var(--nav-width) minmax(0, 1fr);
+      max-width: var(--page-width);
+      margin: 0 auto;
+    }
+
+    nav.toc {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      overflow-y: auto;
+      padding: var(--sp-2xl) var(--sp-base) var(--sp-xl) var(--sp-lg);
+      border-right: 1px solid var(--line);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .toc-brand { display: flex; flex-direction: column; gap: 2px; margin: 0 0 var(--sp-lg); }
+    .toc-brand::after {
+      content: "";
+      width: 24px;
+      height: 3px;
+      margin-top: var(--sp-sm);
+      border-radius: var(--r-full);
+      background: var(--grad-brand);
+    }
+    .toc-org {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink);
+    }
+    .toc-kind { font-size: 12px; color: var(--muted); }
+    nav.toc a {
+      position: relative;
+      display: flex;
+      align-items: baseline;
+      gap: var(--sp-sm);
+      margin: 2px 0;
+      padding: 6px var(--sp-md);
+      border-radius: var(--r-sm);
+      color: var(--muted);
+      text-decoration: none;
+    }
+    nav.toc a:hover { color: var(--ink); }
+    nav.toc a[aria-current="true"] {
+      background: var(--primary-soft);
+      color: var(--nav-active-text);
+      font-weight: 600;
+    }
+    nav.toc a[aria-current="true"]::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 6px;
+      bottom: 6px;
+      width: 3px;
+      border-radius: var(--r-full);
+      background: var(--grad-brand-v);
+    }
+    .toc-no {
+      min-width: 1.75em;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      color: var(--primary);
+    }
+
+    main {
+      position: relative;
+      min-width: 0;
+      max-width: calc(var(--content-width) + 2 * var(--sp-2xl));
+      padding: var(--sp-2xl) var(--sp-2xl) 96px;
+    }
+
+    .doc-head { margin-bottom: var(--sp-xl); }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      margin: 0 0 var(--sp-md);
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+    }
+    .title-rule {
+      width: 56px;
+      height: 3px;
+      margin: var(--sp-base) 0 var(--sp-lg);
+      border-radius: var(--r-full);
+      background: var(--grad-brand);
+    }
+    .lead {
+      position: relative;
+      margin: 0 0 var(--sp-base);
+      padding: var(--sp-base) var(--sp-lg);
+      border-radius: var(--r-md);
+      background: var(--primary-soft);
+      color: var(--ink);
+      font-size: 17px;
+      line-height: 1.65;
+    }
+    .lead::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      border-radius: var(--r-md) 0 0 var(--r-md);
+      background: var(--grad-brand-v);
+    }
+    .lead strong { color: var(--primary); }
+    .meta { display: flex; flex-wrap: wrap; gap: var(--sp-sm); margin: 0; }
+    .meta div {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px var(--sp-md);
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--panel);
+      font-size: 12px;
+      line-height: 1.8;
+    }
+    .meta dt { color: var(--muted); }
+    .meta dd { margin: 0; font-family: var(--font-mono); color: var(--ink); }
+
+    section { margin-top: var(--sp-2xl); }
+    h2 {
+      display: flex;
+      align-items: baseline;
+      gap: var(--sp-md);
+      margin: 0 0 var(--sp-base);
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+    .sec-no {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--primary);
+    }
+    h3 {
+      margin: var(--sp-xl) 0 var(--sp-sm);
+      color: var(--ink);
+      font-size: 17px;
+      font-weight: 600;
+      line-height: 1.5;
+    }
+    p, ul, ol { margin: 0 0 var(--sp-base); }
+    ul, ol { padding-left: 1.4em; }
+    li + li { margin-top: var(--sp-xs); }
+    strong { color: var(--ink); font-weight: 600; }
+
+    code, pre { font-family: var(--font-mono); }
+    code {
+      padding: 1px 6px;
+      border: 1px solid var(--line);
+      border-radius: var(--r-sm);
+      background: var(--panel);
+      color: var(--ink);
+      font-size: 0.875em;
+    }
+    pre {
+      margin: 0 0 var(--sp-base);
+      padding: var(--sp-base);
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: var(--panel);
+      color: var(--ink);
+      font-size: 13.5px;
+      line-height: 1.6;
+    }
+    pre code { padding: 0; border: 0; background: none; font-size: inherit; }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 var(--sp-sm);
+      border-radius: var(--r-full);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0;
+      text-transform: none;
+      white-space: nowrap;
+      vertical-align: 1px;
+    }
+    .tag-memos { background: var(--primary-soft); color: var(--primary); }
+    .tag-memmy { background: var(--memmy-soft); color: var(--memmy-ink); }
+    .tag-clawforce { background: var(--clawforce-soft); color: var(--clawforce-ink); }
+    .tag-positive { background: var(--positive-soft); color: var(--positive-ink); }
+
+    .callout {
+      position: relative;
+      margin: var(--sp-lg) 0;
+      padding: var(--sp-md) var(--sp-base) var(--sp-md) calc(var(--sp-base) + 3px);
+      border-radius: var(--r-md);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .callout::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      border-radius: var(--r-md) 0 0 var(--r-md);
+      background: var(--callout-line);
+    }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { color: inherit; }
+    .callout-title {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--callout-title);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+    .callout.info { --callout-line: var(--primary); --callout-title: var(--primary); background: var(--primary-soft); color: var(--body); }
+    .callout.verify { --callout-line: var(--verify); --callout-title: var(--verify-ink); background: var(--verify-soft); color: var(--verify-ink); }
+    .callout.risk { --callout-line: var(--risk); --callout-title: var(--risk-ink); background: var(--risk-soft); color: var(--risk-ink); }
+
+    ol.steps { list-style: none; counter-reset: step; margin: var(--sp-lg) 0; padding: 0; }
+    ol.steps li { position: relative; margin: 0; padding: 0 0 var(--sp-lg) 40px; counter-increment: step; }
+    ol.steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 2px;
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: var(--r-full);
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+    }
+    ol.steps li::after {
+      content: "";
+      position: absolute;
+      left: 11.5px;
+      top: 32px;
+      bottom: var(--sp-xs);
+      width: 1px;
+      background: var(--line);
+    }
+    ol.steps li:last-child { padding-bottom: 0; }
+    ol.steps li:last-child::after { display: none; }
+    ol.steps strong { display: block; }
+
+    .table-wrap {
+      margin: var(--sp-lg) 0;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.6; }
+    th {
+      padding: 10px var(--sp-base);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-align: left;
+      white-space: nowrap;
+    }
+    td { padding: 10px var(--sp-base); border-top: 1px solid var(--line); color: var(--body); vertical-align: top; }
+    td:first-child { color: var(--ink); font-weight: 600; }
+    th.num, td.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    tr.row-ours td { background: var(--primary-soft); color: var(--ink); }
+    tr.row-ours td:first-child { color: var(--primary); }
+
+    figure.diagram {
+      margin: var(--sp-xl) 0;
+      padding: var(--sp-lg) var(--sp-lg) var(--sp-base);
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      background-color: var(--canvas);
+      box-shadow: var(--shadow-card);
+    }
+    figure.diagram svg { display: block; width: 100%; min-width: 560px; height: auto; }
+    figcaption { margin-top: var(--sp-md); color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .fig-no {
+      margin-right: var(--sp-sm);
+      color: var(--primary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .diagram svg text { font-family: var(--font-sans); }
+    .diagram .t-mono { font-family: var(--font-mono); }
+    .diagram .group { fill: var(--d-group-fill); stroke: var(--d-group-line); }
+    .diagram .node { fill: var(--d-node-fill); stroke: var(--d-node-line); }
+    .diagram .node-focus { fill: var(--d-focus-fill); stroke: var(--d-focus-line); filter: drop-shadow(var(--glow-focus)); }
+    .diagram .chip { fill: var(--d-chip-fill); stroke: var(--d-chip-line); }
+    .diagram .badge { fill: var(--d-badge-fill); stroke: var(--d-badge-line); }
+    .diagram .risk { fill: var(--d-risk-fill); stroke: var(--d-risk-line); }
+    .diagram .legend-box { fill: var(--d-node-fill); stroke: var(--d-node-line); }
+    .diagram .edge-main { stroke: var(--d-main); }
+    .diagram .edge, .diagram .edge-async { stroke: var(--d-edge); }
+    .diagram .edge-ext { stroke: var(--d-ext); }
+    .diagram .arrow-main { fill: var(--d-main); }
+    .diagram .arrow { fill: var(--d-edge); }
+    .diagram .t-title { fill: var(--d-title); font-weight: 600; }
+    .diagram .t-sub { fill: var(--d-sub); }
+    .diagram .t-label { fill: var(--d-sub); font-weight: 600; letter-spacing: 0.08em; }
+    .diagram .t-chip { fill: var(--d-chip-text); font-weight: 500; }
+    .diagram .t-focus { fill: var(--d-focus-text); font-weight: 600; }
+    .diagram .t-risk { fill: var(--d-risk-text); font-weight: 600; }
+    .diagram .t-msg { fill: var(--d-msg); }
+    .diagram .t-guard { fill: var(--d-sub); }
+    .diagram .t-msg, .diagram .t-guard { stroke: var(--canvas); paint-order: stroke; }
+    .diagram .group.frame { fill: none; }
+
+    .page-tools {
+      position: fixed;
+      top: var(--sp-base);
+      right: var(--sp-base);
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+    }
+    .theme-toggle {
+      --icon-sun: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%224%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.6%22%2F%3E%3Cpath%20d%3D%22M12%202.5v2.5M12%2019v2.5M2.5%2012H5M19%2012h2.5M5.2%205.2l1.8%201.8M17%2017l1.8%201.8M18.8%205.2%2017%207M7%2017l-1.8%201.8%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E");
+      --icon-moon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M16%203.2A8.2%208.2%200%201%200%2020.8%2015%206.4%206.4%200%200%201%2016%203.2z%22%20fill%3D%22black%22%2F%3E%3C%2Fsvg%3E");
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      margin: 0;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+    }
+    .theme-toggle::before {
+      content: "";
+      width: 16px;
+      height: 16px;
+      background: currentColor;
+      -webkit-mask: var(--icon-sun) center / contain no-repeat;
+      mask: var(--icon-sun) center / contain no-repeat;
+    }
+    :root[data-theme="dark"] .theme-toggle::before {
+      -webkit-mask-image: var(--icon-moon);
+      mask-image: var(--icon-moon);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .theme-toggle::before {
+        -webkit-mask-image: var(--icon-moon);
+        mask-image: var(--icon-moon);
+      }
+    }
+    .diagram-edit-open {
+      padding: var(--sp-xs) var(--sp-md);
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--surface);
+      color: var(--muted);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .diagram-edit-open[aria-pressed="true"] { color: var(--primary); border-color: var(--primary-line); }
+    .diagram-edit-bar:not([hidden]) {
+      position: fixed;
+      top: 60px;
+      right: var(--sp-base);
+      z-index: 30;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--sp-sm);
+      max-width: min(440px, calc(100% - 32px));
+      padding: var(--sp-sm) var(--sp-md);
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      background: var(--surface);
+      box-shadow: var(--shadow-card);
+      color: var(--body);
+      font-family: var(--font-sans);
+      font-size: 13px;
+    }
+    .diagram-edit-bar.is-plain label { opacity: 0.45; pointer-events: none; }
+    .diagram-edit-bar label { display: flex; align-items: center; gap: var(--sp-xs); color: var(--muted); }
+    .diagram-edit-bar select,
+    .diagram-edit-bar input[type="number"] {
+      border: 1px solid var(--line);
+      border-radius: var(--r-sm);
+      background: var(--panel);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      padding: var(--sp-xs);
+    }
+    .diagram-edit-bar select { max-width: 148px; }
+    .diagram-edit-bar input[type="number"] { width: 64px; }
+    .diagram-edit-bar button {
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--panel);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      cursor: pointer;
+      padding: var(--sp-xs) var(--sp-md);
+    }
+    .diagram-edit-tools {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--sp-sm);
+      flex: 0 0 auto;
+    }
+    .diagram-edit-bar.is-code {
+      flex-direction: column;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      width: min(440px, calc(100% - 32px));
+    }
+    .diagram-edit-code:not([hidden]) {
+      flex: 1 1 auto;
+      align-self: stretch;
+      width: auto;
+      min-width: 0;
+      min-height: 0;
+      max-height: 220px;
+      margin: 0;
+      overflow: auto;
+      white-space: pre;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+    .diagram-edit-bar.is-sized .diagram-edit-code:not([hidden]) {
+      max-height: none;
+    }
+    .diagram-edit-resize {
+      position: absolute;
+      z-index: 2;
+      touch-action: none;
+    }
+    .diagram-edit-resize[data-resize="w"] {
+      left: -4px;
+      top: 0;
+      bottom: 8px;
+      width: 8px;
+      cursor: ew-resize;
+      box-shadow: inset 2px 0 0 var(--line-strong);
+    }
+    .diagram-edit-resize[data-resize="s"] {
+      left: 8px;
+      right: 0;
+      bottom: -4px;
+      height: 8px;
+      cursor: ns-resize;
+      box-shadow: inset 0 -2px 0 var(--line-strong);
+    }
+    .diagram-edit-resize[data-resize="sw"] {
+      left: -4px;
+      bottom: -4px;
+      width: 8px;
+      height: 8px;
+      cursor: nesw-resize;
+      background: var(--line-strong);
+    }
+    .edit-spacer {
+      visibility: hidden;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .diagram-edit-text {
+      position: fixed;
+      z-index: 32;
+      min-width: 4em;
+      margin: 0;
+      padding: var(--sp-xs);
+      border: 1px solid var(--primary);
+      border-radius: var(--r-sm);
+      background: var(--surface);
+      color: var(--ink);
+      outline: none;
+    }
+    body.is-diagram-edit [data-editable] { cursor: grab; touch-action: none; }
+    body.is-diagram-edit [data-editable].is-editing { cursor: text; touch-action: auto; }
+    body.is-diagram-edit .diagram rect,
+    body.is-diagram-edit .diagram text { cursor: grab; }
+    .edit-frame {
+      position: fixed;
+      z-index: 28;
+      border: 1px solid var(--primary);
+      pointer-events: none;
+    }
+    .edit-frame [data-edge] {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      margin: -4px 0 0 -4px;
+      border: 1px solid var(--primary);
+      border-radius: 1px;
+      background: var(--surface);
+      pointer-events: auto;
+    }
+    .edit-frame [data-edge="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+    .edit-frame [data-edge="n"] { left: 50%; top: 0; cursor: ns-resize; }
+    .edit-frame [data-edge="ne"] { left: 100%; top: 0; cursor: nesw-resize; }
+    .edit-frame [data-edge="e"] { left: 100%; top: 50%; cursor: ew-resize; }
+    .edit-frame [data-edge="se"] { left: 100%; top: 100%; cursor: nwse-resize; }
+    .edit-frame [data-edge="s"] { left: 50%; top: 100%; cursor: ns-resize; }
+    .edit-frame [data-edge="sw"] { left: 0; top: 100%; cursor: nesw-resize; }
+    .edit-frame [data-edge="w"] { left: 0; top: 50%; cursor: ew-resize; }
+
+    details {
+      margin: var(--sp-base) 0;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: var(--surface);
+    }
+    summary {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: var(--sp-md) var(--sp-base);
+      color: var(--ink);
+      font-weight: 600;
+      cursor: pointer;
+      list-style: none;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::before { content: "+"; width: 1em; color: var(--primary); font-family: var(--font-mono); }
+    details[open] summary { border-bottom: 1px solid var(--line); }
+    details[open] summary::before { content: "−"; }
+    .details-body { padding: var(--sp-base); }
+    .details-body > :last-child { margin-bottom: 0; }
+    .details-body .table-wrap { margin: 0; }
+
+    .site-foot {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: var(--sp-base);
+      margin-top: 64px;
+      padding-top: var(--sp-base);
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+    }
+
+    @media (max-width: 860px) {
+      body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: stretch;
+      }
+      .layout { display: contents; }
+      .page-tools {
+        position: sticky;
+        top: 0;
+        right: auto;
+        grid-column: 2;
+        grid-row: 1;
+        z-index: 11;
+        align-self: stretch;
+        height: auto;
+        margin: 0;
+        padding: var(--sp-sm) var(--sp-base);
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+      }
+      .diagram-edit-open { display: none; }
+      nav.toc {
+        position: sticky;
+        top: 0;
+        grid-column: 1;
+        grid-row: 1;
+        align-self: stretch;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: var(--sp-xs);
+        min-width: 0;
+        height: auto;
+        overflow-x: auto;
+        padding: var(--sp-sm) var(--sp-base);
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        background: var(--surface);
+        white-space: nowrap;
+        scrollbar-width: none;
+      }
+      nav.toc::-webkit-scrollbar { display: none; }
+      .toc-brand { display: none; }
+      nav.toc a { margin: 0; padding: var(--sp-xs) var(--sp-md); }
+      nav.toc a[aria-current="true"]::before {
+        top: auto;
+        right: var(--sp-md);
+        bottom: 0;
+        left: var(--sp-md);
+        width: auto;
+        height: 2px;
+        background: var(--grad-brand);
+      }
+      main {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        padding: var(--sp-xl) var(--sp-base) 64px;
+      }
+    }
+    @media (max-width: 480px) {
+      .page-tools { gap: var(--sp-xs); padding: var(--sp-xs) var(--sp-sm); }
+      nav.toc { padding: var(--sp-xs) var(--sp-sm); }
+    }
+
+    @media print {
+      body { display: block; }
+      nav.toc { display: none; }
+      .layout { display: block; }
+      main { max-width: none; padding: 0; }
+      figure.diagram { break-inside: avoid; box-shadow: none; }
+      .page-tools, .diagram-edit-bar, .edit-frame { display: none !important; }
+      a { text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-tools">
+    <button type="button" class="diagram-edit-open" aria-pressed="false" title="点选后拖动、贴边缩放，双击改字">调整排版</button>
+    <button type="button" class="theme-toggle" data-theme-toggle aria-label="切换配色"></button>
+  </div>
+  <div class="layout">
+    <nav class="toc" aria-label="目录">
+      <p class="toc-brand"><span class="toc-org">MemTensor</span><span class="toc-kind">研究文档</span></p>
+      <a href="#s1" aria-current="true"><span class="toc-no">01</span>摘要</a>
+      <a href="#s2"><span class="toc-no">02</span>问题</a>
+      <a href="#s3"><span class="toc-no">03</span>算法</a>
+      <a href="#s4"><span class="toc-no">04</span>实验</a>
+      <a href="#s5"><span class="toc-no">05</span>结论</a>
+      <a href="#s6"><span class="toc-no">06</span>错因</a>
+      <a href="#s7"><span class="toc-no">07</span>样例</a>
+      <a href="#s8"><span class="toc-no">08</span>总结</a>
+      <a href="#appendix"><span class="toc-no">A</span>附录</a>
+    </nav>
+    <main>
+      <header class="doc-head">
+        <p class="eyebrow">内部对照 <span class="tag tag-memmy">Memmy</span></p>
+        <h1>项目记忆把改口之后的事实留下来了</h1>
+        <div class="title-rule" aria-hidden="true"></div>
+        <p class="lead"><strong>一句话：</strong>同一套 29 题上，项目记忆的直接召回是 22/29，空白对照是 10/29，属性树是 11/29。让模型根据召回再答一遍，分别是 23/29、19/29、16/29。只把项目记忆的上下文交给 Cursor，裁判结果是 18/29。</p>
+        <dl class="meta">
+          <div><dt>来源</dt><dd>eval/project-memory/runs 的召回文件和裁判文件</dd></div>
+          <div><dt>日期</dt><dd>2026-10-23</dd></div>
+          <div><dt>读者</dt><dd>判断这轮项目记忆预研要不要继续的人</dd></div>
+        </dl>
+      </header>
+
+      <section id="s1">
+        <h2><span class="sec-no">01</span>摘要</h2>
+        <p>这轮预研要回答的问题很具体：两个仓库、多名 Agent 先后改口之后，已经写进记忆的内容，还能不能答出现在有效的事实。我们没有去模拟两个互相搜不到的 Cursor 窗口。要看的是记忆本身。</p>
+        <p>语料是 ledger 和 catalog 两个小仓库上的 34 条工作记录，按时间回放。每问一题，库里只有这题之前的记录。题一共 30 道，q21 的题面本身有问题，不进统计，分母是 29。题分成五类：跨项目 11 题，过时 9 题，被后来的说法改口 5 题，普通事实 3 题，以及 1 题没打开项目目录、不该拿到项目代码的作用域串扰。</p>
+        <p>三种做法对照着跑。空白对照是现在的 Memmy 召回。项目记忆在写入时记下项目、现行结论、检查点和事项，并把被改口的旧记录标成已被取代。属性树不改写入，只在读的时候把记忆收成一棵按文件组织的树，贴在原来的召回前面。属性树用的是第 3 轮，粒度到文件，注入预算 1400 字。</p>
+        <p>直接检查召回文本里有没有现行要点、有没有把陷阱说成现行：项目记忆 22/29，空白对照 10/29，属性树 11/29。被改口的 5 题，项目记忆 5 题都过了，另外两列都是 1 题。过时的 9 题，三列分别是 6、3、3。属性树和空白对照几乎贴在一起。</p>
+        <p>再让模型只根据这段召回作答，由同一个裁判打分：项目记忆 23/29，空白对照 19/29，属性树 16/29。空白对照从召回的 10/29 升到回答的 19/29，说明很多题不是完全没召回，而是新旧说法都在上下文里，模型还能选。项目记忆的回答只比召回多对 1 题，说明它的上下文已经比较干净，模型没有多少额外空间。属性树的回答是 16/29，低于空白对照的 19/29。多出来的树文本没有帮模型做选择。</p>
+        <p>Cursor 只完成了项目记忆这一列。作答模型只看到该题的项目记忆上下文，不能读仓库。裁判结果 18/29，低于同一上下文上的 Memmy 模型回答 23/29。空白对照和属性树的 Cursor 回答这轮没有采，表上写待验证，不能外推成 Cursor 全面高或全面低。</p>
+        <div class="callout">
+          <span class="callout-title">证据合同</span>
+          <p>问题是三种做法在这 29 题上差在哪里，差是从哪一类题来的。读者是要决定预研下一步的人。不覆盖产品界面，也不把没采到的两列 Cursor 写成已完成。数字来自 <code>runs/*-recall.json</code>、<code>runs/*-answer.json</code> 和 <code>runs/cursor-answer-project.json</code>。材料里没有的判断标成待验证。</p>
+        </div>
+      </section>
+
+      <section id="s2">
+        <h2><span class="sec-no">02</span>问题</h2>
+        <p>项目上的记忆和单人备忘录不一样。同一个仓库里，后面的决定会改掉前面的做法；旁边还有另一个仓库，里面的句子用词很像，却不能拿来回答这个问题。Agent 换一扇窗口继续干的时候，需要的是现行事实，连同它属于哪个项目。</p>
+        <p>只把历史对话全部召回，会碰到两种失败。一种是新旧都在，回答的人挑了旧的。一种是召回是空的，回答的人只能说不知道，或者离开记忆去翻仓库。还有一种更窄：当前窗口根本没打开项目目录，却把别的项目的月报算法讲了出来。</p>
+        <p>所以评测做成三类结果，每类三种方式。</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>结果</th><th>在量什么</th></tr></thead>
+          <tbody>
+            <tr><td>直接召回</td><td>上下文里必须出现每一条现行要点，并且不能把陷阱说法当成现行事实。陷阱也出现在上下文里，这题就是失败，即使要点也在。</td></tr>
+            <tr><td>模型回答</td><td>模型只能看这段记忆。裁判看回答有没有体现现行要点，有没有把陷阱当成现行事实，并给一个错因。</td></tr>
+            <tr><td>Cursor 回答</td><td>另一个作答模型只看该题上下文，不使用工具、不读仓库。裁判和上一行是同一套。</td></tr>
+          </tbody>
+        </table></div>
+        <p>直接召回更严。它衡量的是注入文本干不干净。模型回答衡量的是一个会阅读的模型能不能从混杂的文本里选出现行事实。两行数字可以差很多，这是评分定义造成的，两行都要看。</p>
+        <p>空白对照的代码基线是 <code>8684cb570f1b54debcdd45da45f0f02661a76a42</code>。评测时有一处历史过滤两边都改过：问题里一出现「价格」，旧逻辑会把整层轨迹记忆丢掉，catalog 的题就会全部变空。这个过滤收窄之后，两边才是在比项目记忆，而不是比谁先被这条旧规则挡住。因此空白对照是「原始 Memmy 加上这一处过滤修正」，写报告时按这个范围理解。</p>
+      </section>
+
+      <section id="s3">
+        <h2><span class="sec-no">03</span>算法</h2>
+        <h3>空白对照</h3>
+        <p>空白对照走原始 Memmy 的写入和召回。一条工作记录进来，做成轨迹记忆，带摘要和向量。提问时按相关性把历史证据注入上下文。它没有「这是哪个项目的现行结论」这一层，也没有把后来说的话标成对前一句话的取代。</p>
+        <h3>项目记忆</h3>
+        <p>项目按 git 仓库根来认。同一个仓库里的子目录共用一个项目身份，另一个仓库是另一个项目。召回之后按作用域乘一个系数，系数写在 <code>Memory/src/service/project/scope-weight.ts</code>。</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>记忆落在哪里</th><th class="num">系数</th></tr></thead>
+          <tbody>
+            <tr><td>同一项目的轨迹记忆</td><td class="num">1.0</td></tr>
+            <tr><td>同一项目的上层记忆</td><td class="num">1.3</td></tr>
+            <tr><td>全局轨迹记忆</td><td class="num">0.5</td></tr>
+            <tr><td>其他项目的轨迹记忆和事项</td><td class="num">不进入候选</td></tr>
+            <tr><td>其他项目的策略</td><td class="num">0.4</td></tr>
+            <tr><td>已被标成取代的记录</td><td class="num">不进入候选</td></tr>
+          </tbody>
+        </table></div>
+        <p>写入侧多了三块给当前窗口看的文字：现行结论、检查点、事项。检查点来自这一轮待办从进行中到完成的边界。一项决定如果后来改过口，后一条写成现行结论，前一条标上已被谁取代。冲突里赢的那一边同样处理。提问时，这些句子排在「其他 Agent 最近做了什么」之前。空白对照看不到这三块。</p>
+        <p>这一支要解决的是「哪句还算数」。作用域系数解决串到另一个仓库，现行结论和取代标记解决同一仓库里的改口。</p>
+        <h3>属性树</h3>
+        <p>属性树是读时实验，写在原始 Memmy 上，代码在属性树工作区的 <code>eval/attribute-tree.mjs</code>。它不改库里的记忆。提问时先把当时库里的记忆收成记录，按项目、文件和种类归行，再按本轮的粒度截断，拼到原召回的前面。</p>
+        <p>三轮只改注入的粒度和字数。第 1 轮按项目，280 字。第 2 轮按模块，700 字。第 3 轮按文件，并带上上级，1400 字。本报告的属性树列是第 3 轮。选择范围是当前项目加上全局记录。其他项目的记录不进这棵树。</p>
+        <p>它要解决的是上下文太长、两个项目混在一起。它不单独写一句「现在以哪边为准」。树里的一行仍然是原来的记忆文本。实际注入里还能看到摘要和原始轮次缠在一起，所以读到的是一层索引，决定句还是旧文本。</p>
+      </section>
+
+      <section id="s4">
+        <h2><span class="sec-no">04</span>实验</h2>
+        <p>回放按时间排序。每条工作记录入库之后，把摘要和向量的队列排空，再问这段时间里的题。不排空的话，召回只剩关键词，三列会看起来一样。作答和裁判用的模型是 claude-haiku-5-5。Cursor 作答是另一路，只接收该题的记忆文本。温度参数不传，这个模型的接口不接受它。</p>
+        <p>q21 问的是 catalog 价格列现在怎么读金额。题面里同时有「价格」和「现在」，裁判多次被接口过载打断，题本身也和前后的金额题缠在一起。这道题留在数据里，不进任何一列的分子和分母。</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>结果</th><th class="num">空白对照</th><th class="num">项目记忆</th><th class="num">属性树</th></tr></thead>
+          <tbody>
+            <tr class="row-ours"><td>直接召回</td><td class="num">10/29</td><td class="num">22/29</td><td class="num">11/29</td></tr>
+            <tr><td>模型回答</td><td class="num">19/29</td><td class="num">23/29</td><td class="num">16/29</td></tr>
+            <tr><td>Cursor 回答</td><td class="num">待验证</td><td class="num">18/29</td><td class="num">待验证</td></tr>
+          </tbody>
+        </table></div>
+        <p>召回耗时：空白对照 264 秒、84 次模型调用；项目记忆 219 秒、66 次；属性树 257 秒、82 次。调用次数的差别来自入库时做了多少次摘要，不能拿来比较谁记得更准。</p>
+        <p>按题型拆开，前三列是直接召回，后三列是模型回答。</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>题型</th><th class="num">对照召回</th><th class="num">项目召回</th><th class="num">属性树召回</th><th class="num">对照回答</th><th class="num">项目回答</th><th class="num">属性树回答</th></tr></thead>
+          <tbody><tr><td>跨项目</td><td class='num'>4/11</td><td class='num'>8/11</td><td class='num'>4/11</td><td class='num'>8/11</td><td class='num'>8/11</td><td class='num'>5/11</td></tr><tr><td>过时</td><td class='num'>3/9</td><td class='num'>6/9</td><td class='num'>3/9</td><td class='num'>6/9</td><td class='num'>7/9</td><td class='num'>6/9</td></tr><tr><td>被改口</td><td class='num'>1/5</td><td class='num'>5/5</td><td class='num'>1/5</td><td class='num'>3/5</td><td class='num'>5/5</td><td class='num'>2/5</td></tr><tr><td>普通</td><td class='num'>2/3</td><td class='num'>3/3</td><td class='num'>3/3</td><td class='num'>2/3</td><td class='num'>3/3</td><td class='num'>3/3</td></tr><tr><td>作用域串扰</td><td class='num'>0/1</td><td class='num'>0/1</td><td class='num'>0/1</td><td class='num'>0/1</td><td class='num'>0/1</td><td class='num'>0/1</td></tr></tbody>
+        </table></div>
+        <p>Cursor 只做了项目记忆的上下文。这一列按题型是 跨项目 5/11、过时 6/9、被改口 4/5、普通 3/3、作用域串扰 0/1。</p>
+        <div class="callout verify">
+          <span class="callout-title">待验证</span>
+          <p>空白对照和属性树的 Cursor 回答没有采集。缺的是用这两列各自的召回文本、按同样的「只看记忆、不读仓库」约束再答一遍。在这两份原文出现之前，不能比较 Cursor 在三种做法上的差别。</p>
+        </div>
+      </section>
+
+      <section id="s5">
+        <h2><span class="sec-no">05</span>结论</h2>
+        <p>项目记忆相对空白对照多对的题，落在改口、过时和跨项目。被改口的 5 题，召回是 5/5 对 1/5。过时的 9 题，召回是 6/9 对 3/9。跨项目从 4/11 到 8/11。普通题项目记忆是 3/3，空白对照是 2/3。</p>
+        <p>这个分布和算法对得上。现行结论把「现在以哪句为准」写在上下文最前面，取代标记让旧句退出候选。空白对照把前后两次说法都留下来，字符串评分一看到旧句就算失败。模型阅读之后，空白对照能从 10/29 补到 19/29，补上的正是那些新旧都在、人还能选的题。项目记忆的模型回答 23/29，只比自己的召回多 1 题。上下文已经把现行句放对了位置，模型再选一次，空间很小。</p>
+        <p>属性树没有形成独立收益。召回 11/29，只比空白对照多对 1 道普通题。过时和被改口都停在 3/9 和 1/5，和空白对照相同。模型回答 16/29，低于空白对照的 19/29。跨项目的模型回答是 5/11，空白对照是 8/11。树把更多原文贴回提示词，模型更常说「记忆里没有」，空召回从空白对照回答里的 5 题变成属性树的 9 题。读时索引没有代替「哪句是现行」。</p>
+        <p>还有一道题三列都没过，而且不该被讲成小问题。q20 的窗口没有打开项目目录，金标是这里没有月报代码。三列的召回都失败，三列的模型也都把 ledger 的月报算法讲了出来。项目记忆这一题的上下文里甚至没有「现行结论」那一段，送进去的是普通召回。作用域权重还没有挡住「当前没有项目」这一种窗口。</p>
+        <p>Cursor 在项目记忆上下文上是 18/29。它低于同一上下文的模型回答 23/29。差出来的题里，有的是漏了要点，有的是把已经撤回的文件说成还留着，也有一道是意思对了、原词没对齐。下一节把错因拆开，避免把 18/29 读成 Cursor 不会用这段记忆。</p>
+      </section>
+
+      <section id="s6">
+        <h2><span class="sec-no">06</span>错因</h2>
+        <p>错因只存在于模型裁判。直接召回没有这一个字段。裁判在答错时五选一：召回空或答不出；把过时说法当成现行；几条相似信息没有选；用了另一个项目的说法；其余归入其他。答对记成答对。下面每张饼图的分母都是 29，一块是这一类的题数。</p>
+        <h3>模型回答</h3>
+        <p>空白对照答对 19/29。错题里最多的是答不出：上下文里没有现行句，模型明确说不知道。另有把过时说法当现行、没在相似句里做选择、用了另一个项目，以及归入其他的题。这张图说明空白对照的主要问题是现行事实没有被单独留下，旧事实还占着上下文。</p>
+        <figure class="diagram">
+      <svg viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="图 1 · 空白对照 · 模型回答">
+        <path fill="var(--positive)" d="M 118 118 L 118.00 32.00 A 86 86 0 1 1 46.82 166.26 Z" /><path fill="var(--muted)" d="M 118 118 L 46.82 166.26 A 86 86 0 0 1 42.02 77.72 Z" /><path fill="var(--risk)" d="M 118 118 L 42.02 77.72 A 86 86 0 0 1 52.45 62.32 Z" /><path fill="var(--verify)" d="M 118 118 L 52.45 62.32 A 86 86 0 0 1 65.96 49.54 Z" /><path fill="var(--brand-violet)" d="M 118 118 L 65.96 49.54 A 86 86 0 0 1 81.89 39.95 Z" /><path fill="var(--primary)" d="M 118 118 L 81.89 39.95 A 86 86 0 0 1 118.00 32.00 Z" /><rect x="250" y="34" width="14" height="14" rx="2" fill="var(--positive)" /><text class="t-title" x="274" y="46" font-size="13">答对</text><text class="t-sub t-mono" x="470" y="46" font-size="13">19</text><rect x="250" y="62" width="14" height="14" rx="2" fill="var(--muted)" /><text class="t-title" x="274" y="74" font-size="13">召回空或答不出</text><text class="t-sub t-mono" x="470" y="74" font-size="13">5</text><rect x="250" y="90" width="14" height="14" rx="2" fill="var(--risk)" /><text class="t-title" x="274" y="102" font-size="13">把过时说法当现行</text><text class="t-sub t-mono" x="470" y="102" font-size="13">1</text><rect x="250" y="118" width="14" height="14" rx="2" fill="var(--verify)" /><text class="t-title" x="274" y="130" font-size="13">相似信息没选</text><text class="t-sub t-mono" x="470" y="130" font-size="13">1</text><rect x="250" y="146" width="14" height="14" rx="2" fill="var(--brand-violet)" /><text class="t-title" x="274" y="158" font-size="13">用了另一个项目</text><text class="t-sub t-mono" x="470" y="158" font-size="13">1</text><rect x="250" y="174" width="14" height="14" rx="2" fill="var(--primary)" /><text class="t-title" x="274" y="186" font-size="13">其他</text><text class="t-sub t-mono" x="470" y="186" font-size="13">2</text>
+        <text class="t-sub" x="118" y="228" text-anchor="middle" font-size="12">19/29 题</text>
+      </svg>
+      <figcaption><span class="fig-no">图 1 · 空白对照 · 模型回答</span>分母不含 q21。答对和五种错因来自同一份裁判结果。</figcaption>
+    </figure>
+        <p>项目记忆答对 23/29。错题少，而且几乎都是答不出：精度、时区、output 目录、样例文件这几件，现行句没有进到这一题的上下文里。另有 1 题把不该讲的月报算法讲成了现行事实，就是上面的 q20。项目记忆的错因图里，过时和串项目都不再是主要块。</p>
+        <figure class="diagram">
+      <svg viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="图 2 · 项目记忆 · 模型回答">
+        <path fill="var(--positive)" d="M 118 118 L 118.00 32.00 A 86 86 0 1 1 35.13 94.99 Z" /><path fill="var(--muted)" d="M 118 118 L 35.13 94.99 A 86 86 0 0 1 81.89 39.95 Z" /><path fill="var(--risk)" d="M 118 118 L 81.89 39.95 A 86 86 0 0 1 99.51 34.01 Z" /><path fill="var(--primary)" d="M 118 118 L 99.51 34.01 A 86 86 0 0 1 118.00 32.00 Z" /><rect x="250" y="34" width="14" height="14" rx="2" fill="var(--positive)" /><text class="t-title" x="274" y="46" font-size="13">答对</text><text class="t-sub t-mono" x="470" y="46" font-size="13">23</text><rect x="250" y="62" width="14" height="14" rx="2" fill="var(--muted)" /><text class="t-title" x="274" y="74" font-size="13">召回空或答不出</text><text class="t-sub t-mono" x="470" y="74" font-size="13">4</text><rect x="250" y="90" width="14" height="14" rx="2" fill="var(--risk)" /><text class="t-title" x="274" y="102" font-size="13">把过时说法当现行</text><text class="t-sub t-mono" x="470" y="102" font-size="13">1</text><rect x="250" y="118" width="14" height="14" rx="2" fill="var(--primary)" /><text class="t-title" x="274" y="130" font-size="13">其他</text><text class="t-sub t-mono" x="470" y="130" font-size="13">1</text>
+        <text class="t-sub" x="118" y="228" text-anchor="middle" font-size="12">23/29 题</text>
+      </svg>
+      <figcaption><span class="fig-no">图 2 · 项目记忆 · 模型回答</span>分母不含 q21。答对和五种错因来自同一份裁判结果。</figcaption>
+    </figure>
+        <p>属性树答对 16/29。答不出是最大的一块，比空白对照更多。过时和没选清楚各留下 2 题。这张图和总分一致：树没有把空召回补上，也没有消掉改口。</p>
+        <figure class="diagram">
+      <svg viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="图 3 · 属性树 · 模型回答">
+        <path fill="var(--positive)" d="M 118 118 L 118.00 32.00 A 86 86 0 1 1 90.54 199.50 Z" /><path fill="var(--muted)" d="M 118 118 L 90.54 199.50 A 86 86 0 0 1 52.45 62.32 Z" /><path fill="var(--risk)" d="M 118 118 L 52.45 62.32 A 86 86 0 0 1 81.89 39.95 Z" /><path fill="var(--verify)" d="M 118 118 L 81.89 39.95 A 86 86 0 0 1 118.00 32.00 Z" /><rect x="250" y="34" width="14" height="14" rx="2" fill="var(--positive)" /><text class="t-title" x="274" y="46" font-size="13">答对</text><text class="t-sub t-mono" x="470" y="46" font-size="13">16</text><rect x="250" y="62" width="14" height="14" rx="2" fill="var(--muted)" /><text class="t-title" x="274" y="74" font-size="13">召回空或答不出</text><text class="t-sub t-mono" x="470" y="74" font-size="13">9</text><rect x="250" y="90" width="14" height="14" rx="2" fill="var(--risk)" /><text class="t-title" x="274" y="102" font-size="13">把过时说法当现行</text><text class="t-sub t-mono" x="470" y="102" font-size="13">2</text><rect x="250" y="118" width="14" height="14" rx="2" fill="var(--verify)" /><text class="t-title" x="274" y="130" font-size="13">相似信息没选</text><text class="t-sub t-mono" x="470" y="130" font-size="13">2</text>
+        <text class="t-sub" x="118" y="228" text-anchor="middle" font-size="12">16/29 题</text>
+      </svg>
+      <figcaption><span class="fig-no">图 3 · 属性树 · 模型回答</span>分母不含 q21。答对和五种错因来自同一份裁判结果。</figcaption>
+    </figure>
+        <h3>Cursor</h3>
+        <p>项目记忆的 Cursor 回答答对 18/29。错因和上面用的是同一套裁判、同一批要点。空白对照和属性树没有这张图，因为原文没采。</p>
+        <figure class="diagram">
+      <svg viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="图 4 · 项目记忆 · Cursor 回答">
+        <path fill="var(--positive)" d="M 118 118 L 118.00 32.00 A 86 86 0 1 1 58.86 180.44 Z" /><path fill="var(--muted)" d="M 118 118 L 58.86 180.44 A 86 86 0 0 1 33.13 131.91 Z" /><path fill="var(--risk)" d="M 118 118 L 33.13 131.91 A 86 86 0 0 1 32.13 113.34 Z" /><path fill="var(--primary)" d="M 118 118 L 32.13 113.34 A 86 86 0 0 1 118.00 32.00 Z" /><rect x="250" y="34" width="14" height="14" rx="2" fill="var(--positive)" /><text class="t-title" x="274" y="46" font-size="13">答对</text><text class="t-sub t-mono" x="470" y="46" font-size="13">18</text><rect x="250" y="62" width="14" height="14" rx="2" fill="var(--muted)" /><text class="t-title" x="274" y="74" font-size="13">召回空或答不出</text><text class="t-sub t-mono" x="470" y="74" font-size="13">3</text><rect x="250" y="90" width="14" height="14" rx="2" fill="var(--risk)" /><text class="t-title" x="274" y="102" font-size="13">把过时说法当现行</text><text class="t-sub t-mono" x="470" y="102" font-size="13">1</text><rect x="250" y="118" width="14" height="14" rx="2" fill="var(--primary)" /><text class="t-title" x="274" y="130" font-size="13">其他</text><text class="t-sub t-mono" x="470" y="130" font-size="13">7</text>
+        <text class="t-sub" x="118" y="228" text-anchor="middle" font-size="12">18/29 题</text>
+      </svg>
+      <figcaption><span class="fig-no">图 4 · 项目记忆 · Cursor 回答</span>分母不含 q21。答对和五种错因来自同一份裁判结果。</figcaption>
+    </figure>
+        <p>Cursor 的「其他」比 Memmy 模型回答多。抽查之后，这里面不都是事实反了。q11 问没有清单的那一轮要不要拆开，Cursor 写了「不要拆开，整段做完」，金标要点是「没有拆开」。意思对齐了，裁判因为原词不一样判了其他。q29 的保存回答是「按 id 去重，只留最早那条」，裁判理由却写成没有看到回答。这一题的错因标签不可靠，总分仍按文件里的 18/29 报告，不在这里手工改分。其余错题里，q16 把已经撤回的 month.json 说成还留着，q05、q08、q26 和模型回答一样，是上下文里没有精度、目录和时区。</p>
+      </section>
+
+      <section id="s7">
+        <h2><span class="sec-no">07</span>样例</h2>
+        <p>下面每题都给出问句、现行要点，以及三列里能说明机制的回答。引用截到能核对的长度，全文在附录的错题表和结果文件里。</p>
+        <h3>改口：分支</h3>
+        <p>q19 问改动应该放在哪个分支上。现行要点是 main 不直接改。金标是先放 feature 分支。这题在直接召回上，项目记忆通过，空白对照和属性树都不通过。模型回答同样只有项目记忆通过。</p>
+        <p>空白对照的回答是：记忆里没有关于分支的信息，所以无法确定。它记得的是空客户行怎么跳、样例文件已撤回、改动留在当前窗口。这些都是真的旧记录，里面没有后来那句「放 feature，main 不直接改」。项目记忆的回答是：改动放在 feature 分支上，不直接修改 main。现行结论把后一句放到了上下文前面。</p>
+        <h3>过时：还搬不搬</h3>
+        <p>q09 问 catalog 的导出做法有没有抄进 ledger，后面还搬不搬。现行要点是月报用不上 export。陷阱是「再看要不要搬」。金标是拷贝已经撤掉，dry-run 之后不再搬。</p>
+        <p>空白对照回答说拷贝后来撤掉了，后面搬不搬还没定，要等 dry-run 再决定。撤掉这件事它记得，旧的「再看」也还在，模型选了旧的那半句。项目记忆回答说没有抄进去，月报用不上这份导出。这是现行结论在起作用，模型少选了一次。</p>
+        <h3>跨项目：为什么改成读一列</h3>
+        <p>q25 问月报后来为什么改成直接读 entries 的一列。现行要点是扫全文太慢。陷阱是把 catalog 的理由「价格查询太慢」拿过来。</p>
+        <p>空白对照回答说记忆里没有这件事，现有记录是相反的：entries 的表结构没改，金额仍在 journal 正文里。它停在更早的那次决定上。项目记忆回答说原来扫整个 journal 太慢，加上 amount 列之后直接读这一列。两个仓库的「加一列」没有被说成同一件事。</p>
+        <h3>召回空了之后模型会离开记忆</h3>
+        <p>q14 问 README 里现在还有没有数据库连接串。现行要点是已经删掉了。空白对照这一题的召回是空的，模型回答写「记忆部分是空的，我直接查仓库里的 README」。这违反了只根据记忆作答的约束，也说明空召回在真实使用里会变成去翻工作区。项目记忆回答连接串已经删了，密码只留在本机的 .env。属性树这一题的模型回答也通过了，召回文本本身仍是失败：字符串评分看到陷阱句还在上下文里。</p>
+        <h3>三列都没挡住的窗口</h3>
+        <p>q20 问 ledger 的月报现在怎么汇总金额，但这个提问窗口没有打开项目目录。现行要点是没有月报代码。陷阱是把「不再扫描 journal 全文」讲成这个窗口里的现行事实。</p>
+        <p>三列召回都失败。空白对照的模型把 entries 的 amount 列、空客户规则和东八区月份都讲了一遍。项目记忆的模型同样讲了直接读 amount 列、整数分和按 id 去重。Cursor 在这一题上也讲了 report.ts 里的去重和 amount 列。三路都把别的会话里的月报事实，答成了这个没打开目录的窗口的现状。这是目前最清楚的产品缺口：没有项目的窗口，仍然收到了项目记忆。</p>
+        <h3>Cursor 把撤回说成还留着</h3>
+        <p>q16 问 tests/fixtures/month.json 还留不留着之前的改动。现行要点是 month.json 已撤回。项目记忆的模型回答说记忆里没有这个文件，属于答不出。Cursor 的回答是「还留着。样例文件仍然有效」。同一段上下文，一个模型承认没有看见，一个模型把旧状态说成了现在。Cursor 这一列的风险在于会把上下文里的旧句说得更肯定。</p>
+      </section>
+
+      <section id="s8">
+        <h2><span class="sec-no">08</span>总结</h2>
+        <p>这轮数据支持把项目记忆继续做下去，支持的是其中「现行结论」和「被改口的旧记录退出候选」这两件事。它们把被改口的题从 1/5 做成了 5/5，把过时题从 3/9 做成了 6/9，并把直接召回从 10/29 做成了 22/29。作用域系数对跨项目有帮助，召回从 4/11 到 8/11，但没打开目录的那一道仍然失败。</p>
+        <p>属性树这一轮不能当作独立方案往后推。它的召回 11/29，模型回答 16/29，都没有超过空白对照。读的时候多贴一棵树，没有产生「现在以哪句为准」。若以后还要试注入形态，应该先让注入的是一句决定，再谈文件粒度。</p>
+        <p>给下一步的顺序也很清楚。先修没有项目目录的窗口，让它不要收到项目事实。然后在真实仓库的会话上重跑同样三类评分。这套 29 题说明的是机制，还不能代表一周真实使用的比例。Cursor 的空白对照和属性树两列补采之后，才能写 Cursor 和 Memmy 谁更会用这段记忆。在那之前，能写的是：同一段项目记忆上下文上，Memmy 模型回答 23/29，Cursor 18/29。</p>
+        <div class="callout info">
+          <span class="callout-title">可以带去讨论的三句</span>
+          <p>项目记忆的召回是 22/29，空白对照是 10/29，多出来的题主要是改口和过时。属性树是 11/29，这轮没有超过空白对照。没打开项目的窗口三列都把月报算法讲了出来，这是下一处要修的地方。</p>
+        </div>
+      </section>
+
+      <section id="appendix">
+        <h2><span class="sec-no">A</span>附录</h2>
+        <p>错题表只列裁判判负的题。通过的题在结果文件里，原因字段为空。q21 不在这些表里。</p>
+        <details open>
+          <summary>空白对照的模型错题</summary>
+          <div class="details-body"><div class='table-wrap'><table><thead><tr><th>题</th><th>题型</th><th>错因</th><th>裁判理由</th></tr></thead><tbody><tr><td>q03</td><td>普通</td><td>召回空或答不出</td><td>回答说记忆里没有空客户测试的内容，没有体现必须包含的要点“没有客户名时这笔不进月报”。</td></tr><tr><td>q09</td><td>过时</td><td>其他</td><td>回答漏掉了现行要点“月报用不上 export”，只说明了已撤回和后续待定，没有给出不搬导出做法的依据。</td></tr><tr><td>q10</td><td>过时</td><td>相似信息没选</td><td>回答没有选定现行要点“步骤记在清单里”，而是把两条相互冲突的说法都列出并要求用户确认。</td></tr><tr><td>q13</td><td>被改口</td><td>其他</td><td>回答没有覆盖“说明和普通记录都不放连接串”这一现行要点，只说明了带密码的连接串不放进仓库和 README，还建议可以写不含密码的连接串，并承认没有说明普通记录的情况。</td></tr><tr><td>q14</td><td>过时</td><td>召回空或答不出</td><td>回答说记忆部分是空的并直接去查仓库，没有给出&quot;已经删掉了&quot;这一现行要点，因此未满足 mustInclude。</td></tr><tr><td>q19</td><td>被改口</td><td>召回空或答不出</td><td>回答称记忆里没有分支信息，没有体现“main 不直接改”这一现行要点，属于召回为空、答不出。</td></tr><tr><td>q20</td><td>作用域串扰</td><td>把过时说法当现行</td><td>回答遗漏了现行要点“没有月报代码”，反而断言代码在 src/report.ts 中；并把“不再扫描 journal 全文”当作现行事实陈述。</td></tr><tr><td>q24</td><td>跨项目</td><td>用了另一个项目</td><td>回答未给出 catalog 价格表加金额列的原因“价格查询太慢”，却把 ledger 仓库 entries 表的“月报汇总、不扫 journal 全文”说法当作答案，属于用了另一个项目的说法。</td></tr><tr><td>q25</td><td>跨项目</td><td>召回空或答不出</td><td>回答说无法说明原因，没有体现“扫全文太慢”这一现行要点，且断言了与参考答案相反的现状，属于答不出。</td></tr><tr><td>q28</td><td>跨项目</td><td>召回空或答不出</td><td>回答没有给出月报输出位置 reports/，只说记忆里没有写明，属于答不出。</td></tr></tbody></table></div></div>
+        </details>
+        <details>
+          <summary>项目记忆的模型错题</summary>
+          <div class="details-body"><div class='table-wrap'><table><thead><tr><th>题</th><th>题型</th><th>错因</th><th>裁判理由</th></tr></thead><tbody><tr><td>q05</td><td>跨项目</td><td>召回空或答不出</td><td>回答没有给出现行的精度要求（整数分），而是称记忆中没有记录，属于答不出；未把“两位小数”当作现行事实，但缺少必须体现的要点。</td></tr><tr><td>q08</td><td>跨项目</td><td>召回空或答不出</td><td>回答称记忆中没有 output 目录不存在时的处理记录，未体现必须包含的“先创建 output 目录”这一现行要点。</td></tr><tr><td>q10</td><td>过时</td><td>其他</td><td>回答没有体现现行要点“步骤记在清单里”，而是给出了“没有清单时整段写完”的另一套说法。</td></tr><tr><td>q16</td><td>过时</td><td>召回空或答不出</td><td>回答没有给出现行要点「month.json 已撤回」，只说记忆里没有相关记录、无法确定，属于答不出。</td></tr><tr><td>q20</td><td>作用域串扰</td><td>把过时说法当现行</td><td>回答把已过时的“不再扫描 journal 全文”当成现行事实，且没有体现现行要点“没有月报代码”。</td></tr><tr><td>q26</td><td>跨项目</td><td>召回空或答不出</td><td>回答称记忆中没有相关信息、无法确定，未体现必须包含的现行要点 UTC+8，因此属于答不出。</td></tr></tbody></table></div></div>
+        </details>
+        <details>
+          <summary>属性树的模型错题</summary>
+          <div class="details-body"><div class='table-wrap'><table><thead><tr><th>题</th><th>题型</th><th>错因</th><th>裁判理由</th></tr></thead><tbody><tr><td>q05</td><td>跨项目</td><td>召回空或答不出</td><td>回答没有体现现行精度要求“整数分”，而是称记忆中没有精度要求，属于答不出关键要点。</td></tr><tr><td>q06</td><td>跨项目</td><td>召回空或答不出</td><td>回答没有给出现行要点“两位小数”，只说无法确定取整方式；虽然提到了月报的整数分做法，但已明确说明它不适用于价格列表，没有把它当成现行事实。</td></tr><tr><td>q09</td><td>过时</td><td>召回空或答不出</td><td>回答没有包含必须体现的现行要点「月报用不上 export」，关于 export 的用途未能召回。</td></tr><tr><td>q10</td><td>过时</td><td>相似信息没选</td><td>回答列出了两条矛盾记录但没有判定哪条是现行要求，未体现“步骤记在清单里”这一现行要点。</td></tr><tr><td>q11</td><td>被改口</td><td>召回空或答不出</td><td>回答说记忆里没有相关约定，未体现必需要点“没有拆开”，属于召回空、答不出。</td></tr><tr><td>q12</td><td>被改口</td><td>把过时说法当现行</td><td>回答认为不同文件的两次修改也算冲突，并把“只要改了文件就算冲突”当作现行规则，没有体现“改了不同文件不算”这一现行要点，反而落入了“都记成冲突”的陷阱。</td></tr><tr><td>q18</td><td>过时</td><td>相似信息没选</td><td>回答没有选定现行说法，而是以时间戳相同为由判定无法确定，并把&quot;只留在当前窗口&quot;作为待选记录保留，未明确给出&quot;下一次开口&quot;这一现行要点。</td></tr><tr><td>q19</td><td>被改口</td><td>召回空或答不出</td><td>回答说记忆里没有分支信息、无法判断，未体现必须包含的现行要点“main 不直接改”。</td></tr><tr><td>q20</td><td>作用域串扰</td><td>把过时说法当现行</td><td>回答把陷阱说法“不再扫描 journal 全文”当成现行事实，且没有体现必需要点“没有月报代码”。</td></tr><tr><td>q24</td><td>跨项目</td><td>召回空或答不出</td><td>回答称记忆中没有 catalog 加金额列的记录，未给出现行原因“价格查询太慢”；虽然正确地把“扫全文太慢”归于 ledger 项目，没有当成 catalog 的事实，但仍未答出要点。</td></tr><tr><td>q25</td><td>跨项目</td><td>召回空或答不出</td><td>回答说无法说明原因，没有包含必须体现的“扫全文太慢”这一要点。</td></tr><tr><td>q27</td><td>跨项目</td><td>召回空或答不出</td><td>回答称记忆中没有价格生效日的记录，无法作答，因此漏掉了必须体现的现行要点“UTC 零点”；虽然正确地没有把 UTC+8 当作价格规则，但这不足以通过。</td></tr><tr><td>q29</td><td>跨项目</td><td>召回空或答不出</td><td>回答称无法确定月报的重复分录处理规则，没有给出现行要点&quot;只留最早一条&quot;。</td></tr></tbody></table></div></div>
+        </details>
+        <details>
+          <summary>项目记忆的 Cursor 错题</summary>
+          <div class="details-body"><div class='table-wrap'><table><thead><tr><th>题</th><th>题型</th><th>错因</th><th>裁判理由</th></tr></thead><tbody><tr><td>q02</td><td>过时</td><td>其他</td><td>答案给出了 entries.amount 作为来源，但未包含必需的“不再扫描 journal 全文”这一现行做法的说明，关键信息缺失。</td></tr><tr><td>q05</td><td>跨项目</td><td>召回空或答不出</td><td>回答未包含必需的「整数分」，并称记忆中没有金额精度要求，实际上没有答出精度问题。</td></tr><tr><td>q08</td><td>跨项目</td><td>召回空或答不出</td><td>答案称记忆里没有 output 目录不存在时的处理方式，未包含必需的“先创建 output 目录”。</td></tr><tr><td>q10</td><td>过时</td><td>其他</td><td>回答说没有清单时要整段写完、不拆段，没有提到步骤应记在清单里，与要求的现行规则不符。</td></tr><tr><td>q11</td><td>被改口</td><td>其他</td><td>回答语义正确，但未包含必需短语“没有拆开”，只写了“不要拆开”。</td></tr><tr><td>q16</td><td>过时</td><td>把过时说法当现行</td><td>答案称 month.json 的改动还留着，与必须包含的“month.json 已撤回”相反，把已撤回的状态当成了现行状态。</td></tr><tr><td>q20</td><td>作用域串扰</td><td>其他</td><td>答案断言 report.ts 里有现行月报逻辑，没有包含必须说明的“没有月报代码”。</td></tr><tr><td>q24</td><td>跨项目</td><td>其他</td><td></td></tr><tr><td>q26</td><td>跨项目</td><td>召回空或答不出</td><td>答案称记忆里没有相关信息，未包含必须出现的 UTC+8，属于答不出。</td></tr><tr><td>q28</td><td>跨项目</td><td>其他</td><td></td></tr><tr><td>q29</td><td>跨项目</td><td>其他</td><td>输入只有题目和参考答案，没有待评测的模型回答，无法判定。</td></tr></tbody></table></div></div>
+        </details>
+        <details>
+          <summary>代码索引</summary>
+          <div class="details-body"><pre><code>Memory/src/service/project/scope-weight.ts          作用域系数
+Memory/src/service/project/context.ts               现行结论、检查点、事项
+scripts/project-memory/eval/run-recall.ts           三列召回
+scripts/project-memory/eval/run-answer.mjs          模型回答与裁判
+scripts/project-memory/eval/run-judge-cursor.mjs    Cursor 裁判
+eval/project-memory/runs/*-recall.json
+eval/project-memory/runs/*-answer.json
+eval/project-memory/runs/cursor-answer-project.json
+memmy-agent-attr-tree/eval/attribute-tree.mjs       属性树第 3 轮</code></pre></div>
+        </details>
+      </section>
+      <footer class="site-foot">
+        <span>MEMTENSOR · 研究文档</span>
+        <span>生成于 2026-10-23</span>
+      </footer>
+
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      const links = [...document.querySelectorAll('nav.toc a[href^="#"]')];
+      const sections = links.map((link) => document.getElementById(link.hash.slice(1))).filter(Boolean);
+      if (sections.length === 0) return;
+      let frame = 0;
+      const update = () => {
+        frame = 0;
+        const line = window.innerHeight * 0.3;
+        const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+        let current = sections[0];
+        for (const section of sections) if (section.getBoundingClientRect().top <= line) current = section;
+        if (atBottom) current = sections[sections.length - 1];
+        for (const link of links) {
+          if (link.hash.slice(1) === current.id) link.setAttribute("aria-current", "true");
+          else link.removeAttribute("aria-current");
+        }
+      };
+      const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
+      window.addEventListener("scroll", schedule, { passive: true });
+      window.addEventListener("resize", schedule);
+      update();
+    })();
+
+    (() => {
+      const KEY = "memtensor-doc-theme";
+      const root = document.documentElement;
+      const btn = document.querySelector("[data-theme-toggle]");
+      if (!btn) return;
+      const appearance = () => {
+        const chosen = root.getAttribute("data-theme");
+        if (chosen === "light" || chosen === "dark") return chosen;
+        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      };
+      const paint = () => {
+        const dark = appearance() === "dark";
+        btn.setAttribute("aria-label", dark ? "切换到浅色" : "切换到深色");
+        btn.title = btn.getAttribute("aria-label");
+      };
+      btn.addEventListener("click", () => {
+        const next = appearance() === "dark" ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        try { localStorage.setItem(KEY, next); } catch { /* 当次切换仍然生效 */ }
+        paint();
+      });
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+        if (!root.getAttribute("data-theme")) paint();
+      });
+      paint();
+    })();
+
+    (() => {
+      const open = document.querySelector(".diagram-edit-open");
+      if (!open) return;
+      const SVG_NS = "http://www.w3.org/2000/svg";
+      const FONTS = [
+        ["", "默认"],
+        ["var(--font-sans)", "正文"],
+        ["var(--font-display)", "标题"],
+        ["var(--font-mono)", "等宽"],
+        ["Segoe UI, PingFang SC, Microsoft YaHei, sans-serif", "Sans Serif"],
+        ["Georgia, Times New Roman, serif", "Serif"],
+        ["Arial, Helvetica, sans-serif", "Arial"],
+        ["Microsoft YaHei, PingFang SC, sans-serif", "微软雅黑"],
+        ["KaiTi, STKaiti, serif", "楷体"],
+        ["Cascadia Code, Consolas, monospace", "Cascadia"],
+      ];
+      const bar = document.createElement("div");
+      bar.className = "diagram-edit-bar";
+      bar.hidden = true;
+      bar.setAttribute("role", "toolbar");
+      bar.innerHTML = '<div class="diagram-edit-tools"><label>字体 <select data-act="font"></select></label><label>字号 <input data-act="size" type="number" min="8" max="200" step="1" value="16"></label><button type="button" data-act="code">展开原始代码</button><button type="button" data-act="copy" hidden>复制这段</button><button type="button" data-act="done">完成</button></div><pre class="diagram-edit-code" hidden></pre><span class="diagram-edit-resize" data-resize="w" hidden></span><span class="diagram-edit-resize" data-resize="s" hidden></span><span class="diagram-edit-resize" data-resize="sw" hidden></span>';
+      const fontInput = bar.querySelector('[data-act="font"]');
+      for (const [value, label] of FONTS) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        fontInput.append(option);
+      }
+      document.body.append(bar);
+      const frame = document.createElement("div");
+      frame.className = "edit-frame";
+      frame.hidden = true;
+      for (const edge of ["nw", "n", "ne", "e", "se", "s", "sw", "w"]) {
+        const handle = document.createElement("span");
+        handle.dataset.edge = edge;
+        frame.append(handle);
+      }
+      document.body.append(frame);
+      const sizeInput = bar.querySelector('[data-act="size"]');
+      const codeBtn = bar.querySelector('[data-act="code"]');
+      const copyBtn = bar.querySelector('[data-act="copy"]');
+      const codeBox = bar.querySelector(".diagram-edit-code");
+      const CURSOR = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", nw: "nwse-resize", se: "nwse-resize", ne: "nesw-resize", sw: "nesw-resize" };
+      let selected = null;
+      let drag = null;
+      let editingEl = null;
+      let editSnapshot = "";
+      let svgTextEdit = null;
+      let savedRange = null;
+      let pendingTarget = null;
+      let interactingWithFormatBar = false;
+      const undo = [];
+      let dirty = false;
+      let saveQueue = Promise.resolve();
+      let textUndo = null;
+      const baselines = new Map();
+      const originals = new Map();
+      const spacers = new Map();
+      const placedAtStart = new Set();
+
+      const n = (el, name) => Number(el.getAttribute(name) || 0);
+      const round = (value) => Math.round(value * 10) / 10;
+      const boxOf = (el) => ({ x: n(el, "x"), y: n(el, "y"), w: n(el, "width"), h: n(el, "height") });
+      const holds = (rect, x, y) => x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+      const fullyInside = (outer, inner) =>
+        inner.x >= outer.x - 0.5 && inner.y >= outer.y - 0.5 && inner.x + inner.w <= outer.x + outer.w + 0.5 && inner.y + inner.h <= outer.y + outer.h + 0.5;
+      const isSvg = (el) => el?.namespaceURI === SVG_NS;
+      const htmlTargets = () => {
+        const all = [...document.querySelectorAll("main h1, main h2, main h3, main p, main li, main dt, main dd, main .callout, main pre")];
+        return all.filter((el) => !el.classList.contains("edit-spacer") && !el.closest("figure.diagram") && !all.some((other) => other !== el && !other.classList.contains("edit-spacer") && other.contains(el)));
+      };
+      const mainEl = () => document.querySelector("main");
+
+      function scaleOf(svg) {
+        const vb = svg.viewBox.baseVal;
+        const rect = svg.getBoundingClientRect();
+        return { sx: vb.width / rect.width || 1, sy: vb.height / rect.height || 1 };
+      }
+      function hitResizeEdge(rect, x, y, threshold = 8) {
+        const left = rect.left;
+        const top = rect.top;
+        const right = rect.right;
+        const bottom = rect.bottom;
+        if (x < left - threshold || x > right + threshold || y < top - threshold || y > bottom + threshold) return "";
+        const onLeft = Math.abs(x - left) <= threshold;
+        const onRight = Math.abs(x - right) <= threshold;
+        const onTop = Math.abs(y - top) <= threshold;
+        const onBottom = Math.abs(y - bottom) <= threshold;
+        if (onTop && onLeft) return "nw";
+        if (onTop && onRight) return "ne";
+        if (onBottom && onLeft) return "sw";
+        if (onBottom && onRight) return "se";
+        if (onLeft) return "w";
+        if (onRight) return "e";
+        if (onTop) return "n";
+        if (onBottom) return "s";
+        return "";
+      }
+      function writePoints(item, points) {
+        if (item.el.tagName === "line") {
+          item.el.setAttribute("x1", String(points[0]));
+          item.el.setAttribute("y1", String(points[1]));
+          item.el.setAttribute("x2", String(points[2]));
+          item.el.setAttribute("y2", String(points[3]));
+          return;
+        }
+        let d = `M${points[0]},${points[1]}`;
+        for (let i = 2; i < points.length; i += 2) d += ` L${points[i]},${points[i + 1]}`;
+        item.el.setAttribute("d", d);
+      }
+      function unitFrom(target) {
+        const root = target.closest?.("svg");
+        if (!root || !root.closest("figure.diagram") || target.closest("g.legend")) return null;
+        const texts = [...root.querySelectorAll("text")].filter((el) => !el.closest("g.legend"));
+        const rects = [...root.querySelectorAll("rect")];
+        let rect = target.closest("rect");
+        if (!rect && target.closest("text")) {
+          const text = target.closest("text");
+          const x = n(text, "x");
+          const y = n(text, "y");
+          rect = rects.filter((el) => holds(boxOf(el), x, y)).sort((a, b) => boxOf(a).w * boxOf(a).h - boxOf(b).w * boxOf(b).h)[0] || null;
+          if (!rect) return { svg: root, rect: null, rects: [], texts: [text], edges: [] };
+        }
+        if (!rect) return null;
+        const area = boxOf(rect);
+        const members = rects.filter((el) => el !== rect && fullyInside(area, boxOf(el)));
+        const moving = [rect, ...members];
+        const boxes = moving.map(boxOf);
+        const labels = texts.filter((el) => boxes.some((item) => holds(item, n(el, "x"), n(el, "y"))));
+        const group = rect.classList.contains("group");
+        const edges = [];
+        for (const el of root.querySelectorAll("line, path")) {
+          const points = el.tagName === "line"
+            ? [n(el, "x1"), n(el, "y1"), n(el, "x2"), n(el, "y2")]
+            : (el.getAttribute("d") || "").match(/-?\d*\.?\d+/g)?.map(Number);
+          if (!points || points.length < 4 || points.length % 2) continue;
+          const indexes = [];
+          for (let i = 0; i < points.length; i += 2) {
+            const x = points[i];
+            const y = points[i + 1];
+            const hit = group
+              ? holds({ x: area.x - 2, y: area.y - 2, w: area.w + 4, h: area.h + 4 }, x, y)
+              : boxes.some((item) => {
+                  const nearX = Math.abs(x - item.x) <= 8 || Math.abs(x - (item.x + item.w)) <= 8;
+                  const nearY = Math.abs(y - item.y) <= 8 || Math.abs(y - (item.y + item.h)) <= 8;
+                  const inX = x >= item.x - 8 && x <= item.x + item.w + 8;
+                  const inY = y >= item.y - 8 && y <= item.y + item.h + 8;
+                  return inX && inY && (nearX || nearY);
+                });
+            if (hit) indexes.push(i);
+          }
+          if (indexes.length) edges.push({ el, points, indexes });
+        }
+        return { svg: root, rect, rects: moving, texts: labels, edges };
+      }
+      function guidesFor(root, skip) {
+        const vb = root.viewBox.baseVal;
+        const vertical = [0, vb.width / 2, vb.width];
+        const horizontal = [0, vb.height / 2, vb.height];
+        for (const el of root.querySelectorAll("rect")) {
+          if (skip.has(el) || el.closest("g.legend")) continue;
+          const box = boxOf(el);
+          vertical.push(box.x, box.x + box.w / 2, box.x + box.w);
+          horizontal.push(box.y, box.y + box.h / 2, box.y + box.h);
+        }
+        return { vertical, horizontal };
+      }
+      function htmlGuides(current) {
+        const parent = mainEl().getBoundingClientRect();
+        const vertical = [0, parent.width / 2, parent.width];
+        const horizontal = [0, parent.height / 2, parent.height];
+        const guides = [...htmlTargets(), ...document.querySelectorAll("main figure.diagram")];
+        for (const el of guides) {
+          if (el === current) continue;
+          const rect = el.getBoundingClientRect();
+          vertical.push(rect.left - parent.left, rect.left - parent.left + rect.width / 2, rect.right - parent.left);
+          horizontal.push(rect.top - parent.top, rect.top - parent.top + rect.height / 2, rect.bottom - parent.top);
+        }
+        return { vertical, horizontal };
+      }
+      function snapShift(pos, size, guides) {
+        let best = 0;
+        let bestDist = 6;
+        for (const at of [pos, pos + size / 2, pos + size]) {
+          for (const guide of guides) {
+            const dist = Math.abs(guide - at);
+            if (dist < bestDist) {
+              bestDist = dist;
+              best = guide - at;
+            }
+          }
+        }
+        return best;
+      }
+      function paintMove(dx, dy, snap = true) {
+        const primary = drag.rects[0];
+        if (!primary) {
+          const text = drag.texts[0];
+          if (!text) return;
+          text.el.setAttribute("x", String(round(text.x0 + dx)));
+          text.el.setAttribute("y", String(round(text.y0 + dy)));
+          return;
+        }
+        if (snap) {
+          const guides = guidesFor(drag.svg, new Set(drag.rects.map((item) => item.el)));
+          dx += snapShift(primary.x0 + dx, primary.w0, guides.vertical);
+          dy += snapShift(primary.y0 + dy, primary.h0, guides.horizontal);
+        }
+        for (const item of drag.rects) {
+          item.el.setAttribute("x", String(round(item.x0 + dx)));
+          item.el.setAttribute("y", String(round(item.y0 + dy)));
+        }
+        for (const item of drag.texts) {
+          item.el.setAttribute("x", String(round(item.x0 + dx)));
+          item.el.setAttribute("y", String(round(item.y0 + dy)));
+        }
+        for (const item of drag.edges) {
+          const moved = item.points.map((value, index) => {
+            if (!item.indexes.includes(index - (index % 2))) return value;
+            return round(value + (index % 2 === 0 ? dx : dy));
+          });
+          writePoints(item, moved);
+        }
+      }
+      function paintResize(dx, dy) {
+        const origin = drag.box;
+        let x = origin.x;
+        let y = origin.y;
+        let w = origin.w;
+        let h = origin.h;
+        if (drag.edge.includes("w")) { x += dx; w -= dx; }
+        if (drag.edge.includes("e")) w += dx;
+        if (drag.edge.includes("n")) { y += dy; h -= dy; }
+        if (drag.edge.includes("s")) h += dy;
+        if (drag.edge.includes("w")) { x = Math.min(x, origin.x + origin.w - 40); w = origin.x + origin.w - x; }
+        if (drag.edge.includes("e")) w = Math.max(40, w);
+        if (drag.edge.includes("n")) { y = Math.min(y, origin.y + origin.h - 24); h = origin.y + origin.h - y; }
+        if (drag.edge.includes("s")) h = Math.max(24, h);
+        const guides = guidesFor(drag.svg, new Set(drag.rects.map((item) => item.el)));
+        if (drag.edge.includes("w")) x += snapShift(x, 0, guides.vertical);
+        if (drag.edge.includes("e")) w += snapShift(x + w, 0, guides.vertical);
+        if (drag.edge.includes("n")) y += snapShift(y, 0, guides.horizontal);
+        if (drag.edge.includes("s")) h += snapShift(y + h, 0, guides.horizontal);
+        w = Math.max(40, w);
+        h = Math.max(24, h);
+        const primary = drag.rects[0];
+        primary.el.setAttribute("x", String(round(x)));
+        primary.el.setAttribute("y", String(round(y)));
+        primary.el.setAttribute("width", String(round(w)));
+        primary.el.setAttribute("height", String(round(h)));
+        const shiftX = x - origin.x;
+        const shiftY = y - origin.y;
+        for (const item of drag.rects.slice(1)) {
+          item.el.setAttribute("x", String(round(item.x0 + shiftX)));
+          item.el.setAttribute("y", String(round(item.y0 + shiftY)));
+        }
+        for (const item of drag.texts) {
+          const nextX = item.anchor === "middle" ? x + w / 2 : x + (item.x0 - origin.x);
+          item.el.setAttribute("x", String(round(nextX)));
+          item.el.setAttribute("y", String(round(y + (item.y0 - origin.y))));
+        }
+        for (const item of drag.edges) {
+          const moved = item.points.map((value, index) => {
+            if (!item.indexes.includes(index - (index % 2))) return value;
+            const px = item.points[index - (index % 2)];
+            const py = item.points[index - (index % 2) + 1];
+            if (index % 2 === 0) {
+              if (Math.abs(px - origin.x) <= 8) return round(x + (px - origin.x));
+              if (Math.abs(px - (origin.x + origin.w)) <= 8) return round(x + w - (origin.x + origin.w - px));
+              return value;
+            }
+            if (Math.abs(py - origin.y) <= 8) return round(y + (py - origin.y));
+            if (Math.abs(py - (origin.y + origin.h)) <= 8) return round(y + h - (origin.y + origin.h - py));
+            return value;
+          });
+          writePoints(item, moved);
+        }
+      }
+      function paintHtmlMove(dx, dy, snap = true) {
+        let left = drag.x + dx;
+        let top = drag.y + dy;
+        if (snap) {
+          const guides = htmlGuides(drag.el);
+          left += snapShift(left, drag.w, guides.vertical);
+          top += snapShift(top, drag.h, guides.horizontal);
+        }
+        drag.el.style.left = `${Math.round(left)}px`;
+        drag.el.style.top = `${Math.round(top)}px`;
+      }
+      function paintHtmlResize(dx, dy) {
+        let left = drag.x;
+        let top = drag.y;
+        let width = drag.w;
+        let height = drag.h;
+        if (drag.edge.includes("w")) { left += dx; width -= dx; }
+        if (drag.edge.includes("e")) width += dx;
+        if (drag.edge.includes("n")) { top += dy; height -= dy; }
+        if (drag.edge.includes("s")) height += dy;
+        width = Math.max(40, width);
+        height = Math.max(24, height);
+        const guides = htmlGuides(drag.el);
+        if (drag.edge.includes("w")) left += snapShift(left, 0, guides.vertical);
+        if (drag.edge.includes("e")) width += snapShift(left + width, 0, guides.vertical);
+        if (drag.edge.includes("n")) top += snapShift(top, 0, guides.horizontal);
+        if (drag.edge.includes("s")) height += snapShift(top + height, 0, guides.horizontal);
+        width = Math.max(40, width);
+        height = Math.max(24, height);
+        drag.el.style.left = `${Math.round(left)}px`;
+        drag.el.style.top = `${Math.round(top)}px`;
+        drag.el.style.width = `${Math.round(width)}px`;
+        drag.el.style.height = `${Math.round(height)}px`;
+      }
+      function flowBox(el) {
+        const parent = mainEl().getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
+        return {
+          left: rect.left - parent.left,
+          top: rect.top - parent.top,
+          width: rect.width,
+          height: rect.height,
+        };
+      }
+      function lift(el) {
+        if (spacers.has(el) || !el.isConnected) return;
+        const prev = el.previousElementSibling;
+        if (prev?.classList.contains("edit-spacer")) {
+          spacers.set(el, prev);
+          return;
+        }
+        const box = flowBox(el);
+        const cs = getComputedStyle(el);
+        const spacer = document.createElement("div");
+        spacer.className = "edit-spacer";
+        spacer.setAttribute("aria-hidden", "true");
+        spacer.style.boxSizing = "border-box";
+        spacer.style.display = "block";
+        spacer.style.flex = "0 0 auto";
+        spacer.style.width = `${Math.round(box.width)}px`;
+        spacer.style.height = `${Math.round(box.height)}px`;
+        spacer.style.marginTop = cs.marginTop;
+        spacer.style.marginRight = cs.marginRight;
+        spacer.style.marginBottom = cs.marginBottom;
+        spacer.style.marginLeft = cs.marginLeft;
+        spacer.style.padding = "0";
+        spacer.style.border = "0";
+        el.before(spacer);
+        spacers.set(el, spacer);
+        el.style.position = "absolute";
+        el.style.left = `${Math.round(box.left)}px`;
+        el.style.top = `${Math.round(box.top)}px`;
+        el.style.width = `${Math.round(box.width)}px`;
+        el.style.height = `${Math.round(box.height)}px`;
+        el.style.margin = "0";
+        el.style.right = "auto";
+        el.style.bottom = "auto";
+        el.style.maxWidth = "none";
+        el.style.maxHeight = "none";
+        el.style.zIndex = "2";
+      }
+      function armEditables() {
+        for (const el of htmlTargets()) {
+          if (!spacers.has(el) && el.previousElementSibling?.classList.contains("edit-spacer")) {
+            spacers.set(el, el.previousElementSibling);
+          }
+          if (!originals.has(el)) originals.set(el, el.getAttribute("style"));
+          el.setAttribute("data-editable", "");
+          const box = flowBox(el);
+          baselines.set(el, {
+            left: Math.round(box.left),
+            top: Math.round(box.top),
+            width: Math.round(box.width),
+            height: Math.round(box.height),
+            html: el.innerHTML,
+          });
+          if (spacers.has(el)) placedAtStart.add(el);
+        }
+      }
+      function dropSpacer(el) {
+        const spacer = spacers.get(el);
+        if (!spacer) return;
+        spacer.remove();
+        spacers.delete(el);
+      }
+      function restoreClean() {
+        const main = mainEl();
+        let dirtyBottom = 0;
+        const parent = main.getBoundingClientRect();
+        for (const [el, style] of originals) {
+          if (!el.isConnected) continue;
+          const base = baselines.get(el);
+          const spacer = spacers.get(el);
+          const left = parseFloat(el.style.left);
+          const top = parseFloat(el.style.top);
+          const width = parseFloat(el.style.width);
+          const height = parseFloat(el.style.height);
+          const moved = !!(spacer && base && (Math.abs(left - base.left) >= 1 || Math.abs(top - base.top) >= 1 || Math.abs(width - base.width) >= 1 || Math.abs(height - base.height) >= 1));
+          const fontFamily = el.style.fontFamily;
+          const fontSize = el.style.fontSize;
+          const html = el.innerHTML;
+          const typed = base && (html !== base.html || fontFamily || fontSize);
+          el.classList.remove("is-picked", "is-editing");
+          el.removeAttribute("contenteditable");
+          el.removeAttribute("data-editable");
+          if (!moved && !placedAtStart.has(el)) {
+            if (style == null) el.removeAttribute("style");
+            else el.setAttribute("style", style);
+            if (typed) {
+              el.innerHTML = html;
+              if (fontFamily) el.style.fontFamily = fontFamily;
+              if (fontSize) el.style.fontSize = fontSize;
+            }
+            dropSpacer(el);
+          } else if (moved) {
+            const rect = el.getBoundingClientRect();
+            dirtyBottom = Math.max(dirtyBottom, rect.bottom - parent.top);
+          }
+        }
+        originals.clear();
+        baselines.clear();
+        placedAtStart.clear();
+        if (dirtyBottom + 24 > parent.height) {
+          const current = parseFloat(main.style.minHeight) || 0;
+          main.style.minHeight = `${Math.ceil(Math.max(current, dirtyBottom + 24))}px`;
+        }
+      }
+      function cleanClone(el) {
+        const clone = el.cloneNode(true);
+        clone.querySelectorAll("*").forEach((node) => {
+          node.classList?.remove("is-picked", "is-editing");
+          if (node.classList && node.classList.length === 0) node.removeAttribute("class");
+          node.removeAttribute?.("contenteditable");
+          node.removeAttribute?.("data-editable");
+        });
+        clone.classList?.remove("is-picked", "is-editing");
+        if (clone.classList && clone.classList.length === 0) clone.removeAttribute("class");
+        clone.removeAttribute?.("contenteditable");
+        clone.removeAttribute?.("data-editable");
+        return clone.outerHTML.replace(/></g, ">\n<");
+      }
+      function sourceHost() {
+        if (selected?.kind === "svg") return selected.unit.svg;
+        if (selected?.kind === "html") return selected.el;
+        return null;
+      }
+      function showCode() {
+        if (codeBox.hidden) return;
+        const host = sourceHost();
+        codeBox.textContent = host ? cleanClone(host) : "先点选一个框或一段文字。";
+      }
+      function snapshot() {
+        if (selected?.kind === "svg") {
+          const svg = selected.unit.svg;
+          const html = svg.innerHTML;
+          return () => {
+            svg.innerHTML = html;
+            clearSelection();
+          };
+        }
+        if (selected?.kind === "html") {
+          const el = selected.el;
+          const style = el.getAttribute("style");
+          const html = el.innerHTML;
+          const spacer = spacers.get(el) || null;
+          const spacerParent = spacer ? spacer.parentNode : null;
+          return () => {
+            if (style == null) el.removeAttribute("style");
+            else el.setAttribute("style", style);
+            el.innerHTML = html;
+            const current = spacers.get(el);
+            if (spacer) {
+              if (current && current !== spacer) current.remove();
+              if (!spacer.isConnected && spacerParent) spacerParent.insertBefore(spacer, el);
+              spacers.set(el, spacer);
+            } else if (current) dropSpacer(el);
+            placeFrame();
+            showCode();
+          };
+        }
+        return null;
+      }
+      function pushUndo(entry) {
+        if (!entry) return;
+        undo.push(entry);
+        dirty = true;
+        if (undo.length > 30) undo.shift();
+      }
+      function remember() {
+        pushUndo(snapshot());
+      }
+      function pageHtml() {
+        const root = document.documentElement.cloneNode(true);
+        root.removeAttribute("data-theme");
+        root.querySelector("body")?.classList.remove("is-diagram-edit");
+        root.querySelectorAll(".diagram-edit-bar, .edit-frame, .diagram-edit-text").forEach((el) => el.remove());
+        root.querySelectorAll("[data-editable], [contenteditable]").forEach((el) => {
+          el.removeAttribute("data-editable");
+          el.removeAttribute("contenteditable");
+        });
+        root.querySelectorAll(".is-picked, .is-editing").forEach((el) => {
+          el.classList.remove("is-picked", "is-editing");
+          if (el.classList.length === 0) el.removeAttribute("class");
+        });
+        return "<!DOCTYPE html>\n" + root.outerHTML;
+      }
+      function persistPage() {
+        const html = pageHtml();
+        const headerPath = location.protocol === "file:" ? location.href : location.pathname;
+        const urls = [];
+        if (location.protocol === "http:" || location.protocol === "https:") urls.push(`${location.origin}/__memtensor/save`);
+        const fallback = "http://127.0.0.1:4173/__memtensor/save";
+        if (!urls.includes(fallback)) urls.push(fallback);
+        saveQueue = saveQueue.catch(() => {}).then(async () => {
+          for (const url of urls) {
+            try {
+              const res = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain", "X-Doc-Path": headerPath },
+                body: html,
+              });
+              if (res.ok) {
+                open.title = "已写回文件";
+                return;
+              }
+            } catch { /* 下一个地址 */ }
+          }
+          open.title = "没能写回文件";
+        });
+      }
+      function placeFrame() {
+        const el = selected?.el;
+        if (!el?.isConnected || editingEl) {
+          frame.hidden = true;
+          return;
+        }
+        const rect = el.getBoundingClientRect();
+        frame.hidden = false;
+        frame.style.left = `${rect.left}px`;
+        frame.style.top = `${rect.top}px`;
+        frame.style.width = `${rect.width}px`;
+        frame.style.height = `${rect.height}px`;
+      }
+      function setFormatEnabled(on) {
+        bar.classList.toggle("is-plain", !on);
+        fontInput.disabled = !on;
+        sizeInput.disabled = !on;
+      }
+      function isSimpleText(el) {
+        return ![...el.childNodes].some((node) => node.nodeType === Node.ELEMENT_NODE);
+      }
+      function rangeParent(range) {
+        const node = range.commonAncestorContainer;
+        return node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+      }
+      function saveTextRange() {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount && !sel.isCollapsed && editingEl && !svgTextEdit && editingEl.contains(sel.anchorNode)) {
+          savedRange = sel.getRangeAt(0).cloneRange();
+          return;
+        }
+        if (!interactingWithFormatBar) savedRange = null;
+      }
+      function typographyTarget() {
+        if (svgTextEdit) return { kind: "element", el: svgTextEdit.node };
+        if (savedRange && !savedRange.collapsed) return { kind: "range", range: savedRange };
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount && !sel.isCollapsed && editingEl && editingEl.contains(sel.anchorNode)) {
+          return { kind: "range", range: sel.getRangeAt(0) };
+        }
+        if (editingEl && sel?.anchorNode && editingEl.contains(sel.anchorNode)) {
+          const el = sel.anchorNode.nodeType === Node.TEXT_NODE ? sel.anchorNode.parentElement : sel.anchorNode;
+          if (el && editingEl.contains(el)) return { kind: "element", el };
+        }
+        if (selected?.kind === "svg") return { kind: "texts", texts: selected.unit.texts };
+        if (selected?.kind === "html") return { kind: "element", el: selected.el };
+        return null;
+      }
+      function applyTypography(el, styles) {
+        if (!el?.style) return;
+        if (styles.fontFamily != null) el.style.fontFamily = styles.fontFamily;
+        if (styles.fontSize == null || styles.fontSize === "") return;
+        el.style.fontSize = `${Math.round(Number(styles.fontSize))}px`;
+        if (!isSvg(el) && el.scrollHeight > el.clientHeight + 1) el.style.height = "auto";
+      }
+      function applyTypographyToRange(range, styles) {
+        if (!range || range.collapsed) return null;
+        const existing = rangeParent(range);
+        if (existing && existing.tagName === "SPAN" && existing.textContent === range.toString()) {
+          applyTypography(existing, styles);
+          return existing;
+        }
+        const span = document.createElement("span");
+        applyTypography(span, styles);
+        try { range.surroundContents(span); }
+        catch { span.append(range.extractContents()); range.insertNode(span); }
+        return span;
+      }
+      function applyCurrentTypography(styles) {
+        const target = typographyTarget() || pendingTarget;
+        if (!target) return;
+        remember();
+        if (target.kind === "range") {
+          const span = applyTypographyToRange(target.range, styles);
+          if (span) {
+            const next = document.createRange();
+            next.selectNodeContents(span);
+            savedRange = next;
+          }
+        } else if (target.kind === "texts") {
+          for (const text of target.texts) applyTypography(text, styles);
+        } else applyTypography(target.el, styles);
+        placeFrame();
+        showCode();
+        readTypography();
+      }
+      function readTypography() {
+        const target = typographyTarget();
+        const el = target?.kind === "texts" ? target.texts[0] : target?.kind === "range" ? rangeParent(target.range) : target?.el;
+        if (!el?.isConnected) return;
+        sizeInput.value = String(Math.round(parseFloat(getComputedStyle(el).fontSize) || 16));
+        const family = el.style?.fontFamily || "";
+        fontInput.value = [...fontInput.options].some((opt) => opt.value === family) ? family : "";
+      }
+      function clearSelection() {
+        document.querySelectorAll(".is-picked").forEach((node) => node.classList.remove("is-picked"));
+        selected = null;
+        pendingTarget = null;
+        frame.hidden = true;
+        setFormatEnabled(false);
+        showCode();
+      }
+      function selectUnit(unit) {
+        if (!unit) return;
+        if (editingEl && !svgTextEdit) endInlineEdit(true);
+        document.querySelectorAll(".is-picked").forEach((node) => node.classList.remove("is-picked"));
+        const el = unit.rect || unit.texts[0];
+        selected = { kind: "svg", unit, el };
+        el.classList.add("is-picked");
+        setFormatEnabled(true);
+        readTypography();
+        pendingTarget = typographyTarget();
+        placeFrame();
+        showCode();
+      }
+      function selectHtml(el) {
+        if (editingEl && editingEl !== el) endInlineEdit(true);
+        document.querySelectorAll(".is-picked").forEach((node) => node.classList.remove("is-picked"));
+        selected = { kind: "html", el };
+        el.classList.add("is-picked");
+        setFormatEnabled(true);
+        readTypography();
+        pendingTarget = typographyTarget();
+        placeFrame();
+        showCode();
+      }
+      function beginSvg(unit, edge, clientX, clientY) {
+        const scale = scaleOf(unit.svg);
+        drag = {
+          kind: "svg",
+          mode: edge && unit.rect ? "resize" : "move",
+          edge: edge || "",
+          svg: unit.svg,
+          sx: scale.sx,
+          sy: scale.sy,
+          clientX,
+          clientY,
+          box: unit.rect ? boxOf(unit.rect) : null,
+          rects: unit.rects.map((el) => ({ el, x0: n(el, "x"), y0: n(el, "y"), w0: n(el, "width"), h0: n(el, "height") })),
+          texts: unit.texts.map((el) => ({ el, x0: n(el, "x"), y0: n(el, "y"), anchor: el.getAttribute("text-anchor") || "start" })),
+          edges: unit.edges,
+          snap: true,
+          noted: false,
+        };
+      }
+      function beginHtml(el, edge, clientX, clientY) {
+        drag = {
+          kind: "html",
+          mode: edge ? "resize" : "move",
+          edge: edge || "",
+          el,
+          x: parseFloat(el.style.left) || 0,
+          y: parseFloat(el.style.top) || 0,
+          w: el.getBoundingClientRect().width,
+          h: el.getBoundingClientRect().height,
+          clientX,
+          clientY,
+          snap: true,
+          noted: false,
+        };
+      }
+      function syncHtmlDragBox() {
+        if (drag?.kind !== "html") return;
+        drag.x = parseFloat(drag.el.style.left) || 0;
+        drag.y = parseFloat(drag.el.style.top) || 0;
+        drag.w = parseFloat(drag.el.style.width) || drag.el.getBoundingClientRect().width;
+        drag.h = parseFloat(drag.el.style.height) || drag.el.getBoundingClientRect().height;
+      }
+      function liftForDrag() {
+        if (drag?.kind !== "html" || spacers.has(drag.el)) return;
+        if (!drag.noted) {
+          remember();
+          drag.noted = true;
+        }
+        lift(drag.el);
+        syncHtmlDragBox();
+      }
+      function startInlineEdit(el) {
+        if (!el || editingEl === el) return;
+        endInlineEdit(true);
+        if (el.hasAttribute?.("data-editable")) selectHtml(el);
+        textUndo = snapshot();
+        editingEl = el;
+        editSnapshot = el.innerHTML;
+        el.contentEditable = "true";
+        el.classList.add("is-editing");
+        frame.hidden = true;
+        el.focus();
+        if (isSimpleText(el)) {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      }
+      function openSvgText(text) {
+        endInlineEdit(true);
+        const unit = unitFrom(text);
+        if (unit) selectUnit(unit);
+        textUndo = snapshot();
+        const bounds = text.getBoundingClientRect();
+        const input = document.createElement("div");
+        input.className = "diagram-edit-text";
+        input.contentEditable = "true";
+        input.textContent = text.textContent;
+        const computed = getComputedStyle(text);
+        input.style.left = `${bounds.left}px`;
+        input.style.top = `${bounds.top}px`;
+        input.style.minWidth = `${Math.max(96, bounds.width + 24)}px`;
+        input.style.font = computed.font;
+        input.style.fontFamily = computed.fontFamily;
+        document.body.append(input);
+        svgTextEdit = { node: text, snapshot: text.textContent };
+        editingEl = input;
+        frame.hidden = true;
+        input.focus();
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        const finish = (commit) => {
+          if (!svgTextEdit || svgTextEdit.node !== text) return;
+          endInlineEdit(commit);
+        };
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") { event.preventDefault(); finish(true); }
+          if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); finish(false); }
+        });
+        input.addEventListener("focusout", (event) => {
+          if (interactingWithFormatBar) return;
+          const next = event.relatedTarget;
+          if (next && bar.contains(next)) return;
+          finish(true);
+        });
+      }
+      function endInlineEdit(commit) {
+        if (svgTextEdit) {
+          const changed = commit && editingEl.textContent !== svgTextEdit.snapshot;
+          if (!commit) svgTextEdit.node.textContent = svgTextEdit.snapshot;
+          else svgTextEdit.node.textContent = editingEl.textContent;
+          if (changed) pushUndo(textUndo);
+          textUndo = null;
+          editingEl.remove();
+          svgTextEdit = null;
+          editingEl = null;
+          savedRange = null;
+          placeFrame();
+          showCode();
+          return;
+        }
+        if (!editingEl) return;
+        const el = editingEl;
+        const changed = commit && el.innerHTML !== editSnapshot;
+        if (!commit) el.innerHTML = editSnapshot;
+        if (changed) pushUndo(textUndo);
+        textUndo = null;
+        el.removeAttribute("contenteditable");
+        el.classList.remove("is-editing");
+        editingEl = null;
+        editSnapshot = "";
+        savedRange = null;
+        placeFrame();
+        showCode();
+      }
+      function setSourceOpen(show) {
+        codeBox.hidden = !show;
+        copyBtn.hidden = !show;
+        codeBtn.textContent = show ? "收起原始代码" : "展开原始代码";
+        bar.classList.toggle("is-code", show);
+        for (const handle of bar.querySelectorAll("[data-resize]")) handle.hidden = !show;
+        if (!show) {
+          bar.classList.remove("is-sized");
+          bar.style.height = "";
+          bar.style.width = "";
+          bar.style.maxWidth = "";
+        } else showCode();
+      }
+      function resizeSource(event) {
+        if (drag.edge === "w" || drag.edge === "sw") {
+          const width = Math.round(Math.max(240, Math.min(drag.right - 8, drag.right - event.clientX)));
+          bar.style.width = `${width}px`;
+          bar.style.maxWidth = "none";
+        }
+        if (drag.edge === "s" || drag.edge === "sw") {
+          const height = Math.round(Math.max(120, Math.min(window.innerHeight - drag.top - 8, event.clientY - drag.top)));
+          bar.style.height = `${height}px`;
+          bar.classList.add("is-sized");
+        }
+      }
+      function setEditing(on) {
+        document.body.classList.toggle("is-diagram-edit", on);
+        open.setAttribute("aria-pressed", on ? "true" : "false");
+        bar.hidden = !on;
+        document.body.style.cursor = "";
+        if (on) {
+          armEditables();
+          setFormatEnabled(false);
+        } else {
+          endInlineEdit(true);
+          clearSelection();
+          restoreClean();
+          setSourceOpen(false);
+          if (dirty) persistPage();
+        }
+      }
+      open.addEventListener("click", () => setEditing(bar.hidden));
+      bar.addEventListener("click", async (event) => {
+        const act = event.target?.dataset?.act;
+        if (act === "done") setEditing(false);
+        if (act === "code") setSourceOpen(codeBox.hidden);
+        if (act === "copy") {
+          const host = sourceHost();
+          if (!host) return;
+          try { await navigator.clipboard.writeText(cleanClone(host)); } catch { /* 仍可从展开的代码里选取 */ }
+        }
+      });
+      fontInput.addEventListener("change", () => applyCurrentTypography({ fontFamily: fontInput.value }));
+      sizeInput.addEventListener("input", () => {
+        const value = Number(sizeInput.value);
+        if (value >= 8 && value <= 200) applyCurrentTypography({ fontSize: value });
+      });
+      bar.addEventListener("pointerdown", (event) => {
+        const handle = event.target.closest?.("[data-resize]");
+        if (handle && !handle.hidden && bar.classList.contains("is-code")) {
+          event.preventDefault();
+          event.stopPropagation();
+          const rect = bar.getBoundingClientRect();
+          document.body.style.cursor = CURSOR[handle.dataset.resize] || "";
+          drag = {
+            kind: "bar",
+            edge: handle.dataset.resize,
+            right: rect.right,
+            top: rect.top,
+            noted: true,
+          };
+          return;
+        }
+        event.stopPropagation();
+        interactingWithFormatBar = true;
+        saveTextRange();
+        pendingTarget = typographyTarget();
+      }, true);
+      window.addEventListener("pointerup", () => { interactingWithFormatBar = false; });
+      window.addEventListener("pointercancel", () => { interactingWithFormatBar = false; });
+      document.addEventListener("selectionchange", () => {
+        if (interactingWithFormatBar || !editingEl || svgTextEdit) return;
+        saveTextRange();
+      });
+      frame.addEventListener("pointerdown", (event) => {
+        const edge = event.target?.dataset?.edge;
+        if (!edge || !selected || editingEl || event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (selected.kind === "svg") beginSvg(selected.unit, edge, event.clientX, event.clientY);
+        else beginHtml(selected.el, edge, event.clientX, event.clientY);
+      });
+      document.addEventListener("pointerdown", (event) => {
+        if (!document.body.classList.contains("is-diagram-edit") || event.button !== 0) return;
+        if (bar.contains(event.target) || open.contains(event.target) || frame.contains(event.target) || event.target.closest(".page-tools") || event.target.closest(".diagram-edit-text")) return;
+        if (editingEl && (editingEl === event.target || editingEl.contains(event.target))) return;
+        const svg = event.target.closest?.("figure.diagram svg");
+        if (svg) {
+          const unit = unitFrom(event.target);
+          if (!unit) {
+            endInlineEdit(true);
+            clearSelection();
+            return;
+          }
+          selectUnit(unit);
+          if (editingEl) return;
+          const edge = unit.rect ? hitResizeEdge(unit.rect.getBoundingClientRect(), event.clientX, event.clientY) : "";
+          beginSvg(unit, edge, event.clientX, event.clientY);
+          event.preventDefault();
+          return;
+        }
+        const html = event.target.closest?.("[data-editable]");
+        if (!html) {
+          endInlineEdit(true);
+          clearSelection();
+          return;
+        }
+        selectHtml(html);
+        if (editingEl) return;
+        const edge = hitResizeEdge(html.getBoundingClientRect(), event.clientX, event.clientY);
+        beginHtml(html, edge, event.clientX, event.clientY);
+        event.preventDefault();
+      });
+      document.addEventListener("pointermove", (event) => {
+        if (drag?.kind === "bar") {
+          resizeSource(event);
+          return;
+        }
+        if (document.body.classList.contains("is-diagram-edit") && !drag && !editingEl) {
+          const rect = event.target.closest?.("rect, [data-editable]");
+          const edge = rect && !rect.closest("g.legend") ? hitResizeEdge(rect.getBoundingClientRect(), event.clientX, event.clientY) : "";
+          document.body.style.cursor = edge ? CURSOR[edge] : "";
+        }
+        if (!drag) return;
+        if (drag.kind === "html" && !spacers.has(drag.el)) {
+          const traveled = Math.hypot(event.clientX - drag.clientX, event.clientY - drag.clientY);
+          if (traveled < 3) return;
+          liftForDrag();
+        }
+        if (!drag.noted) {
+          remember();
+          drag.noted = true;
+        }
+        const dx = event.clientX - drag.clientX;
+        const dy = event.clientY - drag.clientY;
+        if (drag.kind === "svg") {
+          const sdx = dx * drag.sx;
+          const sdy = dy * drag.sy;
+          if (drag.mode === "resize") paintResize(sdx, sdy);
+          else paintMove(sdx, sdy, drag.snap);
+        } else if (drag.mode === "resize") paintHtmlResize(dx, dy);
+        else paintHtmlMove(dx, dy, drag.snap);
+        placeFrame();
+        showCode();
+      });
+      const endDrag = () => {
+        if (drag?.kind === "bar") document.body.style.cursor = "";
+        drag = null;
+      };
+      document.addEventListener("pointerup", endDrag);
+      document.addEventListener("pointercancel", endDrag);
+      document.addEventListener("dblclick", (event) => {
+        if (!document.body.classList.contains("is-diagram-edit")) return;
+        if (bar.contains(event.target)) return;
+        const text = event.target.closest?.("text");
+        if (text && text.closest("figure.diagram") && !text.closest("g.legend")) {
+          event.preventDefault();
+          openSvgText(text);
+          return;
+        }
+        const html = event.target.closest?.("[data-editable]");
+        if (!html || isSvg(html)) return;
+        event.preventDefault();
+        startInlineEdit(html);
+      });
+      document.addEventListener("keydown", (event) => {
+        const undoKey = (event.metaKey || event.ctrlKey) && event.key === "z" && !event.shiftKey;
+        const typing = Boolean(editingEl) || Boolean(event.target.closest?.("input, textarea, select"));
+        if (undoKey && undo.length && !typing) {
+          event.preventDefault();
+          undo.pop()();
+          if (!document.body.classList.contains("is-diagram-edit")) persistPage();
+          return;
+        }
+        if (!document.body.classList.contains("is-diagram-edit")) return;
+        if (editingEl && !svgTextEdit) {
+          if (event.key === "Escape") { event.preventDefault(); endInlineEdit(false); return; }
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey || isSimpleText(editingEl))) {
+            event.preventDefault();
+            endInlineEdit(true);
+          }
+          return;
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key === "z" && undo.length) {
+          event.preventDefault();
+          undo.pop()();
+          return;
+        }
+        if (event.key === "Escape") {
+          if (!codeBox.hidden) setSourceOpen(false);
+          else setEditing(false);
+          return;
+        }
+        const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
+        if (!step || !selected || editingEl) return;
+        event.preventDefault();
+        if (selected.kind === "svg") {
+          beginSvg(selected.unit, "", 0, 0);
+          drag.snap = false;
+          drag.noted = true;
+          remember();
+          paintMove(step[0] * drag.sx, step[1] * drag.sy, false);
+        } else {
+          beginHtml(selected.el, "", 0, 0);
+          drag.snap = false;
+          liftForDrag();
+          if (!drag.noted) {
+            remember();
+            drag.noted = true;
+          }
+          paintHtmlMove(step[0], step[1], false);
+        }
+        drag = null;
+        placeFrame();
+        showCode();
+      });
+      document.addEventListener("focusout", (event) => {
+        if (!editingEl || svgTextEdit) return;
+        if (interactingWithFormatBar) return;
+        const next = event.relatedTarget;
+        if (next && (editingEl.contains(next) || bar.contains(next))) return;
+        endInlineEdit(true);
+      });
+      window.addEventListener("scroll", () => placeFrame(), true);
+      window.addEventListener("resize", () => placeFrame());
+    })();
+  </script>
+</body>
+</html>

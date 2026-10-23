@@ -13,6 +13,7 @@ import type {
 import type { MemoryFilter, MemoryRow } from "../../types.js";
 import { newId, stableHash } from "../../utils/id.js";
 import { isRecord } from "../../utils/json.js";
+import { rephraseRelation } from "../project/rephrase.js";
 
 export interface WorkMemoryQaPair {
   user: string;
@@ -74,7 +75,7 @@ Merge only when the candidates concern the same work object, requirement, or evo
 Return JSON only with one decision for every candidate:
 {"decisions":[{"candidate_ref":"new_1","action":"create","matched_memory_ref":null,"work_topic":"..."}]}
 
-For merge, matched_memory_ref must be one of that candidate's candidate_refs, work_topic must reuse the matched memory topic, and merged_requirement and merged_reason must contain the final non-duplicated text. For create, matched_memory_ref must be null and work_topic must be a new concise classification label.`;
+For merge, matched_memory_ref must be one of that candidate's candidate_refs, work_topic must reuse the matched memory topic, and merged_requirement and merged_reason must contain the final non-duplicated text. If the user 改口, merge into the existing memory instead of creating a second decision, and put the reason in merged_reason. For create, matched_memory_ref must be null and work_topic must be a new concise classification label.`;
 
 export class WorkMemoryPipeline {
   constructor(private readonly deps: WorkMemoryPipelineDependencies) {}
@@ -572,7 +573,15 @@ export class WorkMemoryPipeline {
           requirement,
           reason,
           trajectory_hash: trajectoryHash,
-          schema_version: WORK_MEMORY_SCHEMA_VERSION
+          schema_version: WORK_MEMORY_SCHEMA_VERSION,
+          ...(existing && String(existing.properties.internal_info.requirement ?? "") !== requirement
+            ? {
+                last_change: {
+                  relation: rephraseRelation(String(existing.properties.internal_info.requirement ?? ""), requirement),
+                  reason
+                }
+              }
+            : {})
         }
       },
       memoryLayer: "L1",

@@ -19,6 +19,7 @@ import {
   PanelItemsOutputSchema,
   PanelOverviewOutputSchema,
   PanelTasksOutputSchema,
+  ProjectTopicsOutputSchema,
   OpenSessionOutputSchema,
   SearchOutputSchema,
   StartTurnOutputSchema,
@@ -274,6 +275,13 @@ export function createHttpMemoryClient(
 
     async panelTasks(input, context) {
       return request("GET", "panelTasks", PanelTasksOutputSchema, { query: input, context });
+    },
+
+    async listProjectTopics(input, context) {
+      return request("GET", "projectTopics", ProjectTopicsOutputSchema, {
+        query: { workspacePath: input.workspacePath },
+        context
+      });
     },
 
     async deletePanelTask(taskId, context) {

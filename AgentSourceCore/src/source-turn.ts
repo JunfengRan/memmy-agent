@@ -33,6 +33,7 @@ export interface SourceTurn {
   toolCalls: SourceToolCall[];
   toolResults: SourceToolResult[];
   workspacePath?: string;
+  gitRoot?: string;
 }
 
 /** Shape every native reader stages, before it is turned into a ConversationMessage. */
@@ -117,7 +118,8 @@ export function buildSourceTurnRequest(turn: SourceTurn, channel: "hook" | "agen
     },
     source: turn.source, profileId: resolvedProfileId, channel, query: turn.query, answer: turn.answer,
     status: turn.status, toolCalls: turn.toolCalls, toolResults: turn.toolResults,
-    workspacePath: turn.workspacePath
+    workspacePath: turn.workspacePath,
+    ...(turn.gitRoot ? { gitRoot: turn.gitRoot } : {})
   };
 }
 

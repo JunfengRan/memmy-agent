@@ -1,0 +1,16 @@
+{
+  "phase": "m3",
+  "summary": "权限、读过滤、acl/check、冲突裁决、系统更新、一层复核",
+  "requirements": [
+    { "id": "ADR-009-effective-level", "summary": "Agent 有效级别不超过所在应用" },
+    { "id": "ADR-009-default-write", "summary": "不配置时全部 write" },
+    { "id": "ADR-009-read-filter", "summary": "无 read 的主体看不到 restricted 记忆" },
+    { "id": "ADR-009-acl-deny", "summary": "acl/check 失败即拒绝" },
+    { "id": "ADR-010-same-level-conflict", "summary": "同级矛盾进入待裁决" },
+    { "id": "ADR-010-higher-level-wins", "summary": "权限更高的一侧直接裁决" },
+    { "id": "ADR-010-user-wins", "summary": "用户要求优先于权限" },
+    { "id": "ADR-010-deliver-once", "summary": "系统更新只在下一轮送达一次" },
+    { "id": "Q18-one-layer", "summary": "复核只走一层且单次最多 30 个" },
+    { "id": "Q15-dream-claim", "summary": "Dream 只裁证据明确的 claim 冲突" }
+  ]
+}

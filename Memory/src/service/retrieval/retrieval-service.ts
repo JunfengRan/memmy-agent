@@ -71,6 +71,7 @@ import {
 } from "../turn/turn-normalization.js";
 import { IndexedCandidatePool } from "./indexed-candidate-pool.js";
 import { filterL1TraceSpanRecallHits } from "./l1-trace-span-filter.js";
+import { applyScopeWeights, memoriesVisibleForScope } from "../project/scope-weight.js";
 
 type InternalMemorySearchRequest = MemorySearchRequest & {
   episodeId?: string;
@@ -2341,40 +2342,56 @@ export class RetrievalService {
         currentAgentId: input.currentAgentId,
         config
       });
-      const memories = candidatePool.memories;
+      const memories = memoriesVisibleForScope(candidatePool.memories, {
+        sessionProjectId: input.projectId ?? null,
+        query
+      });
       if (memories.length === 0) {
         return { retrieval: emptyRetrievalResult(), memories };
       }
-      return {
+      const retrieval = retrievePluginMemories({
+        query,
+        queryVector,
+        queryExtract,
         memories,
-        retrieval: retrievePluginMemories({
-          query,
-          queryVector,
-          queryExtract,
-          memories,
-          layers: input.layers,
-          limit: input.limit,
-          mode: input.mode,
-          excludeTraceRawTurnIds: input.excludeTraceRawTurnIds,
-          targetSkillId: input.targetSkillId,
-          channelScoresByMemory: candidatePool.channelScoresByMemory,
-          config
-        })
-      };
+        layers: input.layers,
+        limit: input.limit,
+        mode: input.mode,
+        excludeTraceRawTurnIds: input.excludeTraceRawTurnIds,
+        targetSkillId: input.targetSkillId,
+        channelScoresByMemory: candidatePool.channelScoresByMemory,
+        config
+      });
+      return { memories, retrieval };
     };
+    const weightRetrieval = (
+      output: { retrieval: RetrievalResult; memories: MemoryRow[] },
+      query: string
+    ): { retrieval: RetrievalResult; memories: MemoryRow[] } => ({
+      memories: output.memories,
+      retrieval: {
+        ...output.retrieval,
+        hits: applyScopeWeights({
+          hits: output.retrieval.hits,
+          memories: output.memories,
+          sessionProjectId: input.projectId ?? null,
+          query
+        }).slice(0, input.limit)
+      }
+    });
 
     if (!this.deps.queryRewriteEnabled()) {
-      return runQuery(input.query, input.queryVectorText, input.queryExtract);
+      return weightRetrieval(await runQuery(input.query, input.queryVectorText, input.queryExtract), input.query);
     }
 
     const queries = await this.planQueryRewrite(input.query);
     if (queries.length <= 1) {
       const query = queries[0] ?? input.query;
-      return runQuery(
+      return weightRetrieval(await runQuery(
         query,
         query === input.query ? input.queryVectorText : query,
         query === input.query ? input.queryExtract : null
-      );
+      ), query);
     }
 
     const outputs = await Promise.all(queries.map((query) =>
@@ -2384,10 +2401,10 @@ export class RetrievalService {
         query === input.query ? input.queryExtract : null
       )
     ));
-    return {
+    return weightRetrieval({
       retrieval: mergeRetrievalResults(outputs.map((output) => output.retrieval), input.limit, QUERY_REWRITE_RRF_CONSTANT, QUERY_REWRITE_PER_QUERY_MIN_KEEP),
       memories: uniqMemories(outputs.flatMap((output) => output.memories))
-    };
+    }, input.query);
   }
 
   private async filterRecallHits(query: string, hits: RecallHit[]): Promise<{

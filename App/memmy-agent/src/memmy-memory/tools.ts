@@ -59,6 +59,15 @@ export const MEMOS_MEMORY_TOOL_SPECS: ToolSpec[] = [
     readOnly: true,
     execute: async (client, params) => client.getMemory(String(params.id)),
   },
+  {
+    name: "todo_write",
+    description: "Record the current task's todo list so project memory can cut checkpoints.",
+    parameters: objectSchema({
+      todos: { type: "array", items: { type: "object" } }
+    }, ["todos"]),
+    readOnly: false,
+    execute: async (_client, params) => ({ todos: params.todos ?? [] })
+  },
 ];
 
 export class MemmyMemoryTool extends Tool {

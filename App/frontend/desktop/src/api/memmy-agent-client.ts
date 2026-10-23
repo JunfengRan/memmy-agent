@@ -358,6 +358,24 @@ const ProjectRevealResponseSchema = z.object({
   ok: z.literal(true)
 });
 
+const ProjectBoardCitationSchema = z.object({
+  fromSessionKey: z.string(),
+  toSessionKey: z.string()
+});
+
+export const ProjectBoardSchema = z.object({
+  instruction: z.string(),
+  knowledgeBaseIds: z.array(z.string()),
+  skillIds: z.array(z.string()),
+  citations: z.array(ProjectBoardCitationSchema)
+});
+
+export type ProjectBoard = z.infer<typeof ProjectBoardSchema>;
+
+const ProjectBoardResponseSchema = z.object({
+  board: ProjectBoardSchema
+});
+
 const SlashCommandSchema = z.object({
   command: z.string(),
   title: z.string(),
@@ -828,6 +846,8 @@ export interface MemmyAgentClient {
     options?: MemmyAgentRequestOptions
   ): Promise<MemmyAgentProjectMutationResult>;
   revealProject(projectId: string, options?: MemmyAgentRequestOptions): Promise<void>;
+  readProjectBoard(projectId: string, options?: MemmyAgentRequestOptions): Promise<ProjectBoard>;
+  saveProjectBoard(projectId: string, board: ProjectBoard, options?: MemmyAgentRequestOptions): Promise<ProjectBoard>;
   deleteProject(
     projectId: string,
     options?: MemmyAgentRequestOptions
@@ -1411,6 +1431,28 @@ class HttpMemmyAgentClient implements MemmyAgentClient {
       ...options,
       method: "POST"
     });
+  }
+
+  async readProjectBoard(projectId: string, options: MemmyAgentRequestOptions = {}): Promise<ProjectBoard> {
+    const response = await this.request(
+      `/api/projects/${encodeURIComponent(projectId)}/board`,
+      ProjectBoardResponseSchema,
+      options
+    );
+    return response.board;
+  }
+
+  async saveProjectBoard(
+    projectId: string,
+    board: ProjectBoard,
+    options: MemmyAgentRequestOptions = {}
+  ): Promise<ProjectBoard> {
+    const response = await this.request(
+      `/api/projects/${encodeURIComponent(projectId)}/board`,
+      ProjectBoardResponseSchema,
+      { ...options, method: "PUT", body: board }
+    );
+    return response.board;
   }
 
   async deleteProject(

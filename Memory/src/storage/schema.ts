@@ -1,8 +1,8 @@
 import type Database from "better-sqlite3";
 import { memoryCaptureQaHash, normalizeMemoryCaptureSource } from "../utils/memory-capture-claim.js";
 
-export const SCHEMA_VERSION = 9;
-export const SCHEMA_MIGRATION_ID = "009_token_usage_outbox";
+export const SCHEMA_VERSION = 10;
+export const SCHEMA_MIGRATION_ID = "010_project_memory";
 const API_LOG_SOURCE_AGENT_MIGRATION_FROM_VERSION = 2;
 const PROCESSING_TAGS = new Set([
   "摘要排队中",
@@ -677,7 +677,27 @@ const statements = [
     sequence INTEGER PRIMARY KEY,
     event_id TEXT NOT NULL UNIQUE,
     payload_json TEXT NOT NULL CHECK (json_valid(payload_json))
-  )`
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS memory_conflicts (
+    conflict_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    project_id TEXT,
+    topic_id TEXT,
+    kind TEXT NOT NULL CHECK (kind IN ('claim', 'change')),
+    status TEXT NOT NULL CHECK (status IN ('open', 'resolved')),
+    side_a_id TEXT NOT NULL,
+    side_b_id TEXT NOT NULL,
+    winner TEXT,
+    reason TEXT,
+    resolved_by TEXT,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_memory_conflicts_side_a ON memory_conflicts (side_a_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_memory_conflicts_side_b ON memory_conflicts (side_b_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_memories_topic_id ON memories (json_extract(info_json, '$.topic_id'))`,
+  `CREATE INDEX IF NOT EXISTS idx_memory_change_log_memory_seq ON memory_change_log (memory_id, seq)`
 ];
 
 export function migrate(db: Database.Database): void {
@@ -687,7 +707,7 @@ export function migrate(db: Database.Database): void {
   const hasMemories = tableExists(db, "memories");
   const version = currentSchemaVersion(db);
 
-  if (hasMemories && version !== SCHEMA_VERSION && version !== 2 && version !== 3 && version !== 4 && version !== 5 && version !== 6 && version !== 7 && version !== 8) {
+  if (hasMemories && version !== SCHEMA_VERSION && version !== 2 && version !== 3 && version !== 4 && version !== 5 && version !== 6 && version !== 7 && version !== 8 && version !== 9) {
     throw new Error(
       `Unsupported memory database schema version ${version}; the database was left unchanged`
     );
@@ -740,6 +760,16 @@ export function migrate(db: Database.Database): void {
       }
       if (hasMemories && version > 0 && version < 7) {
         backfillMemoryCaptureClaims(db);
+      }
+      if (hasMemories && version > 0 && version < 10) {
+        db.prepare(
+          `UPDATE memories
+           SET memory_key = 'policy:global:' || substr(memory_key, 8)
+           WHERE memory_layer = 'L2'
+             AND memory_key LIKE 'policy:%'
+             AND length(memory_key) = 23
+             AND instr(substr(memory_key, 8), ':') = 0`
+        ).run();
       }
 
       db.prepare(

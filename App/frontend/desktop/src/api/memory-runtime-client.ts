@@ -24,6 +24,7 @@ import {
   PanelOverviewOutputSchema,
   PanelTasksInputSchema,
   PanelTasksOutputSchema,
+  ProjectTopicsOutputSchema,
   SearchInputSchema,
   SearchOutputSchema,
   StartTurnInputSchema,
@@ -53,6 +54,7 @@ import {
   type PanelOverviewOutput,
   type PanelTasksInput,
   type PanelTasksOutput,
+  type ProjectTopicsOutput,
   type SearchInput,
   type SearchOutput,
   type StartTurnInput,
@@ -87,7 +89,8 @@ export const MEMORY_RUNTIME_ENDPOINTS = [
   "GET /api/v1/panel/analysis",
   "GET /api/v1/panel/items",
   "GET /api/v1/panel/tasks",
-  "DELETE /api/v1/panel/tasks/:id"
+  "DELETE /api/v1/panel/tasks/:id",
+  "GET /api/v1/projects/topics"
 ] as const;
 
 export interface MemoryRuntimeClient {
@@ -112,6 +115,7 @@ export interface MemoryRuntimeClient {
   listPanelItems(input: PanelItemsInput): Promise<PanelItemsOutput>;
   listPanelTasks(input: PanelTasksInput): Promise<PanelTasksOutput>;
   deletePanelTask(id: string): Promise<DeletePanelTaskOutput>;
+  listProjectTopics(workspacePath: string): Promise<ProjectTopicsOutput>;
 }
 
 export function createHttpMemoryRuntimeClient(config: RuntimeConfig): MemoryRuntimeClient {
@@ -241,6 +245,14 @@ export function createHttpMemoryRuntimeClient(config: RuntimeConfig): MemoryRunt
       return requestJson({ config, path: withQuery("/api/v1/panel/tasks", PanelTasksInputSchema.parse(input)), schema: PanelTasksOutputSchema });
     },
 
+    async listProjectTopics(workspacePath) {
+      return requestJson({
+        config,
+        path: withQuery("/api/v1/projects/topics", { workspacePath }),
+        schema: ProjectTopicsOutputSchema
+      });
+    },
+
     async deletePanelTask(id) {
       return requestJson({
         config,
@@ -333,6 +345,9 @@ export function createUnavailableMemoryRuntimeClient(): MemoryRuntimeClient {
       throw unavailable();
     },
     async deletePanelTask() {
+      throw unavailable();
+    },
+    async listProjectTopics() {
       throw unavailable();
     }
   };

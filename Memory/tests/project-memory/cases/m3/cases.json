@@ -1,0 +1,82 @@
+[
+  {
+    "id": "M3-LEVEL-001",
+    "requirement": "ADR-009-effective-level",
+    "kind": "level",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M3-LEVEL-002",
+    "requirement": "ADR-009-default-write",
+    "kind": "default",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M3-READ-001",
+    "requirement": "ADR-009-read-filter",
+    "kind": "read",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M3-ACL-001",
+    "requirement": "ADR-009-acl-deny",
+    "kind": "acl",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M3-CONFLICT-001",
+    "requirement": "ADR-010-same-level-conflict",
+    "kind": "same",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M3-CONFLICT-002",
+    "requirement": "ADR-010-higher-level-wins",
+    "kind": "higher",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M3-CONFLICT-003",
+    "requirement": "ADR-010-user-wins",
+    "kind": "user",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M3-DELIVER-001",
+    "requirement": "ADR-010-deliver-once",
+    "kind": "deliver",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M3-REVIEW-001",
+    "requirement": "Q18-one-layer",
+    "kind": "review",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M3-DREAM-001",
+    "requirement": "Q15-dream-claim",
+    "kind": "dream",
+    "expect": {
+      "ok": true
+    }
+  }
+]

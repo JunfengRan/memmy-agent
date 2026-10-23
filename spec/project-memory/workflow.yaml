@@ -1,0 +1,38 @@
+id: project-memory-presearch
+baselineSha: 8684cb570f1b54debcdd45da45f0f02661a76a42
+initial: spec
+states:
+  - spec
+  - m1
+  - retro
+  - m2
+  - m3
+  - m4
+  - m5
+  - eval
+  - done
+transitions:
+  - from: spec
+    to: m1
+    gates: [spec-valid, progress-updated]
+  - from: m1
+    to: retro
+    gates: [spec-valid, cases-present, tests-green, progress-updated]
+  - from: retro
+    to: m2
+    gates: [spec-valid, progress-updated]
+  - from: m2
+    to: m3
+    gates: [spec-valid, cases-present, tests-green, progress-updated]
+  - from: m3
+    to: m4
+    gates: [spec-valid, cases-present, tests-green, progress-updated]
+  - from: m4
+    to: m5
+    gates: [spec-valid, progress-updated]
+  - from: m5
+    to: eval
+    gates: [spec-valid, progress-updated]
+  - from: eval
+    to: done
+    gates: [spec-valid, tests-green, progress-updated]

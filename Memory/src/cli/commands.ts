@@ -127,9 +127,25 @@ async function mapTopLevelCommand(words: string[], parsed: ParsedArgs): Promise<
       return getMemoryRequest(words.slice(1), parsed);
     case "delete":
       return deleteMemoryRequest(words.slice(1), parsed);
+    case "project":
+      return projectRequest(words.slice(1), parsed);
     default:
       throw new Error(`unknown command: ${words.join(" ")}`);
   }
+}
+
+async function projectRequest(words: string[], parsed: ParsedArgs): Promise<CliRequest> {
+  if (words[0] === "merge-subdirs") {
+    return {
+      method: "POST",
+      path: "/projects/merge-subdirs",
+      body: await requestBody(parsed, {
+        dryRun: optionBoolean(parsed.options, "apply") === true ? false : true,
+        userId: optionString(parsed.options, "user")
+      })
+    };
+  }
+  throw new Error("project requires merge-subdirs");
 }
 
 async function reloadConfigRequest(parsed: ParsedArgs): Promise<CliRequest> {

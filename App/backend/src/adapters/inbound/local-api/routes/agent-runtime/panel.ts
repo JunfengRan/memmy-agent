@@ -55,6 +55,17 @@ export function registerPanelRoutes(app: FastifyInstance, deps: AgentRuntimeRout
     })
   );
 
+  app.get(
+    "/api/v1/projects/topics",
+    { preHandler: deps.authenticateRuntimeToken },
+    withErrorEnvelope(async (request, reply) => {
+      const query = z.object({ workspacePath: z.string().min(1) }).parse(request.query);
+      return reply.send(await deps.services.panel.projectTopics(
+        query.workspacePath,
+        runtimeContextFromRequest(request, deps.timeZone)
+      ));
+    })
+  );
 }
 
 function queryValues(rawUrl: string | undefined, name: string): string[] | undefined {

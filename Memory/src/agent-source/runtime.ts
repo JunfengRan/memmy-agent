@@ -891,8 +891,17 @@ async function ingestStagedMessages(
           ...(resolvedScanMode ? { scanMode: resolvedScanMode } : {})
         };
         addStartedAt = Date.now();
+        const messageGitRoot = turn.messages.find((message) => message.gitRoot)?.gitRoot ?? undefined;
+        const messageWorkspace = turn.messages.find((message) => message.workspacePath)?.workspacePath ?? undefined;
+        const builtTurn = buildSourceTurnRequest({
+          ...sourceTurn,
+          workspacePath: sourceTurn.workspacePath ?? messageWorkspace ?? undefined,
+          gitRoot: sourceTurn.gitRoot ?? messageGitRoot ?? undefined
+        }, "agent_source_scan");
         const result = service.completeSourceTurn({
-          ...buildSourceTurnRequest(sourceTurn, "agent_source_scan"),
+          ...builtTurn,
+          workspacePath: builtTurn.workspacePath ?? messageWorkspace ?? undefined,
+          gitRoot: messageGitRoot ?? sourceTurn.gitRoot,
           ...(legacyImportTurnId ? { legacyImportTurnId } : {}),
           ...(scanMode === "initial_subset" || scanMode === "full" ? { captureLegacyHistory: true } : {})
         });

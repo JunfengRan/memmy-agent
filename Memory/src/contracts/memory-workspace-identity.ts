@@ -5,7 +5,7 @@ import { sha256Hex } from "./memory-canonical-json.js";
 const MAX_WORKSPACE_URI_BYTES = 4096;
 const LOCAL_HOST_NAMES = new Set(["", "localhost"]);
 
-export const L3WorldModelProtocolVersionSchema = z.literal(2);
+export const L3WorldModelProtocolVersionSchema = z.union([z.literal(2), z.literal(3)]);
 export type L3WorldModelProtocolVersion = z.infer<typeof L3WorldModelProtocolVersionSchema>;
 
 export const L3WorldModelTransitionSchema = z.enum(["allow_legacy_rollover", "resume_only"]);

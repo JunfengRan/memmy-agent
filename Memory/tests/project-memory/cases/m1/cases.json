@@ -1,0 +1,19 @@
+[
+  { "id": "M1-ID-001", "requirement": "ADR-003-subdir-root", "kind": "identity", "input": { "layout": "subdir" }, "expect": { "sameProject": true } },
+  { "id": "M1-ID-002", "requirement": "ADR-003-symlink", "kind": "identity", "input": { "layout": "symlink" }, "expect": { "sameProject": true } },
+  { "id": "M1-ID-003", "requirement": "ADR-003-nongit", "kind": "identity", "input": { "layout": "nongit" }, "expect": { "kind": "directory" } },
+  { "id": "M1-ID-004", "requirement": "ADR-003-worktree", "kind": "identity", "input": { "layout": "worktree" }, "expect": { "separateProjects": true } },
+  { "id": "M1-MERGE-001", "requirement": "M1-MERGE-dry-run", "kind": "merge", "input": {}, "expect": { "sessions": 1, "memories": 1 } },
+  { "id": "M1-FILES-001", "requirement": "M1-FILES-patch", "kind": "files", "input": { "tool": "apply_patch" }, "expect": { "files": ["src/a.ts", "src/b.ts"] } },
+  { "id": "M1-FILES-002", "requirement": "M1-FILES-edit", "kind": "files", "input": { "tool": "edit" }, "expect": { "files": ["src/edit.ts", "src/write.ts", "src/memmy.ts"] } },
+  { "id": "M1-FILES-003", "requirement": "M1-FILES-cap", "kind": "files", "input": { "tool": "cap" }, "expect": { "count": 50 } },
+  { "id": "M1-GIT-001", "requirement": "M1-GIT-status", "kind": "git", "input": {}, "expect": { "dirty": true } },
+  { "id": "M1-SCOPE-001", "requirement": "ADR-004-exclude-other-l1", "kind": "scope", "input": { "relation": "other-l1" }, "expect": { "weight": null } },
+  { "id": "M1-SCOPE-002", "requirement": "ADR-004-coefficients", "kind": "scope", "input": { "relation": "coefficients" }, "expect": { "sameL1": 1, "sameL2": 1.3, "globalL1": 0.5, "globalL2": 1, "globalSkill": 1, "otherPolicy": 0.4 } },
+  { "id": "M1-SCOPE-003", "requirement": "ADR-004-work-memory", "kind": "scope", "input": { "relation": "work-memory" }, "expect": { "same": 1, "other": null } },
+  { "id": "M1-CTX-001", "requirement": "M1-CTX-activity", "kind": "context", "input": {}, "expect": { "includesAgent": "cursor:main", "includesFile": "src/pool.ts" } },
+  { "id": "M1-CTX-002", "requirement": "M1-CTX-budget", "kind": "context-budget", "input": {}, "expect": { "max": 800 } },
+  { "id": "M1-HOOK-001", "requirement": "M1-HOOK-inject", "kind": "hook", "input": { "mode": "inject" }, "expect": { "field": "additional_context" } },
+  { "id": "M1-HOOK-002", "requirement": "M1-HOOK-off", "kind": "hook", "input": { "mode": "off" }, "expect": { "continue": true } },
+  { "id": "M1-DEDUP-001", "requirement": "M1-DEDUP-project", "kind": "dedup", "input": {}, "expect": { "stored": 2, "visible": 1 } }
+]

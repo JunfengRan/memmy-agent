@@ -64,3 +64,22 @@ function createSource(db: Database.Database): CursorVscdbSource | null {
 function hasTable(db: Database.Database, tableName: string): boolean {
   return Boolean(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName));
 }
+
+/** Global Cursor state keeps the workspace id on the composer header, not on the bubble. */
+export function listCursorComposerLocations(path: string): Array<{ composerId: string; workspaceId: string | null }> {
+  const db = new Database(path, { readonly: true, fileMustExist: true });
+  try {
+    if (!hasTable(db, "composerHeaders")) return [];
+    const columns = new Set((db.prepare("PRAGMA table_info(composerHeaders)").all() as Array<{ name: string }>).map((column) => column.name));
+    const where = columns.has("isSubagent") ? "WHERE isSubagent = 0 AND composerId IS NOT NULL" : "WHERE composerId IS NOT NULL";
+    const sql = columns.has("workspaceId")
+      ? `SELECT composerId, workspaceId FROM composerHeaders ${where}`
+      : `SELECT composerId, NULL AS workspaceId FROM composerHeaders ${where}`;
+    return (db.prepare(sql).all() as Array<{ composerId: string; workspaceId: string | null }>).map((row) => ({
+      composerId: row.composerId,
+      workspaceId: typeof row.workspaceId === "string" && row.workspaceId ? row.workspaceId : null
+    }));
+  } finally {
+    db.close();
+  }
+}

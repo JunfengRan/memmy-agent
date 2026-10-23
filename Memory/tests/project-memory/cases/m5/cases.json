@@ -1,0 +1,26 @@
+[
+  {
+    "id": "M5-BASE-001",
+    "requirement": "M5-baseline-sha",
+    "kind": "baseline",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M5-TREE-001",
+    "requirement": "M5-tree-inject",
+    "kind": "inject",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M5-ROUND-001",
+    "requirement": "M5-iterate-cap",
+    "kind": "rounds",
+    "expect": {
+      "ok": true
+    }
+  }
+]

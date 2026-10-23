@@ -1,0 +1,23 @@
+{
+  "numPassedTests": 17,
+  "numFailedTests": 0,
+  "caseIds": [
+    "ADR-003-subdir-root",
+    "ADR-003-symlink",
+    "ADR-003-nongit",
+    "ADR-003-worktree",
+    "M1-MERGE-dry-run",
+    "M1-FILES-patch",
+    "M1-FILES-edit",
+    "M1-FILES-cap",
+    "M1-GIT-status",
+    "ADR-004-exclude-other-l1",
+    "ADR-004-coefficients",
+    "ADR-004-work-memory",
+    "M1-CTX-activity",
+    "M1-CTX-budget",
+    "M1-HOOK-inject",
+    "M1-HOOK-off",
+    "M1-DEDUP-project"
+  ]
+}

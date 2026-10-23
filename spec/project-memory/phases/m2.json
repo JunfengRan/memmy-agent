@@ -1,0 +1,16 @@
+{
+  "phase": "m2",
+  "summary": "协议 v3、检查点、事项有界视图、策略作用域、过滤接口",
+  "requirements": [
+    { "id": "ADR-012-protocol-v3", "summary": "协议版本接受 2 和 3，v2 不跑检查点" },
+    { "id": "ADR-002-checkpoint-span", "summary": "todo 从进行中到完成切成一个检查点，可跨轮" },
+    { "id": "ADR-002-abandoned", "summary": "会话结束仍未完成的 todo 记 abandoned" },
+    { "id": "ADR-002-no-llm-summary", "summary": "检查点摘要是 todo 文本加步骤，不调 LLM" },
+    { "id": "ADR-002-span-filter", "summary": "检查点不受每轨迹 2 段上限，并去掉全部父轨迹" },
+    { "id": "ADR-005-topic-assign", "summary": "同一 todo 列表沿用事项，重名归入，否则新建，重复归属幂等" },
+    { "id": "ADR-008-bounded-view", "summary": "事项视图有上限且整行不超过 8 KB" },
+    { "id": "ADR-005-policy-scope", "summary": "两个项目可以有不同策略键，旧键能兜底查到" },
+    { "id": "M2-evidence-cap", "summary": "策略证据列表截到最近 20 条" },
+    { "id": "ADR-006-rephrase", "summary": "用户改口后只剩一条有效决策，旧文本在变更日志" }
+  ]
+}

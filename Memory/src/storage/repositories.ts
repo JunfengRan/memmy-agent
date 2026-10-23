@@ -825,6 +825,43 @@ export class MemoryRepository {
     return this.hydrateMany(rows.map(memoryFromSql));
   }
 
+  listProjectNotes(userId: string, projectId: string, limit = 20): MemoryRow[] {
+    const rows = this.db.prepare(
+      `SELECT *
+       FROM memories
+       WHERE deleted_at IS NULL
+         AND user_id = ?
+         AND json_extract(info_json, '$.project_id') = ?
+         AND (
+           json_extract(info_json, '$.duplicate_of') IS NULL
+           OR TRIM(CAST(json_extract(info_json, '$.duplicate_of') AS TEXT)) = ''
+         )
+         AND (
+           json_extract(info_json, '$.current_decision') IS NOT NULL
+           OR json_extract(info_json, '$.checkpoint_summary') IS NOT NULL
+           OR json_extract(info_json, '$.topic_name') IS NOT NULL
+         )
+       ORDER BY updated_at DESC, id DESC
+       LIMIT ?`
+    ).all(userId, projectId, limit) as MemorySqlRow[];
+    return this.hydrateMany(rows.map(memoryFromSql));
+  }
+
+  listProjectActivity(userId: string, projectId: string, limit = 8): MemoryRow[] {
+    const rows = this.db.prepare(
+      `SELECT *
+       FROM memories
+       WHERE deleted_at IS NULL
+         AND user_id = ?
+         AND memory_layer = 'L1'
+         AND json_extract(info_json, '$.project_id') = ?
+         AND json_extract(info_json, '$.duplicate_of') IS NULL
+       ORDER BY updated_at DESC, id DESC
+       LIMIT ?`
+    ).all(userId, projectId, limit) as MemorySqlRow[];
+    return this.hydrateMany(rows.map(memoryFromSql));
+  }
+
   listStats(): MemoryStatsRow[] {
     const rows = this.db
       .prepare(
@@ -6912,6 +6949,7 @@ function buildMemoryWhere(filter: MemoryFilter): { where: string; params: SqlVal
   addArrayClause("id", filter.ids);
   addMemoryKindClause(filter.memoryKind);
   addWorkMemoryScopeClause(filter.workMemoryUserId, filter.workMemoryProjectId);
+  addRecallProjectClause(filter.recallProjectId);
   addTagClauses(filter.tags);
 
   return {
@@ -6978,6 +7016,24 @@ function buildMemoryWhere(filter: MemoryFilter): { where: string; params: SqlVal
     )`;
     clauses.push(`${expression} IN (${values.map(() => "?").join(", ")})`);
     params.push(...values);
+  }
+
+  function addRecallProjectClause(projectId: string | null | undefined): void {
+    if (!projectId) return;
+    const projectExpr = "NULLIF(TRIM(CAST(json_extract(info_json, '$.project_id') AS TEXT)), '')";
+    const scopeExpr = "NULLIF(TRIM(CAST(json_extract(info_json, '$.memory_scope') AS TEXT)), '')";
+    const kindExpr = "COALESCE(json_extract(properties_json, '$.internal_info.memory_kind'), 'trace')";
+    clauses.push(`NOT (
+      ${projectExpr} IS NOT NULL
+      AND ${projectExpr} != ?
+      AND COALESCE(${scopeExpr}, 'project') = 'project'
+      AND (memory_layer = 'L1' OR ${kindExpr} = 'topic')
+    )`);
+    clauses.push(`(
+      json_extract(info_json, '$.duplicate_of') IS NULL
+      OR TRIM(CAST(json_extract(info_json, '$.duplicate_of') AS TEXT)) = ''
+    )`);
+    params.push(projectId);
   }
 
   function addWorkMemoryScopeClause(userId: string | undefined, projectId: string | null | undefined): void {

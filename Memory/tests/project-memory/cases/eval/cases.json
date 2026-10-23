@@ -1,0 +1,26 @@
+[
+  {
+    "id": "EVAL-JSON-001",
+    "requirement": "EVAL-results-json",
+    "kind": "json",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "EVAL-HTML-001",
+    "requirement": "EVAL-html-svg",
+    "kind": "html",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "EVAL-ARMS-001",
+    "requirement": "EVAL-three-arms",
+    "kind": "arms",
+    "expect": {
+      "ok": true
+    }
+  }
+]

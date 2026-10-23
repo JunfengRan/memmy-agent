@@ -76,6 +76,8 @@ import { THREAD_SEARCH_SCROLL_OFFSET } from "./agent-thread-search.js";
 import { AgentThreadToolbar } from "./agent-thread-toolbar.js";
 import { AgentWorkspaceContext } from "./agent-workspace-context.js";
 import { AppFrame } from "./app-frame.js";
+import { loadProjectTaskContextPrefix, ProjectBoardPage, ProjectTopicHint } from "./project-board.js";
+import { closeProjectBoard, useProjectBoardSession } from "./project-board-session.js";
 import {
   MicrophonePermissionError,
   mergeVoiceTranscript,
@@ -872,6 +874,7 @@ export function HomePage() {
     return () => { active = false; unsubscribe?.(); };
   }, [clients?.runtimeConfig]);
   const { state, dispatch } = useAppState();
+  const boardSession = useProjectBoardSession();
   const modelWorkspace = createModelWorkspace(state.modelConfig);
   const { language, t } = useTranslation();
   const { track } = useAnalytics();
@@ -1841,6 +1844,22 @@ export function HomePage() {
       resolvedConversationModel.candidateId
     ));
     const target: WebuiSessionTarget | null = state.agent.currentChatId ? null : draftTarget;
+    const projectIdForContext = state.agent.currentChatId
+      ? state.agent.tasks.find((task) => task.chatId === state.agent.currentChatId)?.projectId ?? null
+      : draftTarget.kind === "project" ? draftTarget.projectId : null;
+    let contentForAgent = input;
+    let displayForAgent = selectedComposerCommand ? composerInput : undefined;
+    if (projectIdForContext && clients) {
+      try {
+        const prefix = await loadProjectTaskContextPrefix(clients, projectIdForContext);
+        if (prefix) {
+          contentForAgent = `${prefix}\n\n${input}`;
+          displayForAgent = selectedComposerCommand ? composerInput : input;
+        }
+      } catch {
+        contentForAgent = input;
+      }
+    }
     try {
       const submitted = await submitAgentComposerMessage({
         chatId: state.agent.currentChatId,
@@ -1848,8 +1867,8 @@ export function HomePage() {
         clientRequestId,
         connection,
         ensureChatSubscription,
-        content: input,
-        displayContent: selectedComposerCommand ? composerInput : undefined,
+        content: contentForAgent,
+        displayContent: displayForAgent,
         language,
         pendingAttachments,
         uploadAgentMedia: (attachments) => clients!.memmyAgent.uploadAgentMedia(attachments),
@@ -1899,6 +1918,44 @@ export function HomePage() {
       messageSendLocksRef.current.delete(sendScopeKey);
       dispatch(agentActions.messageSendLockUpdated(sendScopeKey, null));
     }
+  }
+
+  async function sendFromProjectBoard(projectId: string, text: string): Promise<boolean> {
+    if (!clients || !connection || !text.trim()) return false;
+    let content = text;
+    try {
+      const prefix = await loadProjectTaskContextPrefix(clients, projectId);
+      if (prefix) content = `${prefix}\n\n${text}`;
+    } catch {
+      content = text;
+    }
+    return submitAgentComposerMessage({
+      chatId: null,
+      target: { kind: "project", projectId },
+      clientRequestId: crypto.randomUUID(),
+      connection,
+      ensureChatSubscription,
+      content,
+      displayContent: text,
+      language,
+      pendingAttachments: [],
+      uploadAgentMedia: (attachments) => clients.memmyAgent.uploadAgentMedia(attachments),
+      dispatch,
+      track,
+      clearComposer: () => undefined,
+      chatSelectionEpoch: state.agent.chatSelectionEpoch,
+      getChatSelectionEpoch: () => chatSelectionEpochRef.current,
+      scopeKey: agentChatScopeKey(null, state.agent.newChatRequestId),
+      modelPreset: resolvedConversationModel.candidateId ?? undefined,
+      onNewChatMessageSent: (chatId) => {
+        closeProjectBoard();
+        taskStateCoordinator.refreshTaskState({
+          expectedChatId: chatId,
+          reason: "new-chat",
+          state: state.agent
+        });
+      }
+    });
   }
 
   async function removeQueuedMessage(clientRequestId: string): Promise<boolean> {
@@ -2847,6 +2904,13 @@ export function HomePage() {
     threadPanel.openTab(threadTabForPath(file.path, file.name));
   }, [threadPanel.openTab]);
   const threadPanelMotionClass = `thread-panel-motion--${threadPanel.motion}`;
+  const boardProject = boardSession.projectId
+    ? state.agent.projects.find((project) => project.id === boardSession.projectId) ?? null
+    : null;
+  const hintedProjectId = !state.agent.currentChatId && draftTarget.kind === "project"
+    ? draftTarget.projectId
+    : state.agent.tasks.find((task) => task.chatId === state.agent.currentChatId)?.projectId ?? null;
+  const hintedProject = state.agent.projects.find((project) => project.id === hintedProjectId) ?? null;
 
   return (
     <AppFrame
@@ -2885,6 +2949,13 @@ export function HomePage() {
       ) : null}
       windowsTitlebarSafe={hasActiveConversation}
     >
+      {boardProject ? (
+        <ProjectBoardPage
+          project={boardProject}
+          tasks={state.agent.tasks.filter((task) => !task.archived && (task.projectId === boardProject.id || task.groupProjectId === boardProject.id))}
+          onSend={(text) => sendFromProjectBoard(boardProject.id, text)}
+        />
+      ) : (
       <div
         ref={workspaceLayoutRef}
         className={`agent-workspace-layout ${threadPanelMotionClass}`}
@@ -2933,6 +3004,7 @@ export function HomePage() {
                     />
                   </div>
                 ) : null}
+                <ProjectTopicHint project={hintedProject} draft={composerInput} />
                 <textarea
                   ref={inputRef}
                   value={composerInput}
@@ -3145,6 +3217,7 @@ export function HomePage() {
                       selectedLabel={t("home.media.addPhotoFile")}
                       t={t}
                     />
+                    <ProjectTopicHint project={hintedProject} draft={composerInput} />
                     <textarea
                       ref={inputRef}
                       value={composerInput}
@@ -3216,6 +3289,7 @@ export function HomePage() {
         </section>
         )}
       </div>
+      )}
     </AppFrame>
   );
 }

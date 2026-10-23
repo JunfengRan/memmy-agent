@@ -874,6 +874,35 @@ export const PanelTasksOutputSchema = z.object({
 });
 export type PanelTasksOutput = z.infer<typeof PanelTasksOutputSchema>;
 
+const ProjectTopicTextSchema = z.object({
+  id: z.string().min(1),
+  text: z.string(),
+  agent: z.string().optional(),
+  time: z.string().optional()
+});
+
+/** Read-only project topic assembled from stored project memories. */
+export const ProjectTopicSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  updatedAt: z.string().min(1),
+  summary: z.string(),
+  description: z.string(),
+  decisions: z.array(ProjectTopicTextSchema),
+  experiences: z.array(ProjectTopicTextSchema),
+  events: z.array(ProjectTopicTextSchema),
+  conflicts: z.array(ProjectTopicTextSchema),
+  sourceSessionIds: z.array(z.string())
+});
+export type ProjectTopic = z.infer<typeof ProjectTopicSchema>;
+
+export const ProjectTopicsOutputSchema = z.object({
+  projectId: z.string().nullable(),
+  rootPath: z.string().nullable(),
+  topics: z.array(ProjectTopicSchema)
+});
+export type ProjectTopicsOutput = z.infer<typeof ProjectTopicsOutputSchema>;
+
 /** Schema for deleting a task from the memory panel. */
 export const DeletePanelTaskOutputSchema = z.object({
   ok: z.literal(true),

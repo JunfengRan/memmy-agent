@@ -21,6 +21,19 @@ export interface DiscoverCursorWorkspacesOptions {
   maxWorkspaces?: number;
 }
 
+/** Resolves a global composer header's workspace id to the git toplevel, when that folder still exists. */
+export async function resolveCursorWorkspaceLocation(
+  storageRoot: string,
+  workspaceId: string | null
+): Promise<{ workspacePath: string | null; gitRoot: string | null }> {
+  if (!workspaceId) return { workspacePath: null, gitRoot: null };
+  const workspacePath = await readWorkspacePath(join(storageRoot, workspaceId));
+  return {
+    workspacePath,
+    gitRoot: workspacePath ? findGitRoot(workspacePath) : null
+  };
+}
+
 /** Handles discover cursor workspaces. */
 export async function discoverCursorWorkspaces(options: DiscoverCursorWorkspacesOptions): Promise<CursorWorkspace[]> {
   const entries = await readDirectoryIfExists(options.storageRoot);

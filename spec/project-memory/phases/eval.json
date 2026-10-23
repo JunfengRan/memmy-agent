@@ -1,0 +1,9 @@
+{
+  "phase": "eval",
+  "summary": "三臂结果与自包含 HTML 报告",
+  "requirements": [
+    { "id": "EVAL-results-json", "summary": "报告数字来自 results.json" },
+    { "id": "EVAL-html-svg", "summary": "HTML 内嵌 SVG，不依赖外网" },
+    { "id": "EVAL-three-arms", "summary": "同时给出项目记忆、原始 Memmy、属性树" }
+  ]
+}

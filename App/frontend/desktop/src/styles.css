@@ -11587,6 +11587,16 @@ body.memmy-platform-windows :is(
   --sidebar-row-bg: color-mix(in srgb, var(--color-action-sky) 16%, var(--color-sidebar-bg));
 }
 
+.app-frame-project-row__toggle {
+  display: flex;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
 .app-frame-project-row__main {
   display: flex;
   min-width: 0;

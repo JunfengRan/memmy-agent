@@ -1,0 +1,82 @@
+[
+  {
+    "id": "M2-PROTOCOL-001",
+    "requirement": "ADR-012-protocol-v3",
+    "kind": "protocol",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M2-CP-001",
+    "requirement": "ADR-002-checkpoint-span",
+    "kind": "checkpoint-span",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M2-CP-002",
+    "requirement": "ADR-002-abandoned",
+    "kind": "abandoned",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M2-CP-003",
+    "requirement": "ADR-002-no-llm-summary",
+    "kind": "summary",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M2-CP-004",
+    "requirement": "ADR-002-span-filter",
+    "kind": "span-filter",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M2-TOPIC-001",
+    "requirement": "ADR-005-topic-assign",
+    "kind": "topic",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M2-TOPIC-002",
+    "requirement": "ADR-008-bounded-view",
+    "kind": "bounded",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M2-POLICY-001",
+    "requirement": "ADR-005-policy-scope",
+    "kind": "policy",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M2-POLICY-002",
+    "requirement": "M2-evidence-cap",
+    "kind": "evidence",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "M2-REPHRASE-001",
+    "requirement": "ADR-006-rephrase",
+    "kind": "rephrase",
+    "expect": {
+      "ok": true
+    }
+  }
+]
