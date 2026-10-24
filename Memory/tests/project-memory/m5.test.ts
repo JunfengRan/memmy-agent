@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const cases = JSON.parse(readFileSync(new URL("./cases/m5/cases.json", import.meta.url), "utf8")) as Array<{ id: string; requirement: string; kind: string }>;
 // @ts-expect-error attribute-tree eval module has no declarations
-const tree = await import("/Users/junfengran/repos/memmy-agent-attr-tree/eval/attribute-tree.mjs") as {
+const tree = await import("../../../eval/project-memory/arms/attribute-tree.mjs") as {
   renderAttributeTree: (records: unknown[], query: string, round: number) => string;
   controlRecall: (recall: string, records: unknown[], query: string, round: number) => string;
 };

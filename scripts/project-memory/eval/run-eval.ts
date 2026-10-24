@@ -8,9 +8,10 @@ import { loadEvalSet, validateEvalSet } from "../../../eval/project-memory/load-
 const RUN_ARMS = false;
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const BASELINE = "/Users/junfengran/repos/memmy-agent-baseline/Memory/src/index.ts";
+const BASELINE_DIR = process.env.MEMMY_BASELINE_DIR ?? join(REPO, "../memmy-agent-baseline");
+const BASELINE = pathToFileURL(join(BASELINE_DIR, "Memory/src/index.ts")).href;
 const CURRENT = pathToFileURL(join(REPO, "Memory/src/index.ts")).href;
-const TREE = "/Users/junfengran/repos/memmy-agent-attr-tree/eval/attribute-tree.mjs";
+const TREE = pathToFileURL(join(REPO, "eval/project-memory/arms/attribute-tree.mjs")).href;
 
 const HOST = "eval-installation";
 
@@ -305,7 +306,7 @@ function renderHtml(result: any): string {
   const rows = arms.map((arm: any) => `<tr><td>${arm.name}</td><td>${arm.score}</td><td>${arm.relay}</td><td>${arm.conflict}</td><td>${arm.recallMs}</td><td>${arm.recallP95}</td><td>${arm.openP50}</td><td>${arm.openP95}</td><td>${arm.dbBytes}</td></tr>`).join("");
   const [project, original, tree] = arms;
   const note = `项目记忆得分 ${project.score}，原始 Memmy ${original.score}，属性树第 ${tree.round} 轮 ${tree.score}。接力命中率：项目记忆 ${project.relay}，原始 Memmy ${original.relay}，属性树 ${tree.relay}。冲突处置一致率：项目记忆 ${project.conflict}，原始 Memmy ${original.conflict}，属性树 ${tree.conflict}。`;
-  return `<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>项目记忆三臂对照</title><style>body{font-family:sans-serif;margin:32px;color:#1d1d1f;background:#f6f5f2}section{margin:24px 0}svg{width:100%;max-width:720px;color:#315f4b}table{border-collapse:collapse}td,th{border-bottom:1px solid #ccc;padding:6px 10px;text-align:left}</style></head><body><h1>本地多 Agent 对照</h1><p>基线 ${result.baselineSha}。数字来自本次运行写入的 results.json。总墙钟 ${result.wallClockMs} ms。</p><p>${note}</p>${bar(arms, (item) => item.score, "综合得分")}${bar(rounds, (item) => item.score, "属性树三轮")}${bar(arms, (item) => item.recallMs, "召回 P50 ms")}<table><thead><tr><th>臂</th><th>得分</th><th>接力</th><th>冲突</th><th>召回 P50</th><th>召回 P95</th><th>开会话 P50</th><th>开会话 P95</th><th>库字节</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+  return `<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>项目记忆三臂对照</title><style>body{font-family:sans-serif;margin:32px;color:#1d1d1f;background:#f6f5f2}section{margin:24px 0}svg{width:100%;max-width:720px;color:#315f4b}table{border-collapse:collapse}td,th{border-bottom:1px solid #ccc;padding:6px 10px;text-align:left}</style></head><body><h1>本地多 Agent 对照</h1><p>本页是 M5 闸门用的合成三臂对照，不是正式评测。正式评测报告见仓库里的 eval/project-memory/report.html。</p><p>基线 ${result.baselineSha}。数字来自本次运行写入的 results.json。总墙钟 ${result.wallClockMs} ms。</p><p>${note}</p>${bar(arms, (item) => item.score, "综合得分")}${bar(rounds, (item) => item.score, "属性树三轮")}${bar(arms, (item) => item.recallMs, "召回 P50 ms")}<table><thead><tr><th>臂</th><th>得分</th><th>接力</th><th>冲突</th><th>召回 P50</th><th>召回 P95</th><th>开会话 P50</th><th>开会话 P95</th><th>库字节</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
 }
 
 main().catch((error) => {

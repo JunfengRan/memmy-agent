@@ -1,0 +1,15 @@
+diff --git a/Memory/src/service/user-memory/user-memory.ts b/Memory/src/service/user-memory/user-memory.ts
+index ddc9e42a..8159722c 100644
+--- a/Memory/src/service/user-memory/user-memory.ts
++++ b/Memory/src/service/user-memory/user-memory.ts
+@@ -17,7 +17,9 @@ const STABLE_PREFERENCE_PATTERNS = [
+   /(?:以后|今后|从现在起|每次|始终|永远|默认).{0,80}(?:请|要|先|不要|别|避免|保持|使用|给|回答|推荐|写)/i,
+   /\b(?:from now on|in future|always|never)\b.{1,120}/i
+ ] as const;
+-const DYNAMIC_CURRENT_FACT_PATTERN = /(?:天气|气温|降雨|空气质量|股价|汇率|价格|票价|库存|余额|实时|当前.{0,8}(?:指标|数据|状态)|今天.{0,8}(?:天气|价格))|\b(?:weather|temperature|stock price|exchange rate|current price|live status|real[- ]time)\b/i;
++// A bare 价格/库存/余额 is not a live quote: a price-list project asks about them as ordinary facts.
++// They only count as live data when a time word such as 当前/最新/今天 sits right in front.
++const DYNAMIC_CURRENT_FACT_PATTERN = /(?:天气|气温|降雨|空气质量|股价|汇率|实时|(?:当前|最新|今天|今日|此刻)(?:的)?[^，。？?\s]{0,4}(?:价格|票价|库存|余额)|当前.{0,8}(?:指标|数据|状态)|今天.{0,8}(?:天气|价格))|\b(?:weather|temperature|stock price|exchange rate|current price|live status|real[- ]time)\b/i;
+ 
+ export function classifyUserMemory(text: string): UserMemoryType[] {
+   const content = text.trim();

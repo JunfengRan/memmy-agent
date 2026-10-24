@@ -1,7 +1,7 @@
 // Recall-only evaluation: replay the corpus into one Memory arm, ask every relay question, and
 // score the recalled context against the rubric.
-// Usage: tsx run-recall.ts <baseline|project|attr-tree>
-// attr-tree replays the blank-control Memmy, then prepends the attribute tree at read time.
+// Usage: tsx run-recall.ts <baseline|project|attr-tree|memos|graphiti|memos+graphiti>
+// Tree arms replay the blank-control Memmy, then replace the read-time attribute tree.
 //
 // Why it is built this way:
 // - completeTurn only queues summary and embedding work, so the worker is drained before
@@ -10,7 +10,8 @@
 //   environment profile never change what is recalled, so they fail fast.
 // - Questions with no new trace between them see the same memory and run together.
 // - The process exits explicitly; the local embedding runtime keeps handles open otherwise.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -19,18 +20,31 @@ import { deriveWorkspaceHostId } from "../../../Memory/src/contracts/memory-work
 import { checkpointsFromHistory } from "../../../Memory/src/service/project/checkpoint.ts";
 import { assignTopic, type TopicCandidate } from "../../../Memory/src/service/project/topic.ts";
 
-const BASELINE_ENTRY = "/Users/junfengran/repos/memmy-agent-baseline/Memory/src/index.ts";
-const TREE_ENTRY = "/Users/junfengran/repos/memmy-agent-attr-tree/eval/attribute-tree.mjs";
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+const BASELINE_DIR = process.env.MEMMY_BASELINE_DIR ?? join(REPO_ROOT, "../memmy-agent-baseline");
+const BASELINE_ENTRY = pathToFileURL(join(BASELINE_DIR, "Memory/src/index.ts")).href;
+const ARMS_DIR = join(REPO_ROOT, "eval/project-memory/arms");
+const TREE_PATHS = {
+  "attr-tree": pathToFileURL(join(ARMS_DIR, "attribute-tree.mjs")).href,
+  memos: pathToFileURL(join(ARMS_DIR, "memos-leaf.mjs")).href,
+  graphiti: pathToFileURL(join(ARMS_DIR, "graphiti-edge.mjs")).href
+};
 const ATTRIBUTE_TREE_ROUND = 3;
 const NEEDED_OPERATIONS = /^(capture\.|retrieval\.|relation\.)/;
 const LLM_TIMEOUT_MS = 60_000;
 const DRAIN_ROUND_LIMIT = 10;
 
-const arm = process.argv[2] ?? "baseline";
-if (arm !== "baseline" && arm !== "project" && arm !== "attr-tree") {
-  throw new Error(`unknown arm ${arm}`);
+const requested = (process.argv[2] ?? "baseline").split("+").filter(Boolean);
+const known = new Set(["baseline", "project", ...Object.keys(TREE_PATHS)]);
+for (const name of requested) {
+  if (!known.has(name)) throw new Error(`unknown arm ${name}`);
 }
-const usesBaseline = arm !== "project";
+if (requested.length > 1 && requested.some((name) => name === "baseline" || name === "project")) {
+  throw new Error("baseline and project cannot share a replay with a tree arm");
+}
+const usesBaseline = !requested.includes("project");
+const treeNames = requested.filter((name) => TREE_PATHS[name]);
+const arm = requested.join("+");
 const repo = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const root = join(repo, "eval/project-memory");
 const runs = join(root, "runs");
@@ -89,8 +103,14 @@ function skipUnrelated(operation: string | undefined): void {
 
 // ---- load the arm ----------------------------------------------------------------------------
 const mod = await import(usesBaseline ? BASELINE_ENTRY : pathToFileURL(join(repo, "Memory/src/index.ts")).href);
-const tree = arm === "attr-tree" ? await import(TREE_ENTRY) : null;
+const trees = new Map();
+for (const name of treeNames) trees.set(name, await import(TREE_PATHS[name]));
 const evalSet = loadEvalSet();
+// The fixture repos are committed without .git; project identity needs a git root.
+for (const project of evalSet.corpus.projects) {
+  const dir = join(root, project.root);
+  if (!existsSync(join(dir, ".git"))) execFileSync("git", ["init", "-q", dir]);
+}
 const todolists = JSON.parse(readFileSync(join(root, "dataset/todolists.json"), "utf8"));
 const conflicts = JSON.parse(readFileSync(join(root, "dataset/conflicts.json"), "utf8"));
 const dbDir = join(runs, `${arm}-recall-db`);
@@ -191,7 +211,7 @@ function readMemoryRows(): unknown[] {
 }
 
 async function ask(question: (typeof evalSet.relay.questions)[number]) {
-  const records = tree ? readMemoryRows() : [];
+  const records = trees.size > 0 ? readMemoryRows() : [];
   const session = open(`ask-${question.id}`, workspaceOf(question.projectId));
   const started = await service.startTurn({
     sessionId: session.sessionId,
@@ -206,9 +226,6 @@ async function ask(question: (typeof evalSet.relay.questions)[number]) {
     : "";
   const recalled = `${project}\n${injected}\n${hits}`;
   const sessionProject = question.projectId ? projectNameById.get(question.projectId) ?? null : null;
-  const context = tree
-    ? tree.controlRecall(recalled, records, question.question, ATTRIBUTE_TREE_ROUND, sessionProject)
-    : recalled;
   return {
     id: question.id,
     kind: question.kind,
@@ -216,8 +233,10 @@ async function ask(question: (typeof evalSet.relay.questions)[number]) {
     goldAnswer: question.goldAnswer,
     mustInclude: question.mustInclude,
     mustNotInclude: question.mustNotInclude,
-    context,
-    passed: scoreAnswer(context, question)
+    context: recalled,
+    records,
+    sessionProject,
+    passed: scoreAnswer(recalled, question)
   };
 }
 
@@ -305,7 +324,15 @@ async function flushQuestions(): Promise<void> {
   if (waiting.length === 0) return;
   const batch = waiting;
   waiting = [];
-  questions.push(...await Promise.all(batch));
+  const raw = await Promise.all(batch);
+  for (const item of raw) {
+    const byArm: Record<string, { context: string; passed: boolean }> = {};
+    for (const [name, tree] of trees) {
+      const context = await tree.controlRecall(item.context, item.records, item.question, ATTRIBUTE_TREE_ROUND, item.sessionProject);
+      byArm[name] = { context, passed: scoreAnswer(context, item) };
+    }
+    questions.push({ ...item, byArm });
+  }
   log(`answered ${questions.length}/${evalSet.relay.questions.length} questions`);
 }
 
@@ -339,22 +366,41 @@ await flushQuestions();
 db.close();
 
 // ---- report ----------------------------------------------------------------------------------
-const included = questions.filter((question) => !question.excluded && question.id !== "q21");
-const passed = included.filter((question) => question.passed).length;
-const report = {
-  arm,
-  method: "recall",
-  attributeTreeRound: arm === "attr-tree" ? ATTRIBUTE_TREE_ROUND : null,
-  model: env.MODEL,
-  modelCalls,
-  seconds: Math.round((Date.now() - startedAt) / 1000),
-  questionCount: included.length,
-  excluded: ["q21"],
-  passed,
-  accuracy: passed / included.length,
-  ingested,
-  questions: included.sort((left, right) => left.id.localeCompare(right.id))
-};
-writeFileSync(join(runs, `${arm}-recall.json`), `${JSON.stringify(report, null, 2)}\n`);
-process.stdout.write(`${arm} recall ${passed}/${included.length} ${(report.accuracy * 100).toFixed(1)}% in ${report.seconds}s, ${modelCalls} model calls\n`);
+function publish(name: string, rows: typeof questions, tree: { METHOD?: string; modelCalls?: () => number } | null): void {
+  const included = rows.filter((question) => question.id !== "q21");
+  const passed = included.filter((question) => question.passed).length;
+  const report = {
+    arm: name,
+    method: "recall",
+    treeMethod: tree?.METHOD ?? null,
+    attributeTreeRound: name === "attr-tree" ? ATTRIBUTE_TREE_ROUND : null,
+    model: env.MODEL,
+    modelCalls,
+    treeModelCalls: tree?.modelCalls?.() ?? 0,
+    seconds: Math.round((Date.now() - startedAt) / 1000),
+    questionCount: included.length,
+    excluded: ["q21"],
+    passed,
+    accuracy: passed / included.length,
+    ingested,
+    questions: included
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map(({ records: _records, sessionProject: _sessionProject, byArm: _byArm, ...question }) => question)
+  };
+  writeFileSync(join(runs, `${name}-recall.json`), `${JSON.stringify(report, null, 2)}\n`);
+  process.stdout.write(`${name} recall ${passed}/${included.length} ${(report.accuracy * 100).toFixed(1)}% in ${report.seconds}s, ${modelCalls} ingest calls, ${report.treeModelCalls} tree calls\n`);
+}
+
+if (trees.size === 0) {
+  publish(requested[0], questions, null);
+} else {
+  for (const [name, tree] of trees) {
+    const rows = questions.map((question) => ({
+      ...question,
+      context: question.byArm?.[name]?.context ?? question.context,
+      passed: question.byArm?.[name]?.passed ?? question.passed
+    }));
+    publish(name, rows, tree);
+  }
+}
 process.exit(0);

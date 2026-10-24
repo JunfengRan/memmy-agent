@@ -30,3 +30,6 @@ Memory/src/agent-source/integration/workspace-bridge/memmy-workspace-bridge.mjs
 /Mac软件打包/
 # Local design drafts and review notes; mirrored from DingTalk, not shipped.
 /design-docs/
+
+# Project-memory eval replay databases; rebuilt by scripts/project-memory/eval/run-recall.ts.
+/eval/project-memory/runs/**/*-recall-db/
