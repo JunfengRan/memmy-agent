@@ -1,243 +1,395 @@
+"""Render eval/project-memory/report.html from the committed run files.
+
+Usage: python3 eval/project-memory/render-report.py
+
+The page shell comes from the studio template ($MEMTENSOR_TEMPLATE, default
+~/memtensor/templates/explainer.html). Without it, the shell of the existing
+report.html is reused, so the report still renders on a machine without the studio.
+"""
+
 import html
 import json
-import math
+import os
 from collections import Counter
 from pathlib import Path
 
-repo = Path("/Users/junfengran/repos/memmy-agent")
-template = Path("/Users/junfengran/memtensor/templates/explainer.html").read_text()
-root = repo / "eval/project-memory/runs"
-out = repo / "eval/project-memory/report.html"
+here = Path(__file__).resolve().parent
+runs = here / "runs"
+pre = runs / "pre-fix"
+out = here / "report.html"
+body_path = here / "report-body.html"
+template_path = Path(os.environ.get("MEMTENSOR_TEMPLATE", Path.home() / "memtensor/templates/explainer.html"))
 
-arms = [
+ARMS = [
     ("baseline", "空白对照"),
-    ("project", "项目记忆"),
+    ("project", "项目记忆（标注上限）"),
+    ("wiki", "项目记忆+Wiki"),
+    ("lookup", "自行检索"),
     ("attr-tree", "属性树"),
+    ("memos", "MemOS 叶子合并"),
+    ("graphiti", "Graphiti 事实边"),
 ]
-kinds = [
+LABEL = dict(ARMS)
+CURSOR_ARMS = [("baseline", "空白对照"), ("project", "项目记忆（标注上限）"), ("attr-tree", "属性树")]
+KINDS = [
     ("cross-project", "跨项目"),
     ("stale", "过时"),
     ("overridden", "被改口"),
     ("plain", "普通"),
-    ("scope-leak", "作用域串扰"),
+    ("scope-leak", "无项目窗口"),
 ]
-error_order = ["none", "empty", "superseded", "ambiguous", "wrong_project", "other"]
-error_label = {
-    "none": "答对",
-    "empty": "召回空或答不出",
-    "superseded": "把过时说法当现行",
-    "ambiguous": "相似信息没选",
-    "wrong_project": "用了另一个项目",
-    "other": "其他",
-}
-error_color = {
-    "none": "var(--positive)",
-    "empty": "var(--muted)",
-    "superseded": "var(--risk)",
-    "ambiguous": "var(--verify)",
-    "wrong_project": "var(--brand-violet)",
-    "other": "var(--primary)",
-}
+KIND_LABEL = dict(KINDS)
+ERRORS = [
+    ("none", "答对"),
+    ("empty", "答不出"),
+    ("superseded", "把旧说法当现行"),
+    ("wrong_project", "用了别的项目"),
+    ("other", "其他"),
+]
+ERROR_LABEL = {"none": "答对", "empty": "召回空或答不出", "superseded": "把旧说法当现行",
+               "ambiguous": "相似信息没选", "wrong_project": "用了别的项目", "other": "其他"}
 
-def load(name):
-    path = root / name
-    if not path.exists():
-        return None
-    return json.loads(path.read_text())
+
+def load(path):
+    return json.loads(path.read_text()) if path.exists() else None
+
 
 def esc(value):
-    return html.escape(str(value or ""), quote=True)
+    return html.escape(str(value if value is not None else ""), quote=True)
 
-def counts(data):
-    counter = Counter()
-    for question in (data or {}).get("questions", []):
-        key = "none" if question.get("passed") else (question.get("errorType") or "other")
-        if key not in error_label:
-            key = "other"
-        counter[key] += 1
-    return counter
 
-def complete(data):
-    return bool(data) and len(data.get("questions") or []) >= data.get("questionCount", 1)
+def by_id(data):
+    return {q["id"]: q for q in (data or {}).get("questions", [])}
 
-def rate(data):
-    if not data or not data.get("questionCount"):
-        return "待验证"
-    saved = len(data.get("questions") or [])
-    if saved < data["questionCount"]:
-        return f"进行中 {saved}/{data['questionCount']}"
-    return f"{data['passed']}/{data['questionCount']}"
 
-def kind_cells(data, kind):
-    if not complete(data):
-        return "待验证"
-    group = [q for q in data["questions"] if q.get("kind") == kind]
-    if not group:
-        return ""
-    passed = sum(1 for q in group if q.get("passed"))
-    return f"{passed}/{len(group)}"
+def passed(data):
+    return sum(1 for q in (data or {}).get("questions", []) if q.get("passed"))
 
-def pie(data, title):
-    counter = counts(data)
-    total = sum(counter.values()) or 1
-    cx, cy, radius = 118, 118, 86
-    start = -math.pi / 2
-    shapes = []
-    present = [key for key in error_order if counter.get(key)]
-    if len(present) == 1:
-        shapes.append(f'<circle cx="{cx}" cy="{cy}" r="{radius}" fill="{error_color[present[0]]}" />')
-    else:
-        for key in present:
-            fraction = counter[key] / total
-            end = start + fraction * math.tau
-            large = 1 if end - start > math.pi else 0
-            x0 = cx + radius * math.cos(start)
-            y0 = cy + radius * math.sin(start)
-            x1 = cx + radius * math.cos(end)
-            y1 = cy + radius * math.sin(end)
-            shapes.append(
-                f'<path fill="{error_color[key]}" d="M {cx} {cy} L {x0:.2f} {y0:.2f} '
-                f'A {radius} {radius} 0 {large} 1 {x1:.2f} {y1:.2f} Z" />'
-            )
-            start = end
-    legend = []
-    y = 46
-    for key in present:
-        legend.append(
-            f'<rect x="250" y="{y - 12}" width="14" height="14" rx="2" fill="{error_color[key]}" />'
-            f'<text class="t-title" x="274" y="{y}" font-size="13">{esc(error_label[key])}</text>'
-            f'<text class="t-sub t-mono" x="470" y="{y}" font-size="13">{counter[key]}</text>'
-        )
-        y += 28
-    body = "".join(shapes + legend)
-    return f'''<figure class="diagram">
-      <svg viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{esc(title)}">
-        {body}
-        <text class="t-sub" x="118" y="228" text-anchor="middle" font-size="12">{esc(rate(data))} 题</text>
-      </svg>
-      <figcaption><span class="fig-no">{esc(title)}</span>分母不含 q21。答对和五种错因来自同一份裁判结果。</figcaption>
-    </figure>'''
 
-def failure_table(data):
+def total(data):
+    return (data or {}).get("questionCount", 29)
+
+
+def score(data):
     if not data:
-        return ""
-    rows = []
-    for question in data["questions"]:
-        if question.get("passed"):
-            continue
-        key = question.get("errorType") or "other"
-        rows.append(
-            "<tr>"
-            f"<td>{esc(question.get('id'))}</td>"
-            f"<td>{esc(dict(kinds).get(question.get('kind'), question.get('kind')))}</td>"
-            f"<td>{esc(error_label.get(key, key))}</td>"
-            f"<td>{esc(question.get('reason'))}</td>"
-            "</tr>"
-        )
-    if not rows:
-        return "<p>这一列没有错题。</p>"
-    return (
-        "<div class='table-wrap'><table><thead><tr>"
-        "<th>题</th><th>题型</th><th>错因</th><th>裁判理由</th>"
-        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
-    )
+        return "—"
+    return f"{passed(data)}/{total(data)}"
 
-recall = {key: load(f"{key}-recall.json") for key, _ in arms}
-answer = {key: load(f"{key}-answer.json") for key, _ in arms}
-cursor = load("cursor-answer-project.json")
 
-def row(label, mapping, pattern_note=""):
-    cells = "".join(f"<td class='num'>{esc(rate(mapping[key]))}</td>" for key, _ in arms)
-    return f"<tr><td>{esc(label)}</td>{cells}</tr>"
+def pct(data):
+    return round(100 * passed(data) / total(data)) if data else 0
 
-model_name = esc((recall["project"] or {}).get("model") or "评测模型")
-ingested = len((recall["project"] or {}).get("ingested") or [])
-kind_rows = []
-for key, label in kinds:
-    recall_cells = "".join(f"<td class='num'>{esc(kind_cells(recall[arm], key))}</td>" for arm, _ in arms)
-    answer_cells = "".join(f"<td class='num'>{esc(kind_cells(answer[arm], key))}</td>" for arm, _ in arms)
-    kind_rows.append(f"<tr><td>{esc(label)}</td>{recall_cells}{answer_cells}</tr>")
 
-cursor_block = ""
-if complete(cursor):
-    cursor_block = pie(cursor, "图 4 · 项目记忆 · Cursor 回答")
-elif cursor:
-    cursor_block = f'''
-      <div class="callout verify">
-        <span class="callout-title">进行中</span>
-        <p>项目记忆的 Cursor 裁判写到 {esc(rate(cursor))}。写完后再生成这一张饼图。</p>
-      </div>
-    '''
-else:
-    cursor_block = '''
-      <div class="callout verify">
-        <span class="callout-title">待验证</span>
-        <p>Cursor 原文在 <code>runs/cursor-answers.json</code>，只有项目记忆这一列，而且当时没有裁判，所以没有错因。空白对照和属性树的 Cursor 回答这份材料里没有。</p>
-      </div>
-    '''
+def flips(before, after):
+    a, b = by_id(before), by_id(after)
+    return sorted(k for k in a if k in b and bool(a[k].get("passed")) != bool(b[k].get("passed")))
 
-pies = []
-for index, (key, label) in enumerate(arms, start=1):
-    if complete(answer[key]):
-        pies.append(pie(answer[key], f"图 {index} · {label} · 模型回答"))
-    else:
-        pies.append(f"<p>{esc(label)}的模型回答还没有完整裁判结果。</p>")
 
-cursor_kinds = ""
-if complete(cursor):
-    cursor_kinds = "、".join(
-        f"{label} {kind_cells(cursor, key)}" for key, label in kinds
-    )
-
-body = (repo / "eval/project-memory/report-body.html").read_text()
-replacements = {
-    "@@RB@@": esc(rate(recall["baseline"])),
-    "@@RP@@": esc(rate(recall["project"])),
-    "@@RA@@": esc(rate(recall["attr-tree"])),
-    "@@AB@@": esc(rate(answer["baseline"])),
-    "@@AP@@": esc(rate(answer["project"])),
-    "@@AA@@": esc(rate(answer["attr-tree"])),
-    "@@CP@@": esc(rate(cursor)),
-    "@@MODEL@@": model_name,
-    "@@INGESTED@@": str(ingested),
-    "@@SEC_B@@": str((recall["baseline"] or {}).get("seconds", "")),
-    "@@SEC_P@@": str((recall["project"] or {}).get("seconds", "")),
-    "@@SEC_A@@": str((recall["attr-tree"] or {}).get("seconds", "")),
-    "@@CALL_B@@": str((recall["baseline"] or {}).get("modelCalls", "")),
-    "@@CALL_P@@": str((recall["project"] or {}).get("modelCalls", "")),
-    "@@CALL_A@@": str((recall["attr-tree"] or {}).get("modelCalls", "")),
-    "@@KINDS@@": "".join(kind_rows),
-    "@@CURSOR_KINDS@@": esc(cursor_kinds or "待验证"),
-    "@@PIE_B@@": pie(answer["baseline"], "图 1 · 空白对照 · 模型回答"),
-    "@@PIE_P@@": pie(answer["project"], "图 2 · 项目记忆 · 模型回答"),
-    "@@PIE_A@@": pie(answer["attr-tree"], "图 3 · 属性树 · 模型回答"),
-    "@@CURSOR@@": cursor_block,
-    "@@FAIL_B@@": failure_table(answer["baseline"]),
-    "@@FAIL_P@@": failure_table(answer["project"]),
-    "@@FAIL_A@@": failure_table(answer["attr-tree"]),
-    "@@FAIL_C@@": failure_table(cursor) if complete(cursor) else "<p>待验证。</p>",
+recall = {arm: load(runs / f"{arm}-recall.json") for arm, _ in ARMS}
+answer = {arm: load(runs / f"{arm}-answer.json") for arm, _ in ARMS}
+cursor = {arm: load(runs / f"cursor-answer-{arm}.json") for arm, _ in CURSOR_ARMS}
+before = {
+    "recall": {arm: load(pre / f"{arm}-recall.json") for arm in ("baseline", "project", "wiki", "lookup")},
+    "answer": {arm: load(pre / f"{arm}-answer.json") for arm in ("baseline", "project", "wiki", "lookup")},
+    "cursor": load(pre / "cursor-answer-project.json"),
 }
-for key, value in replacements.items():
-    body = body.replace(key, value)
-nav = """<nav class="toc" aria-label="目录">
-      <p class="toc-brand"><span class="toc-org">MemTensor</span><span class="toc-kind">研究文档</span></p>
-      <a href="#s1" aria-current="true"><span class="toc-no">01</span>摘要</a>
-      <a href="#s2"><span class="toc-no">02</span>问题</a>
-      <a href="#s3"><span class="toc-no">03</span>算法</a>
-      <a href="#s4"><span class="toc-no">04</span>实验</a>
-      <a href="#s5"><span class="toc-no">05</span>结论</a>
-      <a href="#s6"><span class="toc-no">06</span>错因</a>
-      <a href="#s7"><span class="toc-no">07</span>样例</a>
-      <a href="#s8"><span class="toc-no">08</span>总结</a>
-      <a href="#appendix"><span class="toc-no">A</span>附录</a>
-    </nav>
-    <main>
-"""
-main = nav + body + "\n    </main>"
+cost = load(runs / "cost.json")
+missing = [f"{arm}-{kind}" for arm, _ in ARMS for kind, data in (("recall", recall[arm]), ("answer", answer[arm])) if not data]
+if missing:
+    raise SystemExit(f"missing run files: {', '.join(missing)}")
 
-head, rest = template.split('<nav class="toc"', 1)
+
+def table(head, rows, num_from=1, ours=None):
+    """head: list of column names. Columns at index >= num_from are numeric unless head starts with '~'."""
+    cells = []
+    for i, name in enumerate(head):
+        text = name.lstrip("~")
+        cls = " class='num'" if i >= num_from and not name.startswith("~") else ""
+        cells.append(f"<th{cls}>{esc(text)}</th>")
+    body = []
+    for key, row in rows:
+        mark = " class='row-ours'" if ours is not None and key == ours else ""
+        tds = []
+        for i, value in enumerate(row):
+            cls = " class='num'" if i >= num_from and not head[i].startswith("~") else ""
+            tds.append(f"<td{cls}>{value}</td>")
+        body.append(f"<tr{mark}>{''.join(tds)}</tr>")
+    return (f"<div class='table-wrap'><table><thead><tr>{''.join(cells)}</tr></thead>"
+            f"<tbody>{''.join(body)}</tbody></table></div>")
+
+
+# ---- figures -----------------------------------------------------------------------------------
+
+def node(cls, x, y, w, h, title, sub=None, title_cls="t-title"):
+    fill, stroke, extra = {
+        "node": ("#FFFFFF", "#E2E8F0", ""),
+        "node-focus": ("#EEF0FF", "#4044ED", ' stroke-width="1.5"'),
+        "risk": ("#FEF2F2", "#DC2626", ""),
+    }[cls]
+    color = {"t-title": "#141D32", "t-focus": "#4044ED", "t-risk": "#B91C1C"}[title_cls]
+    cx = x + w / 2
+    ty = y + (24 if sub else h / 2 + 4.5)
+    parts = [
+        f'<rect class="{cls}" x="{x}" y="{y}" width="{w}" height="{h}" rx="8" fill="{fill}" stroke="{stroke}"{extra} />',
+        f'<text class="{title_cls}" x="{cx}" y="{ty}" text-anchor="middle" font-size="13" font-weight="600" fill="{color}">{esc(title)}</text>',
+    ]
+    if sub:
+        parts.append(f'<text class="t-sub" x="{cx}" y="{y + 42}" text-anchor="middle" font-size="11" fill="#62748E">{esc(sub)}</text>')
+    return "".join(parts)
+
+
+def pipeline_figure():
+    columns = [
+        ("工作记录", f"{len(recall['project'].get('ingested') or [])} 条，按时间回放", [("node", "各方式共用", "同一份语料和题")]),
+        ("写入", "摘要、向量、L1", [("node", "项目记忆", "项目归一、判重"), ("risk", "评测脚本", "按金标写现行结论")]),
+        ("召回", "检索候选", [("node", "项目记忆", "作用域系数"), ("node", "自行检索", "模型调工具查")]),
+        ("注入", "拼进上下文", [("node", "属性树等三种", "读时重排截断"), ("node", "项目记忆+Wiki", "再接两页 wiki")]),
+        ("回答", "模型加裁判", [("node", "Memmy 模型", "只看注入"), ("node", "Cursor", "只看注入")]),
+    ]
+    w, gap, x0, y0 = 120, 20, 20, 48
+    parts = [
+        '<defs><marker id="arr-pm-main" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">'
+        '<path class="arrow-main" d="M0,0 L6,3 L0,6 Z" fill="#4044ED" /></marker>'
+        '<marker id="arr-pm" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">'
+        '<path class="arrow" d="M0,0 L6,3 L0,6 Z" fill="#62748E" /></marker></defs>',
+        '<g class="legend">'
+        '<line class="edge-main" x1="470" y1="20" x2="494" y2="20" stroke="#4044ED" stroke-width="1.5" />'
+        '<text class="t-sub" x="500" y="24" font-size="11" fill="#62748E">数据流</text>'
+        '<line class="edge-async" x1="560" y1="20" x2="584" y2="20" stroke="#62748E" stroke-width="1" stroke-dasharray="4 3" />'
+        '<text class="t-sub" x="590" y="24" font-size="11" fill="#62748E">在这一步改了什么</text>'
+        '</g>',
+    ]
+    for i, (title, sub, below) in enumerate(columns):
+        x = x0 + i * (w + gap)
+        parts.append(node("node", x, y0, w, 56, title, sub))
+        if i < len(columns) - 1:
+            parts.append(f'<line class="edge-main" x1="{x + w}" y1="{y0 + 28}" x2="{x + w + gap - 2}" y2="{y0 + 28}" '
+                         'stroke="#4044ED" stroke-width="1.5" marker-end="url(#arr-pm-main)" />')
+        cx = x + w / 2
+        parts.append(f'<line class="edge-async" x1="{cx}" y1="{y0 + 56}" x2="{cx}" y2="{y0 + 86}" '
+                     'stroke="#62748E" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arr-pm)" />')
+        for j, (cls, t, s) in enumerate(below):
+            title_cls = "t-risk" if cls == "risk" else "t-title"
+            parts.append(node(cls, x, y0 + 88 + j * 76, w, 56, t, s, title_cls))
+    return (
+        '<figure class="diagram">'
+        '<svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img" '
+        'aria-label="七种方式共用一条回放链路，各自只改写入、召回或注入中的一步">'
+        + "".join(parts)
+        + '</svg><figcaption><span class="fig-no">图 1</span>七种方式共用同一条回放链路，各自只改一步。'
+        '红框是这次复盘最要紧的一点：项目记忆的现行结论不是产品写的，是评测脚本按金标写的。</figcaption></figure>'
+    )
+
+
+def score_figure():
+    rows = [arm for arm, _ in ARMS]
+    label_w, bar_x, bar_max = 168, 204, 496
+    top, bar_h, inner, row_gap = 16, 24, 20, 20
+    row_h = bar_h * 2 + inner
+    parts = []
+    for i, arm in enumerate(rows):
+        y = top + i * (row_h + row_gap)
+        cls, tcls = ("node-focus", "t-focus") if arm == "project" else ("node", "t-title")
+        parts.append(node(cls, 16, y, label_w, row_h, LABEL[arm], None, tcls))
+        for j, (kind, data, rect_cls, fill, stroke) in enumerate((
+            ("召回", recall[arm], "badge", "#EEF0FF", "none"),
+            ("回答", answer[arm], "badge", "#FFFFFF", "#D8DAFB"),
+        )):
+            by = y + j * (bar_h + inner)
+            width = max(120, round(bar_max * passed(data) / total(data)))
+            parts.append(f'<rect class="{rect_cls}" x="{bar_x}" y="{by}" width="{width}" height="{bar_h}" rx="12" '
+                         f'fill="{fill}" stroke="{stroke}" />')
+            parts.append(f'<text class="t-chip" x="{bar_x + 12}" y="{by + 16}" font-size="11" fill="#4044ED">'
+                         f'{kind} {score(data)} · {pct(data)}%</text>')
+    height = top * 2 + len(rows) * row_h + (len(rows) - 1) * row_gap
+    return (
+        '<figure class="diagram">'
+        f'<svg viewBox="0 0 720 {height}" xmlns="http://www.w3.org/2000/svg" role="img" '
+        'aria-label="七种方式的直接召回和 Memmy 中模型回答通过题数">'
+        + "".join(parts)
+        + '</svg><figcaption><span class="fig-no">图 2</span>每种方式两条：上面是直接召回，下面是 Memmy 中模型回答。'
+        '条长按通过题数除以 29。项目记忆一行是标注上限。同一份代码重跑会有约 6 题的翻转，差距小于这个数的两行不要比大小。</figcaption></figure>'
+    )
+
+
+# ---- tables ------------------------------------------------------------------------------------
+
+def main_table():
+    what = {
+        "baseline": "原始 Memmy，只多一处价格过滤修正",
+        "project": "项目归一、作用域系数，加金标写的现行结论",
+        "wiki": "项目记忆之上，再读当前项目 wiki 的前两页",
+        "lookup": "不注入正文，模型用工具查 L1",
+        "attr-tree": "空白对照的召回，按文件树重排注入",
+        "memos": "空白对照的召回，叶子只在明确更正时替换",
+        "graphiti": "空白对照的召回，按事实边的生效时间取舍",
+    }
+    rows = []
+    for arm, label in ARMS:
+        c = cursor.get(arm)
+        rows.append((arm, [esc(label), score(recall[arm]), score(answer[arm]), score(c) if c else "未评", esc(what[arm])]))
+    return table(["方式", "直接召回", "Memmy 回答", "Cursor 回答", "~做了什么"], rows, ours="project")
+
+
+def kind_table(source, arm_list):
+    rows = []
+    for arm, label in arm_list:
+        data = source[arm]
+        cells = [esc(label)]
+        for kind, _ in KINDS:
+            group = [q for q in data["questions"] if q.get("kind") == kind]
+            cells.append(f"{sum(1 for q in group if q.get('passed'))}/{len(group)}" if group else "—")
+        rows.append((arm, cells))
+    head = ["方式"] + [f"{name}（{sum(1 for q in recall['baseline']['questions'] if q['kind'] == kind)}）" for kind, name in KINDS]
+    return table(head, rows, ours="project")
+
+
+def error_table():
+    rows = []
+    for arm, label in ARMS:
+        counter = Counter()
+        for q in answer[arm]["questions"]:
+            key = "none" if q.get("passed") else (q.get("errorType") or "other")
+            counter[key if key in ("none", "empty", "superseded", "wrong_project") else "other"] += 1
+        rows.append((arm, [esc(label)] + [str(counter.get(key, 0)) for key, _ in ERRORS]))
+    return table(["方式"] + [name for _, name in ERRORS], rows, ours="project")
+
+
+def fix_table():
+    def line(key, label, rb, ra, ab, aa):
+        recall_cell = f"{score(rb)} → {score(ra)}" if rb else "—"
+        recall_flip = str(len(flips(rb, ra))) if rb else "—"
+        return (key, [esc(label), recall_cell, recall_flip, f"{score(ab)} → {score(aa)}", str(len(flips(ab, aa)))])
+    rows = [
+        line("baseline", "空白对照（代码没改）", before["recall"]["baseline"], recall["baseline"],
+             before["answer"]["baseline"], answer["baseline"]),
+        line("project", "项目记忆（标注上限）", before["recall"]["project"], recall["project"],
+             before["answer"]["project"], answer["project"]),
+        line("cursor", "项目记忆 · Cursor 回答", None, None, before["cursor"], cursor["project"]),
+        line("wiki", "项目记忆+Wiki", before["recall"]["wiki"], recall["wiki"], before["answer"]["wiki"], answer["wiki"]),
+        line("lookup", "自行检索", before["recall"]["lookup"], recall["lookup"], before["answer"]["lookup"], answer["lookup"]),
+    ]
+    return table(["方式", "召回 修复前 → 后", "召回翻转", "回答 修复前 → 后", "回答翻转"], rows, ours="project")
+
+
+def cost_table():
+    rows, rows2 = [], []
+    for item in cost["rows"]:
+        rows.append((item["label"], [esc(item["label"]), str(item["wall"]), str(item["n"]),
+                                     f"{item['in']:,}", f"{item['out']:,}", f"{item['usd']:.3f}"]))
+        rows2.append((item["label"], [esc(item["label"]), f"{item['p50'] / 1000:.1f}", f"{item['p95'] / 1000:.1f}",
+                                      f"{item['cache']:,}", esc(item["note"])]))
+    return (table(["阶段", "墙钟秒", "请求数", "输入 token", "输出 token", "费用 USD"], rows, ours="项目记忆")
+            + table(["阶段", "单次 P50 秒", "单次 P95 秒", "缓存读取 token", "~对账"], rows2, ours="项目记忆"))
+
+
+def mark(q):
+    return "过" if q and q.get("passed") else "不过"
+
+
+def question_tables():
+    ids = [q["id"] for q in recall["baseline"]["questions"]]
+    kinds = {q["id"]: q["kind"] for q in recall["baseline"]["questions"]}
+
+    def cells(arm, qid):
+        return f"召回{mark(by_id(recall[arm]).get(qid))} · 回答{mark(by_id(answer[arm]).get(qid))}"
+
+    first = [(qid, [qid, esc(KIND_LABEL[kinds[qid]])] + [cells(arm, qid) for arm in ("baseline", "project", "wiki", "lookup")])
+             for qid in ids]
+    second = [(qid, [qid, esc(KIND_LABEL[kinds[qid]])] + [cells(arm, qid) for arm in ("attr-tree", "memos", "graphiti")]
+               + [f"回答{mark(by_id(cursor['project']).get(qid))}"]) for qid in ids]
+    head1 = ["~题", "~题型", "~空白对照", "~项目记忆", "~项目记忆+Wiki", "~自行检索"]
+    head2 = ["~题", "~题型", "~属性树", "~MemOS", "~Graphiti", "~Cursor · 项目记忆"]
+    return table(head1, first) + table(head2, second)
+
+
+def failure_details():
+    blocks = []
+    sources = [(f"{label} · Memmy 回答", answer[arm]) for arm, label in ARMS]
+    sources += [(f"{label} · Cursor 回答", cursor[arm]) for arm, label in CURSOR_ARMS]
+    for title, data in sources:
+        rows = [(q["id"], [q["id"], esc(KIND_LABEL.get(q.get("kind"), q.get("kind"))),
+                           esc(ERROR_LABEL.get(q.get("errorType"), "其他")), esc(q.get("reason"))])
+                for q in data["questions"] if not q.get("passed")]
+        inner = table(["~题", "~题型", "~错因", "~裁判理由"], rows) if rows else "<p>没有错题。</p>"
+        blocks.append(f"<details><summary>{esc(title)}：错 {len(rows)} 题</summary>"
+                      f"<div class='details-body'>{inner}</div></details>")
+    return "".join(blocks)
+
+
+def clip(text, limit=110):
+    text = " ".join((text or "").replace("**", "").replace("`", "").split())
+    return text if len(text) <= limit else text[:limit].rstrip("，。、；： ") + "……"
+
+
+def case(qid):
+    base = by_id(recall["baseline"])[qid]
+    rows = []
+    for arm, label in (("baseline", "空白对照"), ("project", "项目记忆")):
+        q = by_id(answer[arm])[qid]
+        rows.append((arm, [esc(label), mark(by_id(recall[arm])[qid]), mark(q), esc(clip(q.get("answer")))]))
+    q = by_id(cursor["project"])[qid]
+    rows.append(("cursor", ["Cursor · 项目记忆", "—", mark(q), esc(clip(q.get("answer")))]))
+    must = "、".join(f"「{p}」" for p in base["mustInclude"])
+    trap = "、".join(f"「{p}」" for p in base["mustNotInclude"]) or "无"
+    return (f"<p><strong>{qid} · {esc(KIND_LABEL[base['kind']])}</strong>　{esc(base['question'])}"
+            f"<br>现行要点 {esc(must)}；陷阱 {esc(trap)}。</p>"
+            + table(["~方式", "~召回", "~回答", "~回答原文（截断）"], rows))
+
+
+# ---- tokens ------------------------------------------------------------------------------------
+
+tokens = {
+    "PIPELINE": pipeline_figure(),
+    "SCORES": score_figure(),
+    "MAIN_TABLE": main_table(),
+    "KIND_RECALL": kind_table(recall, ARMS),
+    "KIND_ANSWER": kind_table(answer, ARMS),
+    "KIND_CURSOR": kind_table(cursor, CURSOR_ARMS),
+    "ERRORS": error_table(),
+    "FIX_TABLE": fix_table(),
+    "COST": cost_table(),
+    "QTABLES": question_tables(),
+    "FAILURES": failure_details(),
+    "INGESTED": str(len(recall["project"].get("ingested") or [])),
+    "MODEL": esc(recall["project"].get("model")),
+    "CALLS_B": str(recall["baseline"].get("modelCalls")),
+    "CALLS_P": str(recall["project"].get("modelCalls")),
+    "SEC_B": str(recall["baseline"].get("seconds")),
+    "SEC_P": str(recall["project"].get("seconds")),
+    "W1": f"{recall['wiki']['variantCounts']['read1']}/{total(recall['wiki'])}",
+    "W3": f"{recall['wiki']['variantCounts']['read3']}/{total(recall['wiki'])}",
+    "FLIP_B": str(len(flips(before["answer"]["baseline"], answer["baseline"]))),
+}
+for arm, _ in ARMS:
+    key = arm.replace("-", "").upper()
+    tokens[f"R_{key}"] = score(recall[arm])
+    tokens[f"A_{key}"] = score(answer[arm])
+for arm, _ in CURSOR_ARMS:
+    tokens[f"C_{arm.replace('-', '').upper()}"] = score(cursor[arm])
+for qid in ("q19", "q09", "q25", "q14", "q20"):
+    tokens[f"CASE_{qid.upper()}"] = case(qid)
+
+body = body_path.read_text()
+for key, value in tokens.items():
+    body = body.replace(f"@@{key}@@", value)
+left = [part.split("@@")[0] for part in body.split("@@")[1::2]]
+if left:
+    raise SystemExit(f"unfilled tokens: {sorted(set(left))}")
+
+nav_items = [("s1", "01", "结论"), ("s2", "02", "怎么测"), ("s3", "03", "结果"), ("s4", "04", "修复前后"),
+             ("s5", "05", "每种方式"), ("s6", "06", "案例"), ("s7", "07", "没解决的"), ("s8", "08", "写入开销"),
+             ("appendix", "A", "附录")]
+current = ' aria-current="true"'
+nav = ('<nav class="toc" aria-label="目录">\n      <p class="toc-brand"><span class="toc-org">MemTensor</span>'
+       '<span class="toc-kind">研究文档</span></p>\n'
+       + "\n".join(f'      <a href="#{sid}"{current if i == 0 else ""}><span class="toc-no">{no}</span>{name}</a>'
+                   for i, (sid, no, name) in enumerate(nav_items))
+       + "\n    </nav>\n\n    <main>\n")
+
+shell = template_path.read_text() if template_path.exists() else out.read_text()
+head, rest = shell.split('<nav class="toc"', 1)
 _, tail = rest.split("</main>", 1)
-head = head.replace("<title>研究文档模板</title>", "<title>项目记忆三种方式对照</title>")
-out.write_text(head + main + tail)
-print("wrote", out)
-print("cursor", rate(cursor))
+head = head.replace("<title>研究文档模板</title>", "<title>项目记忆先行开发评测报告</title>")
+out.write_text(head + nav + body + "\n    </main>" + tail)
+print("wrote", out.relative_to(here.parent.parent))

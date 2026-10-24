@@ -4,11 +4,10 @@
 
 ## 基线
 
-- 分支：`dev-project-memory`
+- 分支：`dev-project-memory-beta`（推到 `origin`）
 - baselineSha：`8684cb570f1b54debcdd45da45f0f02661a76a42`
-- 原始 Memmy worktree：`/Users/junfengran/repos/memmy-agent-baseline`，分支 `experiment/memmy-baseline`
-- 属性树 worktree：`/Users/junfengran/repos/memmy-agent-attr-tree`，分支 `experiment/attribute-tree`
-- 两个 worktree 的 `node_modules` 是指向本仓的符号链接，方便直接 import 基线 `Memory/src`
+- 原始 Memmy 基线不常驻。要重跑空白对照或三种读时对照时，先跑 `eval/project-memory/baseline/setup-baseline.sh`：在 `MEMMY_BASELINE_DIR`（缺省 `../memmy-agent-baseline`）建一个分离的 worktree，打上 `price-filter.patch`，`node_modules` 链到本仓
+- 收尾前的 5 个实验 worktree 和对应的 5 个实验分支（`experiment/attribute-tree`、`attribute-memos`、`attribute-graphiti`、`memmy-baseline`、`searchable-wiki`）都已删除，代码和结果收在 `eval/project-memory/`
 - 待定问题按 `organized/14-待定问题.md` 的默认方案。这是预研，不是发布级实现。
 
 ## spec
@@ -66,16 +65,33 @@
 ## m5
 
 - 状态：完成
-- 已做：属性树在 `/Users/junfengran/repos/memmy-agent-attr-tree/eval/attribute-tree.mjs`。记忆写入和召回仍是基线 Memmy。三轮只改注入：项目一行、模块节点、再只保留当前项目加全局，并删掉其他项目独有的长词。
+- 已做：属性树在 `eval/project-memory/arms/attribute-tree.mjs`（同目录还有 `memos-leaf.mjs`、`graphiti-edge.mjs`、`searchable-wiki.mjs`）。记忆写入和召回仍是基线 Memmy。三轮只改注入：项目一行、模块节点、再只保留当前项目加全局，并删掉其他项目独有的长词。
 - 决定：最多三轮，到此停止。
 - 没做完的：没有把属性树合并回本分支。
 - 下一入口：报告
 
 ## eval
 
-- 状态：报告已写成。q21 不计入，分母是 29。空白对照和属性树的 Cursor 列还没采。
-- 已做：报告在 `eval/project-memory/report.html`，用记忆张量研究文档模板。q21 不计入。直接召回：空白对照 10/29，项目记忆 22/29，属性树 11/29。模型回答：19/29、23/29、16/29。Cursor 只裁判了项目记忆一列，18/29。空白对照和属性树的 Cursor 回答还没采。
-- 决定：不把两个不能互搜的会话当成实验本身。问题是已经写进记忆的内容能不能答对。属性树单独成一列，不并进项目记忆。
-- 没做完的：空白对照和属性树的 Cursor 作答。
-- 下一入口：若要补全 3×3，用各自召回上下文再采两列 Cursor 回答，同一套裁判。
-- 更早一版召回（检查点还没写入、q21 还在分母里）是空白对照和项目记忆都是 11/30。那一版不能和现在这张表对照。
+- 状态：收尾完成（2026-10-24）。修完 4 个缺陷后重跑，报告已按新结果重写。
+- 已做：报告 `eval/project-memory/report.html`，由 `render-report.py` 把 `report-body.html` 套进 `~/memtensor/templates/explainer.html`（找不到模板就沿用现有报告的外壳）。q21 不计入，分母 29。
+
+| 方式 | 直接召回 | Memmy 中模型回答 | Cursor 回答 |
+|---|---|---|---|
+| 空白对照 | 12/29 | 17/29 | 12/29 |
+| 项目记忆（标注上限） | 25/29 | 23/29 | 21/29 |
+| 项目记忆+Wiki（标注上限） | 24/29 | 27/29 | — |
+| 自行检索 | 13/29 | 17/29 | — |
+| 属性树 | 11/29 | 16/29 | 15/29 |
+| MemOS 叶子合并 | 7/29 | 15/29 | — |
+| Graphiti 事实边 | 13/29 | 23/29 | — |
+
+- 目录：`eval/project-memory/arms/`（四种读时对照）、`baseline/`（基线重建脚本和补丁）、`dataset/`、`workspaces/`（ledger、catalog；运行时各自 `git init`）、`runs/`（结果；`pre-fix/` 是修复前一份；`cost.json` 是写入开销汇总；`*-recall-db/` 不进 git）。
+- 修掉的缺陷：无项目窗口收到项目轨迹（`scope-weight.ts`、`retrieval-service.ts`）；`source-turn` 的 `gitRoot`、`changedFiles` 没落库（`http.ts`、`changed-files.ts`）；时间范围召回不看作用域（`retrieval-service.ts`）；合并子目录后策略键和 L3 没跟着走（`merge-subdirs.ts`）。细节和用例见设计文档 `organized/16-先行开发复盘.md` §3。
+- 决定：
+  1. **项目记忆一列是标注上限。**现行结论、取代标记、检查点摘要、事项名由 `run-recall.ts` 的 `recordProjectStructure` 写入，前两样来自金标。报告和文档统一这样标。
+  2. **噪声底是 6 题。**空白对照代码没改，回答重跑翻了 6 题；自行检索翻 10 题。差距不到 6 题不比大小。
+  3. 修复后按约定重跑了空白对照、项目记忆、Cursor 项目记忆列、Wiki、自行检索。属性树、MemOS、Graphiti 建在基线上，没有重跑。
+  4. 裁判和作答出过 12 处坏结果（理由为空、说没有候选回答、调起工具、回答为空），都用 `scripts/project-memory/eval/rejudge.mjs` 单独重判过。
+- 坑：`run-answer.mjs`、`run-judge-cursor.mjs` 会续跑已有输出，`run-recall.ts` 会复用已有 `*-recall-db/`。重跑前先移走。`run-lookup.mjs` 不续跑。
+- 没做完的：现行结论和取代关系还没有由产品产出；q20 的证据被入库判定拒掉；主动搜索在无项目窗口不限项目；检查点、权限、冲突没接进产品链路。完整列表见 16 §6。
+- 下一入口：设计文档 `organized/15-正式开发计划（基于先行开发经验）.md` 的 P0：写入链路自己抽取现行结论和取代关系，评测去掉金标写入，每臂跑 3 次。
