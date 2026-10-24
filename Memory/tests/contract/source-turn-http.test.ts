@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildSourceTurnRequest } from "@memmy/agent-source-core";
 import { DEFAULT_MEMMY_CONFIG, createMemoryHttpServer } from "../../src/index.js";
@@ -78,4 +81,38 @@ describe("source turn HTTP contract", () => {
     } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
   });
 
+  it("keeps the hook's gitRoot and changedFiles on the stored trace", async () => {
+    const repoDir = mkdtempSync(join(tmpdir(), "memmy-http-project-"));
+    mkdirSync(join(repoDir, ".git"));
+    mkdirSync(join(repoDir, "src"));
+    writeFileSync(join(repoDir, "src/pool.ts"), "export {};\n");
+    const { service, db } = createTestService({ config: { ...DEFAULT_MEMMY_CONFIG, userId: "configured-owner" } });
+    const server = createMemoryHttpServer({ service, startAgentSourceAutomation: false, auth: { mode: "local", allowAnonymous: true } });
+    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("expected TCP address");
+    const payload = buildSourceTurnRequest({ source: "cursor", conversationId: "edit-conversation", turnId: "edit-turn",
+      startedAt: "2099-01-01T10:00:00.000Z", completedAt: "2099-01-01T10:01:00.000Z", sequence: 1,
+      completionEvidence: "final_answer:edit-turn", query: "Tune the scope coefficient in the candidate pool.",
+      answer: "The candidate pool now multiplies the scope coefficient after RRF.", status: "succeeded", toolCalls: [], toolResults: []
+    }, "hook");
+    try {
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/v1/source-turns/complete`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, gitRoot: repoDir, changedFiles: [join(repoDir, "src/pool.ts")], namespace: { userId: "configured-owner" } })
+      });
+      expect(response.status).toBe(200);
+      const body = await response.json() as { status: string; result: { sessionId: string; l1MemoryId: string } };
+      expect(body.status).toBe("stored");
+      const repos = new Repositories(db.db);
+      const session = repos.runtime.getSession(body.result.sessionId)!;
+      expect(session.projectId).toBeTruthy();
+      const memory = repos.memories.get(body.result.l1MemoryId)!;
+      expect(memory.info.project_id).toBe(session.projectId);
+      expect(memory.info.changed_files).toEqual([expect.stringContaining("src/pool.ts")]);
+    } finally {
+      await new Promise<void>(resolve => server.close(() => resolve()));
+      rmSync(repoDir, { recursive: true, force: true });
+    }
+  });
 });

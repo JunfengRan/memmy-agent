@@ -597,6 +597,93 @@ describe("MemoryService / retrieval / query and filtering", () => {
     db.close();
   });
 
+  it("keeps another project's traces out of a time-range recall", async () => {
+    const { db, service } = createTestService({
+      llm: createTimeFilterLlm([], {
+        startAt: "2026-08-04T00:00:00.000Z",
+        endAt: "2026-08-05T00:00:00.000Z"
+      }),
+      embedder: createCapturingEmbedder([])
+    });
+    const repos = new Repositories(db.db);
+    const traces = [
+      { id: "trace-same-project", projectId: "ws_alpha", minute: 1 },
+      { id: "trace-other-project", projectId: "ws_beta", minute: 2 },
+      { id: "trace-global", projectId: null, minute: 3 },
+      { id: "trace-superseded", projectId: "ws_alpha", minute: 4, duplicateOf: "trace-same-project" }
+    ];
+    for (const trace of traces) {
+      const row = timeFilteredTraceMemory({
+        id: trace.id,
+        at: new Date(Date.UTC(2026, 7, 4, 0, trace.minute)).toISOString(),
+        value: 10,
+        agentId: "cursor",
+        summary: `${trace.id} activity`
+      });
+      repos.memories.insert({
+        ...row,
+        info: {
+          ...row.info,
+          ...(trace.projectId ? { project_id: trace.projectId, memory_scope: "project" } : { memory_scope: "global" }),
+          ...(trace.duplicateOf ? { duplicate_of: trace.duplicateOf } : {})
+        }
+      });
+    }
+
+    const recall = await service.search({
+      namespace: { source: "codex", profileId: "jiang", userId: "user-time-filter", projectId: "ws_alpha" },
+      timeZone: "Asia/Shanghai",
+      query: "我今天做了什么，总结一下",
+      limit: 100
+    });
+
+    expect(recall.status).toContain("time_filter:l1");
+    expect(recall.hits.map((hit) => hit.id).sort()).toEqual(["trace-global", "trace-same-project"]);
+    db.close();
+  });
+
+  it("injects no project traces into a window without a project, but explicit search still finds them", async () => {
+    const { db, service } = createTestService({
+      llm: createTimeFilterLlm([], {
+        startAt: "2026-08-04T00:00:00.000Z",
+        endAt: "2026-08-05T00:00:00.000Z"
+      }),
+      embedder: createCapturingEmbedder([])
+    });
+    const repos = new Repositories(db.db);
+    for (const [minute, id, projectId] of [[1, "trace-ledger", "ws_ledger"], [2, "trace-global", null]] as const) {
+      const row = timeFilteredTraceMemory({
+        id,
+        at: new Date(Date.UTC(2026, 7, 4, 0, minute)).toISOString(),
+        value: 10,
+        agentId: "cursor",
+        summary: `${id} activity`
+      });
+      repos.memories.insert({
+        ...row,
+        info: { ...row.info, ...(projectId ? { project_id: projectId, memory_scope: "project" } : { memory_scope: "global" }) }
+      });
+    }
+    const namespace = { source: "codex", profileId: "jiang", userId: "user-time-filter" };
+    const session = service.openSession({ namespace });
+    const injected = await service.startTurn({
+      namespace,
+      sessionId: session.sessionId,
+      timeZone: "Asia/Shanghai",
+      query: "我今天做了什么，总结一下"
+    });
+    const searched = await service.search({
+      namespace,
+      timeZone: "Asia/Shanghai",
+      query: "我今天做了什么，总结一下",
+      limit: 100
+    });
+
+    expect(injected.hits.map((hit) => hit.id)).toEqual(["trace-global"]);
+    expect(searched.hits.map((hit) => hit.id).sort()).toEqual(["trace-global", "trace-ledger"]);
+    db.close();
+  });
+
   it("rewrites the retrieval query only when enabled", async () => {
     const summaryCalls: Array<{
       messages: Array<{ role: string; content: string }>;

@@ -734,6 +734,8 @@ async function routeRequest(
     const completeSourceTurn = () => service.completeSourceTurn({
       namespace: request.namespace, timeZone: request.timeZone, source: request.source,
       sourceTurn: request.sourceTurn, channel: request.channel, workspacePath: request.workspacePath,
+      ...(typeof request.gitRoot === "string" && request.gitRoot.trim() ? { gitRoot: request.gitRoot } : {}),
+      ...(Array.isArray(request.changedFiles) ? { changedFiles: request.changedFiles } : {}),
       ...(request.captureLegacyHistory === true ? { captureLegacyHistory: true } : {}),
       ...(typeof request.legacyImportTurnId === "string" && request.legacyImportTurnId.trim()
         ? { legacyImportTurnId: request.legacyImportTurnId.trim() }

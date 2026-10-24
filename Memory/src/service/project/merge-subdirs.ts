@@ -76,10 +76,18 @@ export function mergeSubdirProjects(
              properties_json = json_set(properties_json, '$.info.project_id', ?, '$.info.memory_scope', 'project')
          WHERE user_id = ? AND json_extract(info_json, '$.project_id') = ?`
       ).run(group.toProjectId, group.toProjectId, input.userId, fromProjectId);
+      movePolicyKeys(db, input.userId, fromProjectId, group.toProjectId);
       const destination = db.prepare(
-        `SELECT scope_key FROM l3_world_model_scopes WHERE user_id = ? AND project_id = ?`
-      ).get(input.userId, group.toProjectId);
+        `SELECT scope_key, memory_id AS memoryId FROM l3_world_model_scopes WHERE user_id = ? AND project_id = ?`
+      ).get(input.userId, group.toProjectId) as { scope_key: string; memoryId: string | null } | undefined;
       if (destination) {
+        const source = db.prepare(
+          `SELECT memory_id AS memoryId FROM l3_world_model_scopes WHERE user_id = ? AND project_id = ?`
+        ).get(input.userId, fromProjectId) as { memoryId: string | null } | undefined;
+        // The destination world model stays current; the moved one is kept but not recalled twice.
+        if (source?.memoryId && destination.memoryId && source.memoryId !== destination.memoryId) {
+          markDuplicate(db, source.memoryId, destination.memoryId);
+        }
         db.prepare(
           `DELETE FROM l3_world_model_scopes WHERE user_id = ? AND project_id = ?`
         ).run(input.userId, fromProjectId);
@@ -105,6 +113,32 @@ function sessionLocation(session: { workspacePath: string | null; metaJson: stri
   } catch {
     return null;
   }
+}
+
+/**
+ * Policy induction reads the scope from `policy:<projectId>:<hash>`, not from info.project_id.
+ * A key left on the old id would make the next induction insert a second live policy.
+ */
+function movePolicyKeys(db: Database.Database, userId: string, fromProjectId: string, toProjectId: string): void {
+  const prefix = `policy:${fromProjectId}:`;
+  const rows = db.prepare(
+    `SELECT id, memory_key AS memoryKey FROM memories
+     WHERE user_id = ? AND memory_layer = 'L2' AND substr(memory_key, 1, ?) = ?`
+  ).all(userId, prefix.length, prefix) as Array<{ id: string; memoryKey: string }>;
+  for (const row of rows) {
+    const movedKey = `policy:${toProjectId}:${row.memoryKey.slice(prefix.length)}`;
+    const existing = db.prepare(
+      `SELECT id FROM memories
+       WHERE user_id = ? AND memory_layer = 'L2' AND memory_key = ? AND id != ? AND deleted_at IS NULL
+       ORDER BY updated_at DESC LIMIT 1`
+    ).get(userId, movedKey, row.id) as { id: string } | undefined;
+    if (existing) markDuplicate(db, row.id, existing.id);
+    else db.prepare(`UPDATE memories SET memory_key = ? WHERE id = ?`).run(movedKey, row.id);
+  }
+}
+
+function markDuplicate(db: Database.Database, memoryId: string, winnerId: string): void {
+  db.prepare(`UPDATE memories SET info_json = json_set(info_json, '$.duplicate_of', ?) WHERE id = ?`).run(winnerId, memoryId);
 }
 
 function count(db: Database.Database, sql: string, ...params: string[]): number {

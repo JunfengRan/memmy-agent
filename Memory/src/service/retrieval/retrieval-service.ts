@@ -473,6 +473,15 @@ function onboardingFirstReportRecallHit(memory: MemoryRow): RecallHit | null {
   };
 }
 
+/**
+ * Explicit searches from a window with no project still see every project.
+ * Injected recall from that window does not: project facts would be answered as its own.
+ */
+function scopeProjectId(projectId: string | null | undefined, mode: RetrievalMode): string | null | undefined {
+  if (projectId) return projectId;
+  return mode === "search" || mode === "tool_driven" ? undefined : null;
+}
+
 function timeFilteredTraceHit(memory: MemoryRow, trace: TraceMeta): RecallHit {
   return {
     id: memory.id,
@@ -1975,7 +1984,8 @@ export class RetrievalService {
       ? this.retrieveTimeFilteredTraceMemories({
           timeFilter,
           tags: request.tags,
-          limit: retrievalLimit
+          limit: retrievalLimit,
+          sessionProjectId: scopeProjectId(context.namespace.projectId?.trim() || null, retrievalMode)
         })
       : await this.retrieveSearchMemories({
           userId: context.userId,
@@ -2199,17 +2209,20 @@ export class RetrievalService {
     timeFilter: RetrievalTimeFilter;
     tags?: string[];
     limit: number;
+    sessionProjectId: string | null | undefined;
   }): { retrieval: RetrievalResult; memories: MemoryRow[] } {
     const filter: MemoryFilter = {
       memoryLayer: "L1",
       status: ["activated", "resolving"],
       createdAtGte: input.timeFilter.startAt,
       createdAtLt: input.timeFilter.endAt,
-      ...(input.tags?.length ? { tags: input.tags } : {})
+      ...(input.tags?.length ? { tags: input.tags } : {}),
+      ...(input.sessionProjectId ? { recallProjectId: input.sessionProjectId } : {})
     };
     const candidateCount = this.deps.repos.memories.count(filter);
-    const candidates = this.deps.repos.memories
-      .list(filter, candidateCount)
+    const candidates = memoriesVisibleForScope(this.deps.repos.memories.list(filter, candidateCount), {
+      sessionProjectId: input.sessionProjectId
+    })
       .filter((memory) => this.isMemoryReadyForRetrieval(memory))
       .filter((memory) => kindFromMemory(memory) === "observed_activity" || Boolean(traceMetaFromMemory(memory)?.summary.trim()));
     const selected = [...candidates]
@@ -2343,7 +2356,7 @@ export class RetrievalService {
         config
       });
       const memories = memoriesVisibleForScope(candidatePool.memories, {
-        sessionProjectId: input.projectId ?? null,
+        sessionProjectId: scopeProjectId(input.projectId, input.mode),
         query
       });
       if (memories.length === 0) {
@@ -2374,7 +2387,7 @@ export class RetrievalService {
         hits: applyScopeWeights({
           hits: output.retrieval.hits,
           memories: output.memories,
-          sessionProjectId: input.projectId ?? null,
+          sessionProjectId: scopeProjectId(input.projectId, input.mode),
           query
         }).slice(0, input.limit)
       }

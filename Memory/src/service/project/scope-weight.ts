@@ -13,7 +13,11 @@ export const SCOPE_WEIGHTS = {
 } as const;
 
 export interface ScopeQuery {
-  sessionProjectId: string | null;
+  /**
+   * A project id, `null` for a window known to have no project directory, or `undefined`
+   * when the caller is not project-aware (explicit search) and every memory keeps weight 1.
+   */
+  sessionProjectId: string | null | undefined;
   query?: string;
   namedProjectIds?: readonly string[];
 }
@@ -45,10 +49,12 @@ export function scopeWeight(scope: ScopeQuery, memory: Pick<MemoryRow, "info" | 
   const otherProject = memoryScope === "project" && !sameProject;
   const weights = SCOPE_WEIGHTS;
 
-  if (!scope.sessionProjectId) return 1;
+  if (scope.sessionProjectId === undefined) return 1;
+  // A window with no project directory treats every project memory as another project's.
   if (otherProject && (layer === "L1" || kind === "topic")) return null;
   if (otherProject && kind === "policy") return weights.projectSession.otherProjectPolicy;
   if (otherProject) return null;
+  if (!scope.sessionProjectId) return 1;
   if (sameProject && layer === "L2") return weights.projectSession.sameProjectL2;
   if (sameProject && layer === "L1") return weights.projectSession.sameProjectL1;
   if (memoryScope === "global" && layer === "L1") return weights.projectSession.globalL1;
@@ -64,7 +70,7 @@ export function memoriesVisibleForScope<T extends MemoryRow>(memories: readonly 
 export function applyScopeWeights(input: {
   hits: readonly RecallHit[];
   memories: readonly MemoryRow[];
-  sessionProjectId: string | null;
+  sessionProjectId: string | null | undefined;
   query?: string;
   namedProjectIds?: readonly string[];
 }): RecallHit[] {

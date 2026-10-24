@@ -195,7 +195,11 @@ function runScope(relation: string, expectCase: Record<string, unknown>): void {
   expect(scopeWeight({ sessionProjectId: "ws_a" }, row("L2", "policy", "ws_b"))).toBe(expectCase.otherPolicy);
   expect(scopeWeight({ sessionProjectId: "ws_a" }, row("L2", "decision", "ws_b"))).toBeNull();
   expect(scopeWeight({ sessionProjectId: "ws_a" }, row("Skill", "skill", "ws_b"))).toBeNull();
-  expect(scopeWeight({ sessionProjectId: null }, row("L2", "policy", "ws_a"))).toBe(1);
+  expect(scopeWeight({ sessionProjectId: undefined }, row("L2", "policy", "ws_a"))).toBe(1);
+  expect(scopeWeight({ sessionProjectId: undefined }, row("L1", "trace", "ws_a"))).toBe(1);
+  expect(scopeWeight({ sessionProjectId: null }, row("L1", "trace", "ws_a"))).toBeNull();
+  expect(scopeWeight({ sessionProjectId: null }, row("L2", "policy", "ws_a"))).toBe(expectCase.otherPolicy);
+  expect(scopeWeight({ sessionProjectId: null }, row("L1", "trace", null))).toBe(1);
 }
 
 function runContext(expectCase: Record<string, unknown>): void {

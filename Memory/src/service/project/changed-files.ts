@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { isAbsolute, relative, sep } from "node:path";
 
 const PATCH_FILE = /^\*\*\* (?:Update|Add|Delete) File:\s+(.+?)\s*$/;
@@ -75,11 +76,25 @@ function stripQuotes(value: string): string {
 function relativize(path: string, projectRoot?: string | null): string | null {
   if (!path || path.includes("\0")) return null;
   if (projectRoot && isAbsolute(path)) {
-    const rel = relative(projectRoot, path);
-    if (!rel || rel.startsWith("..") || rel.startsWith(`..${sep}`)) return null;
-    return rel.split(sep).join("/");
+    const rel = insideRoot(projectRoot, path) ?? insideRoot(projectRoot, realPath(path));
+    return rel ? rel.split(sep).join("/") : null;
   }
   const portable = path.split(sep).join("/");
   if (portable.startsWith("../") || portable === "..") return null;
   return portable.replace(/^\.\//, "");
+}
+
+function insideRoot(projectRoot: string, path: string | null): string | null {
+  if (!path) return null;
+  const rel = relative(projectRoot, path);
+  return !rel || rel.startsWith("..") || isAbsolute(rel) ? null : rel;
+}
+
+/** The project root is stored as a realpath; hosts send paths as typed, e.g. /var for /private/var. */
+function realPath(path: string): string | null {
+  try {
+    return realpathSync(path);
+  } catch {
+    return null;
+  }
 }
