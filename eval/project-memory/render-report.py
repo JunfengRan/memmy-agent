@@ -1,4 +1,4 @@
-"""Render eval/project-memory/report.html from the committed run files.
+"""Render eval/project-memory/项目记忆report.html from the committed run files.
 
 Usage: python3 eval/project-memory/render-report.py
 
@@ -17,7 +17,7 @@ from pathlib import Path
 here = Path(__file__).resolve().parent
 runs = here / "runs"
 pre = runs / "pre-fix"
-out = here / "report.html"
+out = here / "项目记忆report.html"
 body_path = here / "report-body.html"
 template_path = Path(os.environ.get("MEMTENSOR_TEMPLATE", Path.home() / "memtensor/templates/explainer.html"))
 
@@ -44,6 +44,7 @@ ERRORS = [
     ("none", "答对"),
     ("empty", "答不出"),
     ("superseded", "把旧说法当现行"),
+    ("ambiguous", "相似信息没选"),
     ("wrong_project", "用了别的项目"),
     ("other", "其他"),
 ]
@@ -75,6 +76,10 @@ def score(data):
     if not data:
         return "—"
     return f"{passed(data)}/{total(data)}"
+
+
+def pctcell(data):
+    return f"<span class='nw'>{pct(data)}% · {passed(data)}/{total(data)}</span>" if data else "—"
 
 
 def pct(data):
@@ -241,333 +246,258 @@ SHORT = {
 }
 
 
-def column_figure(groups, series, maximum, number, caption, aria, bar_w=40):
-    """Vertical bars. groups: (key, label). series: (name, fill, stroke, values-by-key).
-    A bar is at least 24px tall; the count is printed inside it."""
-    inner = 6
-    group_w = len(series) * bar_w + (len(series) - 1) * inner
-    gaps = max(1, len(groups) - 1)
-    group_gap = min(16, (704 - len(groups) * group_w) / gaps)
-    if group_gap < 8:
-        raise SystemExit(f"column chart does not fit: bar {bar_w}, groups {len(groups)}")
-    total_w = len(groups) * group_w + (len(groups) - 1) * group_gap
-    x0 = (720 - total_w) / 2
-    legend_y, plot_top, plot_h, label_h = 8, 52, 150, 36
-    baseline = plot_top + plot_h
+W = 720
+LABEL_X, PLOT_X0, PLOT_X1, VAL_X = 120, 132, 588, 704
+
+CHART_CSS = """
+    /* 图表：横向条形。所有比较都按百分比，绝对数写在表里。 */
+    .diagram .grid { stroke: var(--d-group-line); stroke-width: 1; }
+    .diagram .ax { fill: var(--d-sub); font-size: 11px; font-family: var(--font-mono); }
+    .diagram .mlabel { fill: var(--d-title); font-size: 12.5px; font-weight: 600; }
+    .diagram .gtitle { fill: var(--d-title); font-size: 13px; font-weight: 600; }
+    .diagram .vl { fill: var(--d-sub); font-size: 11.5px; font-family: var(--font-mono); }
+    .diagram .seg-in { fill: light-dark(#FFFFFF, #0B1020); font-size: 11px; font-family: var(--font-mono); font-weight: 600; }
+    .diagram .fill-a { fill: light-dark(#4044ED, #7275F7); }
+    .diagram .fill-b { fill: light-dark(#0E9D88, #5CBFAE); }
+    .diagram .fill-c { fill: light-dark(#D97706, #FBBF24); }
+    .diagram .fill-d { fill: light-dark(#DC2626, #F87171); }
+    .diagram .fill-e { fill: light-dark(#F1623D, #FB8A6B); }
+    .diagram .fill-f { fill: light-dark(#62748E, #90A1B9); }
+    .diagram .fill-g { fill: light-dark(#AA75EF, #BFA0F5); }
+    .diagram .fill-dim { opacity: 0.4; }
+    .nw { white-space: nowrap; }
+"""
+
+
+def _ticks(x_max):
+    step = x_max / 4
+    return [round(step * i, 1) for i in range(5)]
+
+
+def _tick_text(value):
+    return f"{value:g}%"
+
+
+def _legend(series, y=10):
+    """series: (name, cls). Chips left to right, wrapping is not needed for <= 6 items."""
+    parts, x = [], 16
+    for name, cls in series:
+        width = 30 + 13 * len(name)
+        parts.append(f'<rect class="{cls}" x="{x}" y="{y}" width="10" height="10" rx="2" />')
+        parts.append(f'<text class="ax" x="{x + 16}" y="{y + 9.5}">{esc(name)}</text>')
+        x += width
+    return "".join(parts)
+
+
+def _grid(y_top, y_bottom, x_max):
     parts = []
-    legend_x = 16
-    for name, rect_cls, fill, stroke, _values in series:
-        width = max(88, 14 * len(name) + 24)
-        parts.append(
-            f'<rect class="{rect_cls}" x="{legend_x}" y="{legend_y}" width="{width}" height="24" rx="12" '
-            f'fill="{fill}" stroke="{stroke}" />'
-            f'<text class="t-chip" x="{legend_x + width / 2}" y="{legend_y + 16}" text-anchor="middle" '
-            f'font-size="11" fill="#4044ED">{esc(name)}</text>'
-        )
-        legend_x += width + 16
-    for i, (key, label) in enumerate(groups):
-        gx = x0 + i * (group_w + group_gap)
-        focus = key == "project" or key == "项目记忆"
-        cls, tcls, color = ("node-focus", "t-focus", "#4044ED") if focus else ("badge", "t-chip", "#4044ED")
-        stroke = "#4044ED" if focus else "none"
-        fill = "#EEF0FF" if focus else "#FFFFFF"
-        extra = ' stroke-width="1.5"' if focus else ""
-        parts.append(
-            f'<rect class="{cls}" x="{gx}" y="{baseline + 8}" width="{group_w}" height="{label_h}" rx="8" '
-            f'fill="{fill}" stroke="{stroke}"{extra} />'
-            f'<text class="{tcls}" x="{gx + group_w / 2}" y="{baseline + 30}" text-anchor="middle" '
-            f'font-size="11" font-weight="600" fill="{color}">{esc(label)}</text>'
-        )
-        for j, (_name, rect_cls, fill, stroke, values) in enumerate(series):
-            value = values[key]
-            height = max(24, round(plot_h * float(value) / maximum)) if maximum else 24
-            printed = f"{value:.1f}" if isinstance(value, float) else str(value)
-            bx = gx + j * (bar_w + inner)
-            by = baseline - height
-            parts.append(
-                f'<rect class="{rect_cls}" x="{bx}" y="{by}" width="{bar_w}" height="{height}" rx="8" '
-                f'fill="{fill}" stroke="{stroke}" />'
-                f'<text class="t-chip" x="{bx + bar_w / 2}" y="{by + 16}" text-anchor="middle" '
-                f'font-size="11" fill="#4044ED">{esc(printed)}</text>'
-            )
-    height = baseline + 8 + label_h + 16
+    for tick in _ticks(x_max):
+        x = PLOT_X0 + (PLOT_X1 - PLOT_X0) * tick / x_max
+        cls = "edge-main" if tick == 0 else "grid"
+        parts.append(f'<line class="{cls}" x1="{x:.1f}" y1="{y_top}" x2="{x:.1f}" y2="{y_bottom}" />')
+        parts.append(f'<text class="ax" x="{x:.1f}" y="{y_bottom + 17}" text-anchor="middle">{_tick_text(tick)}</text>')
+    return "".join(parts)
+
+
+def hbar_figure(rows, series, number, caption, aria, x_max=100.0, bar_h=17):
+    """rows: [(label, {key: (raw value, printed text)})]. series: [(key, name, css class)]."""
+    legend = [(name, cls) for _key, name, cls in series]
+    bar_gap, group_gap, head_h = 4, 18, 40
+    y = head_h
+    laid = []
+    for label, values in rows:
+        height = len(series) * bar_h + (len(series) - 1) * bar_gap
+        laid.append((label, values, y, height))
+        y += height + group_gap
+    bottom = y - group_gap
+    parts = [_legend(legend), _grid(head_h - 4, bottom, x_max)]
+    for label, values, gy, gh in laid:
+        parts.append(f'<text class="mlabel" x="{LABEL_X}" y="{gy + gh / 2 + 4.5}" text-anchor="end">{esc(label)}</text>')
+        for j, (key, _name, cls) in enumerate(series):
+            raw, text = values[key]
+            by = gy + j * (bar_h + bar_gap)
+            width = (PLOT_X1 - PLOT_X0) * float(raw) / x_max
+            parts.append(f'<rect class="{cls}" x="{PLOT_X0}" y="{by:.1f}" width="{max(width, 1.5):.1f}" '
+                         f'height="{bar_h}" rx="3" />')
+            parts.append(f'<text class="vl" x="{VAL_X}" y="{by + bar_h - 4.5:.1f}" text-anchor="end">{esc(text)}</text>')
+    height = bottom + 34
     return (
         '<figure class="diagram">'
-        f'<svg viewBox="0 0 720 {height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{esc(aria)}">'
+        f'<svg viewBox="0 0 {W} {height:.0f}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{esc(aria)}">'
         + "".join(parts)
         + f'</svg><figcaption><span class="fig-no">图 {number}</span>{caption}</figcaption></figure>'
     )
 
 
-METHODS = [
-    ("baseline", "空白对照", "#62748E", 88),
-    ("project", "项目记忆", "#4044ED", 88),
-    ("wiki", "项目记忆+Wiki", "#0E9D88", 132),
-    ("lookup", "自行检索", "#408DFC", 88),
-    ("attr-tree", "属性树", "#AA75EF", 76),
-    ("memos", "MemOS", "#D97706", 76),
-    ("graphiti", "Graphiti", "#F1623D", 84),
-]
-
-
-def grouped_bars(groups, maximum, number, caption, aria, methods=None, max_bar=120):
-    """groups is a list of (title, {arm: value}). Color is the method. Bars are paths so the
-    fill stays saturated in both themes; the number sits in a pale badge above the bar."""
-    methods = METHODS if methods is None else methods
-    bar_w, bar_gap = 36, 12
-    group_w = len(methods) * bar_w + (len(methods) - 1) * bar_gap
-    group_gap = 24
-    total_w = len(groups) * group_w + (len(groups) - 1) * group_gap
-    x0 = (720 - total_w) / 2
-    parts = []
-    lx, ly = 16, 8
-    for _arm, label, color, name_w in methods:
-        if lx + 52 + name_w > 704:
-            lx, ly = 16, ly + 40
-        parts.append(
-            f'<path class="edge" d="M {lx} {ly} L {lx + 40} {ly} L {lx + 40} {ly + 24} L {lx} {ly + 24} Z" '
-            f'fill="{color}" stroke="{color}" />'
-        )
-        nx = lx + 52
-        parts.append(
-            f'<rect class="badge" x="{nx}" y="{ly}" width="{name_w}" height="24" rx="12" fill="#EEF0FF" stroke="none" />'
-            f'<text class="t-chip" x="{nx + name_w / 2}" y="{ly + 16}" text-anchor="middle" font-size="11" fill="#4044ED">'
-            f'{esc(label)}</text>'
-        )
-        lx = nx + name_w + 12
-    title_y = ly + 40
-    badge_h, badge_gap = 24, 8
-    baseline = title_y + 28 + 12 + badge_h + badge_gap + max_bar
-    for g, (title, values) in enumerate(groups):
-        gx = x0 + g * (group_w + group_gap)
-        title_w = min(group_w, max(88, 14 * len(title) + 28))
-        parts.append(
-            f'<rect class="badge" x="{gx + (group_w - title_w) / 2}" y="{title_y}" width="{title_w}" height="28" '
-            f'rx="8" fill="#EEF0FF" stroke="none" />'
-            f'<text class="t-chip" x="{gx + group_w / 2}" y="{title_y + 18}" text-anchor="middle" font-size="13" '
-            f'font-weight="600" fill="#4044ED">{esc(title)}</text>'
-        )
-        for i, (arm, _label, color, _name_w) in enumerate(methods):
-            value = values[arm]
-            bar_h = max(12, round(max_bar * float(value) / maximum)) if maximum else 12
-            bx = gx + i * (bar_w + bar_gap)
-            by = baseline - bar_h
-            parts.append(
-                f'<path class="edge" d="M {bx:.1f} {by:.1f} L {bx + bar_w:.1f} {by:.1f} '
-                f'L {bx + bar_w:.1f} {baseline:.1f} L {bx:.1f} {baseline:.1f} Z" fill="{color}" stroke="{color}" />'
-            )
-            printed = f"{value:.1f}" if isinstance(value, float) else str(value)
-            ny = by - badge_gap - badge_h
-            parts.append(
-                f'<rect class="badge" x="{bx - 2:.1f}" y="{ny:.1f}" width="40" height="{badge_h}" rx="12" '
-                f'fill="#EEF0FF" stroke="none" />'
-                f'<text class="t-chip" x="{bx + bar_w / 2:.1f}" y="{ny + 16:.1f}" text-anchor="middle" font-size="11" '
-                f'fill="#4044ED">{esc(printed)}</text>'
-            )
-    height = baseline + 16
+def stacked_figure(rows, series, number, caption, aria, bar_h=20, note_col=True):
+    """rows: [(label, [(key, (share percent, text)), ...], total text)]. Shares sum to 100."""
+    legend = [(name, cls) for _key, name, cls in series]
+    head_h, gap = 40, 14
+    y = head_h
+    parts = [_legend(legend)]
+    for label, segments, total in rows:
+        parts.append(f'<text class="mlabel" x="{LABEL_X}" y="{y + bar_h / 2 + 4.5}" text-anchor="end">{esc(label)}</text>')
+        x = PLOT_X0
+        span = PLOT_X1 - PLOT_X0
+        for key, (share, text) in segments:
+            width = span * share / 100
+            cls = dict((k, c) for k, _n, c in series)[key]
+            if width <= 0:
+                continue
+            parts.append(f'<rect class="{cls}" x="{x:.1f}" y="{y}" width="{width:.1f}" height="{bar_h}" />')
+            if width >= 30:
+                parts.append(f'<text class="seg-in" x="{x + width / 2:.1f}" y="{y + bar_h / 2 + 4:.1f}" '
+                             f'text-anchor="middle">{esc(text)}</text>')
+            x += width
+        if note_col:
+            parts.append(f'<text class="vl" x="{VAL_X}" y="{y + bar_h / 2 + 4:.1f}" text-anchor="end">{esc(total)}</text>')
+        y += bar_h + gap
+    height = y - gap + 20
     return (
         '<figure class="diagram">'
-        f'<svg viewBox="0 0 720 {height:.0f}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{esc(aria)}">'
+        f'<svg viewBox="0 0 {W} {height:.0f}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{esc(aria)}">'
         + "".join(parts)
         + f'</svg><figcaption><span class="fig-no">图 {number}</span>{caption}</figcaption></figure>'
     )
+
+
+def _pct(part, whole):
+    return 100.0 * part / whole
+
+
+def _label(part, whole, digits=0):
+    return f"{_pct(part, whole):.{digits}f}% · {part}/{whole}"
 
 
 def score_figure():
-    recall_values = {arm: passed(recall[arm]) for arm, _label in ARMS}
-    answer_values = {arm: passed(answer[arm]) for arm, _label in ARMS}
-    return grouped_bars(
-        [("召回", recall_values), ("模型回答", answer_values)],
-        29, 1,
-        "左边一组是题级召回，右边一组是 Memmy 中模型回答，满分 29。颜色是方式："
-        "灰蓝是空白对照，靛蓝是项目记忆，青绿是项目记忆+Wiki。项目记忆是标注上限。"
-        "Cursor 只评了三列，数字在下面的总表里。同一份代码重跑会翻约 6 题，差距小于这个数的两根柱不要比高低。",
-        "左组是题级召回，右组是 Memmy 中模型回答，颜色区分七种方式",
+    rows = []
+    for arm, label in ARMS:
+        rows.append((SHORT[arm], {
+            "recall": (_pct(passed(recall[arm]), total(recall[arm])), _label(passed(recall[arm]), total(recall[arm]))),
+            "answer": (_pct(passed(answer[arm]), total(answer[arm])), _label(passed(answer[arm]), total(answer[arm]))),
+        }))
+    return hbar_figure(
+        rows,
+        [("recall", "直接召回", "fill-a"), ("answer", "Memmy 中模型回答", "fill-b")],
+        1,
+        "每行一种方式，组内上条是题级召回、下条是 Memmy 中模型回答；横轴是按 29 题算的通过比例，条尾是百分比和题数。"
+        "项目记忆的现行结论由评测脚本按金标写入，这一行只能当上限看；Cursor 只评了三种方式，不在图里。",
+        "七种方式的题级召回与 Memmy 中模型回答通过率",
     )
 
 
 def ratio_figure():
-    values = {arm: round(STATS[arm]["ratio"] * 1000) / 10 for arm, _label in ARMS}
-    return grouped_bars(
-        [("对应比例", values)],
-        50, 3,
-        "这一张只有一个数：含现行要点的条数，除以注入条数，再乘 100。颜色和文首那张相同，青绿是项目记忆+Wiki。"
-        "项目记忆这一柱低，是因为每题都贴了整份现行结论。精确条数在下面的表里。",
-        "七种方式的注入对应比例，按方式上色",
+    rows = []
+    for arm, label in ARMS:
+        item = STATS[arm]
+        rows.append((SHORT[arm], {
+            "hit": (item["ratio"] * 100, f"{item['ratio'] * 100:.1f}% · {item['hits']}/{item['items']}"),
+            "cover": (_pct(item["cover"], 29), _label(item["cover"], 29)),
+        }))
+    return hbar_figure(
+        rows,
+        [("hit", "注入里含要点的条", "fill-a"), ("cover", "上下文里有要点的题", "fill-b")],
+        3,
+        "上条是含现行要点的条数除以注入条数，下条是上下文里出现过现行要点的题数除以 29。"
+        "两条都不是题级召回：题级还要求一条陷阱原句都不剩。",
+        "七种方式的注入条命中比例与要点覆盖比例",
     )
 
 
 def gap_figure():
-    return grouped_bars(
-        [
-            ("仍答对", {arm: STATS[arm]["up"] for arm, _label in ARMS}),
-            ("过了却答错", {arm: STATS[arm]["down"] for arm, _label in ARMS}),
-        ],
-        11, 5,
-        "左边一组是题级没过、Memmy 回答过了的题数；右边一组是题级过了、回答没过的题数。颜色是方式。"
-        "青绿是项目记忆+Wiki。Graphiti 的「仍答对」最高：旧句还在上下文里，模型自己放下了。0 也留一根短柱。",
-        "题级召回和 Memmy 回答对不上的题数，左组仍答对，右组过了却答错",
+    rows = []
+    for arm, label in ARMS:
+        item = STATS[arm]
+        rows.append((SHORT[arm], {
+            "up": (_pct(item["up"], 29), f"{item['up']} 题"),
+            "down": (_pct(item["down"], 29), f"{item['down']} 题"),
+        }))
+    return hbar_figure(
+        rows,
+        [("up", "召回没过、回答过了", "fill-c"), ("down", "召回过了、回答没过", "fill-d")],
+        5,
+        "横轴是占 29 题的比例，条尾是题数。橙色这类是上下文里同时有旧句和要点、模型自己挑对了；"
+        "红色这类是上下文里有现行要点、模型却没答好。",
+        "题级召回与模型回答不一致的题数占比",
+        x_max=50,
+    )
+
+
+ERROR_SERIES = [
+    ("none", "答对", "fill-b"),
+    ("empty", "答不出", "fill-a"),
+    ("superseded", "把旧说法当现行", "fill-d"),
+    ("ambiguous", "相似信息没选", "fill-c"),
+    ("wrong_project", "用了别的项目", "fill-e"),
+    ("other", "其他", "fill-f"),
+]
+
+
+def error_figure():
+    rows = []
+    for arm, label in ARMS:
+        counter = Counter()
+        for q in answer[arm]["questions"]:
+            key = "none" if q.get("passed") else (q.get("errorType") or "other")
+            counter[key if key in dict((k, n) for k, n, _c in ERROR_SERIES) else "other"] += 1
+        segments = [(key, (_pct(counter[key], 29), f"{round(_pct(counter[key], 29))}%"))
+                    for key, _name, _cls in ERROR_SERIES if counter[key]]
+        rows.append((SHORT[arm], segments, f"{passed(answer[arm])}/29"))
+    return stacked_figure(
+        rows,
+        ERROR_SERIES,
+        4,
+        "每一条是一个方式的 29 题怎么分布的，段宽是百分比。右列是通过题数。"
+        "「其他」不是一种错，下面按题写开。",
+        "七种方式的回答结果与错因构成",
     )
 
 
 def cost_figure():
     by_label = {item["label"]: item for item in cost["rows"]}
-    methods = [item for item in METHODS if item[0] in ("baseline", "project", "wiki")]
-    keys = {"baseline": "空白对照记忆", "project": "项目记忆", "wiki": "项目记忆+Wiki 建页"}
-    incoming = {arm: round(by_label[keys[arm]]["in"] / 1000) / 10 for arm, _l, _c, _w in methods}
-    outgoing = {arm: round(by_label[keys[arm]]["out"] / 1000) / 10 for arm, _l, _c, _w in methods}
-    ceiling = max(list(incoming.values()) + list(outgoing.values()))
-    return grouped_bars(
-        [("输入", incoming), ("输出", outgoing)],
-        ceiling, 6,
-        "左边一组是输入 token，右边一组是输出 token，单位是万，同一刻度。颜色和前面的图相同，青绿是项目记忆+Wiki 的建页。"
-        "数字来自修复前的网关导出，不是这次重跑。建页的输出比项目记忆的写入还高。",
-        "修复前写入的输入和输出 token，左组输入，右组输出",
-        methods=methods,
+    base, proj, wiki = (by_label["空白对照记忆"], by_label["项目记忆"], by_label["项目记忆+Wiki 建页"])
+    series = [("baseline", "空白对照", "fill-f"), ("project", "项目记忆", "fill-a"), ("wiki", "Wiki 建页", "fill-b")]
+
+    def row(name, pick):
+        return (name, {key: (_pct(pick(data), pick(base)), f"{_pct(pick(data), pick(base)):.0f}%")
+                       for key, _n, _c, data in (("baseline", "", "", base), ("project", "", "", proj), ("wiki", "", "", wiki))})
+
+    rows = [row("费用", lambda d: d["usd"]),
+            row("输入 token", lambda d: d["in"]),
+            row("输出 token", lambda d: d["out"]),
+            row("写入墙钟", lambda d: d["wall"]),
+            row("单次 P50", lambda d: d["p50"])]
+    return hbar_figure(
+        rows,
+        series,
+        6,
+        "以空白对照的写入为 100%，越短越省，绝对数在下面两张表里。Wiki 建页是叠在项目记忆写入之上的增量，"
+        "用 Wiki 的总开销是蓝条加青条。数据来自修复前那一轮的网关用量导出，不是这次重跑。",
+        "写入阶段的输入、输出 token、墙钟和单次 P50，相对空白对照的百分比",
+        x_max=200,
     )
 
 
-def _token_columns(groups, raw_in, raw_out, shown_in, shown_out, ceiling):
-    bar_w, inner, group_gap = 56, 12, 28
-    group_w = bar_w * 2 + inner
-    total_w = len(groups) * group_w + (len(groups) - 1) * group_gap
-    x0 = (720 - total_w) / 2
-    plot_top, plot_h, label_h = 52, 150, 36
-    baseline = plot_top + plot_h
-    parts = []
-    legend_x = 16
-    for name, rect_cls, fill, stroke in (
-        ("输入 token 万", "badge", "#EEF0FF", "none"),
-        ("输出 token 万", "legend-box", "#FFFFFF", "#4044ED"),
-    ):
-        width = 132
-        parts.append(
-            f'<rect class="{rect_cls}" x="{legend_x}" y="8" width="{width}" height="24" rx="12" fill="{fill}" stroke="{stroke}" />'
-            f'<text class="t-chip" x="{legend_x + width / 2}" y="24" text-anchor="middle" font-size="11" fill="#4044ED">{name}</text>'
-        )
-        legend_x += width + 16
-    series = (
-        ("in", "badge", "#EEF0FF", "none", raw_in, shown_in),
-        ("out", "legend-box", "#FFFFFF", "#4044ED", raw_out, shown_out),
-    )
-    for i, (key, label) in enumerate(groups):
-        gx = x0 + i * (group_w + group_gap)
-        focus = key == "项目记忆"
-        cls, tcls, color = ("node-focus", "t-focus", "#4044ED") if focus else ("badge", "t-chip", "#4044ED")
-        stroke = "#4044ED" if focus else "none"
-        fill = "#EEF0FF" if focus else "#FFFFFF"
-        extra = ' stroke-width="1.5"' if focus else ""
-        parts.append(
-            f'<rect class="{cls}" x="{gx}" y="{baseline + 8}" width="{group_w}" height="{label_h}" rx="8" '
-            f'fill="{fill}" stroke="{stroke}"{extra} />'
-            f'<text class="{tcls}" x="{gx + group_w / 2}" y="{baseline + 30}" text-anchor="middle" '
-            f'font-size="11" font-weight="600" fill="{color}">{esc(label)}</text>'
-        )
-        for j, (_name, rect_cls, fill, stroke, raw, shown) in enumerate(series):
-            height = max(24, round(plot_h * raw[key] / ceiling))
-            bx = gx + j * (bar_w + inner)
-            by = baseline - height
-            parts.append(
-                f'<rect class="{rect_cls}" x="{bx}" y="{by}" width="{bar_w}" height="{height}" rx="8" '
-                f'fill="{fill}" stroke="{stroke}" />'
-                f'<text class="t-chip" x="{bx + bar_w / 2}" y="{by + 16}" text-anchor="middle" '
-                f'font-size="11" fill="#4044ED">{shown[key]}</text>'
-            )
-    height = baseline + 8 + label_h + 16
-    return (
-        '<figure class="diagram">'
-        f'<svg viewBox="0 0 720 {height}" xmlns="http://www.w3.org/2000/svg" role="img" '
-        'aria-label="修复前那次写入的输入和输出 token，竖柱">'
-        + "".join(parts)
-        + '</svg><figcaption><span class="fig-no">图 6</span>左柱是输入，右柱是输出，单位是万 token，同一刻度。'
-        '数字来自修复前的网关导出，不是这次重跑。Wiki 建页的输出比项目记忆的写入还高。</figcaption></figure>'
-    )
-
-
-SLICE_COLORS = [
-    ("none", "答对", "#0E9D88", "#E7F7F3"),
-    ("empty", "答不出", "#4044ED", "#EEF0FF"),
-    ("superseded", "旧说法", "#DC2626", "#FEF2F2"),
-    ("wrong_project", "别的项目", "#F1623D", "#FFF1EC"),
-    ("other", "其他", "#D97706", "#FFFBEB"),
-]
-
-
-def _counts(data):
-    counter = {key: 0 for key, _label, _pie, _chip in SLICE_COLORS}
-    for question in data["questions"]:
-        key = "none" if question.get("passed") else (question.get("errorType") or "other")
-        if key not in counter:
-            key = "other"
-        counter[key] += 1
-    return counter
-
-
-def _wedge(cx, cy, radius, start, end, fill):
-    large = 1 if end - start > _math.pi else 0
-    x0 = cx + radius * _math.cos(start)
-    y0 = cy + radius * _math.sin(start)
-    x1 = cx + radius * _math.cos(end)
-    y1 = cy + radius * _math.sin(end)
-    return (
-        f'<path class="edge" d="M {cx:.1f} {cy:.1f} L {x0:.1f} {y0:.1f} '
-        f'A {radius} {radius} 0 {large} 1 {x1:.1f} {y1:.1f} Z" fill="{fill}" stroke="#FFFFFF" stroke-width="1" />'
-    )
-
-
-def pie_figure():
-    names = {arm: label for arm, label, _color, _width in METHODS}
-    pitch, radius = 180, 32
-    rows = [[arm for arm, _label in ARMS[:4]], [arm for arm, _label in ARMS[4:]]]
-    row_h = 280
-    parts = []
-    for r, arms in enumerate(rows):
-        x0 = (720 - len(arms) * pitch) / 2
-        top = 8 + r * row_h
-        cy = top + 24 + 12 + radius
-        legend_top = cy + radius + 14
-        for i, arm in enumerate(arms):
-            cx = x0 + i * pitch + pitch / 2
-            name = names[arm]
-            name_w = 148
-            parts.append(
-                f'<rect class="badge" x="{cx - name_w / 2}" y="{top}" width="{name_w}" height="24" rx="12" '
-                f'fill="#EEF0FF" stroke="none" />'
-                f'<text class="t-chip" x="{cx}" y="{top + 16}" text-anchor="middle" font-size="11" fill="#4044ED">'
-                f'{esc(name)}</text>'
-            )
-            counts = _counts(answer[arm])
-            slices = [(label, counts[key], pie, chip) for key, label, pie, chip in SLICE_COLORS if counts[key]]
-            if len(slices) == 1:
-                parts.append(
-                    f'<path class="edge" d="M {cx:.1f} {cy - radius:.1f} '
-                    f'A {radius} {radius} 0 1 1 {cx:.1f} {cy + radius:.1f} '
-                    f'A {radius} {radius} 0 1 1 {cx:.1f} {cy - radius:.1f} Z" '
-                    f'fill="{slices[0][2]}" stroke="{slices[0][2]}" />'
-                )
-            else:
-                angle = -_math.pi / 2
-                for _label, count, fill, _chip in slices:
-                    sweep = 2 * _math.pi * count / 29
-                    parts.append(_wedge(cx, cy, radius, angle, angle + sweep, fill))
-                    angle += sweep
-            for n, (label, count, fill, _chip) in enumerate(slices):
-                by = legend_top + n * 36
-                parts.append(
-                    f'<path class="edge" d="M {cx - 62} {by} L {cx - 38} {by} L {cx - 38} {by + 24} L {cx - 62} {by + 24} Z" '
-                    f'fill="{fill}" stroke="{fill}" />'
-                    f'<rect class="badge" x="{cx - 26}" y="{by}" width="96" height="24" rx="12" fill="#EEF0FF" stroke="none" />'
-                    f'<text class="t-chip" x="{cx + 22}" y="{by + 16}" text-anchor="middle" font-size="11" fill="#4044ED">'
-                    f'{esc(label)} {count}</text>'
-                )
-    height = 8 + len(rows) * row_h
-    return (
-        '<figure class="diagram">'
-        f'<svg viewBox="0 0 720 {height}" xmlns="http://www.w3.org/2000/svg" role="img" '
-        'aria-label="七种方式的 Memmy 中模型回答错因构成">'
-        + "".join(parts)
-        + '</svg><figcaption><span class="fig-no">图 4</span>每张饼是 29 题。青绿是答对，靛蓝是答不出，红是把旧说法当现行，'
-        '橙是用了别的项目，琥珀是其他。其他不是同一种错，每一题的具体错法写在表下面。</figcaption></figure>'
+def runtime_figure():
+    order = [("baseline", "空白对照"), ("project", "项目记忆"), ("wiki", "项目记忆+Wiki"),
+             ("attr-tree", "属性树"), ("memos", "MemOS"), ("graphiti", "Graphiti")]
+    base = recall["baseline"]["seconds"]
+    base_calls = recall["baseline"]["modelCalls"]
+    rows = []
+    for arm, label in order:
+        data = recall[arm]
+        rows.append((label, {
+            "wall": (_pct(data["seconds"], base), f"{_pct(data['seconds'], base):.0f}% · {data['seconds']} 秒"),
+            "calls": (_pct(data["modelCalls"] + (data.get("treeModelCalls") or 0), base_calls),
+                      f"{data['modelCalls'] + (data.get('treeModelCalls') or 0)} 次"),
+        }))
+    return hbar_figure(
+        rows,
+        [("wall", "回放与召回墙钟（空白对照为 100%）", "fill-a"), ("calls", "模型调用次数（占 92 次）", "fill-b")],
+        7,
+        "这六行量的是同一段：回放语料加召回，不含模型回答与裁判。自行检索的 712 秒把作答和裁判也算在里面，"
+        "不同段，没放进图里。MemOS 和 Graphiti 共用一次回放，所以两条墙钟相同。",
+        "回放与召回的墙钟和模型调用次数",
     )
 
 
@@ -586,7 +516,8 @@ def main_table():
     rows = []
     for arm, label in ARMS:
         c = cursor.get(arm)
-        rows.append((arm, [esc(label), score(recall[arm]), score(answer[arm]), score(c) if c else "未评", esc(what[arm])]))
+        rows.append((arm, [esc(label), pctcell(recall[arm]), pctcell(answer[arm]),
+                           pctcell(c) if c else "未评", esc(what[arm])]))
     return table(["方式", "直接召回", "Memmy 回答", "Cursor 回答", "~做了什么"], rows, ours="project")
 
 
@@ -609,7 +540,7 @@ def error_table():
         counter = Counter()
         for q in answer[arm]["questions"]:
             key = "none" if q.get("passed") else (q.get("errorType") or "other")
-            counter[key if key in ("none", "empty", "superseded", "wrong_project") else "other"] += 1
+            counter[key if key in ("none", "empty", "superseded", "ambiguous", "wrong_project") else "other"] += 1
         rows.append((arm, [esc(label)] + [str(counter.get(key, 0)) for key, _ in ERRORS]))
     return table(["方式"] + [name for _, name in ERRORS], rows, ours="project")
 
@@ -640,6 +571,32 @@ def cost_table():
                                       f"{item['cache']:,}", esc(item["note"])]))
     return (table(["阶段", "墙钟秒", "请求数", "输入 token", "输出 token", "费用 USD"], rows, ours="项目记忆")
             + table(["阶段", "单次 P50 秒", "单次 P95 秒", "缓存读取 token", "~对账"], rows2, ours="项目记忆"))
+
+
+def overview_table():
+    """One row per arm: effect, cost, runtime. Cost comes from the pre-fix gateway export."""
+    by_label = {item["label"]: item for item in cost["rows"]}
+    cost_of = {"baseline": by_label["空白对照记忆"], "project": by_label["项目记忆"],
+               "wiki": by_label["项目记忆+Wiki 建页"]}
+    rows = []
+    for arm, label in ARMS:
+        r, a = recall[arm], answer[arm]
+        c = cursor.get(arm)
+        item = cost_of.get(arm)
+        cost_cell = (f"+${item['usd']:.3f}" if arm == "wiki" else f"${item['usd']:.3f}") if item else "—"
+        token_cell = f"{item['in'] / 1000:.0f}k / {item['out'] / 1000:.0f}k" if item else "—"
+        wall = f"{r['seconds']} 秒" if r.get("seconds") else "—"
+        rows.append((arm, [
+            esc(label),
+            pctcell(r),
+            pctcell(a),
+            pctcell(c) if c else "未评",
+            wall,
+            cost_cell,
+            token_cell,
+        ]))
+    return table(["方式", "题级召回", "Memmy 回答", "Cursor 回答", "回放+召回墙钟",
+                  "写入费用", "写入 token 入/出"], rows, ours="project")
 
 
 def volume_table():
@@ -684,7 +641,7 @@ def replay_table():
 
 
 def mark(q):
-    return "过" if q and q.get("passed") else "不过"
+    return "<span class='nw'>过</span>" if q and q.get("passed") else "<span class='nw'>不过</span>"
 
 
 def question_tables():
@@ -743,13 +700,15 @@ tokens = {
     "PIPELINE": pipeline_figure(),
     "SCORES": score_figure(),
     "VOLUME_FIG": ratio_figure(),
-    "PIES": pie_figure(),
+    "ERROR_FIG": error_figure(),
+    "RUNTIME_FIG": runtime_figure(),
     "VOLUME": volume_table(),
     "GAP_FIG": gap_figure(),
     "COST_FIG": cost_figure(),
     "REPLAY": replay_table(),
     "VOLUME_Q": volume_question_tables(),
     "MAIN_TABLE": main_table(),
+    "OVERVIEW": overview_table(),
     "KIND_RECALL": kind_table(recall, ARMS),
     "KIND_ANSWER": kind_table(answer, ARMS),
     "KIND_CURSOR": kind_table(cursor, CURSOR_ARMS),
@@ -798,6 +757,46 @@ for arm, _ in ARMS:
     tokens[f"A_{key}"] = score(answer[arm])
 for arm, _ in CURSOR_ARMS:
     tokens[f"C_{arm.replace('-', '').upper()}"] = score(cursor[arm])
+for arm, _ in ARMS:
+    key = arm.replace("-", "").upper()
+    tokens[f"PCT_R_{key}"] = f"{pct(recall[arm])}%"
+    tokens[f"PCT_A_{key}"] = f"{pct(answer[arm])}%"
+for arm, _ in CURSOR_ARMS:
+    tokens[f"PCT_C_{arm.replace('-', '').upper()}"] = f"{pct(cursor[arm])}%"
+tokens.update({
+    "FLIP_PR": str(len(flips(before["recall"]["project"], recall["project"]))),
+    "FLIP_P": str(len(flips(before["answer"]["project"], answer["project"]))),
+    "FLIP_WR": str(len(flips(before["recall"]["wiki"], recall["wiki"]))),
+    "FLIP_W": str(len(flips(before["answer"]["wiki"], answer["wiki"]))),
+    "FLIP_L": str(len(flips(before["answer"]["lookup"], answer["lookup"]))),
+    "FLIP_LR": str(len(flips(before["recall"]["lookup"], recall["lookup"]))),
+    "FLIP_C": str(len(flips(before["cursor"], cursor["project"]))),
+    "FLIP_BR": str(len(flips(before["recall"]["baseline"], recall["baseline"]))),
+    "PASS_B_BEFORE": score(before["answer"]["baseline"]),
+    "PASS_P_BEFORE": score(before["answer"]["project"]),
+    "PASS_B_AFTER": score(answer["baseline"]),
+    "PASS_P_AFTER": score(answer["project"]),
+    "COST_B_USD": f"{cost['rows'][0]['usd']:.3f}",
+    "COST_P_USD": f"{cost['rows'][1]['usd']:.3f}",
+    "COST_W_USD": f"{cost['rows'][2]['usd']:.3f}",
+    "COST_B_IN": f"{cost['rows'][0]['in'] / 1000:.1f}",
+    "COST_P_IN": f"{cost['rows'][1]['in'] / 1000:.1f}",
+    "COST_B_OUT": f"{cost['rows'][0]['out'] / 1000:.1f}",
+    "COST_P_OUT": f"{cost['rows'][1]['out'] / 1000:.1f}",
+    "COST_W_OUT": f"{cost['rows'][2]['out'] / 1000:.1f}",
+    "COST_B_WALL": str(cost["rows"][0]["wall"]),
+    "COST_P_WALL": str(cost["rows"][1]["wall"]),
+    "COST_W_WALL": str(cost["rows"][2]["wall"]),
+    "COST_W_CALLS": str(cost["rows"][2]["n"]),
+    "SEC_L": str(answer["lookup"]["seconds"]),
+    "SEC_W": str(recall["wiki"]["seconds"]),
+    "SEC_AT": str(recall["attr-tree"]["seconds"]),
+    "SEC_G": str(recall["graphiti"]["seconds"]),
+    "CALLS_W": str(recall["wiki"]["modelCalls"]),
+    "CALLS_L": str(answer["lookup"]["modelCalls"]),
+    "CALLS_G": str(recall["graphiti"]["modelCalls"] + recall["graphiti"]["treeModelCalls"]),
+    "CALLS_AT": str(recall["attr-tree"]["modelCalls"]),
+})
 for qid in ("q19", "q09", "q25", "q14", "q20"):
     tokens[f"CASE_{qid.upper()}"] = case(qid)
 
@@ -808,9 +807,9 @@ left = [part.split("@@")[0] for part in body.split("@@")[1::2]]
 if left:
     raise SystemExit(f"unfilled tokens: {sorted(set(left))}")
 
-nav_items = [("s1", "01", "结论"), ("s2", "02", "怎么测"), ("s3", "03", "结果"), ("s4", "04", "修复前后"),
-             ("s5", "05", "召回与回答"), ("s6", "06", "案例"), ("s7", "07", "没解决的"), ("s8", "08", "写入开销"),
-             ("appendix", "A", "附录")]
+nav_items = [("s1", "01", "结论"), ("s2", "02", "怎么测"), ("s3", "03", "结果"), ("s4", "04", "召回与回答"),
+             ("s5", "05", "修复前后"), ("s6", "06", "案例"), ("s7", "07", "开销与时长"),
+             ("s8", "08", "没解决的"), ("appendix", "A", "附录")]
 current = ' aria-current="true"'
 nav = ('<nav class="toc" aria-label="目录">\n      <p class="toc-brand"><span class="toc-org">MemTensor</span>'
        '<span class="toc-kind">研究文档</span></p>\n'
@@ -822,5 +821,7 @@ shell = template_path.read_text() if template_path.exists() else out.read_text()
 head, rest = shell.split('<nav class="toc"', 1)
 _, tail = rest.split("</main>", 1)
 head = head.replace("<title>研究文档模板</title>", "<title>项目记忆先行开发评测报告</title>")
+if ".diagram .vl" not in head:
+    head = head.replace("  </style>", CHART_CSS + "  </style>", 1)
 out.write_text(head + nav + body + "\n    </main>" + tail)
 print("wrote", out.relative_to(here.parent.parent))
