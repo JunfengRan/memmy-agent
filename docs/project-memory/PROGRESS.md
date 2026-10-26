@@ -1,6 +1,6 @@
 # 项目记忆预研进度
 
-给下一个接手的 agent。产品规格在本地 `design-docs/设计文档/项目记忆/`（不进 git）。机器可读规格在 `spec/project-memory/`。门禁：`node scripts/project-memory/cli.mjs status`。
+给下一个接手的 agent。产品规格在本地 `design-docs/ProjectMemory/beta/`（不进 git）。机器可读规格在 `spec/project-memory/`。门禁：`node scripts/project-memory/cli.mjs status`。
 
 ## 基线
 
@@ -8,7 +8,7 @@
 - baselineSha：`8684cb570f1b54debcdd45da45f0f02661a76a42`
 - 原始 Memmy 基线不常驻。要重跑空白对照或三种读时对照时，先跑 `eval/project-memory/baseline/setup-baseline.sh`：在 `MEMMY_BASELINE_DIR`（缺省 `../memmy-agent-baseline`）建一个分离的 worktree，打上 `price-filter.patch`，`node_modules` 链到本仓
 - 收尾前的 5 个实验 worktree 和对应的 5 个实验分支（`experiment/attribute-tree`、`attribute-memos`、`attribute-graphiti`、`memmy-baseline`、`searchable-wiki`）都已删除，代码和结果收在 `eval/project-memory/`
-- 待定问题按 `organized/14-待定问题.md` 的默认方案。这是预研，不是发布级实现。
+- 待定问题按 `design-docs/ProjectMemory/beta/14-待定问题.md` 的默认方案。这是预研，不是发布级实现。
 
 ## spec
 
@@ -86,7 +86,7 @@
 | Graphiti 事实边 | 13/29 | 23/29 | — |
 
 - 目录：`eval/project-memory/arms/`（四种读时对照）、`baseline/`（基线重建脚本和补丁）、`dataset/`、`workspaces/`（ledger、catalog；运行时各自 `git init`）、`runs/`（结果；`pre-fix/` 是修复前一份；`cost.json` 是写入开销汇总；`*-recall-db/` 不进 git）。
-- 修掉的缺陷：无项目窗口收到项目轨迹（`scope-weight.ts`、`retrieval-service.ts`）；`source-turn` 的 `gitRoot`、`changedFiles` 没落库（`http.ts`、`changed-files.ts`）；时间范围召回不看作用域（`retrieval-service.ts`）；合并子目录后策略键和 L3 没跟着走（`merge-subdirs.ts`）。细节和用例见设计文档 `organized/16-先行开发复盘.md` §3。
+- 修掉的缺陷：无项目窗口收到项目轨迹（`scope-weight.ts`、`retrieval-service.ts`）；`source-turn` 的 `gitRoot`、`changedFiles` 没落库（`http.ts`、`changed-files.ts`）；时间范围召回不看作用域（`retrieval-service.ts`）；合并子目录后策略键和 L3 没跟着走（`merge-subdirs.ts`）。细节和用例见设计文档 `design-docs/ProjectMemory/beta/16-先行开发复盘.md` §3。
 - 决定：
   1. **项目记忆一列是标注上限。**现行结论、取代标记、检查点摘要、事项名由 `run-recall.ts` 的 `recordProjectStructure` 写入，前两样来自金标。报告和文档统一这样标。
   2. **噪声底是 6 题。**空白对照代码没改，回答重跑翻了 6 题；自行检索翻 10 题。差距不到 6 题不比大小。
@@ -94,4 +94,4 @@
   4. 裁判和作答出过 12 处坏结果（理由为空、说没有候选回答、调起工具、回答为空），都用 `scripts/project-memory/eval/rejudge.mjs` 单独重判过。
 - 坑：`run-answer.mjs`、`run-judge-cursor.mjs` 会续跑已有输出，`run-recall.ts` 会复用已有 `*-recall-db/`。重跑前先移走。`run-lookup.mjs` 不续跑。
 - 没做完的：现行结论和取代关系还没有由产品产出；q20 的证据被入库判定拒掉；主动搜索在无项目窗口不限项目；检查点、权限、冲突没接进产品链路。完整列表见 16 §6。
-- 下一入口：设计文档 `organized/15-正式开发计划（基于先行开发经验）.md` 的 P0：写入链路自己抽取现行结论和取代关系，评测去掉金标写入，每臂跑 3 次。
+- 下一入口：设计文档 `design-docs/ProjectMemory/beta/15-正式开发计划（基于先行开发经验）.md` 的 P0：写入链路自己抽取现行结论和取代关系，评测去掉金标写入，每臂跑 3 次。
