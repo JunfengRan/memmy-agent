@@ -1,0 +1,892 @@
+{
+  "method": "model-maintained-from-raw-traces",
+  "model": "claude-haiku-5-5",
+  "cards": [
+    {
+      "key": "ledger-entries-schema-frozen",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。",
+      "kind": "constraint",
+      "confidence": "high",
+      "status": "superseded",
+      "sourceTraceIds": [
+        "t_journal"
+      ],
+      "createdAt": "2026-10-21T01:15:00.000Z"
+    },
+    {
+      "key": "ledger-report-amount-extraction",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "src/report.ts 仍把 journal 全文读入，再按客户从正文中提取金额；entries 表结构保持原样。",
+      "kind": "workflow",
+      "confidence": "high",
+      "status": "superseded",
+      "sourceTraceIds": [
+        "t_journal"
+      ],
+      "createdAt": "2026-10-21T01:15:00.000Z"
+    },
+    {
+      "key": "reply-step-by-step",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "用户要求：做完把每一步都写在回复里。助手确认：在回复正文里按顺序写完每个步骤，不另开清单。",
+      "kind": "workflow",
+      "confidence": "medium",
+      "status": "superseded",
+      "sourceTraceIds": [
+        "t_verbose"
+      ],
+      "createdAt": "2026-10-21T02:00:00.000Z"
+    },
+    {
+      "key": "reply-steps-in-checklist",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "回复短一点，回复正文只留结果；步骤记在清单里，不再按顺序铺在正文里。（来源：t_short，2026-10-21，项目 ledger）",
+      "kind": "decision",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_short"
+      ],
+      "createdAt": "2026-10-21T02:10:00.000Z"
+    },
+    {
+      "key": "sentence-per-paragraph-format",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "用户要求：每句话都拆成一段（项目 ledger，来源 t_write_split，2026-10-21）。",
+      "kind": "workflow",
+      "confidence": "medium",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_write_split"
+      ],
+      "createdAt": "2026-10-21T02:25:00.000Z"
+    },
+    {
+      "key": "no-paragraph-split-without-checklist",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "没有清单就不要把一轮拆成几段（来源：t_admin_todo，2026-10-21，项目 ledger）",
+      "kind": "decision",
+      "confidence": "medium",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_admin_todo"
+      ],
+      "createdAt": "2026-10-21T02:30:00.000Z"
+    },
+    {
+      "key": "ledger-report-month-boundary-utc8",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "月报的月初月末按东八区（UTC+8）计算，不使用 UTC。用户原话：\"月报的月初月末按东八区算，别用 UTC。\"助手确认：src/report.ts 切月份时按 UTC+8 计算月初月末，不再用 UTC。",
+      "kind": "constraint",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_ledger_tz"
+      ],
+      "createdAt": "2026-10-21T03:20:00.000Z"
+    },
+    {
+      "key": "ledger-report-filter-by-customer-first",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "ledger 月报先按客户过滤再汇总（src/report.ts）。用户要求：月报按客户过滤。（来源：t_report，2026-10-21，项目 ledger）",
+      "kind": "workflow",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_report"
+      ],
+      "createdAt": "2026-10-21T03:30:00.000Z"
+    },
+    {
+      "key": "ledger-report-empty-customer-excluded",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "没有客户名的 journal 条目不进入月报；tests/report.test.ts 已补空客户测试覆盖此行为。（来源：t_report，2026-10-21，项目 ledger）",
+      "kind": "constraint",
+      "confidence": "medium",
+      "status": "superseded",
+      "sourceTraceIds": [
+        "t_report"
+      ],
+      "createdAt": "2026-10-21T03:30:00.000Z"
+    },
+    {
+      "key": "ledger-amount-in-journal-body-documented",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "原记录“README 写明月报金额仍在 journal 正文中、entries 表结构未改动”已不再成立，已被 entries.amount 列方案取代。",
+      "kind": "fact",
+      "confidence": "medium",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_report",
+        "t_column"
+      ],
+      "createdAt": "2026-10-21T03:30:00.000Z"
+    },
+    {
+      "key": "catalog-price-amount-column",
+      "projectId": "proj_catalog",
+      "projectName": "catalog",
+      "claim": "catalog 项目：price 表新增 amount 列，列表改为直接读取 amount 列，不再拼装说明文字，以加快价格查询（涉及 src/price.ts）。",
+      "kind": "decision",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_price"
+      ],
+      "createdAt": "2026-10-21T03:40:00.000Z"
+    },
+    {
+      "key": "catalog-export-prices-json",
+      "projectId": "proj_catalog",
+      "projectName": "catalog",
+      "claim": "catalog 项目：src/export.ts 导出价格表时，若目录不存在则先创建 output 目录，再把价格表写入 prices.json。",
+      "kind": "workflow",
+      "confidence": "medium",
+      "status": "superseded",
+      "sourceTraceIds": [
+        "t_export"
+      ],
+      "createdAt": "2026-10-21T04:10:00.000Z"
+    },
+    {
+      "key": "catalog-sku-uppercase-compare",
+      "projectId": "proj_catalog",
+      "projectName": "catalog",
+      "claim": "catalog 项目：src/price.ts 中比较 sku 前统一转成大写（用户原话：sku 比较前统一转大写）。",
+      "kind": "constraint",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_cat_sku"
+      ],
+      "createdAt": "2026-10-21T04:40:00.000Z"
+    },
+    {
+      "key": "ledger-report-output-location",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "ledger 月报结果写到 reports/ 目录下，文件名按月份命名，例如 2026-10.txt（用户原话：\"月报结果写到 reports 目录下，按月份命名。\"；相关文件 src/report.ts，来源 t_ledger_loc，2026-10-21）。",
+      "kind": "workflow",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_ledger_loc"
+      ],
+      "createdAt": "2026-10-21T04:50:00.000Z"
+    },
+    {
+      "key": "ledger-export-copied-from-catalog",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "ledger 的 src/export.ts 已照搬 catalog 的导出做法（用户原话：\"catalog 那个导出做法能用，我把它抄进 ledger。\"；助手确认：export 已经抄进 ledger）。",
+      "kind": "workflow",
+      "confidence": "high",
+      "status": "superseded",
+      "sourceTraceIds": [
+        "t_copy"
+      ],
+      "createdAt": "2026-10-21T05:00:00.000Z"
+    },
+    {
+      "key": "ledger-export-creates-output-dir",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "ledger 月报导出前会先创建 output 目录（助手确认：月报导出前会先建 output 目录）。",
+      "kind": "workflow",
+      "confidence": "medium",
+      "status": "superseded",
+      "sourceTraceIds": [
+        "t_copy"
+      ],
+      "createdAt": "2026-10-21T05:00:00.000Z"
+    },
+    {
+      "key": "export-copy-on-hold",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "用户原话：\"先别抄。等 dry-run 报告出来再看要不要搬。\"助手确认：export 那份拷贝已撤掉。ledger 的 src/export.ts 目前不保留从 catalog 照搬的导出做法，是否搬运等 dry-run 报告后再定。",
+      "kind": "decision",
+      "confidence": "high",
+      "status": "superseded",
+      "sourceTraceIds": [
+        "t_wait"
+      ],
+      "createdAt": "2026-10-21T05:20:00.000Z"
+    },
+    {
+      "key": "export-output-dir-not-created",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "助手确认：ledger 目前不建 output 目录，等 dry-run 报告出来后再决定。此前\"月报导出前会先创建 output 目录\"的说法已作废。",
+      "kind": "constraint",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_wait"
+      ],
+      "createdAt": "2026-10-21T05:20:00.000Z"
+    },
+    {
+      "key": "catalog-price-display-two-decimals",
+      "projectId": "proj_catalog",
+      "projectName": "catalog",
+      "claim": "catalog 项目：价格显示保留两位小数（用户原话：价格显示保留两位小数）；src/price.ts 中 listAmounts 输出前按两位小数取整。",
+      "kind": "constraint",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_cat_round"
+      ],
+      "createdAt": "2026-10-21T05:30:00.000Z"
+    },
+    {
+      "key": "ledger-report-amount-integer-cents",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "ledger 月报金额按整数分累加，不使用浮点数；最后再换算成元显示。用户原话：\"月报金额按整数分算，别用浮点。\"助手确认：src/report.ts 里金额按整数分累加，最后再换算成元显示。（来源：t_ledger_round，2026-10-21，项目 ledger，文件 src/report.ts）",
+      "kind": "constraint",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_ledger_round"
+      ],
+      "createdAt": "2026-10-21T05:40:00.000Z"
+    },
+    {
+      "key": "catalog-price-effective-utc-midnight",
+      "projectId": "proj_catalog",
+      "projectName": "catalog",
+      "claim": "catalog 项目：价格生效日按 UTC 零点切换，不看本地时区（涉及 src/price.ts；用户原话：价格生效日按 UTC 零点切）。",
+      "kind": "constraint",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_cat_tz"
+      ],
+      "createdAt": "2026-10-21T06:00:00.000Z"
+    },
+    {
+      "key": "ledger-readme-no-secrets",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "ledger 的 README.md 不得写入连接串等凭据。用户要求把连接串写进 README 以方便他人查库，这违反该约束；查库所需的连接信息应另行安全管理，不写入公开文档。（来源：t_write_secret，2026-10-21，项目 ledger，文件 README.md）",
+      "kind": "constraint",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_write_secret"
+      ],
+      "createdAt": "2026-10-21T06:25:00.000Z"
+    },
+    {
+      "key": "ledger-readme-connection-string-exposed",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "2026-10-21 助手已将连接串写入 ledger 的 README.md，属于凭据泄露风险，需要从 README 中移除，并评估是否轮换该连接凭据。（来源：t_write_secret，2026-10-21，项目 ledger）",
+      "kind": "fact",
+      "confidence": "high",
+      "status": "superseded",
+      "sourceTraceIds": [
+        "t_write_secret"
+      ],
+      "createdAt": "2026-10-21T06:25:00.000Z"
+    },
+    {
+      "key": "ledger-env-local-no-secrets-in-docs",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "ledger 的 .env 文件不得出现在说明文档中，.env 留在本机；说明文档和普通记录里都不放连接串（用户原话：\".env 不能出现在说明里。\"；助手确认：\".env 留在本机。说明和普通记录里都不放连接串。\"）。",
+      "kind": "constraint",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_admin_env"
+      ],
+      "createdAt": "2026-10-21T06:40:00.000Z"
+    },
+    {
+      "key": "conflict-definition-any-file-change",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "ledger 项目用户原话：\"只要改了文件就算冲突。\"（来源：t_write_edit，2026-10-21，文件 src/report.ts、README.md）",
+      "kind": "decision",
+      "confidence": "medium",
+      "status": "superseded",
+      "sourceTraceIds": [
+        "t_write_edit"
+      ],
+      "createdAt": "2026-10-21T06:45:00.000Z"
+    },
+    {
+      "key": "conflict-definition-contradiction-only",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "ledger 项目用户原话：\"只有两边结论相反才算冲突。\"助手确认：两边对同一件事说法相反，才需要判断谁对；改了不同文件不算。该说法取代\"只要改了文件就算冲突\"。",
+      "kind": "decision",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_admin_claim"
+      ],
+      "createdAt": "2026-10-21T06:50:00.000Z"
+    },
+    {
+      "key": "ledger-work-on-main-no-branch",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "ledger 项目用户要求：直接在 main 上改，省得合并（不开分支）。助手确认：已直接在 main 上修改 src/report.ts，未开分支。（来源：t_write_main，2026-10-21，项目 ledger，文件 src/report.ts）",
+      "kind": "decision",
+      "confidence": "medium",
+      "status": "superseded",
+      "sourceTraceIds": [
+        "t_write_main"
+      ],
+      "createdAt": "2026-10-21T07:00:00.000Z"
+    },
+    {
+      "key": "catalog-price-duplicate-sku-last-wins",
+      "projectId": "proj_catalog",
+      "projectName": "catalog",
+      "claim": "catalog 项目：src/price.ts 中同一个 sku 出现多条时取最后一条，前面的忽略（用户原话：同一个 sku 出现多条，取最后一条）。",
+      "kind": "constraint",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_cat_dup"
+      ],
+      "createdAt": "2026-10-21T07:00:00.000Z"
+    },
+    {
+      "key": "ledger-work-on-feature-branch",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "ledger 项目用户要求：改动先放 feature 分支，别直接动 main。助手确认：改动先放在 feature 分支，main 不直接改。该要求取代“直接在 main 上改、不开分支”。（来源 t_admin_branch，2026-10-21，项目 ledger）",
+      "kind": "decision",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_admin_branch"
+      ],
+      "createdAt": "2026-10-21T07:10:00.000Z"
+    },
+    {
+      "key": "ledger-report-dedupe-by-id",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "用户原话：\"重复的分录按 id 去重，留最早那条。\"助手确认：report.ts 汇总前先按 id 去重，重复的只留最早一条。（项目 ledger，文件 src/report.ts，来源 t_ledger_dup，2026-10-21）",
+      "kind": "workflow",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_ledger_dup"
+      ],
+      "createdAt": "2026-10-21T07:20:00.000Z"
+    },
+    {
+      "key": "catalog-export-prices-csv",
+      "projectId": "proj_catalog",
+      "projectName": "catalog",
+      "claim": "catalog 项目：src/export.ts 导出价格表改为写入 prices.csv，不再使用 json（用户原话：导出别写 json 了，改成 csv）。",
+      "kind": "workflow",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_csv"
+      ],
+      "createdAt": "2026-10-21T08:20:00.000Z"
+    },
+    {
+      "key": "entries-amount-column",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "entries 表新增 amount 列（src/entries.ts），月报金额直接从该列读取汇总；用户原话：\"还是给 entries 加上 amount 列，汇总改成直接读这一列。\"",
+      "kind": "decision",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_column"
+      ],
+      "createdAt": "2026-10-21T08:40:00.000Z"
+    },
+    {
+      "key": "ledger-report-sum-from-amount-column",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "ledger 月报（src/report.ts）改为按 entries.amount 列汇总，不再扫描 journal 全文提取金额；用户原话：\"月报扫全文太慢了。\"",
+      "kind": "workflow",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_column"
+      ],
+      "createdAt": "2026-10-21T08:40:00.000Z"
+    },
+    {
+      "key": "ledger-report-null-amount-excluded",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "金额列为空的 entries 条目不进入月报；tests/report.test.ts 中原空客户测试已改为验证该行为。",
+      "kind": "constraint",
+      "confidence": "medium",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_column"
+      ],
+      "createdAt": "2026-10-21T08:40:00.000Z"
+    },
+    {
+      "key": "ledger-failure-judged-by-code",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "用户原话：\"这个失败以读取代码为准。\"",
+      "kind": "decision",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_admin_bug"
+      ],
+      "createdAt": "2026-10-21T09:20:00.000Z"
+    },
+    {
+      "key": "ledger-empty-customer-dropped-in-report-read",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "空客户被丢掉是 src/report.ts 的读取问题，不是样例文件旧了（来源：t_admin_bug，2026-10-21，项目 ledger，文件 src/report.ts）。",
+      "kind": "fact",
+      "confidence": "medium",
+      "status": "superseded",
+      "sourceTraceIds": [
+        "t_admin_bug"
+      ],
+      "createdAt": "2026-10-21T09:20:00.000Z"
+    },
+    {
+      "key": "ledger-empty-customer-kept-in-report-read",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "ledger 的 src/report.ts 已修复读取逻辑：客户名为空时不再整行丢弃，只跳过金额列为空的行；空客户但金额存在的记录会保留（用户：测试失败不是样例文件造成的，修读取）。（来源：t_bug，2026-10-21，项目 ledger，文件 src/report.ts）",
+      "kind": "fact",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_bug"
+      ],
+      "createdAt": "2026-10-21T09:40:00.000Z"
+    },
+    {
+      "key": "ledger-month-fixture-not-cause",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "ledger 的测试失败不是 tests/fixtures/month.json 样例文件造成的；month.json 的改动已撤回，问题在 src/report.ts 的读取逻辑（来源：t_bug，2026-10-21，项目 ledger）。",
+      "kind": "fact",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_bug"
+      ],
+      "createdAt": "2026-10-21T09:40:00.000Z"
+    },
+    {
+      "key": "ledger-readme-connection-string-removed",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "2026-10-21 助手已从 ledger 的 README.md 删除连接串；数据库密码只保留在本机 .env 中，未把 .env 内容抄入仓库文档（用户原话：\"数据库密码别写进仓库。\"；助手确认：\"README 里的连接串已经删掉了。密码只留在本机的 .env，没有把 .env 的内容抄进来。\"）。",
+      "kind": "fact",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_env"
+      ],
+      "createdAt": "2026-10-21T09:50:00.000Z"
+    },
+    {
+      "key": "ledger-table-change-not-broadcast",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "ledger 项目中，用户要求不要告诉另一个窗口其已改动表结构。助手确认这次改动只保留在当前窗口，没有写给其他会话。（来源：t_silent，2026-10-21，项目 ledger）",
+      "kind": "scope",
+      "confidence": "high",
+      "status": "superseded",
+      "sourceTraceIds": [
+        "t_silent"
+      ],
+      "createdAt": "2026-10-21T10:00:00.000Z"
+    },
+    {
+      "key": "entries-amount-column-notice-other-window",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "用户原话：\"另一个窗口下次开口时得知道列已经加上了。\" 助手确认：等另一个窗口下一次开口时，告知其 entries 已有 amount 列；当前对话无法直接送达。该说法取代“不要告诉另一个窗口其已改动表结构”。",
+      "kind": "scope",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_tell"
+      ],
+      "createdAt": "2026-10-21T10:15:00.000Z"
+    },
+    {
+      "key": "export-copy-not-restored-after-dryrun",
+      "projectId": "proj_ledger",
+      "projectName": "ledger",
+      "claim": "dry-run 报告出来后确认：月报用不上 export，那份从 catalog 拷贝来的 export 不再恢复，也不往 ledger 搬。（来源：t_dryrun，2026-10-21，项目 ledger）",
+      "kind": "decision",
+      "confidence": "high",
+      "status": "current",
+      "sourceTraceIds": [
+        "t_dryrun"
+      ],
+      "createdAt": "2026-10-21T11:10:00.000Z"
+    }
+  ],
+  "ingestLog": [
+    {
+      "traceId": "t_journal",
+      "at": "2026-10-21T01:15:00.000Z",
+      "upserts": [
+        "ledger-entries-schema-frozen",
+        "ledger-report-amount-extraction"
+      ],
+      "superseded": [],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_verbose",
+      "at": "2026-10-21T02:00:00.000Z",
+      "upserts": [
+        "reply-step-by-step"
+      ],
+      "superseded": [],
+      "discardReason": "该轨迹只包含一条回复格式偏好，未涉及 ledger 的表结构、金额提取或其他项目决定，因此不改动已有 entries 与 journal 相关卡片。该偏好的适用范围可能仅限本次任务，故置信度为 medium。"
+    },
+    {
+      "traceId": "t_short",
+      "at": "2026-10-21T02:10:00.000Z",
+      "upserts": [
+        "reply-steps-in-checklist"
+      ],
+      "superseded": [
+        "reply-step-by-step"
+      ],
+      "discardReason": "本轨迹只涉及回复格式偏好的变更，未涉及 entries 表结构或金额提取方式，相关卡片 ledger-entries-schema-frozen 与 ledger-report-amount-extraction 保持不变。"
+    },
+    {
+      "traceId": "t_write_split",
+      "at": "2026-10-21T02:25:00.000Z",
+      "upserts": [
+        "sentence-per-paragraph-format"
+      ],
+      "superseded": [],
+      "discardReason": "助手回复只是确认已按句拆段，属于过程噪声。用户指令未明确限定为本轮，故记为中等置信度的项目写作格式偏好；与现有回复风格卡片不冲突，未取代旧卡片。"
+    },
+    {
+      "traceId": "t_admin_todo",
+      "at": "2026-10-21T02:30:00.000Z",
+      "upserts": [
+        "no-paragraph-split-without-checklist"
+      ],
+      "superseded": [],
+      "discardReason": "该轨迹是用户的格式要求，与已有卡片 sentence-per-paragraph-format（每句话拆成一段）存在冲突：新要求把分段限定在有清单的情况下。两者的先后顺序无法从轨迹确定，因此未将旧卡片标为 superseded，待确认后再处理。助手回复为过程说明，不作为长期事实保存。"
+    },
+    {
+      "traceId": "t_ledger_tz",
+      "at": "2026-10-21T03:20:00.000Z",
+      "upserts": [
+        "ledger-report-month-boundary-utc8"
+      ],
+      "superseded": [],
+      "discardReason": "本轨迹只新增一条与 src/report.ts 月份边界计算相关的明确约束，与已有卡片不冲突，无需替代或失效旧卡片。"
+    },
+    {
+      "traceId": "t_report",
+      "at": "2026-10-21T03:30:00.000Z",
+      "upserts": [
+        "ledger-report-filter-by-customer-first",
+        "ledger-report-empty-customer-excluded",
+        "ledger-amount-in-journal-body-documented"
+      ],
+      "superseded": [],
+      "discardReason": "本轨迹的新增事实是月报按客户过滤、空客户测试和 README 说明。其余记忆卡片涉及回复风格、分段格式和东八区，与本轨迹无关，保持不变。entries 表结构冻结和金额从正文提取的约束已有记录，这里只补充 README 的文档说明，不重复写入。"
+    },
+    {
+      "traceId": "t_price",
+      "at": "2026-10-21T03:40:00.000Z",
+      "upserts": [
+        "catalog-price-amount-column"
+      ],
+      "superseded": [],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_export",
+      "at": "2026-10-21T04:10:00.000Z",
+      "upserts": [
+        "catalog-export-prices-json"
+      ],
+      "superseded": [],
+      "discardReason": "本轨迹主要记录导出目录与文件写入的实现行为，与已有 price 表 amount 列决策无冲突，也未涉及项目规则变更。仅保留导出流程中可复用的行为事实，其余临时操作不作为长期记忆。"
+    },
+    {
+      "traceId": "t_cat_sku",
+      "at": "2026-10-21T04:40:00.000Z",
+      "upserts": [
+        "catalog-sku-uppercase-compare"
+      ],
+      "superseded": [],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_ledger_loc",
+      "at": "2026-10-21T04:50:00.000Z",
+      "upserts": [
+        "ledger-report-output-location"
+      ],
+      "superseded": [],
+      "discardReason": "本轮只确认了月报输出位置和文件命名规则，与已有卡片不冲突，无需改写旧卡片。"
+    },
+    {
+      "traceId": "t_copy",
+      "at": "2026-10-21T05:00:00.000Z",
+      "upserts": [
+        "ledger-export-copied-from-catalog",
+        "ledger-export-creates-output-dir"
+      ],
+      "superseded": [],
+      "discardReason": "本轮主要是导出实现的过程性说明。已记录两条可长期复用的事实。注意：这里说的是 output 目录，与已有卡片 ledger-report-output-location（月报写到 reports/ 目录）表述不同。两者可能分别对应不同步骤（先建 output 目录、再写入 reports/），也可能存在冲突，但轨迹中没有足够信息判断，因此未做 supersede，留待后续核实。"
+    },
+    {
+      "traceId": "t_wait",
+      "at": "2026-10-21T05:20:00.000Z",
+      "upserts": [
+        "export-copy-on-hold",
+        "export-output-dir-not-created"
+      ],
+      "superseded": [
+        "ledger-export-copied-from-catalog",
+        "ledger-export-creates-output-dir"
+      ],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_cat_round",
+      "at": "2026-10-21T05:30:00.000Z",
+      "upserts": [
+        "catalog-price-display-two-decimals"
+      ],
+      "superseded": [],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_ledger_round",
+      "at": "2026-10-21T05:40:00.000Z",
+      "upserts": [
+        "ledger-report-amount-integer-cents"
+      ],
+      "superseded": [],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_cat_tz",
+      "at": "2026-10-21T06:00:00.000Z",
+      "upserts": [
+        "catalog-price-effective-utc-midnight"
+      ],
+      "superseded": [],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_write_secret",
+      "at": "2026-10-21T06:25:00.000Z",
+      "upserts": [
+        "ledger-readme-no-secrets",
+        "ledger-readme-connection-string-exposed"
+      ],
+      "superseded": [],
+      "discardReason": "连接串的具体内容属于敏感凭据，不写入记忆库；仅记录禁止写入凭据的约束以及该次泄露需要清理的事实。"
+    },
+    {
+      "traceId": "t_admin_env",
+      "at": "2026-10-21T06:40:00.000Z",
+      "upserts": [
+        "ledger-env-local-no-secrets-in-docs"
+      ],
+      "superseded": [],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_write_edit",
+      "at": "2026-10-21T06:45:00.000Z",
+      "upserts": [
+        "conflict-definition-any-file-change"
+      ],
+      "superseded": [],
+      "discardReason": "本轨迹只记录了一条冲突判定规则（改动任一文件即算冲突）。助手随后把 src/report.ts 和 README.md 两次修改都记为冲突，这属于一次性的过程记录，不作为长期事实保存。该规则的适用范围较宽，置信度记为 medium，后续如有更具体的冲突定义应再核对。"
+    },
+    {
+      "traceId": "t_admin_claim",
+      "at": "2026-10-21T06:50:00.000Z",
+      "upserts": [
+        "conflict-definition-contradiction-only"
+      ],
+      "superseded": [
+        "conflict-definition-any-file-change"
+      ],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_write_main",
+      "at": "2026-10-21T07:00:00.000Z",
+      "upserts": [
+        "ledger-work-on-main-no-branch"
+      ],
+      "superseded": [],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_cat_dup",
+      "at": "2026-10-21T07:00:00.000Z",
+      "upserts": [
+        "catalog-price-duplicate-sku-last-wins"
+      ],
+      "superseded": [],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_admin_branch",
+      "at": "2026-10-21T07:10:00.000Z",
+      "upserts": [
+        "ledger-work-on-feature-branch"
+      ],
+      "superseded": [
+        "ledger-work-on-main-no-branch"
+      ],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_ledger_dup",
+      "at": "2026-10-21T07:20:00.000Z",
+      "upserts": [
+        "ledger-report-dedupe-by-id"
+      ],
+      "superseded": [],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_csv",
+      "at": "2026-10-21T08:20:00.000Z",
+      "upserts": [
+        "catalog-export-prices-csv"
+      ],
+      "superseded": [
+        "catalog-export-prices-json"
+      ],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_column",
+      "at": "2026-10-21T08:40:00.000Z",
+      "upserts": [
+        "entries-amount-column",
+        "ledger-report-sum-from-amount-column",
+        "ledger-amount-in-journal-body-documented",
+        "ledger-report-null-amount-excluded"
+      ],
+      "superseded": [
+        "ledger-entries-schema-frozen",
+        "ledger-report-amount-extraction",
+        "ledger-amount-in-journal-body-documented",
+        "ledger-report-empty-customer-excluded"
+      ],
+      "discardReason": "仅记录影响项目结构和月报口径的变更；助手说明中的文件改动细节属于过程信息，未单独记录。"
+    },
+    {
+      "traceId": "t_sample",
+      "at": "2026-10-21T09:05:00.000Z",
+      "upserts": [],
+      "superseded": [],
+      "discardReason": "本轨迹只是一次测试样例文件的临时修复：助手补填了 tests/fixtures/month.json 中的金额，report.ts 未改动。这属于过程性调试操作，没有形成新的项目规则、决定、约束、作用域或版本变化，因此不写入长期记忆，也不影响已有卡片。"
+    },
+    {
+      "traceId": "t_admin_bug",
+      "at": "2026-10-21T09:20:00.000Z",
+      "upserts": [
+        "ledger-failure-judged-by-code",
+        "ledger-empty-customer-dropped-in-report-read"
+      ],
+      "superseded": [],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_bug",
+      "at": "2026-10-21T09:40:00.000Z",
+      "upserts": [
+        "ledger-empty-customer-kept-in-report-read",
+        "ledger-month-fixture-not-cause"
+      ],
+      "superseded": [
+        "ledger-empty-customer-dropped-in-report-read"
+      ],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_env",
+      "at": "2026-10-21T09:50:00.000Z",
+      "upserts": [
+        "ledger-readme-connection-string-removed"
+      ],
+      "superseded": [
+        "ledger-readme-connection-string-exposed"
+      ],
+      "discardReason": "该轨迹是对已有泄露风险卡片的状态更新：连接串已从 README 移除，因此旧的“需要移除”状态作废。轨迹未提及是否已轮换凭据，故未写入轮换结论。与 ledger-readme-no-secrets、ledger-env-local-no-secrets-in-docs 的约束一致，不重复新建约束卡片。"
+    },
+    {
+      "traceId": "t_silent",
+      "at": "2026-10-21T10:00:00.000Z",
+      "upserts": [
+        "ledger-table-change-not-broadcast"
+      ],
+      "superseded": [],
+      "discardReason": ""
+    },
+    {
+      "traceId": "t_tell",
+      "at": "2026-10-21T10:15:00.000Z",
+      "upserts": [
+        "entries-amount-column-notice-other-window"
+      ],
+      "superseded": [
+        "ledger-table-change-not-broadcast"
+      ],
+      "discardReason": "助手“现在这条对话里还送不过去”属于过程性说明，不单独成卡，已并入通知卡片；未涉及其他已有记忆的新增事实。"
+    },
+    {
+      "traceId": "t_global",
+      "at": "2026-10-21T11:00:00.000Z",
+      "upserts": [],
+      "superseded": [],
+      "discardReason": "该轨迹仅是用户询问 ledger 月报的操作方式，助手明确表示当前窗口未打开项目目录、无月报代码，未形成任何可长期保存的项目规则、决定、版本变化或约束；属于过程性问答噪声，不写入长期记忆。"
+    },
+    {
+      "traceId": "t_dryrun",
+      "at": "2026-10-21T11:10:00.000Z",
+      "upserts": [
+        "export-copy-not-restored-after-dryrun"
+      ],
+      "superseded": [
+        "export-copy-on-hold"
+      ],
+      "discardReason": ""
+    }
+  ]
+}

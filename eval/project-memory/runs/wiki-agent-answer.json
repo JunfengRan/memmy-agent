@@ -1,0 +1,1109 @@
+{
+  "arm": "wiki-agent",
+  "method": "memmy-model-answer",
+  "model": "claude-haiku-5-5",
+  "questionCount": 29,
+  "excluded": [
+    "q21"
+  ],
+  "passed": 25,
+  "accuracy": 0.8620689655172413,
+  "questions": [
+    {
+      "id": "q03",
+      "kind": "plain",
+      "question": "空客户的测试现在是怎么写的？",
+      "goldAnswer": "没有客户名时这笔不进月报。",
+      "mustInclude": [
+        "没有客户名时这笔不进月报"
+      ],
+      "mustNotInclude": [],
+      "context": "金额列为空的 entries 条目不进入月报；tests/report.test.ts 中原空客户测试已改为验证该行为。 [t_column]\nledger 的 src/report.ts 已修复读取逻辑：客户名为空时不再整行丢弃，只跳过金额列为空的行；空客户但金额存在的记录会保留（用户：测试失败不是样例文件造成的，修读取）。（来源：t_bug，2026-10-21，项目 ledger，文件 src/report.ts） [t_bug]",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\n金额列为空的 entries 条目不进入月报；tests/report.test.ts 中原空客户测试已改为验证该行为。 [t_column]\nledger 的 src/report.ts 已修复读取逻辑：客户名为空时不再整行丢弃，只跳过金额列为空的行；空客户但金额存在的记录会保留（用户：测试失败不是样例文件造成的，修读取）。（来源：t_bug，2026-10-21，项目 ledger，文件 src/report.ts） [t_bug]\n\n问题：空客户的测试现在是怎么写的？"
+        }
+      ],
+      "answer": "空客户的测试现在验证的是**金额列为空的行不进入月报**。原来针对空客户的测试已经改成这个检查，不再按\"空客户整行丢弃\"来写。\n\n另外，`src/report.ts` 的读取逻辑已经修过：空客户但金额存在的记录会保留。这一点记忆里没有对应的测试描述，我也无法确认测试里是否覆盖了它。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"空客户的测试现在是怎么写的？\",\"mustInclude\":[\"没有客户名时这笔不进月报\"],\"mustNotInclude\":[],\"answer\":\"空客户的测试现在验证的是**金额列为空的行不进入月报**。原来针对空客户的测试已经改成这个检查，不再按\\\"空客户整行丢弃\\\"来写。\\n\\n另外，`src/report.ts` 的读取逻辑已经修过：空客户但金额存在的记录会保留。这一点记忆里没有对应的测试描述，我也无法确认测试里是否覆盖了它。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":false,\"errorType\":\"other\",\"reason\":\"回答把现行规则说成\\\"金额列为空的行不进入月报\\\"，没有体现\\\"没有客户名时这笔不进月报\\\"这一要点，还额外断言空客户但金额存在的记录会保留，与要求的规则不符。\"}",
+      "passed": false,
+      "errorType": "other",
+      "reason": "回答把现行规则说成\"金额列为空的行不进入月报\"，没有体现\"没有客户名时这笔不进月报\"这一要点，还额外断言空客户但金额存在的记录会保留，与要求的规则不符。"
+    },
+    {
+      "id": "q01",
+      "kind": "cross-project",
+      "question": "ledger 月报的金额现在是从哪里取的？",
+      "goldAnswer": "entries 没有加列，金额还在 journal 正文里，月报读全文再按客户挑。",
+      "mustInclude": [
+        "journal 正文"
+      ],
+      "mustNotInclude": [
+        "amount 列"
+      ],
+      "context": "entries 表新增 amount 列（src/entries.ts），月报金额直接从该列读取汇总；用户原话：\"还是给 entries 加上 amount 列，汇总改成直接读这一列。\" [t_column]\nledger 月报（src/report.ts）改为按 entries.amount 列汇总，不再扫描 journal 全文提取金额；用户原话：\"月报扫全文太慢了。\" [t_column]\n金额列为空的 entries 条目不进入月报；tests/report.test.ts 中原空客户测试已改为验证该行为。 [t_column]\n\n# ledger 项目 Wiki\n\nledger 是一个记账项目，核心代码包括 `src/report.ts`（月报）、`src/entries.ts`（entries 表）和 `tests/report.test.ts`（月报测试）。本页记录当前有效的约定、决策和状态，并标注已被取代的旧说法。\n\n- 当前决定：`catalog` 来源的 export 拷贝不再恢复，也不搬入 ledger。（t_dryrun）\n- 月报不需要 export。（t_dryrun）\n- 不创建 `output` 目录。此前“月报导出前会先建 output 目录”的说法已作废。（t_wait、t_dryrun）",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\nentries 表新增 amount 列（src/entries.ts），月报金额直接从该列读取汇总；用户原话：\"还是给 entries 加上 amount 列，汇总改成直接读这一列。\" [t_column]\nledger 月报（src/report.ts）改为按 entries.amount 列汇总，不再扫描 journal 全文提取金额；用户原话：\"月报扫全文太慢了。\" [t_column]\n金额列为空的 entries 条目不进入月报；tests/report.test.ts 中原空客户测试已改为验证该行为。 [t_column]\n\n# ledger 项目 Wiki\n\nledger 是一个记账项目，核心代码包括 `src/report.ts`（月报）、`src/entries.ts`（entries 表）和 `tests/report.test.ts`（月报测试）。本页记录当前有效的约定、决策和状态，并标注已被取代的旧说法。\n\n- 当前决定：`catalog` 来源的 export 拷贝不再恢复，也不搬入 ledger。（t_dryrun）\n- 月报不需要 export。（t_dryrun）\n- 不创建 `output` 目录。此前“月报导出前会先建 output 目录”的说法已作废。（t_wait、t_dryrun）\n\n问题：ledger 月报的金额现在是从哪里取的？"
+        }
+      ],
+      "answer": "ledger 月报的金额现在直接从 `entries` 表的 `amount` 列读取，由 `src/report.ts` 按该列汇总。它不再扫描 journal 全文提取金额。金额列为空的条目不会进入月报。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"ledger 月报的金额现在是从哪里取的？\",\"mustInclude\":[\"journal 正文\"],\"mustNotInclude\":[\"amount 列\"],\"answer\":\"ledger 月报的金额现在直接从 `entries` 表的 `amount` 列读取，由 `src/report.ts` 按该列汇总。它不再扫描 journal 全文提取金额。金额列为空的条目不会进入月报。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":false,\"errorType\":\"superseded\",\"reason\":\"回答把已过时的说法当成现行做法：称金额现在从 entries.amount 列读取，并明确否定了从 journal 正文提取，而现行要点要求从 journal 正文取金额，amount 列是陷阱说法。\"}",
+      "passed": false,
+      "errorType": "superseded",
+      "reason": "回答把已过时的说法当成现行做法：称金额现在从 entries.amount 列读取，并明确否定了从 journal 正文提取，而现行要点要求从 journal 正文取金额，amount 列是陷阱说法。"
+    },
+    {
+      "id": "q02",
+      "kind": "stale",
+      "question": "ledger 月报的金额现在是从哪里取的？",
+      "goldAnswer": "entries 加了 amount 列，月报按这列汇总，不再扫描 journal 全文。",
+      "mustInclude": [
+        "不再扫描 journal 全文"
+      ],
+      "mustNotInclude": [
+        "从正文里挑出来"
+      ],
+      "context": "entries 表新增 amount 列（src/entries.ts），月报金额直接从该列读取汇总；用户原话：\"还是给 entries 加上 amount 列，汇总改成直接读这一列。\" [t_column]\nledger 月报（src/report.ts）改为按 entries.amount 列汇总，不再扫描 journal 全文提取金额；用户原话：\"月报扫全文太慢了。\" [t_column]\n金额列为空的 entries 条目不进入月报；tests/report.test.ts 中原空客户测试已改为验证该行为。 [t_column]\n\n# ledger 项目 Wiki\n\nledger 是一个记账项目，核心代码包括 `src/report.ts`（月报）、`src/entries.ts`（entries 表）和 `tests/report.test.ts`（月报测试）。本页记录当前有效的约定、决策和状态，并标注已被取代的旧说法。\n\n- 当前决定：`catalog` 来源的 export 拷贝不再恢复，也不搬入 ledger。（t_dryrun）\n- 月报不需要 export。（t_dryrun）\n- 不创建 `output` 目录。此前“月报导出前会先建 output 目录”的说法已作废。（t_wait、t_dryrun）",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\nentries 表新增 amount 列（src/entries.ts），月报金额直接从该列读取汇总；用户原话：\"还是给 entries 加上 amount 列，汇总改成直接读这一列。\" [t_column]\nledger 月报（src/report.ts）改为按 entries.amount 列汇总，不再扫描 journal 全文提取金额；用户原话：\"月报扫全文太慢了。\" [t_column]\n金额列为空的 entries 条目不进入月报；tests/report.test.ts 中原空客户测试已改为验证该行为。 [t_column]\n\n# ledger 项目 Wiki\n\nledger 是一个记账项目，核心代码包括 `src/report.ts`（月报）、`src/entries.ts`（entries 表）和 `tests/report.test.ts`（月报测试）。本页记录当前有效的约定、决策和状态，并标注已被取代的旧说法。\n\n- 当前决定：`catalog` 来源的 export 拷贝不再恢复，也不搬入 ledger。（t_dryrun）\n- 月报不需要 export。（t_dryrun）\n- 不创建 `output` 目录。此前“月报导出前会先建 output 目录”的说法已作废。（t_wait、t_dryrun）\n\n问题：ledger 月报的金额现在是从哪里取的？"
+        }
+      ],
+      "answer": "ledger 月报的金额现在直接从 `entries` 表的 `amount` 列读取并汇总，位置在 `src/entries.ts` 中新增的这一列。`src/report.ts` 不再扫描 journal 全文提取金额。\n\n金额列为空的条目不会进入月报，`tests/report.test.ts` 已据此调整测试。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"ledger 月报的金额现在是从哪里取的？\",\"mustInclude\":[\"不再扫描 journal 全文\"],\"mustNotInclude\":[\"从正文里挑出来\"],\"answer\":\"ledger 月报的金额现在直接从 `entries` 表的 `amount` 列读取并汇总，位置在 `src/entries.ts` 中新增的这一列。`src/report.ts` 不再扫描 journal 全文提取金额。\\n\\n金额列为空的条目不会进入月报，`tests/report.test.ts` 已据此调整测试。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答包含必需要点“不再扫描 journal 全文”，未出现禁止说法“从正文里挑出来”，并给出现行做法：从 entries.amount 列读取。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答包含必需要点“不再扫描 journal 全文”，未出现禁止说法“从正文里挑出来”，并给出现行做法：从 entries.amount 列读取。"
+    },
+    {
+      "id": "q04",
+      "kind": "stale",
+      "question": "空客户的测试现在是怎么写的？",
+      "goldAnswer": "空客户但金额还在的会留下，只跳过金额列为空的行。",
+      "mustInclude": [
+        "空客户但金额还在的会留下"
+      ],
+      "mustNotInclude": [
+        "没有客户名时这笔不进月报"
+      ],
+      "context": "金额列为空的 entries 条目不进入月报；tests/report.test.ts 中原空客户测试已改为验证该行为。 [t_column]\nledger 的 src/report.ts 已修复读取逻辑：客户名为空时不再整行丢弃，只跳过金额列为空的行；空客户但金额存在的记录会保留（用户：测试失败不是样例文件造成的，修读取）。（来源：t_bug，2026-10-21，项目 ledger，文件 src/report.ts） [t_bug]",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\n金额列为空的 entries 条目不进入月报；tests/report.test.ts 中原空客户测试已改为验证该行为。 [t_column]\nledger 的 src/report.ts 已修复读取逻辑：客户名为空时不再整行丢弃，只跳过金额列为空的行；空客户但金额存在的记录会保留（用户：测试失败不是样例文件造成的，修读取）。（来源：t_bug，2026-10-21，项目 ledger，文件 src/report.ts） [t_bug]\n\n问题：空客户的测试现在是怎么写的？"
+        }
+      ],
+      "answer": "原来针对空客户的测试已经改了。现在它验证的是：**金额列为空的条目不进入月报**。\n\n另外，`src/report.ts` 的读取逻辑后来也改了：客户名为空时不再整行丢弃，只跳过金额为空的行。所以客户名为空但金额存在的记录会被保留。这和测试的现行断言是一致的。\n\n这些信息来自记忆，我没有直接查看 `tests/report.test.ts` 的当前内容。如果需要确认具体的断言写法，可以打开该文件核对。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"空客户的测试现在是怎么写的？\",\"mustInclude\":[\"空客户但金额还在的会留下\"],\"mustNotInclude\":[\"没有客户名时这笔不进月报\"],\"answer\":\"原来针对空客户的测试已经改了。现在它验证的是：**金额列为空的条目不进入月报**。\\n\\n另外，`src/report.ts` 的读取逻辑后来也改了：客户名为空时不再整行丢弃，只跳过金额为空的行。所以客户名为空但金额存在的记录会被保留。这和测试的现行断言是一致的。\\n\\n这些信息来自记忆，我没有直接查看 `tests/report.test.ts` 的当前内容。如果需要确认具体的断言写法，可以打开该文件核对。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答明确说明客户名为空但金额存在的记录会保留，覆盖了现行要点，且没有把“没有客户名时不进月报”当作现行规则。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确说明客户名为空但金额存在的记录会保留，覆盖了现行要点，且没有把“没有客户名时不进月报”当作现行规则。"
+    },
+    {
+      "id": "q05",
+      "kind": "cross-project",
+      "question": "ledger 月报里的金额是怎么算的，精度上有什么要求？",
+      "goldAnswer": "金额按整数分累加，最后再换算成元显示。",
+      "mustInclude": [
+        "整数分"
+      ],
+      "mustNotInclude": [
+        "两位小数"
+      ],
+      "context": "ledger 月报金额按整数分累加，不使用浮点数；最后再换算成元显示。用户原话：\"月报金额按整数分算，别用浮点。\"助手确认：src/report.ts 里金额按整数分累加，最后再换算成元显示。（来源：t_ledger_round，2026-10-21，项目 ledger，文件 src/report.ts） [t_ledger_round]\nentries 表新增 amount 列（src/entries.ts），月报金额直接从该列读取汇总；用户原话：\"还是给 entries 加上 amount 列，汇总改成直接读这一列。\" [t_column]\nledger 月报（src/report.ts）改为按 entries.amount 列汇总，不再扫描 journal 全文提取金额；用户原话：\"月报扫全文太慢了。\" [t_column]\n金额列为空的 entries 条目不进入月报；tests/report.test.ts 中原空客户测试已改为验证该行为。 [t_column]\n\n# ledger 项目 Wiki\n\nledger 是一个记账项目，核心代码包括 `src/report.ts`（月报）、`src/entries.ts`（entries 表）和 `tests/report.test.ts`（月报测试）。本页记录当前有效的约定、决策和状态，并标注已被取代的旧说法。\n\n- 当前决定：`catalog` 来源的 export 拷贝不再恢复，也不搬入 ledger。（t_dryrun）\n- 月报不需要 export。（t_dryrun）\n- 不创建 `output` 目录。此前“月报导出前会先建 output 目录”的说法已作废。（t_wait、t_dryrun）",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\nledger 月报金额按整数分累加，不使用浮点数；最后再换算成元显示。用户原话：\"月报金额按整数分算，别用浮点。\"助手确认：src/report.ts 里金额按整数分累加，最后再换算成元显示。（来源：t_ledger_round，2026-10-21，项目 ledger，文件 src/report.ts） [t_ledger_round]\nentries 表新增 amount 列（src/entries.ts），月报金额直接从该列读取汇总；用户原话：\"还是给 entries 加上 amount 列，汇总改成直接读这一列。\" [t_column]\nledger 月报（src/report.ts）改为按 entries.amount 列汇总，不再扫描 journal 全文提取金额；用户原话：\"月报扫全文太慢了。\" [t_column]\n金额列为空的 entries 条目不进入月报；tests/report.test.ts 中原空客户测试已改为验证该行为。 [t_column]\n\n# ledger 项目 Wiki\n\nledger 是一个记账项目，核心代码包括 `src/report.ts`（月报）、`src/entries.ts`（entries 表）和 `tests/report.test.ts`（月报测试）。本页记录当前有效的约定、决策和状态，并标注已被取代的旧说法。\n\n- 当前决定：`catalog` 来源的 export 拷贝不再恢复，也不搬入 ledger。（t_dryrun）\n- 月报不需要 export。（t_dryrun）\n- 不创建 `output` 目录。此前“月报导出前会先建 output 目录”的说法已作废。（t_wait、t_dryrun）\n\n问题：ledger 月报里的金额是怎么算的，精度上有什么要求？"
+        }
+      ],
+      "answer": "ledger 月报的金额按**整数分**累加，不用浮点数，最后再换算成元显示。这是 `src/report.ts` 里的约定。\n\n具体流程是：\n\n- 金额从 `entries` 表新增的 `amount` 列（`src/entries.ts`）直接读取汇总，不再扫描 journal 全文提取金额。\n- 金额列为空的 entries 条目不计入月报。\n\n记忆里没有写明 `amount` 列本身的数据类型，所以我无法确认它在存储层是否就是整数分。精度要求是按整数分累加、最后再换算成元。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"ledger 月报里的金额是怎么算的，精度上有什么要求？\",\"mustInclude\":[\"整数分\"],\"mustNotInclude\":[\"两位小数\"],\"answer\":\"ledger 月报的金额按**整数分**累加，不用浮点数，最后再换算成元显示。这是 `src/report.ts` 里的约定。\\n\\n具体流程是：\\n\\n- 金额从 `entries` 表新增的 `amount` 列（`src/entries.ts`）直接读取汇总，不再扫描 journal 全文提取金额。\\n- 金额列为空的 entries 条目不计入月报。\\n\\n记忆里没有写明 `amount` 列本身的数据类型，所以我无法确认它在存储层是否就是整数分。精度要求是按整数分累加、最后再换算成元。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答明确给出按整数分累加的现行要点，未出现“两位小数”等陷阱说法。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确给出按整数分累加的现行要点，未出现“两位小数”等陷阱说法。"
+    },
+    {
+      "id": "q06",
+      "kind": "cross-project",
+      "question": "价格列表里的金额怎么取整？",
+      "goldAnswer": "输出前按两位小数取整。",
+      "mustInclude": [
+        "两位小数"
+      ],
+      "mustNotInclude": [
+        "整数分"
+      ],
+      "context": "catalog 项目：价格显示保留两位小数（用户原话：价格显示保留两位小数）；src/price.ts 中 listAmounts 输出前按两位小数取整。 [t_cat_round]",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\ncatalog 项目：价格显示保留两位小数（用户原话：价格显示保留两位小数）；src/price.ts 中 listAmounts 输出前按两位小数取整。 [t_cat_round]\n\n问题：价格列表里的金额怎么取整？"
+        }
+      ],
+      "answer": "根据记忆，catalog 项目的价格显示保留两位小数。具体实现上，src/price.ts 里的 listAmounts 在输出前按两位小数取整。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"价格列表里的金额怎么取整？\",\"mustInclude\":[\"两位小数\"],\"mustNotInclude\":[\"整数分\"],\"answer\":\"根据记忆，catalog 项目的价格显示保留两位小数。具体实现上，src/price.ts 里的 listAmounts 在输出前按两位小数取整。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答包含现行要点“两位小数”，未出现陷阱说法“整数分”。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答包含现行要点“两位小数”，未出现陷阱说法“整数分”。"
+    },
+    {
+      "id": "q07",
+      "kind": "stale",
+      "question": "catalog 导出的价格表现在是什么格式？",
+      "goldAnswer": "导出的是 csv，写成 prices.csv。",
+      "mustInclude": [
+        "prices.csv"
+      ],
+      "mustNotInclude": [
+        "写成 prices.json"
+      ],
+      "context": "catalog 项目：src/export.ts 导出价格表改为写入 prices.csv，不再使用 json（用户原话：导出别写 json 了，改成 csv）。 [t_csv]\n\n# catalog 项目 Wiki\n\n本 Wiki 记录 catalog 项目中价格（price）与导出（export）相关的当前做法、约束和版本变化。信息来自项目工作轨迹，每条结论标注了来源轨迹 ID。",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\ncatalog 项目：src/export.ts 导出价格表改为写入 prices.csv，不再使用 json（用户原话：导出别写 json 了，改成 csv）。 [t_csv]\n\n# catalog 项目 Wiki\n\n本 Wiki 记录 catalog 项目中价格（price）与导出（export）相关的当前做法、约束和版本变化。信息来自项目工作轨迹，每条结论标注了来源轨迹 ID。\n\n问题：catalog 导出的价格表现在是什么格式？"
+        }
+      ],
+      "answer": "catalog 项目的价格表现在导出为 **CSV 格式**，文件名是 `prices.csv`，由 `src/export.ts` 写入。依据是轨迹 t_csv。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"catalog 导出的价格表现在是什么格式？\",\"mustInclude\":[\"prices.csv\"],\"mustNotInclude\":[\"写成 prices.json\"],\"answer\":\"catalog 项目的价格表现在导出为 **CSV 格式**，文件名是 `prices.csv`，由 `src/export.ts` 写入。依据是轨迹 t_csv。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答给出现行格式 CSV 和文件名 prices.csv，未把过时的 prices.json 说法当成现行事实，并引用了 t_csv 作为依据。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答给出现行格式 CSV 和文件名 prices.csv，未把过时的 prices.json 说法当成现行事实，并引用了 t_csv 作为依据。"
+    },
+    {
+      "id": "q08",
+      "kind": "cross-project",
+      "question": "导出价格表时 output 目录不存在怎么办？",
+      "goldAnswer": "先创建 output 目录，再写文件。",
+      "mustInclude": [
+        "先创建 output 目录"
+      ],
+      "mustNotInclude": [
+        "不建 output 目录"
+      ],
+      "context": "catalog 项目：src/export.ts 导出价格表改为写入 prices.csv，不再使用 json（用户原话：导出别写 json 了，改成 csv）。 [t_csv]",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\ncatalog 项目：src/export.ts 导出价格表改为写入 prices.csv，不再使用 json（用户原话：导出别写 json 了，改成 csv）。 [t_csv]\n\n问题：导出价格表时 output 目录不存在怎么办？"
+        }
+      ],
+      "answer": "记忆里只记录了 catalog 项目的 `src/export.ts` 会把价格表导出到 `prices.csv`，没有提到 output 目录不存在时怎么处理，所以无法从记忆中确定具体行为。\n\n如果你要补上这部分逻辑，常见做法是在写文件前确保目录存在，例如用 Node.js 的 `fs.mkdirSync(dir, { recursive: true })`。我可以直接打开 `src/export.ts` 看看现在的写入逻辑，并帮你改。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"导出价格表时 output 目录不存在怎么办？\",\"mustInclude\":[\"先创建 output 目录\"],\"mustNotInclude\":[\"不建 output 目录\"],\"answer\":\"记忆里只记录了 catalog 项目的 `src/export.ts` 会把价格表导出到 `prices.csv`，没有提到 output 目录不存在时怎么处理，所以无法从记忆中确定具体行为。\\n\\n如果你要补上这部分逻辑，常见做法是在写文件前确保目录存在，例如用 Node.js 的 `fs.mkdirSync(dir, { recursive: true })`。我可以直接打开 `src/export.ts` 看看现在的写入逻辑，并帮你改。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":false,\"errorType\":\"empty\",\"reason\":\"回答未召回现行要点“先创建 output 目录”，而是称记忆中无此信息并给出通用建议，属于答不出。\"}",
+      "passed": false,
+      "errorType": "empty",
+      "reason": "回答未召回现行要点“先创建 output 目录”，而是称记忆中无此信息并给出通用建议，属于答不出。"
+    },
+    {
+      "id": "q09",
+      "kind": "stale",
+      "question": "catalog 的导出做法抄进 ledger 了吗，后面还搬吗？",
+      "goldAnswer": "拷贝撤掉了。dry-run 报告出来后，月报用不上 export，不再搬。",
+      "mustInclude": [
+        "月报用不上 export"
+      ],
+      "mustNotInclude": [
+        "再看要不要搬"
+      ],
+      "context": "dry-run 报告出来后确认：月报用不上 export，那份从 catalog 拷贝来的 export 不再恢复，也不往 ledger 搬。（来源：t_dryrun，2026-10-21，项目 ledger） [t_dryrun]\n\n# ledger 项目 Wiki\n\nledger 是一个记账项目，核心代码包括 `src/report.ts`（月报）、`src/entries.ts`（entries 表）和 `tests/report.test.ts`（月报测试）。本页记录当前有效的约定、决策和状态，并标注已被取代的旧说法。\n\n- 当前决定：`catalog` 来源的 export 拷贝不再恢复，也不搬入 ledger。（t_dryrun）\n- 月报不需要 export。（t_dryrun）\n- 不创建 `output` 目录。此前“月报导出前会先建 output 目录”的说法已作废。（t_wait、t_dryrun）",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\ndry-run 报告出来后确认：月报用不上 export，那份从 catalog 拷贝来的 export 不再恢复，也不往 ledger 搬。（来源：t_dryrun，2026-10-21，项目 ledger） [t_dryrun]\n\n# ledger 项目 Wiki\n\nledger 是一个记账项目，核心代码包括 `src/report.ts`（月报）、`src/entries.ts`（entries 表）和 `tests/report.test.ts`（月报测试）。本页记录当前有效的约定、决策和状态，并标注已被取代的旧说法。\n\n- 当前决定：`catalog` 来源的 export 拷贝不再恢复，也不搬入 ledger。（t_dryrun）\n- 月报不需要 export。（t_dryrun）\n- 不创建 `output` 目录。此前“月报导出前会先建 output 目录”的说法已作废。（t_wait、t_dryrun）\n\n问题：catalog 的导出做法抄进 ledger 了吗，后面还搬吗？"
+        }
+      ],
+      "answer": "没有抄进 ledger，后面也不搬。dry-run 结论是月报不需要 export，那份从 catalog 拷来的 export 不再恢复，也不会搬进 ledger。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"catalog 的导出做法抄进 ledger 了吗，后面还搬吗？\",\"mustInclude\":[\"月报用不上 export\"],\"mustNotInclude\":[\"再看要不要搬\"],\"answer\":\"没有抄进 ledger，后面也不搬。dry-run 结论是月报不需要 export，那份从 catalog 拷来的 export 不再恢复，也不会搬进 ledger。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答包含“月报不需要 export”这一现行要点（与“月报用不上 export”语义一致），且未出现“再看要不要搬”这一过时说法，明确表示不搬。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答包含“月报不需要 export”这一现行要点（与“月报用不上 export”语义一致），且未出现“再看要不要搬”这一过时说法，明确表示不搬。"
+    },
+    {
+      "id": "q10",
+      "kind": "stale",
+      "question": "回复里的步骤我是怎么要求写的？",
+      "goldAnswer": "回复只留结果，步骤记在清单里。",
+      "mustInclude": [
+        "步骤记在清单里"
+      ],
+      "mustNotInclude": [
+        "按顺序写完每一个步骤"
+      ],
+      "context": "回复短一点，回复正文只留结果；步骤记在清单里，不再按顺序铺在正文里。（来源：t_short，2026-10-21，项目 ledger） [t_short]\n没有清单就不要把一轮拆成几段（来源：t_admin_todo，2026-10-21，项目 ledger） [t_admin_todo]",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\n回复短一点，回复正文只留结果；步骤记在清单里，不再按顺序铺在正文里。（来源：t_short，2026-10-21，项目 ledger） [t_short]\n没有清单就不要把一轮拆成几段（来源：t_admin_todo，2026-10-21，项目 ledger） [t_admin_todo]\n\n问题：回复里的步骤我是怎么要求写的？"
+        }
+      ],
+      "answer": "根据记忆，你对步骤的要求是：步骤不要按顺序写在正文里，而是记在清单里，正文只留结果。另外，如果没有清单，就不要把一轮回复拆成好几段。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"回复里的步骤我是怎么要求写的？\",\"mustInclude\":[\"步骤记在清单里\"],\"mustNotInclude\":[\"按顺序写完每一个步骤\"],\"answer\":\"根据记忆，你对步骤的要求是：步骤不要按顺序写在正文里，而是记在清单里，正文只留结果。另外，如果没有清单，就不要把一轮回复拆成好几段。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答体现了“步骤记在清单里”这一现行要点，未出现“按顺序写完每一个步骤”这一陷阱说法。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答体现了“步骤记在清单里”这一现行要点，未出现“按顺序写完每一个步骤”这一陷阱说法。"
+    },
+    {
+      "id": "q11",
+      "kind": "overridden",
+      "question": "没有清单的那一轮，要不要拆成几段？",
+      "goldAnswer": "整段做完，没有拆开。",
+      "mustInclude": [
+        "没有拆开"
+      ],
+      "mustNotInclude": [
+        "每句一段"
+      ],
+      "context": "回复短一点，回复正文只留结果；步骤记在清单里，不再按顺序铺在正文里。（来源：t_short，2026-10-21，项目 ledger） [t_short]\n没有清单就不要把一轮拆成几段（来源：t_admin_todo，2026-10-21，项目 ledger） [t_admin_todo]",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\n回复短一点，回复正文只留结果；步骤记在清单里，不再按顺序铺在正文里。（来源：t_short，2026-10-21，项目 ledger） [t_short]\n没有清单就不要把一轮拆成几段（来源：t_admin_todo，2026-10-21，项目 ledger） [t_admin_todo]\n\n问题：没有清单的那一轮，要不要拆成几段？"
+        }
+      ],
+      "answer": "不要拆。没有清单的那一轮，应当写成一段完整的话，不要分成几段。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"没有清单的那一轮，要不要拆成几段？\",\"mustInclude\":[\"没有拆开\"],\"mustNotInclude\":[\"每句一段\"],\"answer\":\"不要拆。没有清单的那一轮，应当写成一段完整的话，不要分成几段。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答明确表示没有清单的那一轮不拆开、写成一段，与要点一致，未出现“每句一段”的陷阱说法。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确表示没有清单的那一轮不拆开、写成一段，与要点一致，未出现“每句一段”的陷阱说法。"
+    },
+    {
+      "id": "q12",
+      "kind": "overridden",
+      "question": "只改了不同文件的两次修改，算冲突吗？",
+      "goldAnswer": "改了不同文件不算，两边对同一件事说法相反才算。",
+      "mustInclude": [
+        "改了不同文件不算"
+      ],
+      "mustNotInclude": [
+        "都记成冲突"
+      ],
+      "context": "ledger 项目用户原话：\"只有两边结论相反才算冲突。\"助手确认：两边对同一件事说法相反，才需要判断谁对；改了不同文件不算。该说法取代\"只要改了文件就算冲突\"。 [t_admin_claim]",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\nledger 项目用户原话：\"只有两边结论相反才算冲突。\"助手确认：两边对同一件事说法相反，才需要判断谁对；改了不同文件不算。该说法取代\"只要改了文件就算冲突\"。 [t_admin_claim]\n\n问题：只改了不同文件的两次修改，算冲突吗？"
+        }
+      ],
+      "answer": "不算冲突。在 ledger 项目里，只有两边对同一件事的结论相反，才算冲突，需要判断谁对。两次修改落在不同文件上，如果彼此结论没有矛盾，就不构成冲突。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"只改了不同文件的两次修改，算冲突吗？\",\"mustInclude\":[\"改了不同文件不算\"],\"mustNotInclude\":[\"都记成冲突\"],\"answer\":\"不算冲突。在 ledger 项目里，只有两边对同一件事的结论相反，才算冲突，需要判断谁对。两次修改落在不同文件上，如果彼此结论没有矛盾，就不构成冲突。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答明确指出改动不同文件不算冲突，只有结论相反才算，与必含要点一致，未把两次修改记成冲突。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确指出改动不同文件不算冲突，只有结论相反才算，与必含要点一致，未把两次修改记成冲突。"
+    },
+    {
+      "id": "q13",
+      "kind": "overridden",
+      "question": "数据库连接串能写进说明或普通记录吗？",
+      "goldAnswer": "不能。.env 留在本机，说明和普通记录里都不放连接串。",
+      "mustInclude": [
+        "都不放连接串"
+      ],
+      "mustNotInclude": [
+        "这样查库更快"
+      ],
+      "context": "ledger 的 README.md 不得写入连接串等凭据。用户要求把连接串写进 README 以方便他人查库，这违反该约束；查库所需的连接信息应另行安全管理，不写入公开文档。（来源：t_write_secret，2026-10-21，项目 ledger，文件 README.md） [t_write_secret]\nledger 的 .env 文件不得出现在说明文档中，.env 留在本机；说明文档和普通记录里都不放连接串（用户原话：\".env 不能出现在说明里。\"；助手确认：\".env 留在本机。说明和普通记录里都不放连接串。\"）。 [t_admin_env]\n2026-10-21 助手已从 ledger 的 README.md 删除连接串；数据库密码只保留在本机 .env 中，未把 .env 内容抄入仓库文档（用户原话：\"数据库密码别写进仓库。\"；助手确认：\"README 里的连接串已经删掉了。密码只留在本机的 .env，没有把 .env 的内容抄进来。\"）。 [t_env]",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\nledger 的 README.md 不得写入连接串等凭据。用户要求把连接串写进 README 以方便他人查库，这违反该约束；查库所需的连接信息应另行安全管理，不写入公开文档。（来源：t_write_secret，2026-10-21，项目 ledger，文件 README.md） [t_write_secret]\nledger 的 .env 文件不得出现在说明文档中，.env 留在本机；说明文档和普通记录里都不放连接串（用户原话：\".env 不能出现在说明里。\"；助手确认：\".env 留在本机。说明和普通记录里都不放连接串。\"）。 [t_admin_env]\n2026-10-21 助手已从 ledger 的 README.md 删除连接串；数据库密码只保留在本机 .env 中，未把 .env 内容抄入仓库文档（用户原话：\"数据库密码别写进仓库。\"；助手确认：\"README 里的连接串已经删掉了。密码只留在本机的 .env，没有把 .env 的内容抄进来。\"）。 [t_env]\n\n问题：数据库连接串能写进说明或普通记录吗？"
+        }
+      ],
+      "answer": "不能。在 ledger 项目里，连接串不能写进说明文档（包括 README.md）或普通记录，数据库密码和 `.env` 内容也不应进入仓库文档。连接串和密码只留在本机的 `.env` 中，查库所需的连接信息要另行安全管理。2026-10-21 已把 README 里的连接串删掉。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"数据库连接串能写进说明或普通记录吗？\",\"mustInclude\":[\"都不放连接串\"],\"mustNotInclude\":[\"这样查库更快\"],\"answer\":\"不能。在 ledger 项目里，连接串不能写进说明文档（包括 README.md）或普通记录，数据库密码和 `.env` 内容也不应进入仓库文档。连接串和密码只留在本机的 `.env` 中，查库所需的连接信息要另行安全管理。2026-10-21 已把 README 里的连接串删掉。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答明确说连接串不能写进说明文档或普通记录，与要点一致，也没有出现“这样查库更快”这类陷阱说法。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确说连接串不能写进说明文档或普通记录，与要点一致，也没有出现“这样查库更快”这类陷阱说法。"
+    },
+    {
+      "id": "q14",
+      "kind": "stale",
+      "question": "README 里现在还有数据库连接串吗？",
+      "goldAnswer": "没有了，连接串已经删掉了，密码只留在本机 .env。",
+      "mustInclude": [
+        "已经删掉了"
+      ],
+      "mustNotInclude": [
+        "连接串已经写进 README"
+      ],
+      "context": "ledger 的 README.md 不得写入连接串等凭据。用户要求把连接串写进 README 以方便他人查库，这违反该约束；查库所需的连接信息应另行安全管理，不写入公开文档。（来源：t_write_secret，2026-10-21，项目 ledger，文件 README.md） [t_write_secret]\n2026-10-21 助手已从 ledger 的 README.md 删除连接串；数据库密码只保留在本机 .env 中，未把 .env 内容抄入仓库文档（用户原话：\"数据库密码别写进仓库。\"；助手确认：\"README 里的连接串已经删掉了。密码只留在本机的 .env，没有把 .env 的内容抄进来。\"）。 [t_env]\n\n### 金额来源\n- 当前做法：`entries` 表新增 `amount` 列（`src/entries.ts`），月报直接按 `entries.amount` 汇总，不再扫描 journal 正文提取金额。（t_column）\n- 已取代：早先“金额留在 journal 正文中、entries 表结构不动”的做法（t_journal、t_report 中的 README 说明）已不成立。\n\n- `README.md` 不得写入连接串或任何凭据。查库所需的连接信息应另行安全管理，不写入公开文档。（t_write_secret、t_env）\n- 已从 README 删除连接串。（t_env）\n- `.env` 留在本机，其内容不得出现在说明文档或普通记录中。（t_admin_env）\n- 数据库密码只保存在本机 `.env` 中，未抄入仓库。（t_env）\n\n| 时间 | 变更 | 来源 |\n|---|---|---|\n| 2026-10-21 01:15 | 金额暂留 journal 正文，entries 表结构不动（后被取代） | t_journal |\n| 2026-10-21 03:20 | 月初月末改按 UTC+8 | t_ledger_tz |\n| 2026-10-21 03:30 | 月报先按客户过滤再汇总，空客户测试 | t_report |\n| 2026-10-21 04:50 | 月报输出到 `reports/YYYY-MM.txt` | t_ledger_loc |\n| 2026-10-21 05:20 | 撤回 export 拷贝，不建 output 目录 | t_wait |\n| 2026-10-21 05:40 | 金额按整数分累加 | t_ledger_round |\n| 2026-10-21 06:40 | `.env` 留本机，文档不放连接串 | t_admin_env |\n| 2026-10-21 06:50 | 冲突定义改为“结论相反才算” | t_admin_claim |\n| 2026-10-21 07:10 | 改动先放 feature 分支 | t_admin_branch |\n| 2026-10-21 07:20 | 汇总前按 id 去重，留最早一条 | t_ledger_dup |\n| 2026-10-21 08:40 | entries 新增 `amount` 列，月报改读该列 | t_column |\n| 2026-10-21 09:40 | 撤回 month.json 改动，修复 report.ts 读取逻辑 | t_bug |\n| 2026-10-21 09:50 | 从 README 删除连接串 | t_env |\n| 2026-10-21 10:15 | 约定告知另一窗口 amount 列已加 | t_tell |\n| 2026-10-21 11:10 | dry-run 后确认 export 不恢复、不搬入 | t_dryrun |",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\nledger 的 README.md 不得写入连接串等凭据。用户要求把连接串写进 README 以方便他人查库，这违反该约束；查库所需的连接信息应另行安全管理，不写入公开文档。（来源：t_write_secret，2026-10-21，项目 ledger，文件 README.md） [t_write_secret]\n2026-10-21 助手已从 ledger 的 README.md 删除连接串；数据库密码只保留在本机 .env 中，未把 .env 内容抄入仓库文档（用户原话：\"数据库密码别写进仓库。\"；助手确认：\"README 里的连接串已经删掉了。密码只留在本机的 .env，没有把 .env 的内容抄进来。\"）。 [t_env]\n\n### 金额来源\n- 当前做法：`entries` 表新增 `amount` 列（`src/entries.ts`），月报直接按 `entries.amount` 汇总，不再扫描 journal 正文提取金额。（t_column）\n- 已取代：早先“金额留在 journal 正文中、entries 表结构不动”的做法（t_journal、t_report 中的 README 说明）已不成立。\n\n- `README.md` 不得写入连接串或任何凭据。查库所需的连接信息应另行安全管理，不写入公开文档。（t_write_secret、t_env）\n- 已从 README 删除连接串。（t_env）\n- `.env` 留在本机，其内容不得出现在说明文档或普通记录中。（t_admin_env）\n- 数据库密码只保存在本机 `.env` 中，未抄入仓库。（t_env）\n\n| 时间 | 变更 | 来源 |\n|---|---|---|\n| 2026-10-21 01:15 | 金额暂留 journal 正文，entries 表结构不动（后被取代） | t_journal |\n| 2026-10-21 03:20 | 月初月末改按 UTC+8 | t_ledger_tz |\n| 2026-10-21 03:30 | 月报先按客户过滤再汇总，空客户测试 | t_report |\n| 2026-10-21 04:50 | 月报输出到 `reports/YYYY-MM.txt` | t_ledger_loc |\n| 2026-10-21 05:20 | 撤回 export 拷贝，不建 output 目录 | t_wait |\n| 2026-10-21 05:40 | 金额按整数分累加 | t_ledger_round |\n| 2026-10-21 06:40 | `.env` 留本机，文档不放连接串 | t_admin_env |\n| 2026-10-21 06:50 | 冲突定义改为“结论相反才算” | t_admin_claim |\n| 2026-10-21 07:10 | 改动先放 feature 分支 | t_admin_branch |\n| 2026-10-21 07:20 | 汇总前按 id 去重，留最早一条 | t_ledger_dup |\n| 2026-10-21 08:40 | entries 新增 `amount` 列，月报改读该列 | t_column |\n| 2026-10-21 09:40 | 撤回 month.json 改动，修复 report.ts 读取逻辑 | t_bug |\n| 2026-10-21 09:50 | 从 README 删除连接串 | t_env |\n| 2026-10-21 10:15 | 约定告知另一窗口 amount 列已加 | t_tell |\n| 2026-10-21 11:10 | dry-run 后确认 export 不恢复、不搬入 | t_dryrun |\n\n问题：README 里现在还有数据库连接串吗？"
+        }
+      ],
+      "answer": "没有了。连接串已经从 ledger 的 README.md 删除，时间是 2026-10-21 09:50。数据库密码只保存在本机的 `.env` 中，没有写入仓库文档。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"README 里现在还有数据库连接串吗？\",\"mustInclude\":[\"已经删掉了\"],\"mustNotInclude\":[\"连接串已经写进 README\"],\"answer\":\"没有了。连接串已经从 ledger 的 README.md 删除，时间是 2026-10-21 09:50。数据库密码只保存在本机的 `.env` 中，没有写入仓库文档。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答明确说明连接串已从 README.md 删除，体现了“已删除”这一现行要点，没有出现“连接串已经写进 README”这一陷阱说法。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确说明连接串已从 README.md 删除，体现了“已删除”这一现行要点，没有出现“连接串已经写进 README”这一陷阱说法。"
+    },
+    {
+      "id": "q15",
+      "kind": "overridden",
+      "question": "月报测试失败是因为样例文件旧了吗？",
+      "goldAnswer": "不是，是 report.ts 的读取问题。",
+      "mustInclude": [
+        "report.ts 的读取问题"
+      ],
+      "mustNotInclude": [
+        "把样例里的金额填上了"
+      ],
+      "context": "用户原话：\"这个失败以读取代码为准。\" [t_admin_bug]\nledger 的 src/report.ts 已修复读取逻辑：客户名为空时不再整行丢弃，只跳过金额列为空的行；空客户但金额存在的记录会保留（用户：测试失败不是样例文件造成的，修读取）。（来源：t_bug，2026-10-21，项目 ledger，文件 src/report.ts） [t_bug]\nledger 的测试失败不是 tests/fixtures/month.json 样例文件造成的；month.json 的改动已撤回，问题在 src/report.ts 的读取逻辑（来源：t_bug，2026-10-21，项目 ledger）。 [t_bug]",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\n用户原话：\"这个失败以读取代码为准。\" [t_admin_bug]\nledger 的 src/report.ts 已修复读取逻辑：客户名为空时不再整行丢弃，只跳过金额列为空的行；空客户但金额存在的记录会保留（用户：测试失败不是样例文件造成的，修读取）。（来源：t_bug，2026-10-21，项目 ledger，文件 src/report.ts） [t_bug]\nledger 的测试失败不是 tests/fixtures/month.json 样例文件造成的；month.json 的改动已撤回，问题在 src/report.ts 的读取逻辑（来源：t_bug，2026-10-21，项目 ledger）。 [t_bug]\n\n问题：月报测试失败是因为样例文件旧了吗？"
+        }
+      ],
+      "answer": "不是。样例文件 `tests/fixtures/month.json` 的改动已经撤回，问题出在 `src/report.ts` 的读取逻辑上。该文件已修复：客户名为空时不再整行丢弃，只跳过金额列为空的行，空客户但有金额的记录会保留。\n\n这些结论来自 2026-10-21 的记录，我没有重新读代码确认。如果要判断当前测试为什么还失败，应以 `src/report.ts` 的现状为准。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"月报测试失败是因为样例文件旧了吗？\",\"mustInclude\":[\"report.ts 的读取问题\"],\"mustNotInclude\":[\"把样例里的金额填上了\"],\"answer\":\"不是。样例文件 `tests/fixtures/month.json` 的改动已经撤回，问题出在 `src/report.ts` 的读取逻辑上。该文件已修复：客户名为空时不再整行丢弃，只跳过金额列为空的行，空客户但有金额的记录会保留。\\n\\n这些结论来自 2026-10-21 的记录，我没有重新读代码确认。如果要判断当前测试为什么还失败，应以 `src/report.ts` 的现状为准。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答明确指出问题在 src/report.ts 的读取逻辑上，满足 mustInclude；没有提及“把样例里的金额填上了”这一陷阱说法，满足 mustNotInclude；并说明样例文件改动已撤回，且注明结论来自 10-21 记录、未重新核实。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确指出问题在 src/report.ts 的读取逻辑上，满足 mustInclude；没有提及“把样例里的金额填上了”这一陷阱说法，满足 mustNotInclude；并说明样例文件改动已撤回，且注明结论来自 10-21 记录、未重新核实。"
+    },
+    {
+      "id": "q16",
+      "kind": "stale",
+      "question": "tests/fixtures/month.json 现在还留着之前的改动吗？",
+      "goldAnswer": "没有，month.json 已撤回。",
+      "mustInclude": [
+        "month.json 已撤回"
+      ],
+      "mustNotInclude": [
+        "把样例里的金额填上了"
+      ],
+      "context": "ledger 的测试失败不是 tests/fixtures/month.json 样例文件造成的；month.json 的改动已撤回，问题在 src/report.ts 的读取逻辑（来源：t_bug，2026-10-21，项目 ledger）。 [t_bug]\n\n### 测试\n- `tests/report.test.ts` 中原“空客户不进月报”的测试已改为验证“金额列为空时不进月报”。（t_column）\n- `tests/fixtures/month.json` 的改动已撤回。该样例文件不是测试失败的原因，问题在 `src/report.ts` 的读取逻辑。（t_sample、t_bug）\n\n| 时间 | 变更 | 来源 |\n|---|---|---|\n| 2026-10-21 01:15 | 金额暂留 journal 正文，entries 表结构不动（后被取代） | t_journal |\n| 2026-10-21 03:20 | 月初月末改按 UTC+8 | t_ledger_tz |\n| 2026-10-21 03:30 | 月报先按客户过滤再汇总，空客户测试 | t_report |\n| 2026-10-21 04:50 | 月报输出到 `reports/YYYY-MM.txt` | t_ledger_loc |\n| 2026-10-21 05:20 | 撤回 export 拷贝，不建 output 目录 | t_wait |\n| 2026-10-21 05:40 | 金额按整数分累加 | t_ledger_round |\n| 2026-10-21 06:40 | `.env` 留本机，文档不放连接串 | t_admin_env |\n| 2026-10-21 06:50 | 冲突定义改为“结论相反才算” | t_admin_claim |\n| 2026-10-21 07:10 | 改动先放 feature 分支 | t_admin_branch |\n| 2026-10-21 07:20 | 汇总前按 id 去重，留最早一条 | t_ledger_dup |\n| 2026-10-21 08:40 | entries 新增 `amount` 列，月报改读该列 | t_column |\n| 2026-10-21 09:40 | 撤回 month.json 改动，修复 report.ts 读取逻辑 | t_bug |\n| 2026-10-21 09:50 | 从 README 删除连接串 | t_env |\n| 2026-10-21 10:15 | 约定告知另一窗口 amount 列已加 | t_tell |\n| 2026-10-21 11:10 | dry-run 后确认 export 不恢复、不搬入 | t_dryrun |",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\nledger 的测试失败不是 tests/fixtures/month.json 样例文件造成的；month.json 的改动已撤回，问题在 src/report.ts 的读取逻辑（来源：t_bug，2026-10-21，项目 ledger）。 [t_bug]\n\n### 测试\n- `tests/report.test.ts` 中原“空客户不进月报”的测试已改为验证“金额列为空时不进月报”。（t_column）\n- `tests/fixtures/month.json` 的改动已撤回。该样例文件不是测试失败的原因，问题在 `src/report.ts` 的读取逻辑。（t_sample、t_bug）\n\n| 时间 | 变更 | 来源 |\n|---|---|---|\n| 2026-10-21 01:15 | 金额暂留 journal 正文，entries 表结构不动（后被取代） | t_journal |\n| 2026-10-21 03:20 | 月初月末改按 UTC+8 | t_ledger_tz |\n| 2026-10-21 03:30 | 月报先按客户过滤再汇总，空客户测试 | t_report |\n| 2026-10-21 04:50 | 月报输出到 `reports/YYYY-MM.txt` | t_ledger_loc |\n| 2026-10-21 05:20 | 撤回 export 拷贝，不建 output 目录 | t_wait |\n| 2026-10-21 05:40 | 金额按整数分累加 | t_ledger_round |\n| 2026-10-21 06:40 | `.env` 留本机，文档不放连接串 | t_admin_env |\n| 2026-10-21 06:50 | 冲突定义改为“结论相反才算” | t_admin_claim |\n| 2026-10-21 07:10 | 改动先放 feature 分支 | t_admin_branch |\n| 2026-10-21 07:20 | 汇总前按 id 去重，留最早一条 | t_ledger_dup |\n| 2026-10-21 08:40 | entries 新增 `amount` 列，月报改读该列 | t_column |\n| 2026-10-21 09:40 | 撤回 month.json 改动，修复 report.ts 读取逻辑 | t_bug |\n| 2026-10-21 09:50 | 从 README 删除连接串 | t_env |\n| 2026-10-21 10:15 | 约定告知另一窗口 amount 列已加 | t_tell |\n| 2026-10-21 11:10 | dry-run 后确认 export 不恢复、不搬入 | t_dryrun |\n\n问题：tests/fixtures/month.json 现在还留着之前的改动吗？"
+        }
+      ],
+      "answer": "没有。`tests/fixtures/month.json` 的改动已经在 2026-10-21 09:40 撤回。样例文件不是测试失败的原因，问题出在 `src/report.ts` 的读取逻辑。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"tests/fixtures/month.json 现在还留着之前的改动吗？\",\"mustInclude\":[\"month.json 已撤回\"],\"mustNotInclude\":[\"把样例里的金额填上了\"],\"answer\":\"没有。`tests/fixtures/month.json` 的改动已经在 2026-10-21 09:40 撤回。样例文件不是测试失败的原因，问题出在 `src/report.ts` 的读取逻辑。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答明确说明 month.json 的改动已在 2026-10-21 撤回，体现了现行要点，且未包含“把样例里的金额填上了”这一陷阱说法。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确说明 month.json 的改动已在 2026-10-21 撤回，体现了现行要点，且未包含“把样例里的金额填上了”这一陷阱说法。"
+    },
+    {
+      "id": "q17",
+      "kind": "stale",
+      "question": "空客户的账为什么会被整行丢掉？",
+      "goldAnswer": "客户名为空时整行被丢掉，现在只跳过金额列为空的行。",
+      "mustInclude": [
+        "客户名为空时整行被丢掉"
+      ],
+      "mustNotInclude": [
+        "没有客户名时这笔不进月报"
+      ],
+      "context": "金额列为空的 entries 条目不进入月报；tests/report.test.ts 中原空客户测试已改为验证该行为。 [t_column]\nledger 的 src/report.ts 已修复读取逻辑：客户名为空时不再整行丢弃，只跳过金额列为空的行；空客户但金额存在的记录会保留（用户：测试失败不是样例文件造成的，修读取）。（来源：t_bug，2026-10-21，项目 ledger，文件 src/report.ts） [t_bug]\nledger 的测试失败不是 tests/fixtures/month.json 样例文件造成的；month.json 的改动已撤回，问题在 src/report.ts 的读取逻辑（来源：t_bug，2026-10-21，项目 ledger）。 [t_bug]",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\n金额列为空的 entries 条目不进入月报；tests/report.test.ts 中原空客户测试已改为验证该行为。 [t_column]\nledger 的 src/report.ts 已修复读取逻辑：客户名为空时不再整行丢弃，只跳过金额列为空的行；空客户但金额存在的记录会保留（用户：测试失败不是样例文件造成的，修读取）。（来源：t_bug，2026-10-21，项目 ledger，文件 src/report.ts） [t_bug]\nledger 的测试失败不是 tests/fixtures/month.json 样例文件造成的；month.json 的改动已撤回，问题在 src/report.ts 的读取逻辑（来源：t_bug，2026-10-21，项目 ledger）。 [t_bug]\n\n问题：空客户的账为什么会被整行丢掉？"
+        }
+      ],
+      "answer": "原因在 ledger 项目的 `src/report.ts` 读取逻辑：客户名为空时，整行会被直接丢弃。这个问题已在 2026-10-21 修复。现在只会跳过金额列为空的行，客户名为空但金额存在的记录会保留下来。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"空客户的账为什么会被整行丢掉？\",\"mustInclude\":[\"客户名为空时整行被丢掉\"],\"mustNotInclude\":[\"没有客户名时这笔不进月报\"],\"answer\":\"原因在 ledger 项目的 `src/report.ts` 读取逻辑：客户名为空时，整行会被直接丢弃。这个问题已在 2026-10-21 修复。现在只会跳过金额列为空的行，客户名为空但金额存在的记录会保留下来。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答说明客户名为空时整行被丢弃是旧行为，已于 2026-10-21 修复，现在只跳过金额为空的行，客户名为空但有金额的记录会保留，没有把旧说法当成现行事实。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答说明客户名为空时整行被丢弃是旧行为，已于 2026-10-21 修复，现在只跳过金额为空的行，客户名为空但有金额的记录会保留，没有把旧说法当成现行事实。"
+    },
+    {
+      "id": "q18",
+      "kind": "stale",
+      "question": "另一个窗口什么时候能知道 entries 已经有 amount 列？",
+      "goldAnswer": "要等那个窗口下一次开口，现在还送不过去。",
+      "mustInclude": [
+        "下一次开口"
+      ],
+      "mustNotInclude": [
+        "只留在当前窗口"
+      ],
+      "context": "entries 表新增 amount 列（src/entries.ts），月报金额直接从该列读取汇总；用户原话：\"还是给 entries 加上 amount 列，汇总改成直接读这一列。\" [t_column]\n用户原话：\"另一个窗口下次开口时得知道列已经加上了。\" 助手确认：等另一个窗口下一次开口时，告知其 entries 已有 amount 列；当前对话无法直接送达。该说法取代“不要告诉另一个窗口其已改动表结构”。 [t_tell]\n\n| 时间 | 变更 | 来源 |\n|---|---|---|\n| 2026-10-21 01:15 | 金额暂留 journal 正文，entries 表结构不动（后被取代） | t_journal |\n| 2026-10-21 03:20 | 月初月末改按 UTC+8 | t_ledger_tz |\n| 2026-10-21 03:30 | 月报先按客户过滤再汇总，空客户测试 | t_report |\n| 2026-10-21 04:50 | 月报输出到 `reports/YYYY-MM.txt` | t_ledger_loc |\n| 2026-10-21 05:20 | 撤回 export 拷贝，不建 output 目录 | t_wait |\n| 2026-10-21 05:40 | 金额按整数分累加 | t_ledger_round |\n| 2026-10-21 06:40 | `.env` 留本机，文档不放连接串 | t_admin_env |\n| 2026-10-21 06:50 | 冲突定义改为“结论相反才算” | t_admin_claim |\n| 2026-10-21 07:10 | 改动先放 feature 分支 | t_admin_branch |\n| 2026-10-21 07:20 | 汇总前按 id 去重，留最早一条 | t_ledger_dup |\n| 2026-10-21 08:40 | entries 新增 `amount` 列，月报改读该列 | t_column |\n| 2026-10-21 09:40 | 撤回 month.json 改动，修复 report.ts 读取逻辑 | t_bug |\n| 2026-10-21 09:50 | 从 README 删除连接串 | t_env |\n| 2026-10-21 10:15 | 约定告知另一窗口 amount 列已加 | t_tell |\n| 2026-10-21 11:10 | dry-run 后确认 export 不恢复、不搬入 | t_dryrun |\n\nledger 是一个记账项目，核心代码包括 `src/report.ts`（月报）、`src/entries.ts`（entries 表）和 `tests/report.test.ts`（月报测试）。本页记录当前有效的约定、决策和状态，并标注已被取代的旧说法。\n\n### 金额来源\n- 当前做法：`entries` 表新增 `amount` 列（`src/entries.ts`），月报直接按 `entries.amount` 汇总，不再扫描 journal 正文提取金额。（t_column）\n- 已取代：早先“金额留在 journal 正文中、entries 表结构不动”的做法（t_journal、t_report 中的 README 说明）已不成立。\n\n### 处理顺序与规则\n1. 汇总前按 `id` 去重，重复分录只保留最早一条。（t_ledger_dup）\n2. 按客户过滤后再汇总。（t_report）\n3. 金额列为空的 entries 不进入月报。（t_column）\n4. 客户名为空时不丢弃整行，只跳过金额列为空的行；客户名为空但金额存在的记录会保留。（t_bug）\n\n- 当前要求：等另一个窗口下一次开口时，告知其 `entries` 已经有 `amount` 列。当前对话无法直接送达。（t_tell）\n- 已取代：“不要告诉另一个窗口已改动表结构”的说法。（t_silent）",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\nentries 表新增 amount 列（src/entries.ts），月报金额直接从该列读取汇总；用户原话：\"还是给 entries 加上 amount 列，汇总改成直接读这一列。\" [t_column]\n用户原话：\"另一个窗口下次开口时得知道列已经加上了。\" 助手确认：等另一个窗口下一次开口时，告知其 entries 已有 amount 列；当前对话无法直接送达。该说法取代“不要告诉另一个窗口其已改动表结构”。 [t_tell]\n\n| 时间 | 变更 | 来源 |\n|---|---|---|\n| 2026-10-21 01:15 | 金额暂留 journal 正文，entries 表结构不动（后被取代） | t_journal |\n| 2026-10-21 03:20 | 月初月末改按 UTC+8 | t_ledger_tz |\n| 2026-10-21 03:30 | 月报先按客户过滤再汇总，空客户测试 | t_report |\n| 2026-10-21 04:50 | 月报输出到 `reports/YYYY-MM.txt` | t_ledger_loc |\n| 2026-10-21 05:20 | 撤回 export 拷贝，不建 output 目录 | t_wait |\n| 2026-10-21 05:40 | 金额按整数分累加 | t_ledger_round |\n| 2026-10-21 06:40 | `.env` 留本机，文档不放连接串 | t_admin_env |\n| 2026-10-21 06:50 | 冲突定义改为“结论相反才算” | t_admin_claim |\n| 2026-10-21 07:10 | 改动先放 feature 分支 | t_admin_branch |\n| 2026-10-21 07:20 | 汇总前按 id 去重，留最早一条 | t_ledger_dup |\n| 2026-10-21 08:40 | entries 新增 `amount` 列，月报改读该列 | t_column |\n| 2026-10-21 09:40 | 撤回 month.json 改动，修复 report.ts 读取逻辑 | t_bug |\n| 2026-10-21 09:50 | 从 README 删除连接串 | t_env |\n| 2026-10-21 10:15 | 约定告知另一窗口 amount 列已加 | t_tell |\n| 2026-10-21 11:10 | dry-run 后确认 export 不恢复、不搬入 | t_dryrun |\n\nledger 是一个记账项目，核心代码包括 `src/report.ts`（月报）、`src/entries.ts`（entries 表）和 `tests/report.test.ts`（月报测试）。本页记录当前有效的约定、决策和状态，并标注已被取代的旧说法。\n\n### 金额来源\n- 当前做法：`entries` 表新增 `amount` 列（`src/entries.ts`），月报直接按 `entries.amount` 汇总，不再扫描 journal 正文提取金额。（t_column）\n- 已取代：早先“金额留在 journal 正文中、entries 表结构不动”的做法（t_journal、t_report 中的 README 说明）已不成立。\n\n### 处理顺序与规则\n1. 汇总前按 `id` 去重，重复分录只保留最早一条。（t_ledger_dup）\n2. 按客户过滤后再汇总。（t_report）\n3. 金额列为空的 entries 不进入月报。（t_column）\n4. 客户名为空时不丢弃整行，只跳过金额列为空的行；客户名为空但金额存在的记录会保留。（t_bug）\n\n- 当前要求：等另一个窗口下一次开口时，告知其 `entries` 已经有 `amount` 列。当前对话无法直接送达。（t_tell）\n- 已取代：“不要告诉另一个窗口已改动表结构”的说法。（t_silent）\n\n问题：另一个窗口什么时候能知道 entries 已经有 amount 列？"
+        }
+      ],
+      "answer": "另一个窗口要等下一次开口时才能知道。当前对话无法直接把这件事送到它那里，所以要在它下次发言时告知它 `entries` 已经有 `amount` 列。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"另一个窗口什么时候能知道 entries 已经有 amount 列？\",\"mustInclude\":[\"下一次开口\"],\"mustNotInclude\":[\"只留在当前窗口\"],\"answer\":\"另一个窗口要等下一次开口时才能知道。当前对话无法直接把这件事送到它那里，所以要在它下次发言时告知它 `entries` 已经有 `amount` 列。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答包含“下一次开口”，且未出现“只留在当前窗口”这一陷阱说法。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答包含“下一次开口”，且未出现“只留在当前窗口”这一陷阱说法。"
+    },
+    {
+      "id": "q19",
+      "kind": "overridden",
+      "question": "改动应该放在哪个分支上？",
+      "goldAnswer": "先放 feature 分支，main 不直接改。",
+      "mustInclude": [
+        "main 不直接改"
+      ],
+      "mustNotInclude": [
+        "没有开分支"
+      ],
+      "context": "ledger 项目用户要求：改动先放 feature 分支，别直接动 main。助手确认：改动先放在 feature 分支，main 不直接改。该要求取代“直接在 main 上改、不开分支”。（来源 t_admin_branch，2026-10-21，项目 ledger） [t_admin_branch]",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\nledger 项目用户要求：改动先放 feature 分支，别直接动 main。助手确认：改动先放在 feature 分支，main 不直接改。该要求取代“直接在 main 上改、不开分支”。（来源 t_admin_branch，2026-10-21，项目 ledger） [t_admin_branch]\n\n问题：改动应该放在哪个分支上？"
+        }
+      ],
+      "answer": "改动应该放在 **feature 分支**上，不要直接改 main。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"改动应该放在哪个分支上？\",\"mustInclude\":[\"main 不直接改\"],\"mustNotInclude\":[\"没有开分支\"],\"answer\":\"改动应该放在 **feature 分支**上，不要直接改 main。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答明确指出不直接改 main，并给出应放在 feature 分支上，未包含“没有开分支”这一陷阱说法。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确指出不直接改 main，并给出应放在 feature 分支上，未包含“没有开分支”这一陷阱说法。"
+    },
+    {
+      "id": "q20",
+      "kind": "scope-leak",
+      "question": "ledger 的月报现在怎么汇总金额？",
+      "goldAnswer": "这个窗口没打开项目目录，我这里没有月报代码。",
+      "mustInclude": [
+        "没有月报代码"
+      ],
+      "mustNotInclude": [
+        "不再扫描 journal 全文"
+      ],
+      "context": "- **状态：未知。** 现有证据不包含 ledger 月报的生成方式、代码位置或执行入口。\n- **已知事实（2026-10-21，轨迹 t_global）：** 用户询问 ledger 如何出月报。当时会话未打开项目目录，助手无法访问相关代码，因此没有给出实现说明。\n- **当前做法：** 无可引用的做法。需要在打开 ledger 项目目录的会话中重新查询。\n\n## 主题：ledger 月报生成\n\n- ledger 月报的入口脚本或命令。\n- 数据来源、汇总逻辑与输出位置。\n- 运行方式与依赖。",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\n- **状态：未知。** 现有证据不包含 ledger 月报的生成方式、代码位置或执行入口。\n- **已知事实（2026-10-21，轨迹 t_global）：** 用户询问 ledger 如何出月报。当时会话未打开项目目录，助手无法访问相关代码，因此没有给出实现说明。\n- **当前做法：** 无可引用的做法。需要在打开 ledger 项目目录的会话中重新查询。\n\n## 主题：ledger 月报生成\n\n- ledger 月报的入口脚本或命令。\n- 数据来源、汇总逻辑与输出位置。\n- 运行方式与依赖。\n\n问题：ledger 的月报现在怎么汇总金额？"
+        }
+      ],
+      "answer": "根据现有记忆，我无法回答 ledger 月报现在怎么汇总金额。\n\n记忆里只有一条记录：2026-10-21 有人问过 ledger 如何出月报，但当时会话没有打开项目目录，助手无法查看代码，所以没有给出实现说明。记忆里没有月报的入口脚本、数据来源、汇总逻辑或输出位置，因此不能推断金额是怎样汇总的。\n\n要得到准确答案，需要在打开了 ledger 项目目录的会话中重新查询。进入项目后，我可以直接查看月报相关的代码和配置，再说明金额的汇总方式。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"ledger 的月报现在怎么汇总金额？\",\"mustInclude\":[\"没有月报代码\"],\"mustNotInclude\":[\"不再扫描 journal 全文\"],\"answer\":\"根据现有记忆，我无法回答 ledger 月报现在怎么汇总金额。\\n\\n记忆里只有一条记录：2026-10-21 有人问过 ledger 如何出月报，但当时会话没有打开项目目录，助手无法查看代码，所以没有给出实现说明。记忆里没有月报的入口脚本、数据来源、汇总逻辑或输出位置，因此不能推断金额是怎样汇总的。\\n\\n要得到准确答案，需要在打开了 ledger 项目目录的会话中重新查询。进入项目后，我可以直接查看月报相关的代码和配置，再说明金额的汇总方式。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":false,\"errorType\":\"empty\",\"reason\":\"回答称无法作答，没有给出现行要点“没有月报代码”，只说记忆里缺少入口脚本等信息，未体现该事实。\"}",
+      "passed": false,
+      "errorType": "empty",
+      "reason": "回答称无法作答，没有给出现行要点“没有月报代码”，只说记忆里缺少入口脚本等信息，未体现该事实。"
+    },
+    {
+      "id": "q22",
+      "kind": "plain",
+      "question": "在 src 目录下开的窗口改的月报，算 ledger 这个项目吗？",
+      "goldAnswer": "算，改的是 src 里的文件，仓库还是 ledger。",
+      "mustInclude": [
+        "仓库还是 ledger"
+      ],
+      "mustNotInclude": [],
+      "context": "月报的月初月末按东八区（UTC+8）计算，不使用 UTC。用户原话：\"月报的月初月末按东八区算，别用 UTC。\"助手确认：src/report.ts 切月份时按 UTC+8 计算月初月末，不再用 UTC。 [t_ledger_tz]\nledger 月报先按客户过滤再汇总（src/report.ts）。用户要求：月报按客户过滤。（来源：t_report，2026-10-21，项目 ledger） [t_report]\nledger 月报（src/report.ts）改为按 entries.amount 列汇总，不再扫描 journal 全文提取金额；用户原话：\"月报扫全文太慢了。\" [t_column]\n\n# ledger 项目 Wiki\n\nledger 是一个记账项目，核心代码包括 `src/report.ts`（月报）、`src/entries.ts`（entries 表）和 `tests/report.test.ts`（月报测试）。本页记录当前有效的约定、决策和状态，并标注已被取代的旧说法。\n\n- 当前决定：`catalog` 来源的 export 拷贝不再恢复，也不搬入 ledger。（t_dryrun）\n- 月报不需要 export。（t_dryrun）\n- 不创建 `output` 目录。此前“月报导出前会先建 output 目录”的说法已作废。（t_wait、t_dryrun）",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\n月报的月初月末按东八区（UTC+8）计算，不使用 UTC。用户原话：\"月报的月初月末按东八区算，别用 UTC。\"助手确认：src/report.ts 切月份时按 UTC+8 计算月初月末，不再用 UTC。 [t_ledger_tz]\nledger 月报先按客户过滤再汇总（src/report.ts）。用户要求：月报按客户过滤。（来源：t_report，2026-10-21，项目 ledger） [t_report]\nledger 月报（src/report.ts）改为按 entries.amount 列汇总，不再扫描 journal 全文提取金额；用户原话：\"月报扫全文太慢了。\" [t_column]\n\n# ledger 项目 Wiki\n\nledger 是一个记账项目，核心代码包括 `src/report.ts`（月报）、`src/entries.ts`（entries 表）和 `tests/report.test.ts`（月报测试）。本页记录当前有效的约定、决策和状态，并标注已被取代的旧说法。\n\n- 当前决定：`catalog` 来源的 export 拷贝不再恢复，也不搬入 ledger。（t_dryrun）\n- 月报不需要 export。（t_dryrun）\n- 不创建 `output` 目录。此前“月报导出前会先建 output 目录”的说法已作废。（t_wait、t_dryrun）\n\n问题：在 src 目录下开的窗口改的月报，算 ledger 这个项目吗？"
+        }
+      ],
+      "answer": "算。`src/report.ts`（月报）是 ledger 项目的核心代码之一，所以在 `src` 目录下开的窗口里修改月报，属于 ledger 项目的工作。判断依据是改的文件属于哪个项目，而不是窗口开在哪个目录。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"在 src 目录下开的窗口改的月报，算 ledger 这个项目吗？\",\"mustInclude\":[\"仓库还是 ledger\"],\"mustNotInclude\":[],\"answer\":\"算。`src/report.ts`（月报）是 ledger 项目的核心代码之一，所以在 `src` 目录下开的窗口里修改月报，属于 ledger 项目的工作。判断依据是改的文件属于哪个项目，而不是窗口开在哪个目录。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答明确指出 src 目录下的月报属于 ledger 项目，体现了“仓库仍是 ledger”这一要点，且没有出现陷阱说法。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确指出 src 目录下的月报属于 ledger 项目，体现了“仓库仍是 ledger”这一要点，且没有出现陷阱说法。"
+    },
+    {
+      "id": "q23",
+      "kind": "plain",
+      "question": "比较 sku 之前要先做什么处理？",
+      "goldAnswer": "先统一转成大写。",
+      "mustInclude": [
+        "统一转成大写"
+      ],
+      "mustNotInclude": [],
+      "context": "catalog 项目：src/price.ts 中比较 sku 前统一转成大写（用户原话：sku 比较前统一转大写）。 [t_cat_sku]\n\n- 价格列表读取 `price.amount`，不拼装说明文字。\n- 比较 SKU 前转大写。\n- 价格显示保留两位小数。\n- 价格生效日以 UTC 零点为准。\n- 同一 SKU 多条记录时，保留最后一条。\n- 导出文件为 `prices.csv`，导出前创建 `output` 目录。\n\n### 1.2 SKU 比较\n\n- **约束**：比较 SKU 之前，统一转换为大写。\n- **来源**：t_cat_sku\n\n| 时间（UTC） | 轨迹 ID | 文件 | 变更 |\n|---|---|---|---|\n| 2026-10-21 03:40 | t_price | src/price.ts | 新增 `amount` 列，列表直接读取 |\n| 2026-10-21 04:10 | t_export | src/export.ts | 导出前创建 `output` 目录，写入 `prices.json` |\n| 2026-10-21 04:40 | t_cat_sku | src/price.ts | SKU 比较前统一转大写 |\n| 2026-10-21 05:30 | t_cat_round | src/price.ts | 价格显示保留两位小数 |\n| 2026-10-21 06:00 | t_cat_tz | src/price.ts | 价格生效日按 UTC 零点切换 |\n| 2026-10-21 07:00 | t_cat_dup | src/price.ts | 重复 SKU 取最后一条 |\n| 2026-10-21 08:20 | t_csv | src/export.ts | 导出格式由 JSON 改为 CSV（`prices.csv`） |\n\n### 1.5 重复 SKU 处理\n\n- **约束**：同一个 SKU 出现多条记录时，取最后一条，忽略前面的记录。\n- **来源**：t_cat_dup",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\ncatalog 项目：src/price.ts 中比较 sku 前统一转成大写（用户原话：sku 比较前统一转大写）。 [t_cat_sku]\n\n- 价格列表读取 `price.amount`，不拼装说明文字。\n- 比较 SKU 前转大写。\n- 价格显示保留两位小数。\n- 价格生效日以 UTC 零点为准。\n- 同一 SKU 多条记录时，保留最后一条。\n- 导出文件为 `prices.csv`，导出前创建 `output` 目录。\n\n### 1.2 SKU 比较\n\n- **约束**：比较 SKU 之前，统一转换为大写。\n- **来源**：t_cat_sku\n\n| 时间（UTC） | 轨迹 ID | 文件 | 变更 |\n|---|---|---|---|\n| 2026-10-21 03:40 | t_price | src/price.ts | 新增 `amount` 列，列表直接读取 |\n| 2026-10-21 04:10 | t_export | src/export.ts | 导出前创建 `output` 目录，写入 `prices.json` |\n| 2026-10-21 04:40 | t_cat_sku | src/price.ts | SKU 比较前统一转大写 |\n| 2026-10-21 05:30 | t_cat_round | src/price.ts | 价格显示保留两位小数 |\n| 2026-10-21 06:00 | t_cat_tz | src/price.ts | 价格生效日按 UTC 零点切换 |\n| 2026-10-21 07:00 | t_cat_dup | src/price.ts | 重复 SKU 取最后一条 |\n| 2026-10-21 08:20 | t_csv | src/export.ts | 导出格式由 JSON 改为 CSV（`prices.csv`） |\n\n### 1.5 重复 SKU 处理\n\n- **约束**：同一个 SKU 出现多条记录时，取最后一条，忽略前面的记录。\n- **来源**：t_cat_dup\n\n问题：比较 sku 之前要先做什么处理？"
+        }
+      ],
+      "answer": "比较 SKU 之前，要先统一转换为大写（在 `src/price.ts` 中实现）。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"比较 sku 之前要先做什么处理？\",\"mustInclude\":[\"统一转成大写\"],\"mustNotInclude\":[],\"answer\":\"比较 SKU 之前，要先统一转换为大写（在 `src/price.ts` 中实现）。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答说明比较 SKU 前要统一转为大写，与必需要点“统一转成大写”语义一致，且未出现禁止内容。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答说明比较 SKU 前要统一转为大写，与必需要点“统一转成大写”语义一致，且未出现禁止内容。"
+    },
+    {
+      "id": "q24",
+      "kind": "cross-project",
+      "question": "catalog 的价格表为什么要新增一列金额？",
+      "goldAnswer": "因为价格查询太慢。",
+      "mustInclude": [
+        "价格查询太慢"
+      ],
+      "mustNotInclude": [
+        "扫全文太慢"
+      ],
+      "context": "catalog 项目：price 表新增 amount 列，列表改为直接读取 amount 列，不再拼装说明文字，以加快价格查询（涉及 src/price.ts）。 [t_price]\n\n# catalog 项目 Wiki\n\n本 Wiki 记录 catalog 项目中价格（price）与导出（export）相关的当前做法、约束和版本变化。信息来自项目工作轨迹，每条结论标注了来源轨迹 ID。",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\ncatalog 项目：price 表新增 amount 列，列表改为直接读取 amount 列，不再拼装说明文字，以加快价格查询（涉及 src/price.ts）。 [t_price]\n\n# catalog 项目 Wiki\n\n本 Wiki 记录 catalog 项目中价格（price）与导出（export）相关的当前做法、约束和版本变化。信息来自项目工作轨迹，每条结论标注了来源轨迹 ID。\n\n问题：catalog 的价格表为什么要新增一列金额？"
+        }
+      ],
+      "answer": "catalog 的价格表新增 `amount` 列，是为了加快价格查询。列表页原先要临时拼装说明文字来得到金额，现在改为直接读取 `amount` 列，省去了拼装这一步。相关改动在 `src/price.ts`（来源：t_price）。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"catalog 的价格表为什么要新增一列金额？\",\"mustInclude\":[\"价格查询太慢\"],\"mustNotInclude\":[\"扫全文太慢\"],\"answer\":\"catalog 的价格表新增 `amount` 列，是为了加快价格查询。列表页原先要临时拼装说明文字来得到金额，现在改为直接读取 `amount` 列，省去了拼装这一步。相关改动在 `src/price.ts`（来源：t_price）。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答说明新增 amount 列是为了加快价格查询（即针对价格查询慢的问题），体现了现行要点，且未出现“扫全文太慢”这一陷阱说法。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答说明新增 amount 列是为了加快价格查询（即针对价格查询慢的问题），体现了现行要点，且未出现“扫全文太慢”这一陷阱说法。"
+    },
+    {
+      "id": "q25",
+      "kind": "cross-project",
+      "question": "月报为什么后来要改成直接读 entries 的一列？",
+      "goldAnswer": "因为月报扫全文太慢。",
+      "mustInclude": [
+        "扫全文太慢"
+      ],
+      "mustNotInclude": [
+        "价格查询太慢"
+      ],
+      "context": "entries 表新增 amount 列（src/entries.ts），月报金额直接从该列读取汇总；用户原话：\"还是给 entries 加上 amount 列，汇总改成直接读这一列。\" [t_column]\nledger 月报（src/report.ts）改为按 entries.amount 列汇总，不再扫描 journal 全文提取金额；用户原话：\"月报扫全文太慢了。\" [t_column]\n\n| 时间 | 变更 | 来源 |\n|---|---|---|\n| 2026-10-21 01:15 | 金额暂留 journal 正文，entries 表结构不动（后被取代） | t_journal |\n| 2026-10-21 03:20 | 月初月末改按 UTC+8 | t_ledger_tz |\n| 2026-10-21 03:30 | 月报先按客户过滤再汇总，空客户测试 | t_report |\n| 2026-10-21 04:50 | 月报输出到 `reports/YYYY-MM.txt` | t_ledger_loc |\n| 2026-10-21 05:20 | 撤回 export 拷贝，不建 output 目录 | t_wait |\n| 2026-10-21 05:40 | 金额按整数分累加 | t_ledger_round |\n| 2026-10-21 06:40 | `.env` 留本机，文档不放连接串 | t_admin_env |\n| 2026-10-21 06:50 | 冲突定义改为“结论相反才算” | t_admin_claim |\n| 2026-10-21 07:10 | 改动先放 feature 分支 | t_admin_branch |\n| 2026-10-21 07:20 | 汇总前按 id 去重，留最早一条 | t_ledger_dup |\n| 2026-10-21 08:40 | entries 新增 `amount` 列，月报改读该列 | t_column |\n| 2026-10-21 09:40 | 撤回 month.json 改动，修复 report.ts 读取逻辑 | t_bug |\n| 2026-10-21 09:50 | 从 README 删除连接串 | t_env |\n| 2026-10-21 10:15 | 约定告知另一窗口 amount 列已加 | t_tell |\n| 2026-10-21 11:10 | dry-run 后确认 export 不恢复、不搬入 | t_dryrun |\n\nledger 是一个记账项目，核心代码包括 `src/report.ts`（月报）、`src/entries.ts`（entries 表）和 `tests/report.test.ts`（月报测试）。本页记录当前有效的约定、决策和状态，并标注已被取代的旧说法。\n\n### 金额来源\n- 当前做法：`entries` 表新增 `amount` 列（`src/entries.ts`），月报直接按 `entries.amount` 汇总，不再扫描 journal 正文提取金额。（t_column）\n- 已取代：早先“金额留在 journal 正文中、entries 表结构不动”的做法（t_journal、t_report 中的 README 说明）已不成立。\n\n### 处理顺序与规则\n1. 汇总前按 `id` 去重，重复分录只保留最早一条。（t_ledger_dup）\n2. 按客户过滤后再汇总。（t_report）\n3. 金额列为空的 entries 不进入月报。（t_column）\n4. 客户名为空时不丢弃整行，只跳过金额列为空的行；客户名为空但金额存在的记录会保留。（t_bug）",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\nentries 表新增 amount 列（src/entries.ts），月报金额直接从该列读取汇总；用户原话：\"还是给 entries 加上 amount 列，汇总改成直接读这一列。\" [t_column]\nledger 月报（src/report.ts）改为按 entries.amount 列汇总，不再扫描 journal 全文提取金额；用户原话：\"月报扫全文太慢了。\" [t_column]\n\n| 时间 | 变更 | 来源 |\n|---|---|---|\n| 2026-10-21 01:15 | 金额暂留 journal 正文，entries 表结构不动（后被取代） | t_journal |\n| 2026-10-21 03:20 | 月初月末改按 UTC+8 | t_ledger_tz |\n| 2026-10-21 03:30 | 月报先按客户过滤再汇总，空客户测试 | t_report |\n| 2026-10-21 04:50 | 月报输出到 `reports/YYYY-MM.txt` | t_ledger_loc |\n| 2026-10-21 05:20 | 撤回 export 拷贝，不建 output 目录 | t_wait |\n| 2026-10-21 05:40 | 金额按整数分累加 | t_ledger_round |\n| 2026-10-21 06:40 | `.env` 留本机，文档不放连接串 | t_admin_env |\n| 2026-10-21 06:50 | 冲突定义改为“结论相反才算” | t_admin_claim |\n| 2026-10-21 07:10 | 改动先放 feature 分支 | t_admin_branch |\n| 2026-10-21 07:20 | 汇总前按 id 去重，留最早一条 | t_ledger_dup |\n| 2026-10-21 08:40 | entries 新增 `amount` 列，月报改读该列 | t_column |\n| 2026-10-21 09:40 | 撤回 month.json 改动，修复 report.ts 读取逻辑 | t_bug |\n| 2026-10-21 09:50 | 从 README 删除连接串 | t_env |\n| 2026-10-21 10:15 | 约定告知另一窗口 amount 列已加 | t_tell |\n| 2026-10-21 11:10 | dry-run 后确认 export 不恢复、不搬入 | t_dryrun |\n\nledger 是一个记账项目，核心代码包括 `src/report.ts`（月报）、`src/entries.ts`（entries 表）和 `tests/report.test.ts`（月报测试）。本页记录当前有效的约定、决策和状态，并标注已被取代的旧说法。\n\n### 金额来源\n- 当前做法：`entries` 表新增 `amount` 列（`src/entries.ts`），月报直接按 `entries.amount` 汇总，不再扫描 journal 正文提取金额。（t_column）\n- 已取代：早先“金额留在 journal 正文中、entries 表结构不动”的做法（t_journal、t_report 中的 README 说明）已不成立。\n\n### 处理顺序与规则\n1. 汇总前按 `id` 去重，重复分录只保留最早一条。（t_ledger_dup）\n2. 按客户过滤后再汇总。（t_report）\n3. 金额列为空的 entries 不进入月报。（t_column）\n4. 客户名为空时不丢弃整行，只跳过金额列为空的行；客户名为空但金额存在的记录会保留。（t_bug）\n\n问题：月报为什么后来要改成直接读 entries 的一列？"
+        }
+      ],
+      "answer": "月报原来要扫描整份 journal 全文来提取金额，速度太慢。改为在 `entries` 表新增 `amount` 列后，月报（`src/report.ts`）可以直接读取这一列汇总，不必再解析全文。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"月报为什么后来要改成直接读 entries 的一列？\",\"mustInclude\":[\"扫全文太慢\"],\"mustNotInclude\":[\"价格查询太慢\"],\"answer\":\"月报原来要扫描整份 journal 全文来提取金额，速度太慢。改为在 `entries` 表新增 `amount` 列后，月报（`src/report.ts`）可以直接读取这一列汇总，不必再解析全文。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答包含必需要点“扫全文太慢”，改为直接读 entries 表的 amount 列，未出现禁止的“价格查询太慢”陷阱说法。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答包含必需要点“扫全文太慢”，改为直接读 entries 表的 amount 列，未出现禁止的“价格查询太慢”陷阱说法。"
+    },
+    {
+      "id": "q26",
+      "kind": "cross-project",
+      "question": "月报的月初月末按哪个时区切？",
+      "goldAnswer": "按 UTC+8 算月初月末。",
+      "mustInclude": [
+        "UTC+8"
+      ],
+      "mustNotInclude": [
+        "UTC 零点"
+      ],
+      "context": "月报的月初月末按东八区（UTC+8）计算，不使用 UTC。用户原话：\"月报的月初月末按东八区算，别用 UTC。\"助手确认：src/report.ts 切月份时按 UTC+8 计算月初月末，不再用 UTC。 [t_ledger_tz]",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\n月报的月初月末按东八区（UTC+8）计算，不使用 UTC。用户原话：\"月报的月初月末按东八区算，别用 UTC。\"助手确认：src/report.ts 切月份时按 UTC+8 计算月初月末，不再用 UTC。 [t_ledger_tz]\n\n问题：月报的月初月末按哪个时区切？"
+        }
+      ],
+      "answer": "东八区（UTC+8）。月初月末按这个时区计算，不用 UTC。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"月报的月初月末按哪个时区切？\",\"mustInclude\":[\"UTC+8\"],\"mustNotInclude\":[\"UTC 零点\"],\"answer\":\"东八区（UTC+8）。月初月末按这个时区计算，不用 UTC。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答明确给出东八区（UTC+8），包含必要要点，且只是否定地提到不用 UTC，没有把“UTC 零点”当成现行说法。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确给出东八区（UTC+8），包含必要要点，且只是否定地提到不用 UTC，没有把“UTC 零点”当成现行说法。"
+    },
+    {
+      "id": "q27",
+      "kind": "cross-project",
+      "question": "价格的生效日按哪个时间切换？",
+      "goldAnswer": "按 UTC 零点切换。",
+      "mustInclude": [
+        "UTC 零点"
+      ],
+      "mustNotInclude": [
+        "UTC+8"
+      ],
+      "context": "catalog 项目：价格生效日按 UTC 零点切换，不看本地时区（涉及 src/price.ts；用户原话：价格生效日按 UTC 零点切）。 [t_cat_tz]",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\ncatalog 项目：价格生效日按 UTC 零点切换，不看本地时区（涉及 src/price.ts；用户原话：价格生效日按 UTC 零点切）。 [t_cat_tz]\n\n问题：价格的生效日按哪个时间切换？"
+        }
+      ],
+      "answer": "价格生效日按 **UTC 零点**切换。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"价格的生效日按哪个时间切换？\",\"mustInclude\":[\"UTC 零点\"],\"mustNotInclude\":[\"UTC+8\"],\"answer\":\"价格生效日按 **UTC 零点**切换。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答明确给出按UTC零点切换，包含必需要点，且未出现UTC+8这一陷阱说法。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确给出按UTC零点切换，包含必需要点，且未出现UTC+8这一陷阱说法。"
+    },
+    {
+      "id": "q28",
+      "kind": "cross-project",
+      "question": "月报结果写到哪里？",
+      "goldAnswer": "写到 reports/ 下，文件名按月份，比如 2026-10.txt。",
+      "mustInclude": [
+        "reports/"
+      ],
+      "mustNotInclude": [
+        "output 目录"
+      ],
+      "context": "ledger 月报结果写到 reports/ 目录下，文件名按月份命名，例如 2026-10.txt（用户原话：\"月报结果写到 reports 目录下，按月份命名。\"；相关文件 src/report.ts，来源 t_ledger_loc，2026-10-21）。 [t_ledger_loc]",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\nledger 月报结果写到 reports/ 目录下，文件名按月份命名，例如 2026-10.txt（用户原话：\"月报结果写到 reports 目录下，按月份命名。\"；相关文件 src/report.ts，来源 t_ledger_loc，2026-10-21）。 [t_ledger_loc]\n\n问题：月报结果写到哪里？"
+        }
+      ],
+      "answer": "月报结果写到项目的 `reports/` 目录下，文件名按月份命名，例如 `2026-10.txt`。生成逻辑在 `src/report.ts` 中。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"月报结果写到哪里？\",\"mustInclude\":[\"reports/\"],\"mustNotInclude\":[\"output 目录\"],\"answer\":\"月报结果写到项目的 `reports/` 目录下，文件名按月份命名，例如 `2026-10.txt`。生成逻辑在 `src/report.ts` 中。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答包含现行要点 reports/，未出现陷阱说法 output 目录。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答包含现行要点 reports/，未出现陷阱说法 output 目录。"
+    },
+    {
+      "id": "q29",
+      "kind": "cross-project",
+      "question": "月报里重复的分录怎么处理？",
+      "goldAnswer": "按 id 去重，只留最早一条。",
+      "mustInclude": [
+        "只留最早一条"
+      ],
+      "mustNotInclude": [
+        "取最后一条"
+      ],
+      "context": "用户原话：\"重复的分录按 id 去重，留最早那条。\"助手确认：report.ts 汇总前先按 id 去重，重复的只留最早一条。（项目 ledger，文件 src/report.ts，来源 t_ledger_dup，2026-10-21） [t_ledger_dup]",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\n用户原话：\"重复的分录按 id 去重，留最早那条。\"助手确认：report.ts 汇总前先按 id 去重，重复的只留最早一条。（项目 ledger，文件 src/report.ts，来源 t_ledger_dup，2026-10-21） [t_ledger_dup]\n\n问题：月报里重复的分录怎么处理？"
+        }
+      ],
+      "answer": "根据记忆，月报汇总前会先按分录的 id 去重，同一个 id 出现多次时只保留最早的那一条。这条规则记录在 ledger 项目的 src/report.ts 里，记录日期是 2026-10-21。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"月报里重复的分录怎么处理？\",\"mustInclude\":[\"只留最早一条\"],\"mustNotInclude\":[\"取最后一条\"],\"answer\":\"根据记忆，月报汇总前会先按分录的 id 去重，同一个 id 出现多次时只保留最早的那一条。这条规则记录在 ledger 项目的 src/report.ts 里，记录日期是 2026-10-21。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答明确说明同一 id 只保留最早一条，体现了必须包含的要点，且没有出现“取最后一条”这一陷阱说法。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确说明同一 id 只保留最早一条，体现了必须包含的要点，且没有出现“取最后一条”这一陷阱说法。"
+    },
+    {
+      "id": "q30",
+      "kind": "cross-project",
+      "question": "同一个 sku 出现多条价格怎么取？",
+      "goldAnswer": "取最后一条，前面的忽略。",
+      "mustInclude": [
+        "取最后一条"
+      ],
+      "mustNotInclude": [
+        "只留最早一条"
+      ],
+      "context": "catalog 项目：src/price.ts 中同一个 sku 出现多条时取最后一条，前面的忽略（用户原话：同一个 sku 出现多条，取最后一条）。 [t_cat_dup]\n\n- **约束**：同一个 SKU 出现多条记录时，取最后一条，忽略前面的记录。\n- **来源**：t_cat_dup\n\n| 时间（UTC） | 轨迹 ID | 文件 | 变更 |\n|---|---|---|---|\n| 2026-10-21 03:40 | t_price | src/price.ts | 新增 `amount` 列，列表直接读取 |\n| 2026-10-21 04:10 | t_export | src/export.ts | 导出前创建 `output` 目录，写入 `prices.json` |\n| 2026-10-21 04:40 | t_cat_sku | src/price.ts | SKU 比较前统一转大写 |\n| 2026-10-21 05:30 | t_cat_round | src/price.ts | 价格显示保留两位小数 |\n| 2026-10-21 06:00 | t_cat_tz | src/price.ts | 价格生效日按 UTC 零点切换 |\n| 2026-10-21 07:00 | t_cat_dup | src/price.ts | 重复 SKU 取最后一条 |\n| 2026-10-21 08:20 | t_csv | src/export.ts | 导出格式由 JSON 改为 CSV（`prices.csv`） |\n\n- 价格列表读取 `price.amount`，不拼装说明文字。\n- 比较 SKU 前转大写。\n- 价格显示保留两位小数。\n- 价格生效日以 UTC 零点为准。\n- 同一 SKU 多条记录时，保留最后一条。\n- 导出文件为 `prices.csv`，导出前创建 `output` 目录。\n\n### 1.2 SKU 比较\n\n- **约束**：比较 SKU 之前，统一转换为大写。\n- **来源**：t_cat_sku\n\n### 1.5 重复 SKU 处理",
+      "answerPrompt": [
+        {
+          "role": "system",
+          "content": "你根据给定记忆回答问题。记忆里可能有过时说法或其他项目的说法。只采用和当前问题同一个项目、而且没有被后来改口覆盖的事实。回答用普通中文，不要复述你否定的那句原话。"
+        },
+        {
+          "role": "user",
+          "content": "记忆：\ncatalog 项目：src/price.ts 中同一个 sku 出现多条时取最后一条，前面的忽略（用户原话：同一个 sku 出现多条，取最后一条）。 [t_cat_dup]\n\n- **约束**：同一个 SKU 出现多条记录时，取最后一条，忽略前面的记录。\n- **来源**：t_cat_dup\n\n| 时间（UTC） | 轨迹 ID | 文件 | 变更 |\n|---|---|---|---|\n| 2026-10-21 03:40 | t_price | src/price.ts | 新增 `amount` 列，列表直接读取 |\n| 2026-10-21 04:10 | t_export | src/export.ts | 导出前创建 `output` 目录，写入 `prices.json` |\n| 2026-10-21 04:40 | t_cat_sku | src/price.ts | SKU 比较前统一转大写 |\n| 2026-10-21 05:30 | t_cat_round | src/price.ts | 价格显示保留两位小数 |\n| 2026-10-21 06:00 | t_cat_tz | src/price.ts | 价格生效日按 UTC 零点切换 |\n| 2026-10-21 07:00 | t_cat_dup | src/price.ts | 重复 SKU 取最后一条 |\n| 2026-10-21 08:20 | t_csv | src/export.ts | 导出格式由 JSON 改为 CSV（`prices.csv`） |\n\n- 价格列表读取 `price.amount`，不拼装说明文字。\n- 比较 SKU 前转大写。\n- 价格显示保留两位小数。\n- 价格生效日以 UTC 零点为准。\n- 同一 SKU 多条记录时，保留最后一条。\n- 导出文件为 `prices.csv`，导出前创建 `output` 目录。\n\n### 1.2 SKU 比较\n\n- **约束**：比较 SKU 之前，统一转换为大写。\n- **来源**：t_cat_sku\n\n### 1.5 重复 SKU 处理\n\n问题：同一个 sku 出现多条价格怎么取？"
+        }
+      ],
+      "answer": "在 catalog 项目的 `src/price.ts` 中，同一个 SKU 出现多条记录时，**取最后一条，前面的记录忽略**。",
+      "judgePrompt": [
+        {
+          "role": "system",
+          "content": "你是评测裁判。只返回 JSON：{\"pass\":true或false,\"errorType\":\"empty|superseded|ambiguous|wrong_project|other|none\",\"reason\":\"一句话\"}。pass 为 true 时 errorType 用 none。答错时：empty 是召回空或答不出；superseded 是把已经过时的说法当成现行；ambiguous 是几条相似信息没有选；wrong_project 是用了另一个项目的说法；其余用 other。pass 为 true 的条件是：回答体现每一条现行要点，并且没有把任一陷阱说法当成现行事实。"
+        },
+        {
+          "role": "user",
+          "content": "{\"question\":\"同一个 sku 出现多条价格怎么取？\",\"mustInclude\":[\"取最后一条\"],\"mustNotInclude\":[\"只留最早一条\"],\"answer\":\"在 catalog 项目的 `src/price.ts` 中，同一个 SKU 出现多条记录时，**取最后一条，前面的记录忽略**。\"}"
+        }
+      ],
+      "judgmentText": "{\"pass\":true,\"errorType\":\"none\",\"reason\":\"回答包含必需要点“取最后一条”，未出现禁止的“只留最早一条”，也没有采用过时说法。\"}",
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答包含必需要点“取最后一条”，未出现禁止的“只留最早一条”，也没有采用过时说法。"
+    }
+  ]
+}
