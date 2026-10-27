@@ -1,0 +1,1 @@
+{"docs": 14991, "queries": 14228, "first_doc": "afnetworking:0", "last_doc": "trpc:14990", "first_query": "lookup_class_by_name-000", "last_query": "config_module_imports-000", "model": "/root/rjf/bench-eval/codememo/models/all-MiniLM-L6-v2", "theta": 0.55}

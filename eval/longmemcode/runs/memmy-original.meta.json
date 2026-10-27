@@ -1,0 +1,15 @@
+{
+  "variant": "original",
+  "commit": "8cd095c7f67300b6582a912bdd7fd33163d5e5b4",
+  "branch": "origin/main",
+  "code": "/root/rjf/bench-eval/longmemcode/worktrees/memmy-main/Memory/src/algorithm/plugin-algorithms.ts",
+  "scope_code": null,
+  "limit": 10,
+  "llm_filter": false,
+  "scope_self_check": false,
+  "prefilter_self_check": true,
+  "layers": [
+    "L1"
+  ],
+  "mode": "search"
+}

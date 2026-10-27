@@ -47,7 +47,7 @@ import { ObservationDependenciesPendingError } from "../evidence/observation-mem
 import { isObservationMemory, observationJobPayload, observationMemoryState, OBSERVATION_SUMMARY_MODEL_UNCONFIGURED } from "../observation-memory-state.js";
 import { externalSkillGeneration, externalSkillJobPayload } from "../evidence/history-skill-policy.js";
 
-export const SUMMARY_WORKER_CONCURRENCY = 4;
+export const SUMMARY_WORKER_CONCURRENCY = Math.max(1, Number(process.env.MEMMY_SUMMARY_CONCURRENCY || 4));
 export const EMBEDDING_RETRY_LEASE_MS = 5 * 60_000;
 const SUMMARY_JOBS_REQUIRING_MODEL: readonly string[] = ["trace_summary", "import_summary", "observation_extract", "episode_title"];
 

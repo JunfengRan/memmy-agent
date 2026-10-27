@@ -1,0 +1,15 @@
+{
+  "variant": "project",
+  "commit": "16ad2b526995284896867e6981d1fa73d73727d5",
+  "branch": "dev-project-memory-beta",
+  "code": "/root/rjf/memmy-agent/Memory/src/algorithm/plugin-algorithms.ts",
+  "scope_code": "/root/rjf/memmy-agent/Memory/src/service/project/scope-weight.ts",
+  "limit": 10,
+  "llm_filter": false,
+  "scope_self_check": true,
+  "prefilter_self_check": true,
+  "layers": [
+    "L1"
+  ],
+  "mode": "search"
+}

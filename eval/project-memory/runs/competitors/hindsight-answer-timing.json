@@ -1,0 +1,682 @@
+{
+  "arm": "hindsight",
+  "method": "memmy-answers-from-tool-context",
+  "access": "Hindsight reflect 合成后再连同四路召回原文交给 Memmy 回答",
+  "model": "claude-haiku-5-5",
+  "reflectRan": true,
+  "phases": {
+    "reflectMs": 231341,
+    "answerMs": 286992,
+    "reflectCalls": 29,
+    "answerCalls": 29,
+    "judgeCalls": 29
+  },
+  "buildMs": 93160737866,
+  "complete": true,
+  "questionCount": 29,
+  "answered": 29,
+  "excluded": [
+    "q21"
+  ],
+  "passed": 16,
+  "accuracy": 0.5517241379310345,
+  "recallPassed": 10,
+  "retrievalWrong": 12,
+  "answerWrongDespiteRecall": 1,
+  "byKind": {
+    "cross-project": {
+      "passed": 7,
+      "total": 11
+    },
+    "stale": {
+      "passed": 2,
+      "total": 9
+    },
+    "plain": {
+      "passed": 3,
+      "total": 3
+    },
+    "overridden": {
+      "passed": 4,
+      "total": 5
+    },
+    "scope-leak": {
+      "passed": 0,
+      "total": 1
+    }
+  },
+  "questions": [
+    {
+      "id": "q01",
+      "kind": "cross-project",
+      "question": "ledger 月报的金额现在是从哪里取的？",
+      "goldAnswer": "entries 没有加列，金额还在 journal 正文里，月报读全文再按客户挑。",
+      "mustInclude": [
+        "journal 正文"
+      ],
+      "mustNotInclude": [
+        "amount 列"
+      ],
+      "context": "月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\ncatalog 那个导出做法能用，我把它抄进 ledger。\nexport 已经抄进 ledger，月报导出前会先建 output 目录。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n月报金额按整数分算，别用浮点。\nreport.ts 里金额按整数分累加，最后再换算成元显示。\n月报的月初月末按东八区算，别用 UTC。\nreport.ts 切月份时按 UTC+8 算月初月末，不再用 UTC。\n先别抄。等 dry-run 报告出来再看要不要搬。\nexport 那份拷贝我撤掉了。ledger 不建 output 目录，等 dry-run 报告。\n月报结果写到 reports 目录下，按月份命名。\n月报结果写到 reports/ 下，文件名按月份，比如 2026-10.txt。\n回复短一点，步骤放到清单里就行。\n回复里只留结果。步骤记在清单里，不再按顺序铺在正文里。",
+      "reflect": "月报金额从 **journal 正文**里取。`report.ts` 读入 journal 全文，再按客户把金额挑出来。`entries` 表结构没有改。金额按整数分累加，最后换算成元显示。",
+      "reflectError": null,
+      "answer": "月报金额从 **journal 正文**取。`report.ts` 读入 journal 全文，按客户挑出金额，用整数分累加，最后换算成元显示。`entries` 表结构没有改。",
+      "recallPassed": true,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确指出月报金额取自 journal 正文，包含必需要点，没有把 amount 列当作现行来源。",
+      "retrievalWrong": false,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q02",
+      "kind": "stale",
+      "question": "ledger 月报的金额现在是从哪里取的？",
+      "goldAnswer": "entries 加了 amount 列，月报按这列汇总，不再扫描 journal 全文。",
+      "mustInclude": [
+        "不再扫描 journal 全文"
+      ],
+      "mustNotInclude": [
+        "从正文里挑出来"
+      ],
+      "context": "月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\ncatalog 那个导出做法能用，我把它抄进 ledger。\nexport 已经抄进 ledger，月报导出前会先建 output 目录。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n月报金额按整数分算，别用浮点。\nreport.ts 里金额按整数分累加，最后再换算成元显示。\n月报的月初月末按东八区算，别用 UTC。\nreport.ts 切月份时按 UTC+8 算月初月末，不再用 UTC。\n先别抄。等 dry-run 报告出来再看要不要搬。\nexport 那份拷贝我撤掉了。ledger 不建 output 目录，等 dry-run 报告。\n月报结果写到 reports 目录下，按月份命名。\n月报结果写到 reports/ 下，文件名按月份，比如 2026-10.txt。",
+      "reflect": "月报的金额从 journal 正文里取。`report.ts` 读入 journal 全文，按客户过滤后，从正文中挑出金额，以整数分累加，最后换算成元显示。`entries` 表结构没有改动。",
+      "reflectError": null,
+      "answer": "月报金额现在从 journal 正文里取。`report.ts` 读入 journal 全文，按客户过滤后从正文中挑出金额，以整数分累加，最后换算成元显示。`entries` 表没有加 amount 列，结构保持原样。",
+      "recallPassed": false,
+      "passed": false,
+      "errorType": "superseded",
+      "reason": "回答把已过时的做法当成现行：仍说月报金额从 journal 正文中挑出，未体现现行要点“不再扫描 journal 全文”。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q03",
+      "kind": "plain",
+      "question": "空客户的测试现在是怎么写的？",
+      "goldAnswer": "没有客户名时这笔不进月报。",
+      "mustInclude": [
+        "没有客户名时这笔不进月报"
+      ],
+      "mustNotInclude": [],
+      "context": "月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n回复短一点，步骤放到清单里就行。\n回复里只留结果。步骤记在清单里，不再按顺序铺在正文里。\n没有清单就不要把一轮拆成几段。\n这轮没有清单，我就整段做完，没有拆开。\n做完把每一步都写在回复里。\n我会在回复正文里按顺序写完每一个步骤，不另开清单。\n月报的月初月末按东八区算，别用 UTC。\nreport.ts 切月份时按 UTC+8 算月初月末，不再用 UTC。\n价格查询太慢。给 price 表加 amount 列，列表改成直接读这一列。\nprice 表加了 amount 列。列表不再拼装说明文字，直接读 amount 列，查询更快。\n每句话都拆成一段。\n我按句子把这轮拆开了，每句一段。",
+      "reflect": "空客户的测试在 `tests/report.test.ts` 里，断言没有客户名的那笔记录不会进入月报。",
+      "reflectError": null,
+      "answer": "`tests/report.test.ts` 里有一个空客户测试，断言没有客户名的那笔记录不会进入月报。我手上只有记忆摘要，没有测试的具体代码，所以无法给出断言的细节。",
+      "recallPassed": true,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确指出空客户测试断言没有客户名的记录不进入月报，覆盖了必需要点，且没有出现禁止的说法。",
+      "retrievalWrong": false,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q04",
+      "kind": "stale",
+      "question": "空客户的测试现在是怎么写的？",
+      "goldAnswer": "空客户但金额还在的会留下，只跳过金额列为空的行。",
+      "mustInclude": [
+        "空客户但金额还在的会留下"
+      ],
+      "mustNotInclude": [
+        "没有客户名时这笔不进月报"
+      ],
+      "context": "测试失败不是样例文件造成的。空客户进来时 report.ts 把整笔记丢了，把 month.json 的改动撤回，修读取。\nmonth.json 已撤回。问题在 report.ts：客户名为空时整行被丢掉。现在只跳过金额列为空的行，空客户但金额还在的会留下。\n月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n这个失败以读取代码为准。\n空客户被丢掉是 report.ts 的读取问题，不是样例文件旧了。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。\n数据库密码别写进仓库。\nREADME 里的连接串已经删掉了。密码只留在本机的 .env，没有把 .env 的内容抄进来。\n没有清单就不要把一轮拆成几段。\n这轮没有清单，我就整段做完，没有拆开。",
+      "reflect": "当前的空客户测试在 `tests/report.test.ts` 里，断言是：**没有客户名的那笔不进月报。**\n\n这是按召回的记录作答，我没有打开文件核对。",
+      "reflectError": null,
+      "answer": "当前的空客户测试在 `tests/report.test.ts` 里，断言是：**没有客户名的那笔不进月报。** 我是根据记忆回答的，没有打开文件核对，建议以文件为准。",
+      "recallPassed": false,
+      "passed": false,
+      "errorType": "superseded",
+      "reason": "回答把已过时的说法“没有客户名的那笔不进月报”当成现行断言，且缺少现行要点“空客户但金额还在的会留下”。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q05",
+      "kind": "cross-project",
+      "question": "ledger 月报里的金额是怎么算的，精度上有什么要求？",
+      "goldAnswer": "金额按整数分累加，最后再换算成元显示。",
+      "mustInclude": [
+        "整数分"
+      ],
+      "mustNotInclude": [
+        "两位小数"
+      ],
+      "context": "月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\nledger 现在怎么出月报？\n这个窗口没打开项目目录，我这里没有月报代码。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\ncatalog 那个导出做法能用，我把它抄进 ledger。\nexport 已经抄进 ledger，月报导出前会先建 output 目录。\ndry-run 报告出来了，export 在月报里用不上。\n看了 dry-run 报告：月报用不上 export，那份拷贝不再恢复，也不往 ledger 搬。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n月报金额按整数分算，别用浮点。\nreport.ts 里金额按整数分累加，最后再换算成元显示。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。",
+      "reflect": "月报金额按整数分累加，不用浮点。`report.ts` 先按客户过滤，再把金额累加成分，最后换算成元显示。\n\n金额仍然写在 journal 正文里。月报读取 journal 全文，从中挑出每个客户的金额，`entries` 表结构没有改。没有客户名的记录不进月报，`tests/report.test.ts` 里有对应的测试。README 也写明了金额在 journal 正文中。\n\n`tests/fixtures/month.json` 里的样例金额已经补齐，`report.ts` 没有改动。",
+      "reflectError": null,
+      "answer": "ledger 月报的金额按**整数分**累加，不用浮点数。具体流程是：\n\n1. `report.ts` 先按客户过滤。\n2. 把每笔金额累加成分（整数）。\n3. 最后换算成元再显示。\n\n金额仍然写在 journal 正文里。月报读取 journal 全文，从中挑出每个客户的金额，`entries` 表结构没有改。没有客户名的记录不进月报，这一点由 `tests/report.test.ts` 中的测试覆盖，README 也写明了金额位于 journal 正文中。\n\n这些信息来自记忆，我没有读取当前项目的代码来核对。",
+      "recallPassed": true,
+      "passed": false,
+      "errorType": "other",
+      "reason": "回答提到了“整数分”且未出现“两位小数”，但“金额仍在 journal 正文里”“entries 表结构没有改”等细节是凭记忆、未经代码核实的断言，无法确认是现行事实。",
+      "retrievalWrong": false,
+      "answerWrongDespiteRecall": true
+    },
+    {
+      "id": "q06",
+      "kind": "cross-project",
+      "question": "价格列表里的金额怎么取整？",
+      "goldAnswer": "输出前按两位小数取整。",
+      "mustInclude": [
+        "两位小数"
+      ],
+      "mustNotInclude": [
+        "整数分"
+      ],
+      "context": "月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n月报金额按整数分算，别用浮点。\nreport.ts 里金额按整数分累加，最后再换算成元显示。\n测试失败不是样例文件造成的。空客户进来时 report.ts 把整笔记丢了，把 month.json 的改动撤回，修读取。\nmonth.json 已撤回。问题在 report.ts：客户名为空时整行被丢掉。现在只跳过金额列为空的行，空客户但金额还在的会留下。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n数据库密码别写进仓库。\nREADME 里的连接串已经删掉了。密码只留在本机的 .env，没有把 .env 的内容抄进来。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。\n重复的分录按 id 去重，留最早那条。\nreport.ts 汇总前先按 id 去重，重复的只留最早一条。",
+      "reflect": "召回的事实里没有\"价格列表\"的取整规则，也没有提到价格列表。能确定的只有月报的金额处理方式：金额按整数分（不用浮点）累加，汇总后再换算成元显示。如果价格列表有取整要求，需要你告诉我具体规则，或者我可以查看对应的代码和文件。",
+      "reflectError": null,
+      "answer": "记忆里没有\"价格列表\"的取整规则，也没有提到价格列表本身，所以我无法告诉你它是怎么取整的。\n\n我能确定的只有月报的金额处理方式：`report.ts` 里金额按整数分累加，汇总后再换算成元显示。这是月报的规则，不能直接套用到价格列表上。\n\n如果你告诉我价格列表的具体取整要求，我可以据此回答。也可以让我查看价格列表对应的代码和文件，我会直接从源码里找取整逻辑。",
+      "recallPassed": false,
+      "passed": false,
+      "errorType": "empty",
+      "reason": "回答称记忆里没有价格列表的取整规则，未体现必须包含的现行要点“两位小数”；虽然提到“整数分”，但明确说明那是月报的规则，没有把它当成价格列表的现行事实。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q07",
+      "kind": "stale",
+      "question": "catalog 导出的价格表现在是什么格式？",
+      "goldAnswer": "导出的是 csv，写成 prices.csv。",
+      "mustInclude": [
+        "prices.csv"
+      ],
+      "mustNotInclude": [
+        "写成 prices.json"
+      ],
+      "context": "catalog 那个导出做法能用，我把它抄进 ledger。\nexport 已经抄进 ledger，月报导出前会先建 output 目录。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n导出价格表。目录没有就先建，再写文件。\nexport.ts 会先创建 output 目录，再把价格表写成 prices.json。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。\n测试失败不是样例文件造成的。空客户进来时 report.ts 把整笔记丢了，把 month.json 的改动撤回，修读取。\nmonth.json 已撤回。问题在 report.ts：客户名为空时整行被丢掉。现在只跳过金额列为空的行，空客户但金额还在的会留下。\n这个失败以读取代码为准。\n空客户被丢掉是 report.ts 的读取问题，不是样例文件旧了。\nledger 现在怎么出月报？\n这个窗口没打开项目目录，我这里没有月报代码。",
+      "reflect": "catalog 的价格表导出为 JSON 文件 `prices.json`。导出前先创建 output 目录，再写入该文件。\n\n召回的事实里没有说明 JSON 内部的字段结构。",
+      "reflectError": null,
+      "answer": "catalog 的价格表导出为 JSON 文件 `prices.json`，导出前会先创建 output 目录。JSON 内部的字段结构，记忆里没有记录，需要看 catalog 的导出代码或实际生成的文件才能确定。",
+      "recallPassed": false,
+      "passed": false,
+      "errorType": "superseded",
+      "reason": "回答把已过时的 prices.json 当成现行格式，没有体现现行的 prices.csv。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q08",
+      "kind": "cross-project",
+      "question": "导出价格表时 output 目录不存在怎么办？",
+      "goldAnswer": "先创建 output 目录，再写文件。",
+      "mustInclude": [
+        "先创建 output 目录"
+      ],
+      "mustNotInclude": [
+        "不建 output 目录"
+      ],
+      "context": "导出价格表。目录没有就先建，再写文件。\nexport.ts 会先创建 output 目录，再把价格表写成 prices.json。\n先别抄。等 dry-run 报告出来再看要不要搬。\nexport 那份拷贝我撤掉了。ledger 不建 output 目录，等 dry-run 报告。\ncatalog 那个导出做法能用，我把它抄进 ledger。\nexport 已经抄进 ledger，月报导出前会先建 output 目录。\ndry-run 报告出来了，export 在月报里用不上。\n看了 dry-run 报告：月报用不上 export，那份拷贝不再恢复，也不往 ledger 搬。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。\n测试失败不是样例文件造成的。空客户进来时 report.ts 把整笔记丢了，把 month.json 的改动撤回，修读取。\nmonth.json 已撤回。问题在 report.ts：客户名为空时整行被丢掉。现在只跳过金额列为空的行，空客户但金额还在的会留下。\n价格查询太慢。给 price 表加 amount 列，列表改成直接读这一列。\nprice 表加了 amount 列。列表不再拼装说明文字，直接读 amount 列，查询更快。",
+      "reflect": "导出价格表时，`export.ts` 会先创建 `output` 目录，再把价格表写成 `prices.json`，所以目录不存在也不会报错。",
+      "reflectError": null,
+      "answer": "`export.ts` 会先创建 `output` 目录，再把价格表写入 `prices.json`。所以目录不存在时不会报错。",
+      "recallPassed": false,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确说明 export.ts 会先创建 output 目录再写入 prices.json，包含要点“先创建 output 目录”，没有出现“不建 output 目录”的说法。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q09",
+      "kind": "stale",
+      "question": "catalog 的导出做法抄进 ledger 了吗，后面还搬吗？",
+      "goldAnswer": "拷贝撤掉了。dry-run 报告出来后，月报用不上 export，不再搬。",
+      "mustInclude": [
+        "月报用不上 export"
+      ],
+      "mustNotInclude": [
+        "再看要不要搬"
+      ],
+      "context": "catalog 那个导出做法能用，我把它抄进 ledger。\nexport 已经抄进 ledger，月报导出前会先建 output 目录。\n月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\nledger 现在怎么出月报？\n这个窗口没打开项目目录，我这里没有月报代码。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\ndry-run 报告出来了，export 在月报里用不上。\n看了 dry-run 报告：月报用不上 export，那份拷贝不再恢复，也不往 ledger 搬。\n测试失败不是样例文件造成的。空客户进来时 report.ts 把整笔记丢了，把 month.json 的改动撤回，修读取。\nmonth.json 已撤回。问题在 report.ts：客户名为空时整行被丢掉。现在只跳过金额列为空的行，空客户但金额还在的会留下。\n先别抄。等 dry-run 报告出来再看要不要搬。\nexport 那份拷贝我撤掉了。ledger 不建 output 目录，等 dry-run 报告。\n这个失败以读取代码为准。\n空客户被丢掉是 report.ts 的读取问题，不是样例文件旧了。",
+      "reflect": "**不搬了。** 之前确实把 catalog 的导出做法抄进过 ledger，但后来已经撤掉。dry-run 报告显示月报用不上 export，所以那份拷贝不再恢复，ledger 也不建 output 目录。",
+      "reflectError": null,
+      "answer": "**没有搬，之前抄过的那份也已经撤掉了。** dry-run 报告显示月报用不上 export，所以 ledger 不恢复那份拷贝，也不建 output 目录。",
+      "recallPassed": false,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答包含必需要点「月报用不上 export」，且没有出现禁止的陷阱说法「再看要不要搬」。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q10",
+      "kind": "stale",
+      "question": "回复里的步骤我是怎么要求写的？",
+      "goldAnswer": "回复只留结果，步骤记在清单里。",
+      "mustInclude": [
+        "步骤记在清单里"
+      ],
+      "mustNotInclude": [
+        "按顺序写完每一个步骤"
+      ],
+      "context": "回复短一点，步骤放到清单里就行。\n回复里只留结果。步骤记在清单里，不再按顺序铺在正文里。\n做完把每一步都写在回复里。\n我会在回复正文里按顺序写完每一个步骤，不另开清单。\n没有清单就不要把一轮拆成几段。\n这轮没有清单，我就整段做完，没有拆开。\n数据库密码别写进仓库。\nREADME 里的连接串已经删掉了。密码只留在本机的 .env，没有把 .env 的内容抄进来。\n月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。\n别告诉另一个窗口我改了表。\n这次改动只留在当前窗口，我没有写给别的会话。",
+      "reflect": "你要求在回复正文里按顺序写出每一个步骤，不另开清单，做完的每一步都要写进回复。如果一轮没有清单，就整段完成，不拆成几段。",
+      "reflectError": null,
+      "answer": "你要求在回复正文里按顺序写出每一个步骤，不另开清单，做完的每一步都要写进回复。如果一轮没有清单，就整段完成，不拆成几段。\n\n记忆里还有一条说法是步骤应记在清单里、正文只留结果，和这个要求相反。我无法从记录中确定哪条是后来的，所以按出现最多、最明确的这一条来回答。如果你的意思已经变了，可以直接告诉我。",
+      "recallPassed": false,
+      "passed": false,
+      "errorType": "superseded",
+      "reason": "回答把“按顺序写出每一个步骤、不另开清单”当作现行要求，而现行要点“步骤记在清单里”只作为冲突记忆出现，未被采用。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q11",
+      "kind": "overridden",
+      "question": "没有清单的那一轮，要不要拆成几段？",
+      "goldAnswer": "整段做完，没有拆开。",
+      "mustInclude": [
+        "没有拆开"
+      ],
+      "mustNotInclude": [
+        "每句一段"
+      ],
+      "context": "没有清单就不要把一轮拆成几段。\n这轮没有清单，我就整段做完，没有拆开。\n回复短一点，步骤放到清单里就行。\n回复里只留结果。步骤记在清单里，不再按顺序铺在正文里。\n只有两边结论相反才算冲突。\n两边对同一件事说法相反，才需要判断谁对。改了不同文件不算。\n做完把每一步都写在回复里。\n我会在回复正文里按顺序写完每一个步骤，不另开清单。\n另一个窗口下次开口时得知道列已经加上了。\n等那个窗口下一次开口，再告诉它 entries 已经有 amount 列。现在这条对话里还送不过去。\n别告诉另一个窗口我改了表。\n这次改动只留在当前窗口，我没有写给别的会话。\n导出价格表。目录没有就先建，再写文件。\nexport.ts 会先创建 output 目录，再把价格表写成 prices.json。\n直接在 main 上改吧，省得合并。\n我直接在 main 上改了，没有开分支。",
+      "reflect": "不要拆成几段，整段写完。",
+      "reflectError": null,
+      "answer": "不用拆，没有清单的那一轮应整段写完。",
+      "recallPassed": true,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确表示不用拆、整段写完，体现了“没有拆开”的要点，且没有出现“每句一段”之类的陷阱说法。",
+      "retrievalWrong": false,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q12",
+      "kind": "overridden",
+      "question": "只改了不同文件的两次修改，算冲突吗？",
+      "goldAnswer": "改了不同文件不算，两边对同一件事说法相反才算。",
+      "mustInclude": [
+        "改了不同文件不算"
+      ],
+      "mustNotInclude": [
+        "都记成冲突"
+      ],
+      "context": "只有两边结论相反才算冲突。\n两边对同一件事说法相反，才需要判断谁对。改了不同文件不算。\n月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n没有清单就不要把一轮拆成几段。\n这轮没有清单，我就整段做完，没有拆开。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n测试失败不是样例文件造成的。空客户进来时 report.ts 把整笔记丢了，把 month.json 的改动撤回，修读取。\nmonth.json 已撤回。问题在 report.ts：客户名为空时整行被丢掉。现在只跳过金额列为空的行，空客户但金额还在的会留下。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n这个失败以读取代码为准。\n空客户被丢掉是 report.ts 的读取问题，不是样例文件旧了。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。",
+      "reflect": "不算冲突。冲突要求两次修改对同一件事的结论相反。你改了不同的文件，比如 `tests/fixtures/month.json` 和 `report.ts`，它们各自的说法并不相互矛盾，不需要判断谁对。",
+      "reflectError": null,
+      "answer": "不算冲突。冲突要求两次修改对同一件事的结论相反。改的是不同文件，各自的说法不矛盾，不需要判断谁对。\n\n就你的情况来说，只改了 `tests/fixtures/month.json`，把样例里的金额填上了，`report.ts` 没有动，两者不构成冲突。",
+      "recallPassed": true,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确指出改了不同文件不算冲突，与 mustInclude 一致，且没有把两次修改记成冲突。",
+      "retrievalWrong": false,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q13",
+      "kind": "overridden",
+      "question": "数据库连接串能写进说明或普通记录吗？",
+      "goldAnswer": "不能。.env 留在本机，说明和普通记录里都不放连接串。",
+      "mustInclude": [
+        "都不放连接串"
+      ],
+      "mustNotInclude": [
+        "这样查库更快"
+      ],
+      "context": "数据库密码别写进仓库。\nREADME 里的连接串已经删掉了。密码只留在本机的 .env，没有把 .env 的内容抄进来。\n价格查询太慢。给 price 表加 amount 列，列表改成直接读这一列。\nprice 表加了 amount 列。列表不再拼装说明文字，直接读 amount 列，查询更快。\n另一个窗口下次开口时得知道列已经加上了。\n等那个窗口下一次开口，再告诉它 entries 已经有 amount 列。现在这条对话里还送不过去。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n只要改了文件就算冲突。\nreport.ts 和 README 都改过，我把两次修改都记成冲突。\n别告诉另一个窗口我改了表。\n这次改动只留在当前窗口，我没有写给别的会话。\n重复的分录按 id 去重，留最早那条。\nreport.ts 汇总前先按 id 去重，重复的只留最早一条。",
+      "reflect": "不能。数据库密码不应写进仓库。README 里原来的连接串已经删掉，密码只保存在本机的 `.env` 文件里，没有抄到其他地方。",
+      "reflectError": null,
+      "answer": "不能。连接串里含有密码，不应写进 README 或其他说明文档、普通记录中。README 里原来的连接串已经删掉，密码只保存在本机的 `.env` 文件里。如果文档需要说明配置方式，可以只写变量名和占位符，例如 `DATABASE_URL=<从本机 .env 获取>`。",
+      "recallPassed": false,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确表示说明文档和普通记录都不应放连接串，未出现“这样查库更快”这一陷阱说法。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q14",
+      "kind": "stale",
+      "question": "README 里现在还有数据库连接串吗？",
+      "goldAnswer": "没有了，连接串已经删掉了，密码只留在本机 .env。",
+      "mustInclude": [
+        "已经删掉了"
+      ],
+      "mustNotInclude": [
+        "连接串已经写进 README"
+      ],
+      "context": "数据库密码别写进仓库。\nREADME 里的连接串已经删掉了。密码只留在本机的 .env，没有把 .env 的内容抄进来。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n只要改了文件就算冲突。\nreport.ts 和 README 都改过，我把两次修改都记成冲突。\n把连接串写进 README，别人好查。\n连接串已经写进 README，这样查库更快。\n月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\nledger 现在怎么出月报？\n这个窗口没打开项目目录，我这里没有月报代码。\n另一个窗口下次开口时得知道列已经加上了。\n等那个窗口下一次开口，再告诉它 entries 已经有 amount 列。现在这条对话里还送不过去。\n.env 不能出现在说明里。\n.env 留在本机。说明和普通记录里都不放连接串。",
+      "reflect": "**有。** 召回事实里，较晚的一条记录写明连接串已经写进 README，用来加快查库。这条晚于更早的“已删掉”，所以以它为准。\n\n这与“数据库密码不进仓库”“说明和普通记录里都不放连接串”的要求相冲突。建议把 README 里的连接串删掉，只把密码留在本机的 `.env` 里。",
+      "reflectError": null,
+      "answer": "有。记忆里较晚的一条记录写明，连接串已经写进 README，用来加快查库。这条比更早的记录新，所以以它为准。\n\n这和“数据库密码不进仓库”的要求相冲突。建议你打开 README 检查并删掉连接串，密码只留在本机的 `.env` 里。我这边只能看到记忆内容，无法直接确认文件的当前状态。",
+      "recallPassed": false,
+      "passed": false,
+      "errorType": "superseded",
+      "reason": "回答把“连接串已经写进 README”当成现行事实并据此建议排查，没有体现现行要点“连接串已经删掉了”。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q15",
+      "kind": "overridden",
+      "question": "月报测试失败是因为样例文件旧了吗？",
+      "goldAnswer": "不是，是 report.ts 的读取问题。",
+      "mustInclude": [
+        "report.ts 的读取问题"
+      ],
+      "mustNotInclude": [
+        "把样例里的金额填上了"
+      ],
+      "context": "月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n月报金额按整数分算，别用浮点。\nreport.ts 里金额按整数分累加，最后再换算成元显示。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。\n月报结果写到 reports 目录下，按月份命名。\n月报结果写到 reports/ 下，文件名按月份，比如 2026-10.txt。\n月报的月初月末按东八区算，别用 UTC。\nreport.ts 切月份时按 UTC+8 算月初月末，不再用 UTC。\nledger 现在怎么出月报？\n这个窗口没打开项目目录，我这里没有月报代码。\n测试失败不是样例文件造成的。空客户进来时 report.ts 把整笔记丢了，把 month.json 的改动撤回，修读取。\nmonth.json 已撤回。问题在 report.ts：客户名为空时整行被丢掉。现在只跳过金额列为空的行，空客户但金额还在的会留下。",
+      "reflect": "不是。测试失败不是样例文件造成的，我们已经把 `tests/fixtures/month.json` 的改动撤回了。\n\n真正的原因在 `report.ts`：客户名为空时，整行会被丢掉。现在的处理是只跳过金额列为空的行，客户名为空但金额还在的那笔会保留在月报里。",
+      "reflectError": null,
+      "answer": "不是。样例文件 `tests/fixtures/month.json` 的改动已经撤回。真正的原因在 `report.ts`：客户名为空时，整行会被丢掉。现在只跳过金额列为空的行，所以客户名为空但金额还在的那笔会保留在月报里。",
+      "recallPassed": false,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答指出问题在 report.ts 的读取逻辑（客户名为空时整行被丢弃），没有把样例金额填写当作原因，也没有采用过时说法。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q16",
+      "kind": "stale",
+      "question": "tests/fixtures/month.json 现在还留着之前的改动吗？",
+      "goldAnswer": "没有，month.json 已撤回。",
+      "mustInclude": [
+        "month.json 已撤回"
+      ],
+      "mustNotInclude": [
+        "把样例里的金额填上了"
+      ],
+      "context": "月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。\n测试失败不是样例文件造成的。空客户进来时 report.ts 把整笔记丢了，把 month.json 的改动撤回，修读取。\nmonth.json 已撤回。问题在 report.ts：客户名为空时整行被丢掉。现在只跳过金额列为空的行，空客户但金额还在的会留下。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n导出别写 json 了，改成 csv。\nexport.ts 现在写 prices.csv，不再用 json。\n月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n重复的分录按 id 去重，留最早那条。\nreport.ts 汇总前先按 id 去重，重复的只留最早一条。\nledger 现在怎么出月报？\n这个窗口没打开项目目录，我这里没有月报代码。",
+      "reflect": "没有，`tests/fixtures/month.json` 的改动已经撤回，现在保持原样。测试失败的原因在 `report.ts`，不在样例文件。",
+      "reflectError": null,
+      "answer": "不还留着。`tests/fixtures/month.json` 的改动已经撤回，现在保持原样。测试失败的原因在 `report.ts`，不在这个样例文件。",
+      "recallPassed": false,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确说明 month.json 的改动已撤回、保持原样，体现了现行要点，且没有把“把样例里的金额填上了”当作现行事实。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q17",
+      "kind": "stale",
+      "question": "空客户的账为什么会被整行丢掉？",
+      "goldAnswer": "客户名为空时整行被丢掉，现在只跳过金额列为空的行。",
+      "mustInclude": [
+        "客户名为空时整行被丢掉"
+      ],
+      "mustNotInclude": [
+        "没有客户名时这笔不进月报"
+      ],
+      "context": "月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n测试失败不是样例文件造成的。空客户进来时 report.ts 把整笔记丢了，把 month.json 的改动撤回，修读取。\nmonth.json 已撤回。问题在 report.ts：客户名为空时整行被丢掉。现在只跳过金额列为空的行，空客户但金额还在的会留下。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n月报金额按整数分算，别用浮点。\nreport.ts 里金额按整数分累加，最后再换算成元显示。\n这个失败以读取代码为准。\n空客户被丢掉是 report.ts 的读取问题，不是样例文件旧了。\n重复的分录按 id 去重，留最早那条。\nreport.ts 汇总前先按 id 去重，重复的只留最早一条。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。",
+      "reflect": "空客户的账被整行丢掉，原因在 `report.ts` 的读取逻辑。客户名为空时，它把整笔记录当作无效行丢弃了，金额也一并没有进入汇总。样例文件 `tests/fixtures/month.json` 没有过期，测试失败不是它造成的。",
+      "reflectError": null,
+      "answer": "空客户的账被整行丢掉，是 `report.ts` 的读取逻辑造成的。客户名为空时，它把整笔记录当作无效行丢弃，金额也就没有进入汇总。问题出在读取代码，不在样例文件 `tests/fixtures/month.json`。\n\n记忆里关于修复方向的说法前后不一致，我没法确定哪一条是最新的。有几点可以确定：\n\n- entries 表结构没有改，金额仍写在 journal 正文里，读取时从正文中挑出。\n- 汇总前先按 id 去重，重复分录只留最早一条。\n- 金额按整数分累加，最后再换算成元显示。\n\n要确定空客户的预期行为，需要再看一下当前的代码和测试。",
+      "recallPassed": false,
+      "passed": false,
+      "errorType": "superseded",
+      "reason": "回答体现了“客户名为空时整行被丢掉”，但又把“金额没有进入汇总”当作确定事实陈述，实质上重复了陷阱说法“没有客户名时这笔不进月报”。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q18",
+      "kind": "stale",
+      "question": "另一个窗口什么时候能知道 entries 已经有 amount 列？",
+      "goldAnswer": "要等那个窗口下一次开口，现在还送不过去。",
+      "mustInclude": [
+        "下一次开口"
+      ],
+      "mustNotInclude": [
+        "只留在当前窗口"
+      ],
+      "context": "月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n另一个窗口下次开口时得知道列已经加上了。\n等那个窗口下一次开口，再告诉它 entries 已经有 amount 列。现在这条对话里还送不过去。\n价格查询太慢。给 price 表加 amount 列，列表改成直接读这一列。\nprice 表加了 amount 列。列表不再拼装说明文字，直接读 amount 列，查询更快。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n别告诉另一个窗口我改了表。\n这次改动只留在当前窗口，我没有写给别的会话。\nledger 现在怎么出月报？\n这个窗口没打开项目目录，我这里没有月报代码。\n价格显示保留两位小数。\nlistAmounts 输出前按两位小数取整。",
+      "reflect": "另一个窗口不需要知道这件事，因为 entries 的表结构没有改，没有加 amount 列。这次改动只留在当前窗口，也没有写给别的会话，所以目前没有任何需要传过去的变更。",
+      "reflectError": null,
+      "answer": "目前没有需要告诉另一个窗口的内容，它不会知道 entries 有 amount 列，因为这一列并没有加上。后来的改动把表结构保持原样，金额仍写在 journal 正文里，月报读取时再从正文中挑出。这次改动只留在当前窗口，没有写给其他会话。",
+      "recallPassed": false,
+      "passed": false,
+      "errorType": "other",
+      "reason": "回答没有说明另一个窗口会在下一次开口时才知道这一信息，反而写明改动“只留在当前窗口”，命中了不应出现的表述。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q19",
+      "kind": "overridden",
+      "question": "改动应该放在哪个分支上？",
+      "goldAnswer": "先放 feature 分支，main 不直接改。",
+      "mustInclude": [
+        "main 不直接改"
+      ],
+      "mustNotInclude": [
+        "没有开分支"
+      ],
+      "context": "月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n只有两边结论相反才算冲突。\n两边对同一件事说法相反，才需要判断谁对。改了不同文件不算。\n月报金额按整数分算，别用浮点。\nreport.ts 里金额按整数分累加，最后再换算成元显示。\n回复短一点，步骤放到清单里就行。\n回复里只留结果。步骤记在清单里，不再按顺序铺在正文里。\n直接在 main 上改吧，省得合并。\n我直接在 main 上改了，没有开分支。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n测试失败不是样例文件造成的。空客户进来时 report.ts 把整笔记丢了，把 month.json 的改动撤回，修读取。\nmonth.json 已撤回。问题在 report.ts：客户名为空时整行被丢掉。现在只跳过金额列为空的行，空客户但金额还在的会留下。",
+      "reflect": "改动在 **main** 分支上，没有开新分支。",
+      "reflectError": null,
+      "answer": "改动应该放在 **main** 分支上。你明确说过直接在 main 上改，没有开新分支。",
+      "recallPassed": false,
+      "passed": false,
+      "errorType": "superseded",
+      "reason": "回答把已过时的“直接在 main 上改”当成现行做法，与要求的“main 不直接改”相反，并且包含了不应出现的“没有开分支”表述。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q20",
+      "kind": "scope-leak",
+      "question": "ledger 的月报现在怎么汇总金额？",
+      "goldAnswer": "这个窗口没打开项目目录，我这里没有月报代码。",
+      "mustInclude": [
+        "没有月报代码"
+      ],
+      "mustNotInclude": [
+        "不再扫描 journal 全文"
+      ],
+      "context": "ledger 现在怎么出月报？\n这个窗口没打开项目目录，我这里没有月报代码。\n月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\ncatalog 那个导出做法能用，我把它抄进 ledger。\nexport 已经抄进 ledger，月报导出前会先建 output 目录。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\ndry-run 报告出来了，export 在月报里用不上。\n看了 dry-run 报告：月报用不上 export，那份拷贝不再恢复，也不往 ledger 搬。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n月报金额按整数分算，别用浮点。\nreport.ts 里金额按整数分累加，最后再换算成元显示。\n先别抄。等 dry-run 报告出来再看要不要搬。\nexport 那份拷贝我撤掉了。ledger 不建 output 目录，等 dry-run 报告。",
+      "reflect": "ledger 的月报目前是这样汇总金额的：\n\n1. **读取方式**：`report.ts` 读取 journal 全文，不改 `entries` 表结构。金额仍写在 journal 正文里，读取时从正文中挑出每笔的金额。\n2. **过滤**：先按客户过滤，再汇总。没有客户名的记录不进月报，`tests/report.test.ts` 里有对应的空客户测试。\n3. **计算**：金额按整数分累加，最后再换算成元显示，避免浮点误差。\n\nREADME 里已写明金额仍在 journal 正文中。",
+      "reflectError": null,
+      "answer": "ledger 的月报现在这样汇总金额：\n\n1. **读取**：`report.ts` 读取 journal 全文。`entries` 表结构不变，金额仍写在 journal 正文里，读取时从正文中提取每笔的金额。\n2. **过滤**：先按客户过滤，没有客户名的记录不进月报。`tests/report.test.ts` 中有对应的空客户测试。\n3. **计算**：金额按整数分累加，最后换算成元显示，以避免浮点误差。\n\nREADME 也写明了金额仍保存在 journal 正文中。",
+      "recallPassed": false,
+      "passed": false,
+      "errorType": "superseded",
+      "reason": "回答未体现现行要点“没有月报代码”，反而把 report.ts 和其测试当作现行实现来描述，像是沿用了已过时的说法。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q22",
+      "kind": "plain",
+      "question": "在 src 目录下开的窗口改的月报，算 ledger 这个项目吗？",
+      "goldAnswer": "算，改的是 src 里的文件，仓库还是 ledger。",
+      "mustInclude": [
+        "仓库还是 ledger"
+      ],
+      "mustNotInclude": [],
+      "context": "月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\nledger 现在怎么出月报？\n这个窗口没打开项目目录，我这里没有月报代码。\n另一个窗口下次开口时得知道列已经加上了。\n等那个窗口下一次开口，再告诉它 entries 已经有 amount 列。现在这条对话里还送不过去。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\ncatalog 那个导出做法能用，我把它抄进 ledger。\nexport 已经抄进 ledger，月报导出前会先建 output 目录。\ndry-run 报告出来了，export 在月报里用不上。\n看了 dry-run 报告：月报用不上 export，那份拷贝不再恢复，也不往 ledger 搬。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n月报结果写到 reports 目录下，按月份命名。\n月报结果写到 reports/ 下，文件名按月份，比如 2026-10.txt。",
+      "reflect": "算。改动的文件在 src 里，但仓库还是 ledger，所以这些月报改动属于 ledger 项目。",
+      "reflectError": null,
+      "answer": "是的，属于 ledger 项目。改动的文件在 src 目录里，但所在仓库仍然是 ledger，所以这些月报改动都算在 ledger 项目下。",
+      "recallPassed": true,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确指出改动所在仓库仍是 ledger，即使在 src 目录下操作也归属 ledger 项目，覆盖了要求的现行要点，没有出现陷阱说法。",
+      "retrievalWrong": false,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q23",
+      "kind": "plain",
+      "question": "比较 sku 之前要先做什么处理？",
+      "goldAnswer": "先统一转成大写。",
+      "mustInclude": [
+        "统一转成大写"
+      ],
+      "mustNotInclude": [],
+      "context": "sku 比较前统一转大写。\nprice.ts 在比较 sku 前先统一转成大写。\n同一个 sku 出现多条，取最后一条。\nprice.ts 遇到重复 sku 取最后一条，前面的忽略。\n价格显示保留两位小数。\nlistAmounts 输出前按两位小数取整。\n做完把每一步都写在回复里。\n我会在回复正文里按顺序写完每一个步骤，不另开清单。\n回复短一点，步骤放到清单里就行。\n回复里只留结果。步骤记在清单里，不再按顺序铺在正文里。\n没有清单就不要把一轮拆成几段。\n这轮没有清单，我就整段做完，没有拆开。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。\nledger 现在怎么出月报？\n这个窗口没打开项目目录，我这里没有月报代码。",
+      "reflect": "比较 sku 之前，先把 sku 统一转成大写。",
+      "reflectError": null,
+      "answer": "比较 sku 之前，先把 sku 统一转成大写。",
+      "recallPassed": true,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答包含必须体现的要点“统一转成大写”，且没有出现禁止项。",
+      "retrievalWrong": false,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q24",
+      "kind": "cross-project",
+      "question": "catalog 的价格表为什么要新增一列金额？",
+      "goldAnswer": "因为价格查询太慢。",
+      "mustInclude": [
+        "价格查询太慢"
+      ],
+      "mustNotInclude": [
+        "扫全文太慢"
+      ],
+      "context": "catalog 那个导出做法能用，我把它抄进 ledger。\nexport 已经抄进 ledger，月报导出前会先建 output 目录。\n月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n测试失败不是样例文件造成的。空客户进来时 report.ts 把整笔记丢了，把 month.json 的改动撤回，修读取。\nmonth.json 已撤回。问题在 report.ts：客户名为空时整行被丢掉。现在只跳过金额列为空的行，空客户但金额还在的会留下。\n月报金额按整数分算，别用浮点。\nreport.ts 里金额按整数分累加，最后再换算成元显示。\n另一个窗口下次开口时得知道列已经加上了。\n等那个窗口下一次开口，再告诉它 entries 已经有 amount 列。现在这条对话里还送不过去。\n同一个 sku 出现多条，取最后一条。\nprice.ts 遇到重复 sku 取最后一条，前面的忽略。",
+      "reflect": "召回的事实里没有说 catalog 的价格表要新增金额列。\n\n和金额列有关的记录都在 ledger 的 entries 表上，而且后来已被推翻：一度打算给 entries 加 amount 列，让月报直接读这一列汇总，后来决定暂不改表结构。目前的现行做法是：entries 表结构保持原样，金额仍写在 journal 正文里，report.ts 读取时再从正文中挑出金额，按整数分累加，最后换算成元显示。\n\ncatalog 那边只留下两条：导出做法可以用，已抄进 ledger；price.ts 遇到重复 sku 时取最后一条。\n\n如果你指的是另一个需求，比如 catalog 价格表要加金额列，那需要你补充背景，召回的内容里没有相关信息。",
+      "reflectError": null,
+      "answer": "召回的记忆里没有“catalog 价格表要新增金额列”这项需求，我不能给出它的原因。\n\n和金额有关的记录都在 ledger 的 entries 表上，而且已经改口：\n\n- 先前打算给 entries 加 `amount` 列，让月报直接汇总这一列。\n- 后来决定暂不改表结构。现行做法是：entries 表结构保持原样，金额仍写在 journal 正文里，`report.ts` 读取时从正文中提取金额，按整数分累加，最后换算成元显示。\n\ncatalog 相关的记录只有两条：导出做法可用，已抄进 ledger；`price.ts` 遇到重复 sku 时取最后一条。\n\n如果你说的是另一个需求，比如 catalog 价格表要加金额列，请补充背景，比如它要解决什么问题、涉及哪些表或文件，我再据此回答。",
+      "recallPassed": false,
+      "passed": false,
+      "errorType": "empty",
+      "reason": "回答称召回记忆中没有该需求，未给出“价格查询太慢”这一原因，也未体现现行要点，属于答不出。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q25",
+      "kind": "cross-project",
+      "question": "月报为什么后来要改成直接读 entries 的一列？",
+      "goldAnswer": "因为月报扫全文太慢。",
+      "mustInclude": [
+        "扫全文太慢"
+      ],
+      "mustNotInclude": [
+        "价格查询太慢"
+      ],
+      "context": "月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n另一个窗口下次开口时得知道列已经加上了。\n等那个窗口下一次开口，再告诉它 entries 已经有 amount 列。现在这条对话里还送不过去。\n月报结果写到 reports 目录下，按月份命名。\n月报结果写到 reports/ 下，文件名按月份，比如 2026-10.txt。\n月报金额按整数分算，别用浮点。\nreport.ts 里金额按整数分累加，最后再换算成元显示。\n月报的月初月末按东八区算，别用 UTC。\nreport.ts 切月份时按 UTC+8 算月初月末，不再用 UTC。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。",
+      "reflect": "月报并没有改成读 entries 的一列。最初的想法是因为\"月报扫全文太慢\"，所以打算给 entries 加 amount 列，让汇总直接读它。但之后的决定推翻了这个方案：先不改 entries 的表结构，金额继续写在 journal 正文里，读取时再挑出来。\n\n目前的状态是：entries 没有 amount 列，report.ts 仍然读取 journal 全文，先按客户过滤再汇总。记录里没有写明改回的原因。",
+      "reflectError": null,
+      "answer": "月报并没有改成直接读 entries 的一列。最初的想法是月报扫全文太慢，所以打算给 entries 加 amount 列，让汇总直接读它。但后来的决定放弃了这个方案：entries 表结构不动，金额继续写在 journal 正文里，读取时再挑出来。\n\n目前的状态是：entries 没有 amount 列，report.ts 先读取 journal 全文，再按客户过滤和汇总。记录里没有写明放弃这个方案的原因。",
+      "recallPassed": true,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答包含“扫全文太慢”这一动机，没有出现“价格查询太慢”，并正确指出 amount 列方案已被放弃、现行做法是从 journal 正文读取。",
+      "retrievalWrong": false,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q26",
+      "kind": "cross-project",
+      "question": "月报的月初月末按哪个时区切？",
+      "goldAnswer": "按 UTC+8 算月初月末。",
+      "mustInclude": [
+        "UTC+8"
+      ],
+      "mustNotInclude": [
+        "UTC 零点"
+      ],
+      "context": "月报的月初月末按东八区算，别用 UTC。\nreport.ts 切月份时按 UTC+8 算月初月末，不再用 UTC。\n月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n月报结果写到 reports 目录下，按月份命名。\n月报结果写到 reports/ 下，文件名按月份，比如 2026-10.txt。\n月报金额按整数分算，别用浮点。\nreport.ts 里金额按整数分累加，最后再换算成元显示。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。\nledger 现在怎么出月报？\n这个窗口没打开项目目录，我这里没有月报代码。",
+      "reflect": "月报的月初月末按东八区（UTC+8）切分。",
+      "reflectError": null,
+      "answer": "月报的月初月末按东八区（UTC+8）切分，不用 UTC。`report.ts` 里切月份就是按这个时区算的。我这里是根据记忆回答的，没有打开项目代码核对。",
+      "recallPassed": true,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答包含必需要点 UTC+8，未出现陷阱说法 UTC 零点，也没有把过时说法当现行事实。",
+      "retrievalWrong": false,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q27",
+      "kind": "cross-project",
+      "question": "价格的生效日按哪个时间切换？",
+      "goldAnswer": "按 UTC 零点切换。",
+      "mustInclude": [
+        "UTC 零点"
+      ],
+      "mustNotInclude": [
+        "UTC+8"
+      ],
+      "context": "价格生效日按 UTC 零点切。\n价格生效日按 UTC 零点切换，不看本地时区。\n价格显示保留两位小数。\nlistAmounts 输出前按两位小数取整。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。\n另一个窗口下次开口时得知道列已经加上了。\n等那个窗口下一次开口，再告诉它 entries 已经有 amount 列。现在这条对话里还送不过去。\n月报金额按整数分算，别用浮点。\nreport.ts 里金额按整数分累加，最后再换算成元显示。\n月报的月初月末按东八区算，别用 UTC。\nreport.ts 切月份时按 UTC+8 算月初月末，不再用 UTC。\n导出价格表。目录没有就先建，再写文件。\nexport.ts 会先创建 output 目录，再把价格表写成 prices.json。\n价格查询太慢。给 price 表加 amount 列，列表改成直接读这一列。\nprice 表加了 amount 列。列表不再拼装说明文字，直接读 amount 列，查询更快。",
+      "reflect": "价格的生效日按 **UTC 零点**切换，不看本地时区。",
+      "reflectError": null,
+      "answer": "价格的生效日按 **UTC 零点**切换，不看本地时区。",
+      "recallPassed": false,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答包含必需要点“UTC 零点”，且未出现陷阱说法“UTC+8”。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q28",
+      "kind": "cross-project",
+      "question": "月报结果写到哪里？",
+      "goldAnswer": "写到 reports/ 下，文件名按月份，比如 2026-10.txt。",
+      "mustInclude": [
+        "reports/"
+      ],
+      "mustNotInclude": [
+        "output 目录"
+      ],
+      "context": "月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n月报金额按整数分算，别用浮点。\nreport.ts 里金额按整数分累加，最后再换算成元显示。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。\n月报结果写到 reports 目录下，按月份命名。\n月报结果写到 reports/ 下，文件名按月份，比如 2026-10.txt。\nledger 现在怎么出月报？\n这个窗口没打开项目目录，我这里没有月报代码。\n回复短一点，步骤放到清单里就行。\n回复里只留结果。步骤记在清单里，不再按顺序铺在正文里。",
+      "reflect": "月报结果写到 `reports/` 目录下，文件名按月份命名，例如 `2026-10.txt`。",
+      "reflectError": null,
+      "answer": "月报结果写到 `reports/` 目录下，文件名按月份命名，例如 `2026-10.txt`。",
+      "recallPassed": true,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答包含现行要点 `reports/` 目录，且没有提及已过时的 “output 目录” 说法。",
+      "retrievalWrong": false,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q29",
+      "kind": "cross-project",
+      "question": "月报里重复的分录怎么处理？",
+      "goldAnswer": "按 id 去重，只留最早一条。",
+      "mustInclude": [
+        "只留最早一条"
+      ],
+      "mustNotInclude": [
+        "取最后一条"
+      ],
+      "context": "月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。\nentries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。\n月报金额按整数分算，别用浮点。\nreport.ts 里金额按整数分累加，最后再换算成元显示。\n月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。\nreport.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。\n月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。\n没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。\n月报的月初月末按东八区算，别用 UTC。\nreport.ts 切月份时按 UTC+8 算月初月末，不再用 UTC。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。\n月报结果写到 reports 目录下，按月份命名。\n月报结果写到 reports/ 下，文件名按月份，比如 2026-10.txt。\nledger 现在怎么出月报？\n这个窗口没打开项目目录，我这里没有月报代码。",
+      "reflect": "召回的事实里没有提到重复分录的处理方式。\n\n现有信息只说明：`report.ts` 仍然读取 journal 全文，按客户过滤后，从正文里挑出金额，用整数分累加，再换算成元。这个流程里没有去重步骤。如果 journal 里同一笔分录确实会出现两次，按现有描述，它很可能会被计入两次。\n\n另外，这个窗口没有打开项目目录，我无法查看 `report.ts` 或测试，确认不了是否有去重逻辑。你可以打开项目目录，或者把 `report.ts` 里汇总部分的代码贴给我，我再帮你看重复分录是怎么处理的。",
+      "reflectError": null,
+      "answer": "记忆里没有关于重复分录处理方式的记录。根据目前最新的描述，`report.ts` 仍然读取 journal 全文，按客户过滤后从正文里提取金额，用整数分累加，最后换算成元。这个流程里没有去重步骤，所以如果同一笔分录在 journal 里出现两次，它很可能会被计入两次。这是根据流程做的推断，不是已确认的行为。\n\n我这边打不开项目目录，无法查看 `report.ts` 或测试，所以确认不了是否有其他去重逻辑。你可以把 `report.ts` 里汇总部分的代码贴给我，我再帮你看重复分录是怎么处理的。",
+      "recallPassed": false,
+      "passed": false,
+      "errorType": "empty",
+      "reason": "回答称记忆里没有重复分录的处理记录，没有给出现行要点“只留最早一条”，只是推断会重复计入。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    },
+    {
+      "id": "q30",
+      "kind": "cross-project",
+      "question": "同一个 sku 出现多条价格怎么取？",
+      "goldAnswer": "取最后一条，前面的忽略。",
+      "mustInclude": [
+        "取最后一条"
+      ],
+      "mustNotInclude": [
+        "只留最早一条"
+      ],
+      "context": "同一个 sku 出现多条，取最后一条。\nprice.ts 遇到重复 sku 取最后一条，前面的忽略。\nsku 比较前统一转大写。\nprice.ts 在比较 sku 前先统一转成大写。\n只有两边结论相反才算冲突。\n两边对同一件事说法相反，才需要判断谁对。改了不同文件不算。\n价格显示保留两位小数。\nlistAmounts 输出前按两位小数取整。\n别告诉另一个窗口我改了表。\n这次改动只留在当前窗口，我没有写给别的会话。\n重复的分录按 id 去重，留最早那条。\nreport.ts 汇总前先按 id 去重，重复的只留最早一条。\nledger 现在怎么出月报？\n这个窗口没打开项目目录，我这里没有月报代码。\n月报测试出现问题了，我看样例文件是不是过期了。\n我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。",
+      "reflect": "同一个 sku 出现多条时，取**最后一条**，前面的忽略。`price.ts` 里遇到重复 sku 也是这样处理。比较 sku 之前，会先统一转成大写。",
+      "reflectError": null,
+      "answer": "同一个 sku 出现多条时，取**最后一条**，前面的忽略。`price.ts` 里处理重复 sku 也是这样。比较前会先把 sku 统一转成大写。",
+      "recallPassed": false,
+      "passed": true,
+      "errorType": "none",
+      "reason": "回答明确给出现行要点“取最后一条”，没有把“只留最早一条”当作现行做法。",
+      "retrievalWrong": true,
+      "answerWrongDespiteRecall": false
+    }
+  ]
+}
