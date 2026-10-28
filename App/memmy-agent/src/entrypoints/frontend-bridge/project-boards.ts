@@ -17,6 +17,7 @@ export interface ProjectBoardRecord {
   instruction: string;
   knowledgeBaseIds: string[];
   skillIds: string[];
+  connectorIds: string[];
   citations: ProjectBoardCitation[];
 }
 
@@ -24,6 +25,7 @@ export const EMPTY_PROJECT_BOARD: ProjectBoardRecord = {
   instruction: "",
   knowledgeBaseIds: [],
   skillIds: [],
+  connectorIds: [],
   citations: []
 };
 
@@ -83,7 +85,7 @@ function parseBoard(value: unknown): ProjectBoardRecord {
     throw new WebuiProjectError("project_request_invalid", 400);
   }
   const raw = value as Record<string, unknown>;
-  const allowed = new Set(["instruction", "knowledgeBaseIds", "skillIds", "citations"]);
+  const allowed = new Set(["instruction", "knowledgeBaseIds", "skillIds", "connectorIds", "citations"]);
   if (Object.keys(raw).some((key) => !allowed.has(key))) {
     throw new WebuiProjectError("project_request_invalid", 400);
   }
@@ -94,6 +96,7 @@ function parseBoard(value: unknown): ProjectBoardRecord {
     instruction: raw.instruction,
     knowledgeBaseIds: parseIds(raw.knowledgeBaseIds),
     skillIds: parseIds(raw.skillIds),
+    connectorIds: raw.connectorIds === undefined ? [] : parseIds(raw.connectorIds),
     citations: parseCitations(raw.citations)
   };
 }
@@ -141,6 +144,7 @@ function cloneBoard(board: ProjectBoardRecord): ProjectBoardRecord {
     instruction: board.instruction,
     knowledgeBaseIds: [...board.knowledgeBaseIds],
     skillIds: [...board.skillIds],
+    connectorIds: [...board.connectorIds],
     citations: board.citations.map((citation) => ({ ...citation }))
   };
 }

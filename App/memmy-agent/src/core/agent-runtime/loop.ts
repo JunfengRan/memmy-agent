@@ -112,6 +112,7 @@ import { FileStateStore } from "./tools/file-state.js";
 import { connectMissingServers, handleRuntimeControl, reloadLock, runtimeLines as mcpRuntimeLines, sessionExtra as mcpSessionExtra } from "./tools/mcp.js";
 import { BrowserSessionManager, type BrowserScope } from "./tools/browser.js";
 import { ContextBuilder } from "./context.js";
+import { projectRefRuntimeLines } from "./project-board.js";
 import { BUILTIN_SKILLS_DIR } from "./skills.js";
 import {
   Consolidator,
@@ -3195,6 +3196,7 @@ export class AgentLoop {
         ...mcpRuntimeLines(msg, {
           availableServerNames: new Set(Object.keys(this.mcpServers ?? {})),
         }),
+        ...projectRefRuntimeLines(msg),
       ],
       hook: this.lifecycleHook(),
       sessionWorkspace,
@@ -4192,6 +4194,7 @@ export class AgentLoop {
           ...mcpRuntimeLines(ctx.msg, {
             availableServerNames: new Set(Object.keys(this.mcpServers ?? {})),
           }),
+          ...projectRefRuntimeLines(ctx.msg),
         ],
         hook: this.lifecycleHook(),
         sessionWorkspace,
@@ -4596,6 +4599,7 @@ export class AgentLoop {
             ...mcpRuntimeLines(msg, {
               availableServerNames: new Set(Object.keys(this.mcpServers ?? {})),
             }),
+            ...projectRefRuntimeLines(msg),
           ],
       hook: this.lifecycleHook(),
       sessionWorkspace,
@@ -4625,6 +4629,7 @@ export class AgentLoop {
               ...mcpRuntimeLines(msg, {
                 availableServerNames: new Set(Object.keys(this.mcpServers ?? {})),
               }),
+              ...projectRefRuntimeLines(msg),
             ],
         hook: this.lifecycleHook(),
         sessionWorkspace,

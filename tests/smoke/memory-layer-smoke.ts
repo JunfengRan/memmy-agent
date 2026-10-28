@@ -6,12 +6,15 @@ import { fileURLToPath } from "node:url";
 import {
   API_ROUTES,
   DEFAULT_MEMMY_CONFIG,
+  loadMemmyConfig,
   MemoryDb,
   MemoryRestClient,
   MemoryService,
   listenMemoryHttpServer,
   type Embedder
 } from "../../Memory/src/index.js";
+import type { MemmyConfig } from "../../Memory/src/config/index.js";
+import { createLlmClient } from "../../Memory/src/model/llm.js";
 import { createLocalBackend, type LocalBackend } from "../../App/backend/src/index.js";
 import { createHttpMemoryClient } from "../../App/backend/src/adapters/outbound/memory-client/index.js";
 
@@ -31,13 +34,15 @@ export async function runMemoryLayerSmoke(): Promise<MemoryLayerSmokeResult> {
   const configPath = join(root, "config.yaml");
   const adapterDirectory = join(root, "empty-agent-adapters");
   mkdirSync(adapterDirectory, { recursive: true });
+  const loadedConfig = loadMemmyConfig();
+  const serviceConfig = smokeServiceConfig(loadedConfig.config, loadedConfig.path);
   const db = new MemoryDb({ path: join(root, "memory.sqlite") });
   const service = new MemoryService({
     db,
     mode: "dev",
     configPath,
-    configLoader: () => ({ config: DEFAULT_MEMMY_CONFIG, path: configPath }),
-    config: DEFAULT_MEMMY_CONFIG,
+    configLoader: () => ({ config: serviceConfig, path: configPath }),
+    config: serviceConfig,
     embedder: createSmokeEmbedder(),
     fetchAppMemoryBudget: async () => null
   });
@@ -76,7 +81,7 @@ export async function runMemoryLayerSmoke(): Promise<MemoryLayerSmokeResult> {
       memoryClient: createHttpMemoryClient({
         baseUrl: server.url,
         token: MEMORY_TOKEN,
-        timeoutMs: 5_000,
+        timeoutMs: 120_000,
         maxRetries: 0
       }),
       agentAdapterPluginDirectories: [adapterDirectory]
@@ -250,7 +255,7 @@ export async function runMemoryLayerSmoke(): Promise<MemoryLayerSmokeResult> {
 }
 
 async function waitForProcessingReady(baseUrl: string, memoryId: string): Promise<void> {
-  const deadline = Date.now() + 5_000;
+  const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
     const status = await backendRequest<{
       items?: Array<{ memoryId?: string; state?: string; errorMessage?: string | null }>;
@@ -293,6 +298,24 @@ function restoreEnv(name: string, value: string | undefined): void {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function smokeServiceConfig(source: MemmyConfig, path: string): MemmyConfig {
+  const config: MemmyConfig = {
+    ...DEFAULT_MEMMY_CONFIG,
+    roleRouting: source.roleRouting,
+    summary: source.summary,
+    evolution: source.evolution
+  };
+  const summary = createLlmClient(config.summary, { modelRole: "memory_summary" });
+  const evolution = createLlmClient(config.evolution, { modelRole: "memory_evolution" });
+  if (!summary.isConfigured() || !evolution.isConfigured()) {
+    throw new Error(`Memory summary and evolution models must be configured in ${path}`);
+  }
+  console.error(
+    `[memory-layer-smoke] summary=${config.summary.provider}/${config.summary.model} evolution=${config.evolution.provider}/${config.evolution.model}`
+  );
+  return config;
 }
 
 function createSmokeEmbedder(): Embedder {

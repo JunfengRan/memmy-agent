@@ -35,7 +35,9 @@ export function buildTopicView(input: {
     description: input.description.slice(0, 1500),
     decisions: input.decisions.slice(0, LIMITS.decisions).map((item) => ({ ...item, text: item.text.slice(0, 80) })),
     experiences: input.experiences.slice(0, LIMITS.experiences).map((item) => ({ ...item, text: item.text.slice(0, 80) })),
-    events: input.events.slice(0, LIMITS.events).map((item) => ({ ...item, text: item.text.slice(0, 60) })),
+    // Timeline entries are the audit trail; keep the full readable sentence so
+    // the board does not render an unexplained mid-word ellipsis.
+    events: input.events.slice(0, LIMITS.events).map((item) => ({ ...item, text: item.text.slice(0, 500) })),
     conflicts: input.conflicts.slice(0, LIMITS.conflicts).map((item) => ({ ...item, text: item.text.slice(0, 80) }))
   };
 }

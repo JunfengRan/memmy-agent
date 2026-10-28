@@ -35,7 +35,7 @@ import {
   type OpenMemoryReference
 } from "./memory/memory-reference-tags.js";
 import { MemoriesSubPage } from "./memory/memories-sub-page.js";
-import { OverviewSubPage } from "./memory/overview-sub-page.js";
+import { OverviewSubPage, type ProjectSuggestion } from "./memory/overview-sub-page.js";
 import { PoliciesSubPage } from "./memory/policies-sub-page.js";
 import { SkillsSubPage } from "./memory/skills-sub-page.js";
 import { SourcesSubPage } from "./memory/sources-sub-page.js";
@@ -144,6 +144,15 @@ export function MemoryPage(props: MemoryPageProps) {
     setActivePage(page);
   }, []);
 
+  const runProjectSuggestion = useCallback((suggestion: ProjectSuggestion) => {
+    try {
+      window.sessionStorage.setItem("memmy.pending-project-suggestion", JSON.stringify(suggestion));
+    } catch {
+      // The navigation still works when session storage is unavailable.
+    }
+    dispatch(appActions.navigate("/main"));
+  }, [dispatch]);
+
   useEffect(() => {
     if (!analyticsReady) {
       return;
@@ -160,7 +169,7 @@ export function MemoryPage(props: MemoryPageProps) {
 
   const childByPage = useMemo<Record<MemorySubPageId, ReactNode>>(
     () => ({
-      overview: <OverviewSubPage client={client} onNavigate={handleSubPageChange} />,
+      overview: <OverviewSubPage client={client} projects={state?.agent.projects ?? []} onRunSuggestion={runProjectSuggestion} onNavigate={handleSubPageChange} />,
       "computer-history": (
         <ComputerHistorySubPage
           client={clients?.memmyAgent ?? null}
@@ -208,7 +217,7 @@ export function MemoryPage(props: MemoryPageProps) {
       logs: <LogsSubPage client={client} />,
       sources: <SourcesSubPage />
     }),
-    [client, clients?.memmyAgent, dispatch, handleOpenMemoryReference, handleSubPageChange, referenceRequest, historyQuotaExhausted, t]
+    [client, clients?.memmyAgent, dispatch, handleOpenMemoryReference, handleSubPageChange, referenceRequest, historyQuotaExhausted, runProjectSuggestion, state?.agent.projects, t]
   );
 
   useEffect(() => {

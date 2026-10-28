@@ -107,6 +107,10 @@ function sessionSummary(session: Session, filePath: string, options: { repairPre
       : null,
     model_selection: modelSelectionWire(session.metadata?.modelSelection),
   };
+  const sourceAgent = session.metadata?.sourceAgent;
+  if (typeof sourceAgent === "string" && sourceAgent.trim()) {
+    summary.sourceAgent = sourceAgent.trim();
+  }
   if (session.metadata?.[WEBUI_SESSION_METADATA_KEY] === true) {
     const binding = readWebuiSessionBinding(session);
     summary.projectId = binding.projectId;

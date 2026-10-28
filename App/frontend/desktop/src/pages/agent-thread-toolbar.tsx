@@ -15,6 +15,7 @@ const POPOVER_OFFSET = 4;
 type AgentThreadToolbarProps = {
   title: string;
   titleTrailing?: ReactNode;
+  extraActions?: ReactNode;
   messages: AgentChatMessage[];
   panelOpen: boolean;
   onOpenPanel: () => void;
@@ -93,6 +94,7 @@ export function AgentThreadToolbar(props: AgentThreadToolbarProps) {
         {props.titleTrailing}
       </h1>
       <div className="thread-toolbar__actions" data-window-drag-exclusion="thread-toolbar-actions">
+        {props.extraActions}
         {searchOpen ? (
           <div className="thread-search" role="search">
             <span className="thread-search__icon" aria-hidden="true">

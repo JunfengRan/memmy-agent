@@ -538,7 +538,7 @@ describe("WebSocket HTTP route helpers", () => {
     expect(preflight.headers.get("access-control-allow-origin")).toBe(origin);
     expect(preflight.headers.get("access-control-allow-headers")).toContain("x-memmy-agent-auth");
     expect(preflight.headers.get("access-control-allow-methods")).toBe(
-      "GET, POST, PATCH, DELETE, OPTIONS",
+      "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     );
 
     const boot = await fetch(`http://127.0.0.1:${port}/webui/bootstrap`, {

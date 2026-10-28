@@ -22,6 +22,7 @@ describe("ProjectBoardStore", () => {
       instruction: "",
       knowledgeBaseIds: [],
       skillIds: [],
+      connectorIds: [],
       citations: []
     });
 
@@ -29,6 +30,7 @@ describe("ProjectBoardStore", () => {
       instruction: "先看事项再改接口",
       knowledgeBaseIds: ["kb-1"],
       skillIds: ["skill-1"],
+      connectorIds: [],
       citations: [{ fromSessionKey: "draft:project-1", toSessionKey: "sess-1" }]
     });
     expect(saved.instruction).toBe("先看事项再改接口");

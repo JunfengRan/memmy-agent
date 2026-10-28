@@ -244,6 +244,7 @@ const SessionSummarySchema = z.object({
   run_started_at: z.number().optional(),
   projectId: z.string().nullable(),
   cwd: z.string(),
+  sourceAgent: z.string().optional(),
   model_preset: z.string().nullable().optional(),
   model_selection: ModelSelectionSchema.nullable().optional()
 }).passthrough();
@@ -367,6 +368,7 @@ export const ProjectBoardSchema = z.object({
   instruction: z.string(),
   knowledgeBaseIds: z.array(z.string()),
   skillIds: z.array(z.string()),
+  connectorIds: z.array(z.string()).default([]),
   citations: z.array(ProjectBoardCitationSchema)
 });
 

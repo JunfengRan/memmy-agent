@@ -14876,3 +14876,14 @@ body.memmy-platform-windows :is(
 .memmy-browser-history-entry__main span { color: var(--color-text-secondary, #777); font-size: 12px; }
 .memmy-browser-history-entry__source { flex: none; color: var(--color-text-secondary, #777); font-size: 12px; line-height: 1.4; white-space: nowrap; }
 .memmy-browser-history-entry__delete { flex: none; }
+
+.memory-project-suggestions { margin-top: 20px; padding: 18px; border: 1px solid color-mix(in srgb, var(--color-action-sky, #4285f4) 18%, transparent); border-radius: 16px; background: linear-gradient(135deg, color-mix(in srgb, var(--color-action-sky, #4285f4) 7%, white), white); }
+.memory-project-suggestions__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; color: var(--color-action-sky, #4285f4); }
+.memory-project-suggestions__header h4 { margin: 0; color: var(--color-text-ink, #18211f); font-size: 15px; }
+.memory-project-suggestions__header p { margin: 4px 0 0; color: var(--color-text-secondary, #777); font-size: 12px; }
+.memory-project-suggestions__list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 9px; margin-top: 13px; }
+.memory-project-suggestion { display: flex; min-height: 120px; flex-direction: column; align-items: flex-start; gap: 7px; padding: 13px; border: 1px solid color-mix(in srgb, var(--color-action-sky, #4285f4) 16%, transparent); border-radius: 12px; background: rgba(255,255,255,.8); text-align: left; cursor: pointer; }
+.memory-project-suggestion:hover { border-color: color-mix(in srgb, var(--color-action-sky, #4285f4) 42%, transparent); transform: translateY(-1px); }
+.memory-project-suggestion__title { color: var(--color-text-ink, #18211f); font-size: 12.5px; font-weight: 650; line-height: 1.4; }
+.memory-project-suggestion__reason { flex: 1; color: var(--color-text-secondary, #777); font-size: 11px; line-height: 1.45; }
+.memory-project-suggestion__action { color: var(--color-action-sky, #4285f4); font-size: 11px; font-weight: 600; }

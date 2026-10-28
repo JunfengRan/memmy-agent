@@ -892,7 +892,11 @@ export const ProjectTopicSchema = z.object({
   experiences: z.array(ProjectTopicTextSchema),
   events: z.array(ProjectTopicTextSchema),
   conflicts: z.array(ProjectTopicTextSchema),
-  sourceSessionIds: z.array(z.string())
+  sourceSessionIds: z.array(z.string()),
+  /** Agent sources that contributed memories or activity to this work item. */
+  agents: z.array(z.string()).default([]),
+  /** Stored memory ids backing this item, used by the board delete action. */
+  memoryIds: z.array(z.string()).default([])
 });
 export type ProjectTopic = z.infer<typeof ProjectTopicSchema>;
 

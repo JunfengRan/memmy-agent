@@ -114,7 +114,7 @@ function memmyRuntimeConfigPlugin(): Plugin {
         response.setHeader("cache-control", "no-store");
 
         try {
-          const content = await readFile(resolveRuntimeConfigPath(), "utf8");
+          const content = await readDevDesktopRuntimeConfig() ?? await readFile(resolveRuntimeConfigPath(), "utf8");
           response.statusCode = 200;
           response.setHeader("content-type", "application/json; charset=utf-8");
           response.end(content);
@@ -131,4 +131,27 @@ function memmyRuntimeConfigPlugin(): Plugin {
 /** Handles resolve runtime config path. */
 function resolveRuntimeConfigPath(): string {
   return process.env.MEMMY_RUNTIME_CONFIG_PATH?.trim() || join(homedir(), ".memmy", "runtime.json");
+}
+
+/** Reads the full runtime config published by a running `npm run dev:desktop` process, if it is still alive. */
+export async function readDevDesktopRuntimeConfig(
+  path = join(process.env.MEMMY_HOME?.trim() || join(homedir(), ".memmy"), "dev-renderer-runtime.json"),
+  isAlive: (pid: number) => boolean = processIsAlive
+): Promise<string | null> {
+  try {
+    const published = JSON.parse(await readFile(path, "utf8")) as { pid?: unknown; config?: unknown };
+    if (typeof published.pid !== "number" || !published.config || !isAlive(published.pid)) return null;
+    return JSON.stringify(published.config);
+  } catch {
+    return null;
+  }
+}
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
 }

@@ -8,11 +8,11 @@ import type { UpdateCoordinatorValue } from "../../app/update-coordinator.js";
 import type { MemmyAgentProject } from "../../api/memmy-agent-client.js";
 import { I18nProvider } from "../../i18n/i18n-provider.js";
 import { enUSMessages, formatMessage, zhCNMessages, type MessageKey, type MessageValues } from "../../i18n/messages.js";
-import { appActions } from "../../state/app-actions.js";
+import { agentActions, appActions } from "../../state/app-actions.js";
 import { appReducer, createInitialAppState } from "../../state/app-reducer.js";
 import type { AgentTaskView } from "../../state/agent-chat-slice.js";
 import { mockBootstrap } from "./fixtures/bootstrap.js";
-import { AppFrame, TaskArchiveInlineAction, TaskRow, countProjectTasksToArchive, deriveSidebarPlacement, deriveVisibleSidebarPlacement, groupAgentTasks, groupTasksByTime, resolveSidebarAccountSummary, resolveSidebarContextMenuPlacement, resolveSidebarMenuOverlayStyle, resolveSidebarUpdateAction, resolveTaskAncestorGroupKeys, shouldCreateNewAgentDraft, truncateAccountDisplayText } from "../app-frame.js";
+import { AppFrame, TaskArchiveInlineAction, TaskRow, countProjectTasksToArchive, deriveSidebarPlacement, deriveVisibleSidebarPlacement, groupAgentTasks, groupTasksByTime, resolveSidebarAccountSummary, resolveSidebarContextMenuPlacement, resolveSidebarMenuOverlayStyle, resolveSidebarUpdateAction, resolveTaskAncestorGroupKeys, newAgentDraftActions, shouldCreateNewAgentDraft, truncateAccountDisplayText } from "../app-frame.js";
 
 describe("AppFrame", () => {
   it("使用原型 MainLayout 的侧栏图标与导航文案", () => {
@@ -450,10 +450,15 @@ describe("AppFrame", () => {
     expect(shouldCreateNewAgentDraft(newAgentDraftState({ composerPendingAttachmentsByScope: { "draft-3": [{} as never] } }))).toBe(false);
     expect(source).toContain("function openNewAgent(target?: WebuiSessionTarget)");
     expect(source).toContain("clearFocusedAgentTarget(");
-    expect(source).toContain("if (shouldCreateNewAgentDraft(state.agent))");
-    expect(source).toContain("dispatch(agentActions.newChatRequested());");
-    expect(source).toContain("dispatch(agentActions.blankDraftReopened());");
-    expect(source).toContain('dispatch(appActions.navigate("/main"));');
+    expect(newAgentDraftActions({ ...newAgentDraftState(), draftTargetsByScope: {} }, { kind: "project", projectId: "p-1" })).toEqual([
+      agentActions.newChatRequested(),
+      agentActions.draftTargetUpdated("draft-4", { kind: "project", projectId: "p-1" }),
+      appActions.navigate("/main")
+    ]);
+    expect(newAgentDraftActions({
+      ...newAgentDraftState({ composerDraftsByScope: { "draft-3": "未发送" } }),
+      draftTargetsByScope: { "draft-3": { kind: "standalone" } }
+    })).toEqual([agentActions.blankDraftReopened(), appActions.navigate("/main")]);
     expect(source).toContain("openNewAgent();");
     expect(source).not.toContain(".newChat(");
   });
@@ -531,10 +536,10 @@ describe("AppFrame", () => {
     expect(appFrameSource).toContain('deferredGuidanceStep === "improvement" && state.bootstrap?.app.userMode !== "byok" && state.bootstrap?.onboarding.improvementProgram === "unset"');
   });
 
-  it("does not keep New Agent highlighted while a session is current", () => {
+  it("does not keep New Agent highlighted while a session is current or a project board is open", () => {
     const source = readFileSync(resolve(__dirname, "..", "app-frame.tsx"), "utf8");
 
-    expect(source).toContain('&& (item.path !== "/main" || !state.agent.currentSessionKey)');
+    expect(source).toContain('&& (item.path !== "/main" || (!state.agent.currentSessionKey && !boardSession.projectId))');
   });
 
   it("makes the whole sidebar account footer open settings", () => {

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import type { PanelOverviewOutput } from "@memmy/local-api-contracts";
+import type { PanelOverviewOutput, ProjectTopic } from "@memmy/local-api-contracts";
 import { PRODUCT_TOUR_MEMORY_OVERVIEW_COUNTS_ANCHOR } from "../../app/product-tour-layout.js";
 import type { MemoryRuntimeClient } from "../../api/memory-runtime-client.js";
+import type { MemmyAgentProject } from "../../api/memmy-agent-client.js";
 import { Tooltip } from "../../components/tooltip.js";
 import type { MessageKey } from "../../i18n/messages.js";
 import { useTranslation } from "../../i18n/use-translation.js";
@@ -60,6 +61,19 @@ interface ActivityGridLayout {
 export interface OverviewSubPageProps {
   client: MemoryRuntimeClient | null;
   onNavigate: (page: OverviewCountTargetPage) => void;
+  projects?: MemmyAgentProject[];
+  onRunSuggestion?: (suggestion: ProjectSuggestion) => void;
+}
+
+export interface ProjectSuggestion {
+  id: string;
+  projectId: string;
+  title: string;
+  reason: string;
+  prompt: string;
+  targetAgent?: string;
+  sourceTopicIds: string[];
+  createdAt: string;
 }
 
 export function loadOverviewData(client: MemoryRuntimeClient): Promise<PanelOverviewOutput> {
@@ -69,6 +83,7 @@ export function loadOverviewData(client: MemoryRuntimeClient): Promise<PanelOver
 export function OverviewSubPage(props: OverviewSubPageProps) {
   const { t } = useTranslation();
   const [state, setState] = useState<RemoteData<PanelOverviewOutput>>({ status: "loading" });
+  const [suggestions, setSuggestions] = useState<ProjectSuggestion[]>([]);
 
   useEffect(() => {
     if (!props.client) {
@@ -94,12 +109,33 @@ export function OverviewSubPage(props: OverviewSubPageProps) {
     };
   }, [props.client, t]);
 
-  return <OverviewSubPageView state={state} onNavigate={props.onNavigate} />;
+  useEffect(() => {
+    if (!props.client || !props.projects?.length) {
+      setSuggestions([]);
+      return;
+    }
+    let active = true;
+    void Promise.all(props.projects.map(async (project) => {
+      try {
+        const result = await props.client!.listProjectTopics(project.rootPath);
+        return buildProjectSuggestions(project, result.topics);
+      } catch {
+        return [];
+      }
+    })).then((groups) => {
+      if (active) setSuggestions(groups.flat().slice(0, 6));
+    });
+    return () => { active = false; };
+  }, [props.client, props.projects]);
+
+  return <OverviewSubPageView state={state} onNavigate={props.onNavigate} suggestions={suggestions} onRunSuggestion={props.onRunSuggestion} />;
 }
 
 export function OverviewSubPageView(props: {
   state: RemoteData<PanelOverviewOutput>;
   onNavigate: (page: OverviewCountTargetPage) => void;
+  suggestions?: ProjectSuggestion[];
+  onRunSuggestion?: (suggestion: ProjectSuggestion) => void;
 }) {
   const { t } = useTranslation();
 
@@ -114,7 +150,7 @@ export function OverviewSubPageView(props: {
 
       {props.state.status === "loading" && <StateBox message={t("memory.overview.loading")} />}
       {props.state.status === "error" && <StateBox message={props.state.message} tone="error" />}
-      {props.state.status === "ready" && <OverviewContent data={props.state.data} onNavigate={props.onNavigate} />}
+      {props.state.status === "ready" && <OverviewContent data={props.state.data} onNavigate={props.onNavigate} suggestions={props.suggestions} onRunSuggestion={props.onRunSuggestion} />}
     </section>
   );
 }
@@ -122,6 +158,8 @@ export function OverviewSubPageView(props: {
 function OverviewContent(props: {
   data: PanelOverviewOutput;
   onNavigate: (page: OverviewCountTargetPage) => void;
+  suggestions?: ProjectSuggestion[];
+  onRunSuggestion?: (suggestion: ProjectSuggestion) => void;
 }) {
   const countCards = buildCountCards(props.data);
 
@@ -139,6 +177,7 @@ function OverviewContent(props: {
 
       <DailyActivityCard values={props.data.dailyActivity} />
       <SourceDistributionCard values={props.data.sourceDistribution} />
+      <ProjectSuggestions suggestions={props.suggestions ?? []} onRunSuggestion={props.onRunSuggestion} />
     </>
   );
 }
@@ -151,6 +190,48 @@ function buildCountCards(data: PanelOverviewOutput): OverviewCountCard[] {
     { id: "skills", targetPage: "skills", labelKey: "memory.overview.skills", value: data.counts.skills, hintKey: "memory.overview.skillsHint", icon: <Wand2 size={18} /> },
     { id: "userMemories", targetPage: "user-memories", labelKey: "memory.overview.userMemories", value: data.counts.userMemories, hintKey: "memory.overview.userMemoriesHint", icon: <UserRound size={18} /> }
   ];
+}
+
+function buildProjectSuggestions(project: MemmyAgentProject, topics: ProjectTopic[]): ProjectSuggestion[] {
+  const suggestions: ProjectSuggestion[] = [];
+  const newest = [...topics].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+  if (newest?.agents?.length) {
+    suggestions.push({
+      id: `${project.id}:share:${newest.id}`,
+      projectId: project.id,
+      title: `把「${newest.name}」的最近进度分享给参与 agent`,
+      reason: `这个事项最近由 ${newest.agents.join("、")} 参与，适合生成一次进度同步。`,
+      prompt: `请整理事项「${newest.name}」的最近进展、当前风险和下一步，并生成一份可以分享给 ${newest.agents.join("、")} 的简短进度更新。`,
+      targetAgent: newest.agents[0],
+      sourceTopicIds: [newest.id],
+      createdAt: newest.updatedAt
+    });
+  }
+  const conflict = topics.find((topic) => topic.conflicts.length > 0);
+  if (conflict) {
+    suggestions.push({
+      id: `${project.id}:conflict:${conflict.id}`,
+      projectId: project.id,
+      title: `整理「${conflict.name}」的待确认分歧`,
+      reason: "事项中存在待确认的分歧记录。",
+      prompt: `请检查事项「${conflict.name}」的待确认分歧，归纳不同观点，并给出需要下一步确认的问题。`,
+      sourceTopicIds: [conflict.id],
+      createdAt: conflict.updatedAt
+    });
+  }
+  return suggestions;
+}
+
+function ProjectSuggestions(props: { suggestions: ProjectSuggestion[]; onRunSuggestion?: (suggestion: ProjectSuggestion) => void }) {
+  if (props.suggestions.length === 0) return null;
+  return (
+    <section className="memory-project-suggestions">
+      <div className="memory-project-suggestions__header"><div><h4>建议下一步</h4><p>根据项目最近的事项和协作记录生成</p></div><Sparkles size={18} /></div>
+      <div className="memory-project-suggestions__list">
+        {props.suggestions.map((suggestion) => <button type="button" key={suggestion.id} className="memory-project-suggestion" onClick={() => props.onRunSuggestion?.(suggestion)}><span className="memory-project-suggestion__title">{suggestion.title}</span><span className="memory-project-suggestion__reason">{suggestion.reason}</span><span className="memory-project-suggestion__action">开始新 session →</span></button>)}
+      </div>
+    </section>
+  );
 }
 
 function CountCard(props: {

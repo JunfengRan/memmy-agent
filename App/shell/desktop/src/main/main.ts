@@ -877,6 +877,7 @@ async function boot(): Promise<void> {
     if (gatewayStartupIssue && runtimeConfig.agentGateway) {
       runtimeConfig.agentGateway.startupIssue = gatewayStartupIssue;
     }
+    void writeDevRendererRuntimeConfig(runtimeConfig);
     if (!gatewayStartupIssue && runtimeServices.isAgentGatewayExternal()) {
       bootStage = "runtime-services:external-mcp";
       void writePackagedStartupLog(`boot:stage:${JSON.stringify({ stage: bootStage, elapsedMs: Date.now() - bootStartedAt })}`);
@@ -5635,6 +5636,24 @@ async function sendAppExitEvent(): Promise<void> {
 async function sendAppExitEventBeforeQuit(): Promise<void> {
   const exitEvent = sendAppExitEvent();
   await Promise.race([exitEvent, delay(APP_QUIT_ANALYTICS_GRACE_MS)]);
+}
+
+/** Lets a plain browser on the Vite dev server reach the same services as this unpackaged desktop process. */
+async function writeDevRendererRuntimeConfig(config: DesktopRuntimeConfig): Promise<void> {
+  if (app.isPackaged) return;
+  const path = join(process.env.MEMMY_HOME?.trim() || join(homedir(), ".memmy"), "dev-renderer-runtime.json");
+  try {
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, JSON.stringify({ pid: process.pid, config }), { mode: 0o600 });
+    await chmod(path, 0o600);
+  } catch (error) {
+    console.warn("[memmy] failed to write dev renderer runtime config", error);
+  }
+}
+
+const remoteDebuggingPort = process.env.MEMMY_REMOTE_DEBUGGING_PORT ?? "";
+if (/^\d+$/.test(remoteDebuggingPort)) {
+  app.commandLine.appendSwitch("remote-debugging-port", remoteDebuggingPort);
 }
 
 let hasSingleInstanceLock = app.requestSingleInstanceLock();

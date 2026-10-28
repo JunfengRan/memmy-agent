@@ -19,6 +19,8 @@ export interface ProjectTopicRead {
   events: ProjectTopicText[];
   conflicts: ProjectTopicText[];
   sourceSessionIds: string[];
+  agents: string[];
+  memoryIds: string[];
 }
 
 /** Groups stored project notes into the topic view the board renders. */
@@ -81,7 +83,12 @@ export function readProjectTopics(input: {
       experiences: textItems(view.experiences),
       events: textItems(view.events),
       conflicts: textItems(view.conflicts),
-      sourceSessionIds: unique(notes.map((note) => note.sessionId).filter((id): id is string => Boolean(id)))
+      sourceSessionIds: unique(notes.map((note) => note.sessionId).filter((id): id is string => Boolean(id))),
+      agents: unique([
+        ...notes.map((note) => note.agentId),
+        ...namedActivity.map((row) => row.agentId)
+      ].filter((id): id is string => Boolean(id))),
+      memoryIds: unique(notes.map((note) => note.id))
     });
   }
   topics.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.name.localeCompare(right.name));
@@ -115,6 +122,11 @@ function attachUnnamedActivity(topics: ProjectTopicRead[], activity: readonly Me
     ...latest.sourceSessionIds,
     ...unnamed.map((row) => row.sessionId).filter((id): id is string => Boolean(id))
   ]);
+  latest.agents = unique([
+    ...latest.agents,
+    ...unnamed.map((row) => row.agentId).filter((id): id is string => Boolean(id))
+  ]);
+  latest.memoryIds = unique([...latest.memoryIds, ...unnamed.map((row) => row.id)]);
 }
 
 function noteTopicName(memory: MemoryRow): string {

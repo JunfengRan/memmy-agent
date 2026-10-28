@@ -83,6 +83,7 @@ import {
   type WebuiSessionTarget,
 } from "../../entrypoints/frontend-bridge/projects.js";
 import { ProjectBoardStore } from "../../entrypoints/frontend-bridge/project-boards.js";
+import { normalizeProjectRefs, PROJECT_REFS_METADATA_KEY } from "../../core/agent-runtime/project-board.js";
 import {
   GuiSessionProjection,
   GuiSessionProjectionError,
@@ -1628,6 +1629,18 @@ export class WebSocketChannel extends BaseChannel {
       { code: "project_operation_failed", message: "project operation failed" },
       { status: 500 },
     );
+  }
+
+  /** Board instruction for the project a task runs in, by project id or else by its workspace root. */
+  projectBoardInstruction(input: { projectId: string | null; workspace: string | null }): string | null {
+    if (!this.projectStore) return null;
+    const project = input.projectId
+      ? this.projectStore.getActive(input.projectId)
+      : input.workspace
+        ? this.projectStore.listActive().find((item) => comparablePath(item.rootPath) === comparablePath(input.workspace!)) ?? null
+        : null;
+    if (!project) return null;
+    return this.requireProjectBoardStore().get(project.id).instruction || null;
   }
 
   private requireProjectBoardStore(): ProjectBoardStore {
@@ -3719,6 +3732,8 @@ export class WebSocketChannel extends BaseChannel {
     const mcpPresets: any[] = normalizeMcpPresetMentions(envelope.mcp_presets);
     if (!mcpPresets.length) mcpPresets.push(...normalizeMentionList(envelope.mcp_presets));
     if (mcpPresets.length) metadata.mcp_presets = mcpPresets;
+    const projectRefs = normalizeProjectRefs(envelope.project_refs);
+    if (projectRefs) metadata[PROJECT_REFS_METADATA_KEY] = projectRefs;
     if (envelope.image_generation && typeof envelope.image_generation === "object" && envelope.image_generation.enabled === true) {
       metadata.image_generation = {
         enabled: true,
@@ -5360,7 +5375,7 @@ function corsHeadersForRequest(config: WebSocketConfig, request: { headers?: htt
   if (!isAllowedCorsOrigin(origin, config)) return {};
   return {
     "access-control-allow-origin": origin,
-    "access-control-allow-methods": "GET, POST, PATCH, DELETE, OPTIONS",
+    "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "access-control-allow-headers": [
       "authorization",
       "content-type",

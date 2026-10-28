@@ -36,6 +36,7 @@ import {
 import { ChannelManager } from "../../integrations/channels/manager.js";
 import { discoverAll, discoverChannelNames } from "../../integrations/channels/registry.js";
 import { WebSocketChannel } from "../../integrations/channels/websocket.js";
+import { ProjectBoardPromptHook } from "../../core/agent-runtime/project-board.js";
 import { createByokTokenUsageRecorder } from "../../integrations/byok-token-usage/index.js";
 import {
   loadConfig,
@@ -1240,6 +1241,7 @@ export async function gateway({
       ),
     );
     webuiChannel.setProjectStore(projectStore);
+    loop.extraHooks.push(new ProjectBoardPromptHook((input) => webuiChannel.projectBoardInstruction(input)));
     webuiChannel.setSessionDeletionServices({
       cronService: cron,
       sessionDagQueue: loop.sessionDagQueue,

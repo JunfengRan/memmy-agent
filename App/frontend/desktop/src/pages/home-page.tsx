@@ -1,5 +1,5 @@
 /** Home page module. */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type CSSProperties, type DragEvent, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SetStateAction, type UIEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type CSSProperties, type DragEvent, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction, type UIEvent } from "react";
 import type { AgentGatewayStartupIssue } from "@memmy/local-api-contracts";
 import { getRuntimeConfig } from "../api/runtime-config.js";
 import { hydrateAgentThreadInBackground, refreshAgentTaskList, useAgentRuntimeBridge, type AgentTaskStateCoordinator } from "../app/agent-runtime-bridge.js";
@@ -41,7 +41,7 @@ import { ImChannelTitleIcon, imChannelTitleDisplay } from "../integrations/integ
 import { useTaskBus, type TaskBusAgentMessage } from "../lib/task-bus.js";
 import type { AppAction } from "../state/app-actions.js";
 import { agentActions, appActions, createAgentOperationError } from "../state/app-actions.js";
-import { type AgentChatMessage, type AgentState } from "../state/agent-chat-slice.js";
+import { type AgentChatMessage, type AgentState, type AgentTaskView } from "../state/agent-chat-slice.js";
 import { useAppState } from "../state/app-state.js";
 import { isComposingKeyboardEvent } from "../utils/keyboard.js";
 import {
@@ -75,9 +75,10 @@ import { threadTabForInAppPreview, threadTabForPath } from "./agent-thread-panel
 import { THREAD_SEARCH_SCROLL_OFFSET } from "./agent-thread-search.js";
 import { AgentThreadToolbar } from "./agent-thread-toolbar.js";
 import { AgentWorkspaceContext } from "./agent-workspace-context.js";
-import { AppFrame } from "./app-frame.js";
-import { loadProjectTaskContextPrefix, ProjectBoardPage, ProjectTopicHint } from "./project-board.js";
-import { closeProjectBoard, useProjectBoardSession } from "./project-board-session.js";
+import { AppFrame, newAgentDraftActions } from "./app-frame.js";
+import { projectDirectoryPicker } from "../app/project-directory-picker.js";
+import { loadProjectRefs, ProjectBoardPage, ProjectCitationPanel, ProjectTopicHint, withSessionCitations, type BoardMention, type ProjectRefs } from "./project-board.js";
+import { closeCitationPanel, closeProjectBoard, openCitationPanel, openProjectBoard, useCitationPanelOpen, useProjectBoardSession } from "./project-board-session.js";
 import {
   MicrophonePermissionError,
   mergeVoiceTranscript,
@@ -99,7 +100,7 @@ import { HistoryDagPanel, type HistoryDagPanelState } from "./history-dag-panel.
 import { LlmProviderLogo } from "./llm-provider-logo.js";
 import { Mic, Pause, Plus, Send } from "./memory/memory-prototype-icons.js";
 import { resolveWorkspaceEnvironmentScope, useWorkspaceEnvironment } from "./use-workspace-environment.js";
-import { ArrowDown, Check, ChevronDown, Folder, Plus as LucidePlus, RotateCw, Target, X } from "lucide-react";
+import { ArrowDown, AtSign, Check, ChevronDown, Folder, Plus as LucidePlus, RotateCw, Target, X } from "lucide-react";
 
 export { agentChatScopeKey, updateComposerDraftForScope };
 export { hydrateAgentThreadInBackground };
@@ -304,6 +305,7 @@ export interface SubmitAgentComposerMessageInput {
   ensureChatSubscription?: (chatId: string) => void;
   content: string;
   displayContent?: string;
+  projectRefs?: ProjectRefs | null;
   language?: MemmyAgentUiLanguage;
   pendingAttachments: PendingAttachment[];
   uploadAgentMedia: (attachments: UploadAgentMediaInput[]) => Promise<UploadedAgentMedia[]>;
@@ -754,6 +756,7 @@ export async function submitAgentComposerMessage(input: SubmitAgentComposerMessa
     client_request_id: clientRequestId,
     ...(capturedTarget ? { target: capturedTarget } : {}),
     ...(input.language ? { language: input.language } : {}),
+    ...(input.projectRefs ? { project_refs: input.projectRefs } : {}),
     ...(confirmedModelPreset !== undefined ? { model_preset: confirmedModelPreset } : {}),
     ...(uploadedAttachments.length ? { media_paths: uploadedAttachments.map((item) => item.path) } : {})
   };
@@ -875,6 +878,8 @@ export function HomePage() {
   }, [clients?.runtimeConfig]);
   const { state, dispatch } = useAppState();
   const boardSession = useProjectBoardSession();
+  const citationPanelOpen = useCitationPanelOpen();
+  const [boardMentions, setBoardMentions] = useState<BoardMention[]>([]);
   const modelWorkspace = createModelWorkspace(state.modelConfig);
   const { language, t } = useTranslation();
   const { track } = useAnalytics();
@@ -1847,17 +1852,20 @@ export function HomePage() {
     const projectIdForContext = state.agent.currentChatId
       ? state.agent.tasks.find((task) => task.chatId === state.agent.currentChatId)?.projectId ?? null
       : draftTarget.kind === "project" ? draftTarget.projectId : null;
-    let contentForAgent = input;
-    let displayForAgent = selectedComposerCommand ? composerInput : undefined;
+    const sentFromBoardProjectId = !state.agent.currentChatId && boardSession.projectId === projectIdForContext
+      ? boardSession.projectId
+      : null;
+    const sentMentions = sentFromBoardProjectId ? boardMentions : [];
+    let refsForAgent: ProjectRefs | null = null;
     if (projectIdForContext && clients) {
       try {
-        const prefix = await loadProjectTaskContextPrefix(clients, projectIdForContext);
-        if (prefix) {
-          contentForAgent = `${prefix}\n\n${input}`;
-          displayForAgent = selectedComposerCommand ? composerInput : input;
-        }
+        refsForAgent = await loadProjectRefs(clients, projectIdForContext, {
+          knowledgeNames: sentMentions.filter((item) => item.kind === "knowledge").map((item) => item.label),
+          skillNames: sentMentions.filter((item) => item.kind === "skill").map((item) => item.label),
+          citedTitles: sentMentions.filter((item) => item.kind === "session").map((item) => item.label)
+        });
       } catch {
-        contentForAgent = input;
+        refsForAgent = null;
       }
     }
     try {
@@ -1867,8 +1875,9 @@ export function HomePage() {
         clientRequestId,
         connection,
         ensureChatSubscription,
-        content: contentForAgent,
-        displayContent: displayForAgent,
+        content: input,
+        displayContent: selectedComposerCommand ? composerInput : undefined,
+        projectRefs: refsForAgent,
         language,
         pendingAttachments,
         uploadAgentMedia: (attachments) => clients!.memmyAgent.uploadAgentMedia(attachments),
@@ -1900,6 +1909,18 @@ export function HomePage() {
         onNewChatMessageSent: clients?.memmyAgent
           ? (chatId) => {
             rememberFirstEncounterRelayChatIfArmed(chatId);
+            if (sentFromBoardProjectId) {
+              const citedKeys = sentMentions.filter((item) => item.kind === "session").map((item) => item.id);
+              if (citedKeys.length > 0) {
+                const sessionKey = clients.memmyAgent.chatIdToSessionKey(chatId);
+                void clients.memmyAgent.readProjectBoard(sentFromBoardProjectId).then(async (current) => {
+                  const next = withSessionCitations(current, sessionKey, citedKeys);
+                  if (next !== current) await clients.memmyAgent.saveProjectBoard(sentFromBoardProjectId, next);
+                }).catch(() => undefined);
+              }
+              setBoardMentions([]);
+              closeProjectBoard();
+            }
             taskStateCoordinator.refreshTaskState({
               expectedChatId: chatId,
               reason: "new-chat",
@@ -1920,42 +1941,56 @@ export function HomePage() {
     }
   }
 
-  async function sendFromProjectBoard(projectId: string, text: string): Promise<boolean> {
-    if (!clients || !connection || !text.trim()) return false;
-    let content = text;
+  function openProjectTask(task: AgentTaskView) {
+    closeProjectBoard();
+    const chatId = clients?.memmyAgent.sessionKeyToChatId(task.sessionKey) ?? task.chatId;
+    const requestId = `${chatId}:project-${crypto.randomUUID()}`;
+    dispatch(agentActions.historyLoading(task.sessionKey, chatId, requestId));
+    dispatch(appActions.navigate("/main"));
+    if (!clients) return;
+    void clients.memmyAgent.readWebuiThread(task.sessionKey).then((thread) => {
+      dispatch(agentActions.historyLoaded(thread, requestId));
+    }).catch(() => undefined);
+  }
+
+  useEffect(() => {
+    const onProjectSuggestion = (event: Event) => {
+      const suggestion = (event as CustomEvent<{ projectId?: string; prompt?: string }>).detail;
+      if (!suggestion?.projectId || !suggestion.prompt?.trim()) return;
+      const currentDraftScope = agentChatScopeKey(null, state.agent.newChatRequestId);
+      const hasBlankDraft = state.agent.blankDraftActive
+        || Boolean(state.agent.composerDraftsByScope[currentDraftScope])
+        || Boolean(state.agent.composerPendingAttachmentsByScope[currentDraftScope]?.length);
+      const nextRequestId = hasBlankDraft ? state.agent.newChatRequestId : state.agent.newChatRequestId + 1;
+      const scopeKey = agentChatScopeKey(null, nextRequestId);
+      for (const action of newAgentDraftActions(state.agent, { kind: "project", projectId: suggestion.projectId })) dispatch(action);
+      dispatch(agentActions.composerDraftUpdated(scopeKey, suggestion.prompt.trim()));
+      window.setTimeout(() => { void sendMessage(); }, 0);
+    };
+    window.addEventListener("memmy:run-project-suggestion", onProjectSuggestion);
     try {
-      const prefix = await loadProjectTaskContextPrefix(clients, projectId);
-      if (prefix) content = `${prefix}\n\n${text}`;
-    } catch {
-      content = text;
-    }
-    return submitAgentComposerMessage({
-      chatId: null,
-      target: { kind: "project", projectId },
-      clientRequestId: crypto.randomUUID(),
-      connection,
-      ensureChatSubscription,
-      content,
-      displayContent: text,
-      language,
-      pendingAttachments: [],
-      uploadAgentMedia: (attachments) => clients.memmyAgent.uploadAgentMedia(attachments),
-      dispatch,
-      track,
-      clearComposer: () => undefined,
-      chatSelectionEpoch: state.agent.chatSelectionEpoch,
-      getChatSelectionEpoch: () => chatSelectionEpochRef.current,
-      scopeKey: agentChatScopeKey(null, state.agent.newChatRequestId),
-      modelPreset: resolvedConversationModel.candidateId ?? undefined,
-      onNewChatMessageSent: (chatId) => {
-        closeProjectBoard();
-        taskStateCoordinator.refreshTaskState({
-          expectedChatId: chatId,
-          reason: "new-chat",
-          state: state.agent
-        });
+      const pending = window.sessionStorage.getItem("memmy.pending-project-suggestion");
+      if (pending) {
+        window.sessionStorage.removeItem("memmy.pending-project-suggestion");
+        const suggestion = JSON.parse(pending) as { projectId?: string; prompt?: string };
+        onProjectSuggestion(new CustomEvent("memmy:run-project-suggestion", { detail: suggestion }));
       }
-    });
+    } catch {
+      // A malformed or unavailable pending suggestion should not block HomePage.
+    }
+    return () => window.removeEventListener("memmy:run-project-suggestion", onProjectSuggestion);
+  }, [dispatch, state.agent]);
+
+  async function deleteProjectTask(task: AgentTaskView) {
+    if (!clients?.memmyAgent) return;
+    await clients.memmyAgent.deleteSession(task.sessionKey);
+    taskStateCoordinator.refreshTaskState({ reason: "manual", state: state.agent });
+  }
+
+  function showProjectBoardFor(projectId: string, topicId: string | null = null) {
+    for (const action of newAgentDraftActions(state.agent, { kind: "project", projectId })) dispatch(action);
+    setBoardMentions([]);
+    openProjectBoard(projectId, topicId);
   }
 
   async function removeQueuedMessage(clientRequestId: string): Promise<boolean> {
@@ -2091,7 +2126,8 @@ export function HomePage() {
     if (state.agent.currentChatId || messageSendInFlight || projectPickerOperationId || !clients?.memmyAgent) {
       return;
     }
-    if (!window.memmy?.selectProjectDirectory) {
+    const pickDirectory = projectDirectoryPicker("existing", t("appFrame.project.folderPathPrompt"));
+    if (!pickDirectory) {
       dispatch(agentActions.operationFailed("chat", createAgentOperationError({
         source: "new-chat",
         message: "home.project.desktopRequired",
@@ -2105,7 +2141,7 @@ export function HomePage() {
     setProjectPickerOperationId(operationId);
     try {
       await runProjectTargetFolderSelection({
-        selectDirectory: () => window.memmy!.selectProjectDirectory(),
+        selectDirectory: pickDirectory,
         mutateProject: (operation) => taskStateCoordinator.mutateProject(operation),
         onCommitted: (project) => {
           const currentRevision = draftTargetRevisionRef.current[scopeKey] ?? 0;
@@ -2912,6 +2948,138 @@ export function HomePage() {
     : state.agent.tasks.find((task) => task.chatId === state.agent.currentChatId)?.projectId ?? null;
   const hintedProject = state.agent.projects.find((project) => project.id === hintedProjectId) ?? null;
 
+  function insertComposerMentionTrigger() {
+    const draft = composerInput;
+    updateComposerInput(draft && !/\s$/.test(draft) ? `${draft} @` : `${draft}@`);
+    inputRef.current?.focus();
+  }
+
+  function renderNewTaskComposer(board: boolean, chips: ReactNode = null) {
+    return (
+      <>
+        <AgentOperationErrorSlot message={agentError} />
+        <div className="home-empty-composer-stack">
+          <div
+            className="relative home-empty-composer agent-composer-shell rounded-card-lg"
+            onDragOver={handleComposerDragOver}
+            onDrop={handleComposerDrop}
+          >
+            {slashMenuOpen && (
+              <div className="absolute left-0 bottom-full mb-3 z-40" style={{ width: "min(448px, 100%)" }}>
+                <AgentCommandPalette commands={filteredSlashCommands} heading={t("home.commandPalette.commands")} selectedIndex={selectedCommandIndex} onSelect={selectSlashCommand} />
+              </div>
+            )}
+            {lastCompactionPanel.open && !slashMenuOpen && (
+              <div className="absolute left-0 bottom-full mb-3 z-30 w-full" style={{ right: 0 }}>
+                <AgentStatusPanel state={lastCompactionPanel} closeLabel={t("common.close")} loadingLabel={t("home.agent.connecting")} onClose={closeLastCompactionPanel} />
+              </div>
+            )}
+            <ComposerMediaPreviewStrip
+              items={pendingAttachments}
+              onRemove={removePendingMedia}
+              removeLabel={t("common.remove")}
+              selectedLabel={t("home.media.addPhotoFile")}
+              t={t}
+            />
+            {selectedComposerCommand ? (
+              <div className="composer-command-chip-slot composer-command-chip-slot--home">
+                <ComposerCommandChip
+                  command={selectedComposerCommand}
+                  label={t("home.command.goalChip")}
+                  removeLabel={t("common.remove")}
+                  onRemove={clearSelectedComposerCommand}
+                />
+              </div>
+            ) : null}
+            {board ? chips : <ProjectTopicHint project={hintedProject} draft={composerInput} onOpen={showProjectBoardFor} />}
+            <textarea
+              ref={inputRef}
+              value={composerInput}
+              placeholder={selectedComposerCommand ? t("home.goal.input") : t("home.input")}
+              rows={board ? 2 : 3}
+              onChange={(event) => {
+                updateComposerInput(event.target.value);
+                resizeComposerInput(event.target);
+              }}
+              onKeyDown={handleComposerKeyDown}
+              onPaste={handleComposerPaste}
+              className="w-full px-5 pt-4 pb-12 text-sm resize-none focus:outline-none rounded-card-lg bg-background-paper placeholder:text-text-ink/40"
+            />
+            <div className="composer-actions absolute bottom-3 right-4 z-50">
+              <AgentModelSelector
+                mode={modelWorkspaceMode}
+                scopeKey={modelSelectionScopeKey}
+                disabled={isCurrentAgentRunning || isCreatingChat || messageSendInFlight}
+                seedConfig={state.modelConfig}
+                onDefaultModelSelected={persistDefaultModel}
+              />
+              <button
+                type="button"
+                aria-label={t("home.media.menu")}
+                title={t("home.media.menu")}
+                onClick={openMediaFilePicker}
+                className="composer-action-btn"
+              >
+                <Plus size={15} strokeWidth={2} />
+              </button>
+              {board ? (
+                <button
+                  type="button"
+                  aria-label={t("projectBoard.references")}
+                  title={t("projectBoard.references")}
+                  onClick={insertComposerMentionTrigger}
+                  className="composer-action-btn"
+                >
+                  <AtSign size={15} strokeWidth={2} />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                aria-label={t("home.voiceInput")}
+                title={t("home.voiceInput")}
+                disabled={asrRecorder.isTranscribing || asrRecorder.isStarting}
+                onClick={toggleVoiceInput}
+                className={`composer-action-btn${asrRecorder.isRecording ? " composer-action-btn--active" : ""}`}
+              >
+                {asrRecorder.isRecording ? <Pause size={15} strokeWidth={2} /> : <Mic size={15} strokeWidth={2} />}
+              </button>
+              <ComposerSubmitButton
+                isSending={isCurrentAgentRunning}
+                disabled={composerSubmitDisabled}
+                sendLabel={t("home.send")}
+                stopLabel={t("home.stop")}
+                onClick={isCurrentAgentRunning ? stopCurrentTurn : () => void sendMessage()}
+              />
+            </div>
+          </div>
+          <div className="home-composer-toolbar">
+            {board ? null : <ProjectTargetPicker
+              open={projectPickerOpen}
+              target={draftTarget}
+              selectedProject={selectedDraftProject}
+              projects={state.agent.projects}
+              sessions={state.agent.sessions}
+              registryState={state.agent.projectRegistryState}
+              disabled={messageSendInFlight || projectPickerOperationId != null}
+              onToggle={() => setProjectPickerOpen((open) => !open)}
+              onClose={() => setProjectPickerOpen(false)}
+              onSelect={selectDraftTarget}
+              onChooseOther={() => void selectOtherProjectFolder()}
+            />}
+            <AgentWorkspaceContext
+              snapshot={workspaceEnvironment.data?.snapshot ?? null}
+              branches={workspaceEnvironment.data?.branches ?? []}
+              loading={workspaceEnvironment.loading}
+              error={workspaceEnvironment.error}
+              onSwitchBranch={workspaceEnvironment.switchBranch}
+              onCreateOrCheckoutBranch={workspaceEnvironment.createOrCheckoutBranch}
+            />
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <AppFrame
       title={t("home.title")}
@@ -2921,6 +3089,27 @@ export function HomePage() {
           title={activeConversationTitleDisplay}
           titleTrailing={activeImTitleDisplay ? <ImChannelTitleIcon slug={activeImTitleDisplay.slug} name={activeImTitleDisplay.channelName} /> : null}
           messages={state.agent.messages}
+          extraActions={activeTask?.projectId ? (
+            <>
+              <button
+                type="button"
+                className={`thread-toolbar__button project-board-toolbar-button${citationPanelOpen ? " is-active" : ""}`}
+                aria-pressed={citationPanelOpen}
+                onClick={() => citationPanelOpen ? closeCitationPanel() : openCitationPanel()}
+              >
+                {t("projectBoard.references")}
+              </button>
+              <button
+                type="button"
+                className="thread-toolbar__button project-board-toolbar-button"
+                onClick={() => {
+                  if (activeTask.projectId) showProjectBoardFor(activeTask.projectId);
+                }}
+              >
+                {t("appFrame.project.board")}
+              </button>
+            </>
+          ) : null}
           panelOpen={threadPanel.phase === "open"}
           onOpenPanel={threadPanel.open}
           onJumpToMessage={jumpToThreadMessage}
@@ -2951,9 +3140,22 @@ export function HomePage() {
     >
       {boardProject ? (
         <ProjectBoardPage
+          key={boardProject.id}
           project={boardProject}
           tasks={state.agent.tasks.filter((task) => !task.archived && (task.projectId === boardProject.id || task.groupProjectId === boardProject.id))}
-          onSend={(text) => sendFromProjectBoard(boardProject.id, text)}
+          allTasks={state.agent.tasks.filter((task) => !task.archived)}
+          draft={composerInput}
+          onDraftChange={updateComposerInput}
+          mentions={boardMentions}
+          onMentionsChange={setBoardMentions}
+          onOpenTask={openProjectTask}
+          onDeleteTask={deleteProjectTask}
+          renderComposer={(chips) => (
+            <>
+              {renderNewTaskComposer(true, chips)}
+              <input ref={fileInputRef} type="file" accept={AGENT_MEDIA_ACCEPT} multiple hidden className="hidden" onChange={(event) => void selectMedia(event)} />
+            </>
+          )}
         />
       ) : (
       <div
@@ -2970,114 +3172,7 @@ export function HomePage() {
             <h1 className="text-2xl font-bold text-text-ink">{t("home.subtitle")}</h1>
           </div>
           <div className="home-empty-column">
-            <AgentOperationErrorSlot message={agentError} />
-            <div className="home-empty-composer-stack">
-              <div
-                className="relative home-empty-composer agent-composer-shell rounded-card-lg"
-                onDragOver={handleComposerDragOver}
-                onDrop={handleComposerDrop}
-              >
-                {slashMenuOpen && (
-                  <div className="absolute left-0 bottom-full mb-3 z-40" style={{ width: "min(448px, 100%)" }}>
-                    <AgentCommandPalette commands={filteredSlashCommands} heading={t("home.commandPalette.commands")} selectedIndex={selectedCommandIndex} onSelect={selectSlashCommand} />
-                  </div>
-                )}
-                {lastCompactionPanel.open && !slashMenuOpen && (
-                  <div className="absolute left-0 bottom-full mb-3 z-30 w-full" style={{ right: 0 }}>
-                    <AgentStatusPanel state={lastCompactionPanel} closeLabel={t("common.close")} loadingLabel={t("home.agent.connecting")} onClose={closeLastCompactionPanel} />
-                  </div>
-                )}
-                <ComposerMediaPreviewStrip
-                  items={pendingAttachments}
-                  onRemove={removePendingMedia}
-                  removeLabel={t("common.remove")}
-                  selectedLabel={t("home.media.addPhotoFile")}
-                  t={t}
-                />
-                {selectedComposerCommand ? (
-                  <div className="composer-command-chip-slot composer-command-chip-slot--home">
-                    <ComposerCommandChip
-                      command={selectedComposerCommand}
-                      label={t("home.command.goalChip")}
-                      removeLabel={t("common.remove")}
-                      onRemove={clearSelectedComposerCommand}
-                    />
-                  </div>
-                ) : null}
-                <ProjectTopicHint project={hintedProject} draft={composerInput} />
-                <textarea
-                  ref={inputRef}
-                  value={composerInput}
-                  placeholder={selectedComposerCommand ? t("home.goal.input") : t("home.input")}
-                  rows={3}
-                  onChange={(event) => {
-                    updateComposerInput(event.target.value);
-                    resizeComposerInput(event.target);
-                  }}
-                  onKeyDown={handleComposerKeyDown}
-                  onPaste={handleComposerPaste}
-                  className="w-full px-5 pt-4 pb-12 text-sm resize-none focus:outline-none rounded-card-lg bg-background-paper placeholder:text-text-ink/40"
-                />
-                <div className="composer-actions absolute bottom-3 right-4 z-50">
-                  <AgentModelSelector
-                    mode={modelWorkspaceMode}
-                    scopeKey={modelSelectionScopeKey}
-                    disabled={isCurrentAgentRunning || isCreatingChat || messageSendInFlight}
-                    seedConfig={state.modelConfig}
-                    onDefaultModelSelected={persistDefaultModel}
-                  />
-                  <button
-                    type="button"
-                    aria-label={t("home.media.menu")}
-                    title={t("home.media.menu")}
-                    onClick={openMediaFilePicker}
-                    className="composer-action-btn"
-                  >
-                    <Plus size={15} strokeWidth={2} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={t("home.voiceInput")}
-                    title={t("home.voiceInput")}
-                    disabled={asrRecorder.isTranscribing || asrRecorder.isStarting}
-                    onClick={toggleVoiceInput}
-                    className={`composer-action-btn${asrRecorder.isRecording ? " composer-action-btn--active" : ""}`}
-                  >
-                    {asrRecorder.isRecording ? <Pause size={15} strokeWidth={2} /> : <Mic size={15} strokeWidth={2} />}
-                  </button>
-                  <ComposerSubmitButton
-                    isSending={isCurrentAgentRunning}
-                    disabled={composerSubmitDisabled}
-                    sendLabel={t("home.send")}
-                    stopLabel={t("home.stop")}
-                    onClick={isCurrentAgentRunning ? stopCurrentTurn : () => void sendMessage()}
-                  />
-                </div>
-              </div>
-              <div className="home-composer-toolbar">
-                <ProjectTargetPicker
-                  open={projectPickerOpen}
-                  target={draftTarget}
-                  selectedProject={selectedDraftProject}
-                  projects={state.agent.projects}
-                  sessions={state.agent.sessions}
-                  registryState={state.agent.projectRegistryState}
-                  disabled={messageSendInFlight || projectPickerOperationId != null}
-                  onToggle={() => setProjectPickerOpen((open) => !open)}
-                  onClose={() => setProjectPickerOpen(false)}
-                  onSelect={selectDraftTarget}
-                  onChooseOther={() => void selectOtherProjectFolder()}
-                />
-                <AgentWorkspaceContext
-                  snapshot={workspaceEnvironment.data?.snapshot ?? null}
-                  branches={workspaceEnvironment.data?.branches ?? []}
-                  loading={workspaceEnvironment.loading}
-                  error={workspaceEnvironment.error}
-                  onSwitchBranch={workspaceEnvironment.switchBranch}
-                  onCreateOrCheckoutBranch={workspaceEnvironment.createOrCheckoutBranch}
-                />
-              </div>
-            </div>
+            {renderNewTaskComposer(false)}
             <div className="home-empty-status-area">
               {statusText && <p className="text-center text-xs text-text-ink/45 mt-4">{statusText}</p>}
               <p className="text-center text-[11px] text-text-ink/40 mt-4">{t("home.notice")}</p>
@@ -3217,7 +3312,7 @@ export function HomePage() {
                       selectedLabel={t("home.media.addPhotoFile")}
                       t={t}
                     />
-                    <ProjectTopicHint project={hintedProject} draft={composerInput} />
+                    <ProjectTopicHint project={hintedProject} draft={composerInput} onOpen={showProjectBoardFor} />
                     <textarea
                       ref={inputRef}
                       value={composerInput}
@@ -3288,6 +3383,15 @@ export function HomePage() {
           </div>
         </section>
         )}
+        {citationPanelOpen && activeTask?.projectId ? (
+          <ProjectCitationPanel
+            projectId={activeTask.projectId}
+            sessionKey={activeTask.sessionKey}
+            tasks={state.agent.tasks}
+            onOpenSession={openProjectTask}
+            onClose={closeCitationPanel}
+          />
+        ) : null}
       </div>
       )}
     </AppFrame>

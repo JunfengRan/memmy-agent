@@ -29,7 +29,7 @@ import { useOptionalUpdateCoordinator, type UpdateCoordinatorValue } from "../ap
 import type { MemmyAgentProject, WebuiSessionTarget } from "../api/memmy-agent-client.js";
 import { getLegalLinkUrl } from "../legal/legal-links.js";
 import { useTaskBus } from "../lib/task-bus.js";
-import { agentActions, appActions, createAgentOperationError } from "../state/app-actions.js";
+import { agentActions, appActions, createAgentOperationError, type AppAction } from "../state/app-actions.js";
 import type { AppState } from "../state/app-reducer.js";
 import { useAppState } from "../state/app-state.js";
 import { agentChatScopeKey } from "../state/agent-composer-state.js";
@@ -38,6 +38,7 @@ import { decideTaskDoneNotification } from "../state/task-done-notification.js";
 import { maskAccountIdentifier } from "../utils/mask-account-identifier.js";
 import { WindowsTitlebar } from "../components/windows-titlebar.js";
 import { closeProjectBoard, openProjectBoard, useProjectBoardSession } from "./project-board-session.js";
+import { projectDirectoryPicker } from "../app/project-directory-picker.js";
 import { openExternalUrl } from "../utils/open-url.js";
 import { isWindowsDesktopPlatform } from "../utils/window-fullscreen.js";
 import { isComposingKeyboardEvent } from "../utils/keyboard.js";
@@ -69,7 +70,7 @@ import {
 } from "./memory/memory-prototype-icons.js";
 import { AppContentTopbar } from "./app-content-topbar.js";
 import { SETTINGS_BROWSER_EXTENSION_EVENT, SETTINGS_EXCEL_CONNECTION_EVENT, SETTINGS_NAV_ITEMS, writeSettingsMemoryBudgetFocus, type SettingsTabId } from "./settings-nav.js";
-import { ArrowDown, Check, CheckCheck, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Folder, FolderOpen, FolderPlus, ListFilter, MoreHorizontal, MousePointer2, PanelsTopLeft, Plus, RotateCcw } from "lucide-react";
+import { ArrowDown, Check, CheckCheck, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Folder, FolderOpen, FolderPlus, ListFilter, MoreHorizontal, MousePointer2, PanelsTopLeft, Pencil, Plus, RotateCcw } from "lucide-react";
 
 export interface SettingsSidebarNav {
   activeTab: SettingsTabId;
@@ -136,6 +137,7 @@ interface TaskContextMenuState {
 }
 
 type SidebarInlineRename = { sessionKey: string; original: string };
+type SidebarProjectInlineRename = { projectId: string; original: string };
 
 type SidebarTaskPatch = Extract<SidebarIntent, { kind: "task-patch" }>["patch"];
 
@@ -270,6 +272,31 @@ export function shouldCreateNewAgentDraft(agent: NewAgentDraftState): boolean {
     && !(agent.composerPendingAttachmentsByScope[draftScopeKey]?.length);
 }
 
+/** Actions that leave any open chat and land on a blank /main draft aimed at `target`. */
+export function newAgentDraftActions(
+  agent: NewAgentDraftState & Pick<AppState["agent"], "draftTargetsByScope">,
+  target?: WebuiSessionTarget
+): AppAction[] {
+  const createDraft = shouldCreateNewAgentDraft(agent);
+  const draftScopeKey = agentChatScopeKey(null, createDraft ? agent.newChatRequestId + 1 : agent.newChatRequestId);
+  clearFocusedAgentTarget(
+    typeof window === "undefined" ? undefined : window.sessionStorage,
+    typeof window === "undefined" ? undefined : window.location,
+    typeof window === "undefined" ? undefined : window.history
+  );
+  const actions: AppAction[] = [];
+  if (createDraft) {
+    actions.push(agentActions.newChatRequested());
+  } else if (!agent.blankDraftActive) {
+    actions.push(agentActions.blankDraftReopened());
+  }
+  if (target || !(draftScopeKey in agent.draftTargetsByScope)) {
+    actions.push(agentActions.draftTargetUpdated(draftScopeKey, target ?? { kind: "standalone" }));
+  }
+  actions.push(appActions.navigate("/main"));
+  return actions;
+}
+
 /** Sidebar workspace highlight: only when a blank new-task draft targets a project. */
 export function resolveSelectedSidebarProjectId(
   agent: Pick<AppState["agent"], "currentSessionKey" | "newChatRequestId" | "draftTargetsByScope">,
@@ -299,6 +326,8 @@ export function AppFrame(props: AppFrameProps) {
   const [projectCreateMenuAnchor, setProjectCreateMenuAnchor] = useState<SidebarMenuAnchor | null>(null);
   const [inlineRename, setInlineRename] = useState<SidebarInlineRename | null>(null);
   const [inlineRenameDraft, setInlineRenameDraft] = useState("");
+  const [inlineRenameProject, setInlineRenameProject] = useState<SidebarProjectInlineRename | null>(null);
+  const [inlineRenameProjectDraft, setInlineRenameProjectDraft] = useState("");
   const [removeProjectId, setRemoveProjectId] = useState<string | null>(null);
   const [archiveProjectId, setArchiveProjectId] = useState<string | null>(null);
   const [projectMutationId, setProjectMutationId] = useState<string | null>(null);
@@ -515,30 +544,17 @@ export function AppFrame(props: AppFrameProps) {
   }
 
   function showProjectBoard(projectId: string) {
+    openNewAgent({ kind: "project", projectId });
     openProjectBoard(projectId);
-    dispatch(appActions.navigate("/main"));
+  }
+
+  function startProjectTask(projectId: string) {
+    openNewAgent({ kind: "project", projectId });
   }
 
   function openNewAgent(target?: WebuiSessionTarget) {
     closeProjectBoard();
-    const nextDraftRequestId = shouldCreateNewAgentDraft(state.agent)
-      ? state.agent.newChatRequestId + 1
-      : state.agent.newChatRequestId;
-    const draftScopeKey = agentChatScopeKey(null, nextDraftRequestId);
-    clearFocusedAgentTarget(
-      typeof window === "undefined" ? undefined : window.sessionStorage,
-      typeof window === "undefined" ? undefined : window.location,
-      typeof window === "undefined" ? undefined : window.history
-    );
-    if (shouldCreateNewAgentDraft(state.agent)) {
-      dispatch(agentActions.newChatRequested());
-    } else if (!state.agent.blankDraftActive) {
-      dispatch(agentActions.blankDraftReopened());
-    }
-    if (target || !(draftScopeKey in state.agent.draftTargetsByScope)) {
-      dispatch(agentActions.draftTargetUpdated(draftScopeKey, target ?? { kind: "standalone" }));
-    }
-    dispatch(appActions.navigate("/main"));
+    for (const action of newAgentDraftActions(state.agent, target)) dispatch(action);
   }
 
   function openSidebarRoute(path: AppRoutePath) {
@@ -725,13 +741,12 @@ export function AppFrame(props: AppFrameProps) {
 
   async function registerProject(mode: "blank" | "existing") {
     setProjectCreateMenuAnchor(null);
-    if (!clients?.memmyAgent || !window.memmy || projectMutationId) return;
+    const pickDirectory = projectDirectoryPicker(mode, t("appFrame.project.folderPathPrompt"));
+    if (!clients?.memmyAgent || !pickDirectory || projectMutationId) return;
     const operationId = `project-create-${crypto.randomUUID()}`;
     setProjectMutationId(operationId);
     try {
-      const selected = mode === "blank"
-        ? await window.memmy.selectEmptyProjectDirectory()
-        : await window.memmy.selectProjectDirectory();
+      const selected = await pickDirectory();
       if (selected.canceled) return;
       const result = await taskStateCoordinator.mutateProject({
         kind: "create",
@@ -742,7 +757,7 @@ export function AppFrame(props: AppFrameProps) {
         return;
       }
       if (result.project) {
-        openNewAgent({ kind: "project", projectId: result.project.id });
+        showProjectBoard(result.project.id);
       } else {
         openNewAgent({ kind: "standalone" });
       }
@@ -891,6 +906,7 @@ export function AppFrame(props: AppFrameProps) {
     setProjectCreateMenuAnchor(null);
     setTaskContextMenu(null);
     cancelInlineRename();
+    cancelProjectInlineRename();
     const target = event.currentTarget;
     const fromActionButton = event.type === "click"
       && target instanceof HTMLElement
@@ -932,6 +948,32 @@ export function AppFrame(props: AppFrameProps) {
   function cancelInlineRename() {
     setInlineRename(null);
     setInlineRenameDraft("");
+  }
+
+  function beginProjectRename(project: MemmyAgentProject) {
+    setTaskListMenuAnchor(null);
+    setTaskContextMenu(null);
+    setProjectContextMenu(null);
+    cancelInlineRename();
+    setInlineRenameProject({ projectId: project.id, original: project.name });
+    setInlineRenameProjectDraft(project.name);
+  }
+
+  function cancelProjectInlineRename() {
+    setInlineRenameProject(null);
+    setInlineRenameProjectDraft("");
+  }
+
+  function commitProjectInlineRename() {
+    const target = inlineRenameProject;
+    const nextValue = inlineRenameProjectDraft.trim();
+    if (!target) return;
+    if (!nextValue || nextValue === target.original) {
+      cancelProjectInlineRename();
+      return;
+    }
+    cancelProjectInlineRename();
+    void updateProject(target.projectId, { name: nextValue });
   }
 
   function commitInlineRename() {
@@ -1141,7 +1183,8 @@ export function AppFrame(props: AppFrameProps) {
           {navItems.map((item) => {
             const key = item.path ?? item.action ?? "unknown";
             const active = item.path
-              ? state.navigation.currentPath === item.path && (item.path !== "/main" || !state.agent.currentSessionKey)
+              ? state.navigation.currentPath === item.path
+                && (item.path !== "/main" || (!state.agent.currentSessionKey && !boardSession.projectId))
               : false;
 
             const label = item.path
@@ -1271,7 +1314,12 @@ export function AppFrame(props: AppFrameProps) {
                 onUnarchiveTask={unarchiveTask}
                 onDeleteArchivedTask={requestDeleteArchivedTask}
                 onProjectContextMenu={openProjectMenu}
-                onNewProjectTask={(projectId) => openNewAgent({ kind: "project", projectId })}
+                renamingProjectId={inlineRenameProject?.projectId ?? null}
+                projectRenameDraft={inlineRenameProjectDraft}
+                onProjectRenameDraftChange={setInlineRenameProjectDraft}
+                onCommitProjectRename={commitProjectInlineRename}
+                onCancelProjectRename={cancelProjectInlineRename}
+                onNewProjectTask={startProjectTask}
                 onOpenProject={showProjectBoard}
               />
             ) : null}
@@ -1308,7 +1356,12 @@ export function AppFrame(props: AppFrameProps) {
               onUnarchiveTask={unarchiveTask}
               onDeleteArchivedTask={requestDeleteArchivedTask}
               onProjectContextMenu={openProjectMenu}
-              onNewProjectTask={(projectId) => openNewAgent({ kind: "project", projectId })}
+              renamingProjectId={inlineRenameProject?.projectId ?? null}
+              projectRenameDraft={inlineRenameProjectDraft}
+              onProjectRenameDraftChange={setInlineRenameProjectDraft}
+              onCommitProjectRename={commitProjectInlineRename}
+              onCancelProjectRename={cancelProjectInlineRename}
+              onNewProjectTask={startProjectTask}
               onOpenProject={showProjectBoard}
               headerLeadingAction={(
                 <div className="relative flex items-center">
@@ -1373,7 +1426,12 @@ export function AppFrame(props: AppFrameProps) {
               onUnarchiveTask={unarchiveTask}
               onDeleteArchivedTask={requestDeleteArchivedTask}
               onProjectContextMenu={openProjectMenu}
-              onNewProjectTask={(projectId) => openNewAgent({ kind: "project", projectId })}
+              renamingProjectId={inlineRenameProject?.projectId ?? null}
+              projectRenameDraft={inlineRenameProjectDraft}
+              onProjectRenameDraftChange={setInlineRenameProjectDraft}
+              onCommitProjectRename={commitProjectInlineRename}
+              onCancelProjectRename={cancelProjectInlineRename}
+              onNewProjectTask={showProjectBoard}
               onOpenProject={showProjectBoard}
               headerAction={(
                 <div className="app-frame-task-section-header__actions-inner">
@@ -1415,6 +1473,7 @@ export function AppFrame(props: AppFrameProps) {
                 setProjectContextMenu(null);
                 showProjectBoard(project.id);
               }}
+              onRename={(project) => beginProjectRename(project)}
               onPin={(project) => {
                 setProjectContextMenu(null);
                 void updateProject(project.id, { pinned: !project.pinned });
@@ -1981,6 +2040,11 @@ function ProjectTreeSection(props: {
   onUnarchiveTask: (task: AgentTaskView) => void;
   onDeleteArchivedTask: (task: AgentTaskView) => void;
   onProjectContextMenu: (event: MouseEvent, projectId: string) => void;
+  renamingProjectId: string | null;
+  projectRenameDraft: string;
+  onProjectRenameDraftChange: (value: string) => void;
+  onCommitProjectRename: () => void;
+  onCancelProjectRename: () => void;
   onNewProjectTask: (projectId: string) => void;
   onOpenProject: (projectId: string) => void;
 }) {
@@ -2072,6 +2136,11 @@ function ProjectTreeSection(props: {
                     onContextMenu={(event) => props.onProjectContextMenu(event, node.project.id)}
                     onOpen={() => props.onOpenProject(node.project.id)}
                     onNewTask={() => props.onNewProjectTask(node.project.id)}
+                    renaming={props.renamingProjectId === node.project.id}
+                    renameDraft={props.projectRenameDraft}
+                    onRenameDraftChange={props.onProjectRenameDraftChange}
+                    onCommitRename={props.onCommitProjectRename}
+                    onCancelRename={props.onCancelProjectRename}
                   />
                   <div
                     className={`app-frame-collapsible${projectCollapsed ? " is-collapsed" : ""}`}
@@ -2234,6 +2303,11 @@ function ProjectRow(props: {
   onContextMenu: (event: MouseEvent) => void;
   onOpen: () => void;
   onNewTask: () => void;
+  renaming?: boolean;
+  renameDraft?: string;
+  onRenameDraftChange?: (value: string) => void;
+  onCommitRename?: () => void;
+  onCancelRename?: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -2274,13 +2348,22 @@ function ProjectRow(props: {
           />
         </span>
         </button>
-        <button
+        {props.renaming ? (
+          <SidebarInlineRenameInput
+            value={props.renameDraft ?? props.project.name}
+            maxLength={60}
+            ariaLabel={t("appFrame.project.rename")}
+            onChange={props.onRenameDraftChange ?? (() => undefined)}
+            onCommit={props.onCommitRename ?? (() => undefined)}
+            onCancel={props.onCancelRename ?? (() => undefined)}
+          />
+        ) : <button
           type="button"
           className="app-frame-project-title-button"
           onClick={props.onOpen}
         >
           <SidebarMarqueeText text={props.project.name} className="app-frame-project-title" />
-        </button>
+        </button>}
       </div>
       <div className="app-frame-project-row__actions">
         <TaskIconButton label={t("appFrame.project.newTask")} tooltip={false} onClick={props.onNewTask}>
@@ -2883,6 +2966,7 @@ function ProjectContextMenu(props: {
   project: MemmyAgentProject | null;
   archiveTaskCount: number;
   onOpenBoard: (project: MemmyAgentProject) => void;
+  onRename: (project: MemmyAgentProject) => void;
   onPin: (project: MemmyAgentProject) => void;
   onReveal: (project: MemmyAgentProject) => void;
   onMarkRead: (project: MemmyAgentProject) => void;
@@ -2911,6 +2995,11 @@ function ProjectContextMenu(props: {
       style={overlayStyle}
       onClick={(event) => event.stopPropagation()}
     >
+      <MenuButton
+        icon={<Pencil size={13} />}
+        label={t("appFrame.project.rename")}
+        onClick={() => run(() => props.onRename(project))}
+      />
       <MenuButton
         icon={<PanelsTopLeft size={13} />}
         label={t("appFrame.project.board")}
