@@ -1,0 +1,5 @@
+{
+  "noProjectMemoryExpectedScore": 0,
+  "rule": "提问会话没有本地上文。答对必须包含 mustInclude 的每一处，并且不能包含 mustNotInclude。空回答得 0 分，金标得满分。题目分五类：plain 只看是否召回；stale 的陷阱是同项目里被后来改口取代的旧回复；overridden 的陷阱是被高权限结论压过的低权限回复；cross-project 的陷阱是另一个项目里相近的回复；scope-leak 是没打开项目目录的窗口，不能带出项目记忆。题面是用户会问的话，不抄任何一条旧回复；噪声只来自这些真实存在的相近或过时记录，不加不相关的填充。",
+  "consistency": "load-eval-set.mjs 校验：每题证据早于提问时间；证据没有被提问前已写入的后续回复取代（trace.supersedes）；金标短语只在证据里，陷阱短语只在陷阱回复里；会话文件由 build-sessions.mjs 从语料生成，不手写。"
+}

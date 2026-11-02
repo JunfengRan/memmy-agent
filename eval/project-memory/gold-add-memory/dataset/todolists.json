@@ -1,0 +1,84 @@
+{
+  "todolistStatus": "generated",
+  "model": "claude-haiku-5-5",
+  "httpStatus": 200,
+  "items": [
+    {
+      "traceId": "t_report",
+      "todos": [
+        {
+          "text": "按客户过滤月报",
+          "status": "pending"
+        },
+        {
+          "text": "为空客户情况补充测试",
+          "status": "pending"
+        },
+        {
+          "text": "在 README 中说明金额仍在 journal 正文中",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "traceId": "t_column",
+      "todos": [
+        {
+          "text": "为 entries 增加 amount 列",
+          "status": "pending"
+        },
+        {
+          "text": "将汇总改为直接读取 amount 列，不再扫描全文",
+          "status": "pending"
+        },
+        {
+          "text": "修改空客户相关的测试以适配新逻辑",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "traceId": "t_bug",
+      "todos": [
+        {
+          "text": "复现空客户输入时 report.ts 丢失整笔记录的问题",
+          "status": "pending"
+        },
+        {
+          "text": "撤回对 month.json 的改动",
+          "status": "pending"
+        },
+        {
+          "text": "修复读取逻辑，确保空客户记录不被丢弃",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "traceId": "t_price",
+      "todos": [
+        {
+          "text": "为 price 表增加 amount 列",
+          "status": "pending"
+        },
+        {
+          "text": "将价格列表改为直接读取 amount 列",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "traceId": "t_export",
+      "todos": [
+        {
+          "text": "检查目标目录是否存在，不存在则创建",
+          "status": "pending"
+        },
+        {
+          "text": "导出价格表并写入文件",
+          "status": "pending"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "extractors": [
+    {
+      "field": "projectRoot",
+      "extractor": "rule",
+      "how": "git 顶层目录。产品侧是 resolveProjectRoot。"
+    },
+    {
+      "field": "memoryScope",
+      "extractor": "rule",
+      "how": "会话路径落在项目根下就是 project，否则 global。"
+    },
+    {
+      "field": "checkpointBoundary",
+      "extractor": "rule",
+      "how": "checkpointsFromHistory 看 todo 从 in_progress 到 completed 或 cancelled。本轮不写区间。"
+    },
+    {
+      "field": "checkpointSummary",
+      "extractor": "rule",
+      "how": "todo 文本加步骤，不调模型。"
+    },
+    {
+      "field": "todolist",
+      "extractor": "model",
+      "how": "scripts/project-memory/eval/generate-todolists.mjs 读取合并后的 query，调用 ~/.env 的 MODEL。失败就让 todolistStatus 保持 ungenerated，不补列表。"
+    },
+    {
+      "field": "decision",
+      "extractor": "model",
+      "how": "WorkMemoryPipeline.decide，只有 llm.isConfigured() 时才走。本轮不跑。"
+    },
+    {
+      "field": "rephrase",
+      "extractor": "model",
+      "how": "同一条流水线里，用户改口时 action 用 merge，不另开一条。本轮不跑。"
+    },
+    {
+      "field": "topicAssign",
+      "extractor": "model",
+      "how": "设计要求不是同一份 todo 列表时由模型归入、新建或跳过。现有 assignTopic 仍按 listId 或名字匹配。本轮不跑。"
+    },
+    {
+      "field": "conflictReal",
+      "extractor": "model",
+      "how": "设计要求先判断是不是真矛盾。现有 adjudicate 只按权限裁定。本轮不跑。"
+    }
+  ],
+  "singleStep": "一步就能做完的 query 保持 needsTodolist false，不交给模型。硬把不相干的相邻 query 合成一条，冲突两边会混成一件事。",
+  "laterRun": "以后用 Cursor 里两个不能搜索对方会话的 session 回放 ledger-build 和 ledger-follow。本轮不跑三臂，也不写 HTML。"
+}

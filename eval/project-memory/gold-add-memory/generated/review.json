@@ -1,0 +1,43 @@
+{
+  "source": "eval/project-memory/dataset copied from dev-project-memory-alpha",
+  "method": "mock-add-message-extraction",
+  "reviewedAt": "2026-11-02",
+  "standard": [
+    "decision 只保留范围、对外约定或共同约定",
+    "experience 记录可复用做法或已证实不可行的做法",
+    "evolution 只记录产出状态变化，不记录开始做某事或局部步骤"
+  ],
+  "findings": [
+    {
+      "id": "d_copy",
+      "original": "decision",
+      "reviewed": "experience",
+      "reason": "不把 catalog export 搬进 ledger 是局部实现取舍，不是范围、对外约定或共同约定。"
+    },
+    {
+      "id": "d_price",
+      "original": "decision",
+      "reviewed": "experience",
+      "reason": "price 表增加 amount 列是局部实现方案，不能作为项目决策金标。"
+    },
+    {
+      "id": "d_export",
+      "original": "decision",
+      "reviewed": "experience",
+      "reason": "先创建 output 目录再写文件是执行步骤，按 standard 不进入决策字段。"
+    },
+    {
+      "id": "d_csv",
+      "original": "decision",
+      "reviewed": "experience",
+      "reason": "选择 prices.csv 是局部实现细节；保留为经验/当前做法供检索题使用。"
+    }
+  ],
+  "acceptedDecisionIds": [
+    "d_amount",
+    "d_empty",
+    "d_env",
+    "d_branch",
+    "d_notify"
+  ]
+}
