@@ -1,0 +1,1086 @@
+{
+  "endpoint": "http://127.0.0.1:18961",
+  "input": {
+    "add": {
+      "entries": [
+        {
+          "kind": "trace",
+          "topicId": "ledger-monthly-report",
+          "sourceTraceIds": [
+            "t_journal",
+            "t_column"
+          ],
+          "text": "摘要排队中"
+        },
+        {
+          "kind": "trace",
+          "topicId": "ledger-monthly-report",
+          "sourceTraceIds": [
+            "t_report",
+            "t_bug"
+          ],
+          "text": "摘要排队中"
+        },
+        {
+          "kind": "trace",
+          "topicId": "ledger-monthly-report",
+          "sourceTraceIds": [
+            "t_wait",
+            "t_dryrun"
+          ],
+          "text": "摘要排队中"
+        },
+        {
+          "kind": "trace",
+          "topicId": "ledger-monthly-report",
+          "sourceTraceIds": [
+            "t_admin_env",
+            "t_env"
+          ],
+          "text": "摘要排队中"
+        },
+        {
+          "kind": "trace",
+          "topicId": "ledger-monthly-report",
+          "sourceTraceIds": [
+            "t_admin_branch"
+          ],
+          "text": "摘要排队中"
+        },
+        {
+          "kind": "trace",
+          "topicId": "ledger-monthly-report",
+          "sourceTraceIds": [
+            "t_tell"
+          ],
+          "text": "摘要排队中"
+        },
+        {
+          "kind": "trace",
+          "topicId": "catalog-price-export",
+          "sourceTraceIds": [
+            "t_price"
+          ],
+          "text": "摘要排队中"
+        },
+        {
+          "kind": "trace",
+          "topicId": "catalog-price-export",
+          "sourceTraceIds": [
+            "t_export"
+          ],
+          "text": "摘要排队中"
+        },
+        {
+          "kind": "trace",
+          "topicId": "catalog-price-export",
+          "sourceTraceIds": [
+            "t_export",
+            "t_csv"
+          ],
+          "text": "摘要排队中"
+        },
+        {
+          "kind": "trace",
+          "topicId": "ledger-monthly-report",
+          "sourceTraceIds": [
+            "t_column"
+          ],
+          "text": "摘要排队中"
+        },
+        {
+          "kind": "trace",
+          "topicId": "ledger-monthly-report",
+          "sourceTraceIds": [
+            "t_wait"
+          ],
+          "text": "摘要排队中"
+        },
+        {
+          "kind": "trace",
+          "topicId": "catalog-price-export",
+          "sourceTraceIds": [
+            "t_csv"
+          ],
+          "text": "摘要排队中"
+        },
+        {
+          "kind": "trace",
+          "topicId": "ledger-monthly-report",
+          "sourceTraceIds": [
+            "t_bug"
+          ],
+          "text": "摘要排队中"
+        },
+        {
+          "kind": "trace",
+          "topicId": "ledger-monthly-report",
+          "sourceTraceIds": [
+            "t_env"
+          ],
+          "text": "摘要排队中"
+        },
+        {
+          "kind": "trace",
+          "topicId": "ledger-monthly-report",
+          "sourceTraceIds": [
+            "t_tell"
+          ],
+          "text": "摘要排队中"
+        },
+        {
+          "kind": "trace",
+          "topicId": "ledger-monthly-report",
+          "sourceTraceIds": [
+            "t_dryrun"
+          ],
+          "text": "摘要排队中"
+        }
+      ]
+    },
+    "search": [
+      {
+        "questionId": "q01",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q02",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q05",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q20",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q25",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q22",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q26",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q28",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q29",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q03",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q04",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q15",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q16",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q17",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q06",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q07",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q08",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q21",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q23",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q24",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q27",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q30",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q09",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q10",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q11",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q12",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q13",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q14",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q18",
+        "recalledTraceIds": []
+      },
+      {
+        "questionId": "q19",
+        "recalledTraceIds": []
+      }
+    ],
+    "answers": [
+      {
+        "questionId": "q01",
+        "answer": ""
+      },
+      {
+        "questionId": "q02",
+        "answer": ""
+      },
+      {
+        "questionId": "q05",
+        "answer": ""
+      },
+      {
+        "questionId": "q20",
+        "answer": ""
+      },
+      {
+        "questionId": "q25",
+        "answer": ""
+      },
+      {
+        "questionId": "q22",
+        "answer": ""
+      },
+      {
+        "questionId": "q26",
+        "answer": ""
+      },
+      {
+        "questionId": "q28",
+        "answer": ""
+      },
+      {
+        "questionId": "q29",
+        "answer": ""
+      },
+      {
+        "questionId": "q03",
+        "answer": ""
+      },
+      {
+        "questionId": "q04",
+        "answer": ""
+      },
+      {
+        "questionId": "q15",
+        "answer": ""
+      },
+      {
+        "questionId": "q16",
+        "answer": ""
+      },
+      {
+        "questionId": "q17",
+        "answer": ""
+      },
+      {
+        "questionId": "q06",
+        "answer": ""
+      },
+      {
+        "questionId": "q07",
+        "answer": ""
+      },
+      {
+        "questionId": "q08",
+        "answer": ""
+      },
+      {
+        "questionId": "q21",
+        "answer": ""
+      },
+      {
+        "questionId": "q23",
+        "answer": ""
+      },
+      {
+        "questionId": "q24",
+        "answer": ""
+      },
+      {
+        "questionId": "q27",
+        "answer": ""
+      },
+      {
+        "questionId": "q30",
+        "answer": ""
+      },
+      {
+        "questionId": "q09",
+        "answer": ""
+      },
+      {
+        "questionId": "q10",
+        "answer": ""
+      },
+      {
+        "questionId": "q11",
+        "answer": ""
+      },
+      {
+        "questionId": "q12",
+        "answer": ""
+      },
+      {
+        "questionId": "q13",
+        "answer": ""
+      },
+      {
+        "questionId": "q14",
+        "answer": ""
+      },
+      {
+        "questionId": "q18",
+        "answer": ""
+      },
+      {
+        "questionId": "q19",
+        "answer": ""
+      }
+    ]
+  },
+  "searchResults": [
+    {
+      "questionId": "q01",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q02",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q05",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q20",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q25",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q22",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q26",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q28",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q29",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q03",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q04",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q15",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q16",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q17",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q06",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q07",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q08",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q21",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q23",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q24",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q27",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q30",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q09",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q10",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q11",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q12",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q13",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q14",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q18",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    },
+    {
+      "questionId": "q19",
+      "recalledTraceIds": [],
+      "hitCount": 0,
+      "hits": []
+    }
+  ],
+  "addResults": [
+    {
+      "entry": {
+        "id": "decision_d_amount",
+        "kind": "decision",
+        "topicId": "ledger-monthly-report",
+        "text": "entries 增加 amount 列，月报按这列汇总，不再扫描 journal 全文",
+        "reason": "月报扫全文太慢",
+        "sourceTraceIds": [
+          "t_journal",
+          "t_column"
+        ],
+        "changedAt": "2026-10-21T08:40:00.000Z",
+        "relation": "contradict",
+        "source": "copied-alpha-gold-reviewed"
+      },
+      "result": {
+        "id": "trace_a940b736744be478bce7",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "entries 增加 amount 列，月报按这列汇总，不再扫描 journal 全文",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:decision",
+          "gold-topic:ledger-monthly-report",
+          "gold-trace:t_journal",
+          "gold-trace:t_column"
+        ],
+        "createdAt": "2026-11-02T11:38:09.823Z",
+        "serverTime": "2026-11-02T11:38:09.827Z"
+      }
+    },
+    {
+      "entry": {
+        "id": "decision_d_empty",
+        "kind": "decision",
+        "topicId": "ledger-monthly-report",
+        "text": "空客户但金额还在的会留下，只跳过金额列为空的行",
+        "reason": "客户名为空时整行被丢掉",
+        "sourceTraceIds": [
+          "t_report",
+          "t_bug"
+        ],
+        "changedAt": "2026-10-21T09:40:00.000Z",
+        "relation": "contradict",
+        "source": "copied-alpha-gold-reviewed"
+      },
+      "result": {
+        "id": "trace_8271cb3e682aa4f3e4d2",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "空客户但金额还在的会留下，只跳过金额列为空的行",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:decision",
+          "gold-topic:ledger-monthly-report",
+          "gold-trace:t_report",
+          "gold-trace:t_bug"
+        ],
+        "createdAt": "2026-11-02T11:38:09.834Z",
+        "serverTime": "2026-11-02T11:38:09.835Z"
+      }
+    },
+    {
+      "entry": {
+        "id": "experience_d_copy",
+        "kind": "experience",
+        "topicId": "ledger-monthly-report",
+        "text": "月报用不上 export，不把 catalog 的导出抄进 ledger",
+        "reason": "dry-run 报告显示用不上",
+        "sourceTraceIds": [
+          "t_wait",
+          "t_dryrun"
+        ],
+        "changedAt": "2026-10-21T11:10:00.000Z",
+        "relation": "contradict",
+        "source": "copied-alpha-gold-reviewed"
+      },
+      "result": {
+        "id": "trace_554c4ed5b20c7da85462",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "月报用不上 export，不把 catalog 的导出抄进 ledger",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:experience",
+          "gold-topic:ledger-monthly-report",
+          "gold-trace:t_wait",
+          "gold-trace:t_dryrun"
+        ],
+        "createdAt": "2026-11-02T11:38:09.836Z",
+        "serverTime": "2026-11-02T11:38:09.837Z"
+      }
+    },
+    {
+      "entry": {
+        "id": "decision_d_env",
+        "kind": "decision",
+        "topicId": "ledger-monthly-report",
+        "text": "数据库连接串只留在本机 .env，不写进 README 和普通记录",
+        "reason": "密码不能进仓库",
+        "sourceTraceIds": [
+          "t_admin_env",
+          "t_env"
+        ],
+        "changedAt": null,
+        "relation": null,
+        "source": "copied-alpha-gold-reviewed"
+      },
+      "result": {
+        "id": "trace_787dd915914db2b00c7d",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "数据库连接串只留在本机 .env，不写进 README 和普通记录",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:decision",
+          "gold-topic:ledger-monthly-report",
+          "gold-trace:t_admin_env",
+          "gold-trace:t_env"
+        ],
+        "createdAt": "2026-11-02T11:38:09.841Z",
+        "serverTime": "2026-11-02T11:38:09.842Z"
+      }
+    },
+    {
+      "entry": {
+        "id": "decision_d_branch",
+        "kind": "decision",
+        "topicId": "ledger-monthly-report",
+        "text": "改动先放 feature 分支，不直接改 main",
+        "reason": "避免直接动主干",
+        "sourceTraceIds": [
+          "t_admin_branch"
+        ],
+        "changedAt": null,
+        "relation": null,
+        "source": "copied-alpha-gold-reviewed"
+      },
+      "result": {
+        "id": "trace_78dfa282b1d6980eddf0",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "改动先放 feature 分支，不直接改 main",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:decision",
+          "gold-topic:ledger-monthly-report",
+          "gold-trace:t_admin_branch"
+        ],
+        "createdAt": "2026-11-02T11:38:09.845Z",
+        "serverTime": "2026-11-02T11:38:09.846Z"
+      }
+    },
+    {
+      "entry": {
+        "id": "decision_d_notify",
+        "kind": "decision",
+        "topicId": "ledger-monthly-report",
+        "text": "另一个窗口要到下一次开口才知道 entries 已有 amount 列",
+        "reason": "这次对话送不过去",
+        "sourceTraceIds": [
+          "t_tell"
+        ],
+        "changedAt": null,
+        "relation": null,
+        "source": "copied-alpha-gold-reviewed"
+      },
+      "result": {
+        "id": "trace_1efb3c256e8f03b82ed4",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "另一个窗口要到下一次开口才知道 entries 已有 amount 列",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:decision",
+          "gold-topic:ledger-monthly-report",
+          "gold-trace:t_tell"
+        ],
+        "createdAt": "2026-11-02T11:38:09.848Z",
+        "serverTime": "2026-11-02T11:38:09.850Z"
+      }
+    },
+    {
+      "entry": {
+        "id": "experience_d_price",
+        "kind": "experience",
+        "topicId": "catalog-price-export",
+        "text": "price 表增加 amount 列，列表直接读这一列",
+        "reason": "价格查询太慢",
+        "sourceTraceIds": [
+          "t_price"
+        ],
+        "changedAt": null,
+        "relation": null,
+        "source": "copied-alpha-gold-reviewed"
+      },
+      "result": {
+        "id": "trace_a19b63de4ddfd7e4114c",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "price 表增加 amount 列，列表直接读这一列",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:experience",
+          "gold-topic:catalog-price-export",
+          "gold-trace:t_price"
+        ],
+        "createdAt": "2026-11-02T11:38:09.852Z",
+        "serverTime": "2026-11-02T11:38:09.853Z"
+      }
+    },
+    {
+      "entry": {
+        "id": "experience_d_export",
+        "kind": "experience",
+        "topicId": "catalog-price-export",
+        "text": "导出前先创建 output 目录，再写价格表",
+        "reason": "目录可能不存在",
+        "sourceTraceIds": [
+          "t_export"
+        ],
+        "changedAt": null,
+        "relation": null,
+        "source": "copied-alpha-gold-reviewed"
+      },
+      "result": {
+        "id": "trace_5936b633f1c9fec0fd12",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "导出前先创建 output 目录，再写价格表",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:experience",
+          "gold-topic:catalog-price-export",
+          "gold-trace:t_export"
+        ],
+        "createdAt": "2026-11-02T11:38:09.855Z",
+        "serverTime": "2026-11-02T11:38:09.856Z"
+      }
+    },
+    {
+      "entry": {
+        "id": "experience_d_csv",
+        "kind": "experience",
+        "topicId": "catalog-price-export",
+        "text": "导出价格表写成 prices.csv",
+        "reason": "导出不再用 json",
+        "sourceTraceIds": [
+          "t_export",
+          "t_csv"
+        ],
+        "changedAt": "2026-10-21T08:20:00.000Z",
+        "relation": "contradict",
+        "source": "copied-alpha-gold-reviewed"
+      },
+      "result": {
+        "id": "trace_2d484f0e38ee6c9f0d7b",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "导出价格表写成 prices.csv",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:experience",
+          "gold-topic:catalog-price-export",
+          "gold-trace:t_export",
+          "gold-trace:t_csv"
+        ],
+        "createdAt": "2026-11-02T11:38:09.858Z",
+        "serverTime": "2026-11-02T11:38:09.859Z"
+      }
+    },
+    {
+      "entry": {
+        "id": "evolution_t_column",
+        "kind": "evolution",
+        "topicId": "ledger-monthly-report",
+        "text": "entries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。",
+        "sourceTraceIds": [
+          "t_column"
+        ],
+        "at": "2026-10-21T08:40:00.000Z",
+        "supersedes": [
+          "t_journal",
+          "t_report"
+        ],
+        "source": "copied-alpha-corpus"
+      },
+      "result": {
+        "id": "trace_2fa4ed926b980f7b9fd8",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "entries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。...",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:evolution",
+          "gold-topic:ledger-monthly-report",
+          "gold-trace:t_column",
+          "typescript"
+        ],
+        "createdAt": "2026-11-02T11:38:09.862Z",
+        "serverTime": "2026-11-02T11:38:09.863Z"
+      }
+    },
+    {
+      "entry": {
+        "id": "evolution_t_wait",
+        "kind": "evolution",
+        "topicId": "ledger-monthly-report",
+        "text": "export 那份拷贝我撤掉了。ledger 不建 output 目录，等 dry-run 报告。",
+        "sourceTraceIds": [
+          "t_wait"
+        ],
+        "at": "2026-10-21T05:20:00.000Z",
+        "supersedes": [
+          "t_copy"
+        ],
+        "source": "copied-alpha-corpus"
+      },
+      "result": {
+        "id": "trace_645a392f4446b3dff477",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "export 那份拷贝我撤掉了。ledger 不建 output 目录，等 dry-run 报告。",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:evolution",
+          "gold-topic:ledger-monthly-report",
+          "gold-trace:t_wait"
+        ],
+        "createdAt": "2026-11-02T11:38:09.866Z",
+        "serverTime": "2026-11-02T11:38:09.867Z"
+      }
+    },
+    {
+      "entry": {
+        "id": "evolution_t_csv",
+        "kind": "evolution",
+        "topicId": "catalog-price-export",
+        "text": "export.ts 现在写 prices.csv，不再用 json。",
+        "sourceTraceIds": [
+          "t_csv"
+        ],
+        "at": "2026-10-21T08:20:00.000Z",
+        "supersedes": [],
+        "source": "copied-alpha-corpus"
+      },
+      "result": {
+        "id": "trace_bf903b034b30aabc314d",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "export.ts 现在写 prices.csv，不再用 json。",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:evolution",
+          "gold-topic:catalog-price-export",
+          "gold-trace:t_csv",
+          "typescript"
+        ],
+        "createdAt": "2026-11-02T11:38:09.869Z",
+        "serverTime": "2026-11-02T11:38:09.869Z"
+      }
+    },
+    {
+      "entry": {
+        "id": "evolution_t_bug",
+        "kind": "evolution",
+        "topicId": "ledger-monthly-report",
+        "text": "month.json 已撤回。问题在 report.ts：客户名为空时整行被丢掉。现在只跳过金额列为空的行，空客户但金额还在的会留下。",
+        "sourceTraceIds": [
+          "t_bug"
+        ],
+        "at": "2026-10-21T09:40:00.000Z",
+        "supersedes": [
+          "t_report",
+          "t_sample"
+        ],
+        "source": "copied-alpha-corpus"
+      },
+      "result": {
+        "id": "trace_e60f09c3564e4bab8be5",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "month.json 已撤回。问题在 report.ts：客户名为空时整行被丢掉。现在只跳过金额列为空的行，空客户但金额还在的会留下。",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:evolution",
+          "gold-topic:ledger-monthly-report",
+          "gold-trace:t_bug",
+          "typescript"
+        ],
+        "createdAt": "2026-11-02T11:38:09.871Z",
+        "serverTime": "2026-11-02T11:38:09.872Z"
+      }
+    },
+    {
+      "entry": {
+        "id": "evolution_t_env",
+        "kind": "evolution",
+        "topicId": "ledger-monthly-report",
+        "text": "README 里的连接串已经删掉了。密码只留在本机的 .env，没有把 .env 的内容抄进来。",
+        "sourceTraceIds": [
+          "t_env"
+        ],
+        "at": "2026-10-21T09:50:00.000Z",
+        "supersedes": [
+          "t_write_secret"
+        ],
+        "source": "copied-alpha-corpus"
+      },
+      "result": {
+        "id": "trace_54ec5e7d2b4655efadcc",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "README 里的连接串已经删掉了。密码只留在本机的 .env，没有把 .env 的内容抄进来。",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:evolution",
+          "gold-topic:ledger-monthly-report",
+          "gold-trace:t_env"
+        ],
+        "createdAt": "2026-11-02T11:38:09.874Z",
+        "serverTime": "2026-11-02T11:38:09.875Z"
+      }
+    },
+    {
+      "entry": {
+        "id": "evolution_t_tell",
+        "kind": "evolution",
+        "topicId": "ledger-monthly-report",
+        "text": "等那个窗口下一次开口，再告诉它 entries 已经有 amount 列。现在这条对话里还送不过去。",
+        "sourceTraceIds": [
+          "t_tell"
+        ],
+        "at": "2026-10-21T10:15:00.000Z",
+        "supersedes": [
+          "t_silent"
+        ],
+        "source": "copied-alpha-corpus"
+      },
+      "result": {
+        "id": "trace_958f72332db64b839b75",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "等那个窗口下一次开口，再告诉它 entries 已经有 amount 列。现在这条对话里还送不过去。",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:evolution",
+          "gold-topic:ledger-monthly-report",
+          "gold-trace:t_tell"
+        ],
+        "createdAt": "2026-11-02T11:38:09.877Z",
+        "serverTime": "2026-11-02T11:38:09.880Z"
+      }
+    },
+    {
+      "entry": {
+        "id": "evolution_t_dryrun",
+        "kind": "evolution",
+        "topicId": "ledger-monthly-report",
+        "text": "看了 dry-run 报告：月报用不上 export，那份拷贝不再恢复，也不往 ledger 搬。",
+        "sourceTraceIds": [
+          "t_dryrun"
+        ],
+        "at": "2026-10-21T11:10:00.000Z",
+        "supersedes": [
+          "t_wait"
+        ],
+        "source": "copied-alpha-corpus"
+      },
+      "result": {
+        "id": "trace_911bef9f746dfabeabbf",
+        "kind": "trace",
+        "memoryLayer": "L1",
+        "status": "activated",
+        "title": "看了 dry-run 报告：月报用不上 export，那份拷贝不再恢复，也不往 ledger 搬。",
+        "summary": "摘要排队中",
+        "tags": [
+          "project-memory-live",
+          "gold-kind:evolution",
+          "gold-topic:ledger-monthly-report",
+          "gold-trace:t_dryrun"
+        ],
+        "createdAt": "2026-11-02T11:38:09.883Z",
+        "serverTime": "2026-11-02T11:38:09.884Z"
+      }
+    }
+  ]
+}

@@ -1,0 +1,212 @@
+{
+  "schemaVersion": 1,
+  "source": "eval/project-memory/gold-add-memory/generated/live-memmy-run.json",
+  "add": {
+    "expected": 16,
+    "actual": 16,
+    "matched": 0,
+    "precision": 0,
+    "recall": 0,
+    "f1": 0
+  },
+  "search": {
+    "questions": 30,
+    "evidenceRecall": 0,
+    "trapRate": 0,
+    "scopeLeakRate": 0,
+    "evidenceHits": 0,
+    "evidenceTotal": 31,
+    "trapHits": 0,
+    "trapTotal": 27,
+    "scopeLeak": 0,
+    "scopeTotal": 1
+  },
+  "answer": {
+    "questions": 30,
+    "passed": 0,
+    "accuracy": 0,
+    "trapRate": 0,
+    "failures": [
+      {
+        "questionId": "q01",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q02",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q05",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q20",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q25",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q22",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q26",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q28",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q29",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q03",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q04",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q15",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q16",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q17",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q06",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q07",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q08",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q21",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q23",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q24",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q27",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q30",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q09",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q10",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q11",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q12",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q13",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q14",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q18",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      },
+      {
+        "questionId": "q19",
+        "hit": false,
+        "trap": false,
+        "answer": ""
+      }
+    ]
+  }
+}

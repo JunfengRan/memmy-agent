@@ -37,6 +37,9 @@ describe("OpenMem cloud REST client contract", () => {
       turnId: "turn-1",
       agentId: "memmy-agent",
       appId: "memmy-app",
+      spaceIds: ["space_memos_cloud"],
+      domains: ["代码开发"],
+      allowMemoryView: ["project"],
       tags: ["agent"],
       allowKnowledgebaseIds: ["kb-local"],
       request: {
@@ -57,6 +60,9 @@ describe("OpenMem cloud REST client contract", () => {
       app_id: "memmy-app",
       tags: ["agent", "memory"],
       allow_knowledgebase_ids: ["kb-local"],
+      space_ids: ["space_memos_cloud"],
+      domains: ["代码开发"],
+      allow_memory_view: ["project"],
       info: {
         memory_layer: "L1",
         turn_id: "turn-1",
@@ -118,17 +124,48 @@ describe("OpenMem cloud REST client contract", () => {
     });
 
     await client.addMessage(addMessage);
+    await client.searchMemory({
+      user_id: "user-1",
+      query: "项目记忆接口当前状态？",
+      conversation_id: "session-1",
+      space_ids: "space_memos_cloud",
+      domains: "代码开发",
+      include_memory_view: ["project"],
+      memory_limit_number: 3
+    });
     await client.addFeedback(feedback);
 
     expect(calls.map((call) => new URL(call.url).pathname)).toEqual([
       "/api/openmem/v1/add/message",
+      "/api/openmem/v1/search/memory",
       "/api/openmem/v1/add/feedback"
     ]);
     expect(calls.map((call) => call.authorization)).toEqual([
       "Token cloud-key",
+      "Token cloud-key",
       "Token cloud-key"
     ]);
     expect(calls[0]!.body).toMatchObject({ user_id: "user-1", messages: addMessage.messages });
-    expect(calls[1]!.body).toMatchObject({ feedback_content: "The memory should prefer SQLite locally." });
+    expect(calls[1]!.body).toMatchObject({
+      user_id: "user-1",
+      query: "项目记忆接口当前状态？",
+      space_ids: "space_memos_cloud",
+      domains: "代码开发",
+      include_memory_view: ["project"],
+      memory_limit_number: 3
+    });
+    expect(calls[2]!.body).toMatchObject({ feedback_content: "The memory should prefer SQLite locally." });
+  });
+
+  it("requires an explicit non-empty project space for project memory", async () => {
+    const client = new OpenMemCloudClient({
+      endpoint: "https://memos.memtensor.cn/api/openmem/v1",
+      fetchImpl: async () => new Response("{}", { status: 200 })
+    });
+    expect(() => client.searchMemory({
+      user_id: "user-1",
+      query: "项目当前状态",
+      include_memory_view: ["project"]
+    })).toThrow("space_ids");
   });
 });

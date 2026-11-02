@@ -30,16 +30,38 @@ export interface OpenMemMessage {
 }
 
 export interface OpenMemAddMessageRequest {
-  user_id: string;
-  conversation_id: string;
+  user_id: string | string[];
+  conversation_id?: string;
   messages: OpenMemMessage[];
   agent_id?: string;
   app_id?: string;
+  /** Project-memory spaces. Required when allow_memory_view includes project. */
+  space_ids?: string | string[];
+  /** Registered project-memory domains, limited to the requested spaces. */
+  domains?: string | string[];
+  /** Memory views to generate; project must be explicitly opted in. */
+  allow_memory_view?: string[];
   tags?: string[];
   info?: Record<string, unknown>;
   allow_public?: boolean;
   allow_knowledgebase_ids?: string[];
   async_mode?: boolean;
+  [key: string]: unknown;
+}
+
+export interface OpenMemSearchMemoryRequest {
+  user_id: string | string[];
+  query: string;
+  conversation_id?: string;
+  agent_id?: string;
+  app_id?: string;
+  /** Project-memory spaces. Required when include_memory_view includes project. */
+  space_ids?: string | string[];
+  /** Registered project-memory domains, limited to the requested spaces. */
+  domains?: string | string[];
+  /** Memory views to search; project must be explicitly opted in. */
+  include_memory_view?: string[];
+  memory_limit_number?: number;
   [key: string]: unknown;
 }
 
@@ -68,7 +90,13 @@ export class OpenMemCloudClient {
   }
 
   addMessage(request: OpenMemAddMessageRequest): Promise<unknown> {
+    validateProjectMemoryRequest(request, "allow_memory_view");
     return this.post("/add/message", request);
+  }
+
+  searchMemory(request: OpenMemSearchMemoryRequest): Promise<unknown> {
+    validateProjectMemoryRequest(request, "include_memory_view");
+    return this.post("/search/memory", request);
   }
 
   addFeedback(request: OpenMemAddFeedbackRequest): Promise<unknown> {
@@ -115,6 +143,9 @@ export function openMemAddMessageFromTurnComplete(input: {
   info?: Record<string, unknown>;
   allowKnowledgebaseIds?: string[];
   allowPublic?: boolean;
+  spaceIds?: string | string[];
+  domains?: string | string[];
+  allowMemoryView?: string[];
   asyncMode?: boolean;
 }): OpenMemAddMessageRequest {
   const messages: OpenMemMessage[] = [];
@@ -140,6 +171,9 @@ export function openMemAddMessageFromTurnComplete(input: {
     messages,
     agent_id: input.agentId,
     app_id: input.appId,
+    space_ids: input.spaceIds,
+    domains: input.domains,
+    allow_memory_view: input.allowMemoryView,
     tags: distinct([...(input.tags ?? []), ...(input.request.tags ?? [])]),
     allow_knowledgebase_ids: input.allowKnowledgebaseIds,
     allow_public: input.allowPublic,
@@ -284,4 +318,26 @@ function compactRecord(input: Record<string, unknown>): Record<string, unknown> 
 function distinct(values: string[]): string[] | undefined {
   const out = [...new Set(values.filter(Boolean))];
   return out.length ? out : undefined;
+}
+
+function validateProjectMemoryRequest(
+  request: { user_id: string | string[]; space_ids?: string | string[]; domains?: string | string[]; [key: string]: unknown },
+  viewField: "allow_memory_view" | "include_memory_view"
+): void {
+  const views = request[viewField];
+  if (!Array.isArray(views) || !views.includes("project")) return;
+  const users = Array.isArray(request.user_id) ? request.user_id : [request.user_id];
+  if (users.length === 0 || users.some((user) => typeof user !== "string" || !user.trim())) {
+    throw new TypeError("project memory requires a non-empty user_id");
+  }
+  const spaces = Array.isArray(request.space_ids) ? request.space_ids : [request.space_ids];
+  if (spaces.length === 0 || spaces.some((space) => typeof space !== "string" || !space.trim())) {
+    throw new TypeError("project memory requires a non-empty space_ids");
+  }
+  if (request.domains !== undefined) {
+    const domains = Array.isArray(request.domains) ? request.domains : [request.domains];
+    if (domains.length === 0 || domains.some((domain) => typeof domain !== "string" || !domain.trim())) {
+      throw new TypeError("project memory domains must contain non-empty strings");
+    }
+  }
 }
