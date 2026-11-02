@@ -168,4 +168,31 @@ describe("OpenMem cloud REST client contract", () => {
       include_memory_view: ["project"]
     })).toThrow("space_ids");
   });
+
+  it("rejects standard project scope and search limit violations before HTTP", () => {
+    const client = new OpenMemCloudClient({
+      endpoint: "https://memos.memtensor.cn/api/openmem/v1",
+      fetchImpl: async () => new Response("{}", { status: 200 })
+    });
+    expect(() => client.addMessage({
+      user_id: "user-1",
+      messages: [{ role: "user", content: "hello" }],
+      allow_memory_view: ["project"],
+      space_ids: Array.from({ length: 21 }, (_, index) => `space-${index}`)
+    })).toThrow("at most 20 space_ids");
+    expect(() => client.searchMemory({
+      user_id: "user-1",
+      query: "项目当前状态",
+      include_memory_view: ["project"],
+      space_ids: "space-1",
+      domains: []
+    })).toThrow("domains");
+    expect(() => client.searchMemory({
+      user_id: "user-1",
+      query: "项目当前状态",
+      include_memory_view: ["project"],
+      space_ids: "space-1",
+      memory_limit_number: 26
+    })).toThrow("memory_limit_number");
+  });
 });

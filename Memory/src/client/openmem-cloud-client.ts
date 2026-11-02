@@ -24,6 +24,8 @@ export interface OpenMemToolCall {
 export interface OpenMemMessage {
   role: "user" | "assistant" | "system" | "tool";
   content: string | Array<Record<string, unknown>>;
+  role_id?: string;
+  role_name?: string;
   chat_time?: string;
   tool_call_id?: string;
   tool_calls?: OpenMemToolCall[];
@@ -50,7 +52,7 @@ export interface OpenMemAddMessageRequest {
 }
 
 export interface OpenMemSearchMemoryRequest {
-  user_id: string | string[];
+  user_id: string;
   query: string;
   conversation_id?: string;
   agent_id?: string;
@@ -96,6 +98,7 @@ export class OpenMemCloudClient {
 
   searchMemory(request: OpenMemSearchMemoryRequest): Promise<unknown> {
     validateProjectMemoryRequest(request, "include_memory_view");
+    validateMemoryLimit(request.memory_limit_number);
     return this.post("/search/memory", request);
   }
 
@@ -330,14 +333,30 @@ function validateProjectMemoryRequest(
   if (users.length === 0 || users.some((user) => typeof user !== "string" || !user.trim())) {
     throw new TypeError("project memory requires a non-empty user_id");
   }
+  if (users.length > 20) {
+    throw new RangeError("project memory user_id supports at most 20 users");
+  }
   const spaces = Array.isArray(request.space_ids) ? request.space_ids : [request.space_ids];
   if (spaces.length === 0 || spaces.some((space) => typeof space !== "string" || !space.trim())) {
     throw new TypeError("project memory requires a non-empty space_ids");
+  }
+  if (spaces.length > 20) {
+    throw new RangeError("project memory supports at most 20 space_ids");
   }
   if (request.domains !== undefined) {
     const domains = Array.isArray(request.domains) ? request.domains : [request.domains];
     if (domains.length === 0 || domains.some((domain) => typeof domain !== "string" || !domain.trim())) {
       throw new TypeError("project memory domains must contain non-empty strings");
     }
+    if (domains.length > 20) {
+      throw new RangeError("project memory supports at most 20 domains");
+    }
+  }
+}
+
+function validateMemoryLimit(value: number | undefined): void {
+  if (value === undefined) return;
+  if (!Number.isInteger(value) || value < 1 || value > 25) {
+    throw new RangeError("memory_limit_number must be an integer between 1 and 25");
   }
 }
