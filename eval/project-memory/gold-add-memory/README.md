@@ -45,4 +45,4 @@ node eval/project-memory/gold-add-memory/run-pipeline-eval.mjs path/to/memmy-run
 
 真实运行建议至少重复 3 次，并同时保留每题证据、rank、延迟、token 与最终回答；oracle 的 1.0 结果只是评分器 smoke test，不代表产品效果。
 
-本分支还用隔离的本地 Memmy HTTP 服务跑过一次 live smoke：16 次 add 请求均被服务接受，但当前 generic `/api/v1/memory/add` 返回的是 `trace`，不是 reviewed 的 project topic；本地 embedding 模型下载失败导致 search 没有召回，最终回答准确率为 0。该结果作为当前能力边界记录在 `generated/live-report.json`，不能与 oracle 结果混用。
+本分支还用隔离的本地 Memmy HTTP 服务跑过一次 live smoke：16 次 add 请求均被服务接受，但当前 generic `/api/v1/memory/add` 返回的是 `trace`，不是 reviewed 的 project topic；本次服务回放没有形成可评分的 search 召回，最终回答准确率为 0。该结果作为当前能力边界记录在 `generated/live-report.json`，不能与 oracle 结果混用。
