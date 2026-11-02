@@ -21,7 +21,7 @@ node eval/project-memory/gold-add-memory/build-report.mjs
 
 ## SDK 接口实现
 
-`Memory/src/client/openmem-cloud-client.ts` 已补齐 standard 所需的项目记忆字段：`space_ids`、`domains`、`allow_memory_view` / `include_memory_view`，并新增 `OpenMemCloudClient.searchMemory()`。当请求显式包含 `project` 时，客户端会在发出请求前校验 `user_id` 与非空 `space_ids`。
+`Memory/src/client/openmem-cloud-client.ts` 已补齐 standard 所需的项目记忆字段：`space_ids`、`domains`、`allow_memory_view` / `include_memory_view`，并新增 `OpenMemCloudClient.searchMemory()`。当请求显式包含 `project` 时，客户端会在发出请求前校验 `user_id`、非空 `space_ids` / `domains`、20 个空间与群聊成员上限；`searchMemory()` 还校验 `memory_limit_number` 为 1–25 的整数。
 
 ## 三阶段评测门禁
 
