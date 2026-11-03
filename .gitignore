@@ -24,6 +24,10 @@ App/memmy-agent/package-lock.json
 .env
 .env.*
 !.env.example
+# Shared agent skills are versioned; local Claude settings stay ignored.
+!.claude/
+.claude/*
+!.claude/skills/
 # Holds the Windows Computer History folder open until it has code: git does
 # not track empty directories, and `.*` above would otherwise drop the marker.
 !App/memmy-agent/src/tools/computer-history/win/.gitkeep
