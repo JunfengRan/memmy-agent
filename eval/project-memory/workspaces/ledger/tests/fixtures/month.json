@@ -1,0 +1,4 @@
+[
+  { "customer": "north", "amount": 12, "journal": "north paid 12" },
+  { "customer": "", "amount": 4, "journal": "walk-in paid 4" }
+]
