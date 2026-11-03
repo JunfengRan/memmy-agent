@@ -15,7 +15,7 @@ node eval/project-memory/gold-add-memory/build-report.mjs
 
 期望输出：
 
-- `build-gold-baseline.mjs` 输出包含 `"entries":28` 和 `"topics":19`；
+- `build-gold-baseline.mjs` 输出包含 `"entries":28` 和 `"topics":7`；
 - `build-sessions.mjs` 输出 `sessions written`；
 - `load-eval-set.mjs` 输出 `errors: []`；
 - `--oracle` 的各项质量指标为 1（Recall@1 例外，见下文）；
@@ -30,7 +30,7 @@ oracle 和 empty 不调用评委模型。完全等于 goldAnswer 的回答、空
   - 旧 `decisions.json` 中有 4 条越界标签，`d_copy`、`d_price`、`d_export`、`d_csv` 改为 `experience`；
   - 新补的 12 条当前状态事实（`addedEntries`）。以 `t_ledger_round`、`t_cat_tz`、`t_admin_claim` 为例，题目要问它们，但旧 gold 没有收录。
 - 每条 entry 带以下字段：
-  - `goldTopic`：按工作对象分成 19 组，说明见 `review.topicGroups`；
+  - `goldTopic`：按工作对象分成 7 组，说明见 `review.topicGroups`。一个模块、一份产出、一个单独排查的 bug 或一类协作规则是一个 topic；切月时区、取整、去重这类参数和边界情况归入所属对象，不单独成组。ledger 有 3 组（月报计算、空客户行、月报输出），catalog 有 2 组（价格数据口径、价格导出），协作规则有 2 组（仓库操作约定、沟通约定），每组 3 到 5 条；
   - `asOf`：该状态成立的时间；
   - `staleTexts`：这条事实的旧版或被压过的说法，由 `trace.supersedes` 与 `conflicts.json` 的胜负推出。
 - 被取代或被压过的轨迹（`t_verbose`、`t_copy`、`t_sample`、`t_write_*`、`t_silent`）不进当前状态 gold，只出现在 `staleTexts` 里。
@@ -41,7 +41,9 @@ oracle 和 empty 不调用评委模型。完全等于 goldAnswer 的回答、空
 
 每个请求都记录延迟、HTTP 状态和服务端返回的 `usage`（model、llm_calls、input/output/cached tokens），整轮还记录 wallclock。search 结果按"topic 顺序 → entry 顺序"保留 rank。
 
-服务端的 `usage` 字段只在 `dev-project-memory-add-search-dev` 分支的 Local 实现里有；`dev-project-memory-search-gold-baseline` 分支没有 project add/search 服务端，真实回放要在开发分支上跑。服务必须使用一个全新的 SQLite 文件，因为 project search 只按空间过滤，不按用户过滤。脚本开跑前会检查这一点，库不为空就退出。
+被测模型按 topic skill 选 topic_id。skill 在 `Memory/src/service/project-memory/topic-skill.ts`，拼在抽取系统提示词后面；每次 add，服务端还会把该项目已有的 topic（topic_id、条目数、最新一条）放进请求，让模型先复用、再新建。skill 的示例刻意不用本数据集的领域词，避免把 gold topic 泄漏给被测模型。
+
+服务端的 `usage` 字段、topic skill 和已有 topic 目录只在 `dev-project-memory-add-search-dev` 分支的 Local 实现里有；`dev-project-memory-search-gold-baseline` 分支没有 project add/search 服务端，真实回放要在开发分支上跑。服务必须使用一个全新的 SQLite 文件，因为 project search 只按空间过滤，不按用户过滤。脚本开跑前会检查这一点，库不为空就退出。
 
 ```bash
 cd Memory && MEMMY_MEMORY_PORT=18961 MEMMY_MEMORY_DB=/tmp/pm-eval/memory.sqlite npx tsx src/server/index.ts
@@ -93,7 +95,13 @@ node eval/project-memory/gold-add-memory/run-pipeline-eval.mjs eval/project-memo
 
 ## 当前真实结果
 
-2026-11-03 用 claude-haiku-5-5 跑了一次交错回放，结果在 `generated/live-report.json`。这是单次真实模型结果，同一配置重复运行会有波动，不能与 oracle 的 1.0 混用。
+2026-11-03 用 claude-haiku-5-5 跑了一次交错回放，结果在 `generated/live-report.json`。这是单次真实模型结果，同一配置重复运行会有波动，不能与 oracle 的 1.0 混用。仍在初步测试，`report.html` 不展示这些结果。
+
+这次结果是以下改动之前跑的，还没有重跑：
+
+- 当时 gold 有 19 个 topic，现在合并成 7 个，下表的 topic 归纳分数不能直接与新 gold 对照；
+- 当时抽取还没有 topic skill 和已有 topic 目录；
+- 当时 project search 实际上没有按空间过滤：仓储层的 `workMemoryProjectId` 条件只在同时给出 `workMemoryUserId` 时才生效，所以会读到所有项目的条目。现在服务端逐行检查 `project_space_id`。trap rate 和 cross-project 的分数可能受了影响。
 
 | 阶段 | 指标 | 值 |
 | --- | --- | --- |
