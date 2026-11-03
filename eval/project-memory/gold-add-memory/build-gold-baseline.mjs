@@ -34,53 +34,42 @@ const review = {
   // traces (t_write_*) are not current state and stay out of gold.
   addedEntries: [
     { traceId: "t_admin_bug", kind: "experience", goldTopic: "ledger-empty-customer", reason: "已证实补样例不能修复，问题在读取代码，是可复用的排查结论。" },
-    { traceId: "t_ledger_tz", kind: "experience", goldTopic: "ledger-month-boundary", reason: "report.ts 切月规则是局部实现。" },
-    { traceId: "t_ledger_round", kind: "experience", goldTopic: "ledger-amount-rounding", reason: "金额累加精度是局部实现。" },
-    { traceId: "t_ledger_dup", kind: "experience", goldTopic: "ledger-entry-dedupe", reason: "去重规则是局部实现。" },
+    { traceId: "t_ledger_tz", kind: "experience", goldTopic: "ledger-report-calculation", reason: "report.ts 切月规则是局部实现。" },
+    { traceId: "t_ledger_round", kind: "experience", goldTopic: "ledger-report-calculation", reason: "金额累加精度是局部实现。" },
+    { traceId: "t_ledger_dup", kind: "experience", goldTopic: "ledger-report-calculation", reason: "去重规则是局部实现。" },
     { traceId: "t_ledger_loc", kind: "experience", goldTopic: "ledger-report-output", reason: "输出目录与文件名是局部实现，与 d_export 的复核口径一致。" },
-    { traceId: "t_cat_round", kind: "experience", goldTopic: "catalog-amount-rounding", reason: "价格取整是局部实现。" },
-    { traceId: "t_cat_tz", kind: "experience", goldTopic: "catalog-effective-date", reason: "生效日切换规则是局部实现。" },
-    { traceId: "t_cat_sku", kind: "experience", goldTopic: "catalog-sku-normalization", reason: "sku 归一化是局部实现。" },
-    { traceId: "t_cat_dup", kind: "experience", goldTopic: "catalog-duplicate-sku", reason: "重复 sku 取舍是局部实现。" },
-    { traceId: "t_short", kind: "decision", goldTopic: "collab-reply-format", reason: "回复格式是用户与 agent 的共同约定，取代 t_verbose。" },
-    { traceId: "t_admin_todo", kind: "decision", goldTopic: "collab-turn-split", reason: "admin 的协作约定，压过 t_write_split。" },
-    { traceId: "t_admin_claim", kind: "decision", goldTopic: "collab-conflict-rule", reason: "admin 的冲突判定口径是共同约定，压过 t_write_edit。" }
+    { traceId: "t_cat_round", kind: "experience", goldTopic: "catalog-price-data", reason: "价格取整是局部实现。" },
+    { traceId: "t_cat_tz", kind: "experience", goldTopic: "catalog-price-data", reason: "生效日切换规则是局部实现。" },
+    { traceId: "t_cat_sku", kind: "experience", goldTopic: "catalog-price-data", reason: "sku 归一化是局部实现。" },
+    { traceId: "t_cat_dup", kind: "experience", goldTopic: "catalog-price-data", reason: "重复 sku 取舍是局部实现。" },
+    { traceId: "t_short", kind: "decision", goldTopic: "collab-communication", reason: "回复格式是用户与 agent 的共同约定，取代 t_verbose。" },
+    { traceId: "t_admin_todo", kind: "decision", goldTopic: "collab-communication", reason: "admin 的协作约定，压过 t_write_split。" },
+    { traceId: "t_admin_claim", kind: "decision", goldTopic: "collab-repo-safety", reason: "admin 的冲突判定口径是共同约定，压过 t_write_edit。" }
   ],
-  // goldTopic groups entries by work object, not by project. Topic induction is scored with
-  // label-free clustering, so these names never need to match model topic ids.
+  // goldTopic groups entries by work object (module, output or rule area), not by single fact.
+  // Topic induction is scored with label-free clustering, so these names never need to match
+  // model topic ids.
   topicGroups: {
-    "ledger-amount-source": "月报金额从 journal 正文改为 entries.amount 列",
-    "ledger-empty-customer": "空客户行的处理与测试失败根因",
-    "ledger-export-copy": "catalog export 是否搬进 ledger",
-    "ledger-month-boundary": "月报切月时区",
-    "ledger-amount-rounding": "月报金额精度",
-    "ledger-entry-dedupe": "月报分录去重",
-    "ledger-report-output": "月报输出位置",
-    "catalog-price-amount": "price 表 amount 列",
-    "catalog-export-file": "价格表导出目录与格式",
-    "catalog-amount-rounding": "价格取整",
-    "catalog-effective-date": "价格生效日时区",
-    "catalog-sku-normalization": "sku 大小写归一",
-    "catalog-duplicate-sku": "重复 sku 取舍",
-    "collab-secrets": "连接串与 .env",
-    "collab-branch": "分支协作",
-    "collab-notify": "跨窗口通知 amount 列",
-    "collab-reply-format": "回复与清单格式",
-    "collab-turn-split": "无清单时是否拆段",
-    "collab-conflict-rule": "冲突判定口径"
+    "ledger-report-calculation": "月报怎么算：金额来源、精度、切月时区、分录去重",
+    "ledger-empty-customer": "空客户行的处理规则与测试失败根因",
+    "ledger-report-output": "月报输出：写到哪里，以及是否搬用 catalog export",
+    "catalog-price-data": "价格数据口径：amount 列、取整、生效日时区、sku 归一与重复取舍",
+    "catalog-price-export": "价格表导出：目录与文件格式",
+    "collab-repo-safety": "仓库操作约定：连接串与 .env、分支、冲突判定",
+    "collab-communication": "沟通约定：回复格式、无清单时是否拆段、跨窗口通知"
   }
 };
 
 const decisionTopic = {
-  d_amount: "ledger-amount-source",
+  d_amount: "ledger-report-calculation",
   d_empty: "ledger-empty-customer",
-  d_copy: "ledger-export-copy",
-  d_env: "collab-secrets",
-  d_branch: "collab-branch",
-  d_notify: "collab-notify",
-  d_price: "catalog-price-amount",
-  d_export: "catalog-export-file",
-  d_csv: "catalog-export-file"
+  d_copy: "ledger-report-output",
+  d_env: "collab-repo-safety",
+  d_branch: "collab-repo-safety",
+  d_notify: "collab-communication",
+  d_price: "catalog-price-data",
+  d_export: "catalog-price-export",
+  d_csv: "catalog-price-export"
 };
 const latestTraceAt = (ids) => ids.map((id) => traces.get(id).at).sort().at(-1);
 
@@ -122,13 +111,13 @@ for (const added of review.addedEntries) {
 // Evolution is restricted to output status changes represented by supersedes or explicit
 // completed/reverted/fixed outcomes in the copied corpus. Query/answer text is never rewritten.
 const evolutionTopic = {
-  t_column: "ledger-amount-source",
-  t_wait: "ledger-export-copy",
-  t_csv: "catalog-export-file",
+  t_column: "ledger-report-calculation",
+  t_wait: "ledger-report-output",
+  t_csv: "catalog-price-export",
   t_bug: "ledger-empty-customer",
-  t_env: "collab-secrets",
-  t_tell: "collab-notify",
-  t_dryrun: "ledger-export-copy"
+  t_env: "collab-repo-safety",
+  t_tell: "collab-communication",
+  t_dryrun: "ledger-report-output"
 };
 for (const [id, goldTopic] of Object.entries(evolutionTopic)) {
   const trace = traces.get(id);
