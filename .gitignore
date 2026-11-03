@@ -12,7 +12,8 @@ memmy-memory-*.tgz
 *.sqlite.bak
 .DS_Store
 App/memmy-agent/package-lock.json
-sessions/
+# Repo-root runtime logs only. Eval fixtures keep their own sessions directories.
+/sessions/
 .*
 !.github/
 !.github/workflows/
