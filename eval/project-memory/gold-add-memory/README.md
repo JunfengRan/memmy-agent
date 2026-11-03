@@ -1,6 +1,6 @@
 # 项目记忆 Search Gold 基线
 
-本目录从 `main` 分支创建的 `codex/project-memory-search-gold-baseline` 分支上构建。`dataset/` 是从 alpha 先行开发版本复制的输入，`generated/extracted-gold.json` 是按 `design-docs/standard` 的 `add_message` 三类条目规则做的可重复 mock 抽取结果。
+本目录从 `main` 分支创建的 `dev-project-memory-search-gold-baseline` 分支上构建。`dataset/` 是从 alpha 先行开发版本复制的输入，`generated/extracted-gold.json` 是按 `design-docs/standard` 的 `add_message` 三类条目规则做的可重复 mock 抽取结果。
 
 ## 生成与校验
 
