@@ -136,7 +136,7 @@ export class AnthropicProvider extends LLMProvider {
   }
 
   static omitsTemperature(model: string): boolean {
-    return /(?:^|[./])claude-(?:sonnet-5|opus-(?:4-7|5))(?:[-.:@]|$)/i.test(model);
+    return /(?:^|[./])claude-(?:sonnet-5|haiku-5|opus-(?:4-7|5))(?:[-.:@]|$)/i.test(model);
   }
 
   static toolResultBlock(msg: Record<string, any>): Record<string, any> {

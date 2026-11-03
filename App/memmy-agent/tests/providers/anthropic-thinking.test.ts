@@ -231,7 +231,10 @@ describe("Anthropic thinking", () => {
     "claude-sonnet-5",
     "anthropic/claude-sonnet-5-20260801",
     "claude-opus-5",
-    "us.anthropic.claude-opus-5-20260801-v1:0"
+    "us.anthropic.claude-opus-5-20260801-v1:0",
+    "claude-haiku-5-5",
+    "claude-haiku-5.5",
+    "anthropic/claude-haiku-5-5"
   ])("omits temperature for fixed-temperature Claude model %s", (model) => {
     expect(build(null, { defaultModel: model })).not.toHaveProperty("temperature");
     expect(build("adaptive", { defaultModel: model })).not.toHaveProperty("temperature");
