@@ -21,7 +21,7 @@ node eval/project-memory/gold-add-memory/build-report.mjs
 
 ## SDK 接口实现
 
-`Memory/src/client/openmem-cloud-client.ts` 已补齐 standard 所需的项目记忆字段：`space_ids`、`domains`、`allow_memory_view` / `include_memory_view`，并新增 `OpenMemCloudClient.searchMemory()`。当请求显式包含 `project` 时，客户端会在发出请求前校验 `user_id`、非空 `space_ids` / `domains`、20 个空间与群聊成员上限；`searchMemory()` 还校验 `memory_limit_number` 为 1–25 的整数。
+`Memory/src/client/openmem-cloud-client.ts` 已补齐 standard 所需的项目记忆字段：`space_ids`、`domains`、`allow_memory_view` / `include_memory_view`，并新增 `OpenMemCloudClient.searchMemory()`。当请求显式包含 `project` 时，客户端会在发出请求前校验 `user_id`、非空 `space_ids` / `domains`、20 个空间与群聊成员上限；`searchMemory()` 还校验 `memory_limit_number` 为 1–25 的整数。Local 的 `/api/v1/memory/add` 和 `/api/v1/memory/search` 也已接入 project 分支：写入调用已配置的 summary 模型抽取 decision / experience / evolution，检索按 `space_ids`、`domains` 硬过滤，并可由同一模型生成 `answer`。
 
 ## 三阶段评测门禁
 
@@ -45,4 +45,4 @@ node eval/project-memory/gold-add-memory/run-pipeline-eval.mjs path/to/memmy-run
 
 真实运行建议至少重复 3 次，并同时保留每题证据、rank、延迟、token 与最终回答；oracle 的 1.0 结果只是评分器 smoke test，不代表产品效果。
 
-本分支还用隔离的本地 Memmy HTTP 服务跑过一次 live smoke：16 次 add 请求均被服务接受，但当前 generic `/api/v1/memory/add` 返回的是 `trace`，不是 reviewed 的 project topic；本次服务回放没有形成可评分的 search 召回，最终回答准确率为 0。该结果作为当前能力边界记录在 `generated/live-report.json`，不能与 oracle 结果混用。
+本分支已用当前 Memmy 配置中的 `claude-haiku-5-5` 跑过真实 Local HTTP 回放：7 个项目会话经 project add 写入，25 个模型条目落入隔离 SQLite；30 道问题经 project search 检索并调用同一模型生成答案。当前结果记录在 `generated/live-report.json`：add 严格 topic 对齐 F1=0（模型生成的 topic_id 与 reviewed gold 不同，且抽取出 25 条）；search evidence recall=0.871、trap rate=0.704、scope leak=0；最终回答准确率=0.300、trap rate=0。该结果是真实模型结果，不能与 oracle 的 1.0 混用；同一配置重复运行会有模型输出和排序波动。

@@ -21,6 +21,8 @@ import type {
   MemoryLayer,
   MemoryReloadConfigRequest,
   MemorySearchRequest,
+  ProjectMemoryAddRequest,
+  ProjectMemorySearchRequest,
   RequestEnvelope,
   RuntimeNamespace,
   SessionOpenRequest,
@@ -782,6 +784,11 @@ async function routeRequest(
 
   if (method === "POST" && path === "/api/v1/memory/search") {
     requireMemoryRead(principal);
+    const rawRequest = asObject(body, "memory.search");
+    if (includesProjectMemoryView(rawRequest.include_memory_view)) {
+      const request = requestWithPrincipal<Record<string, unknown> & RequestEnvelope>(rawRequest, "memory.search", principal);
+      return publicProjectMemorySearchResponse(await service.searchProjectMemory(parseProjectMemorySearchRequest(request)));
+    }
     const request = requestWithPrincipal<MemorySearchRequest>(body, "memory.search", principal);
     requireStringField(request, "query", "memory.search");
     const publicRequest: MemorySearchRequest = {
@@ -825,6 +832,11 @@ async function routeRequest(
 
   if (method === "POST" && path === "/api/v1/memory/add") {
     requireMemoryWrite(principal);
+    const rawRequest = asObject(body, "memory.add");
+    if (includesProjectMemoryView(rawRequest.allow_memory_view)) {
+      const request = requestWithPrincipal<Record<string, unknown> & RequestEnvelope>(rawRequest, "memory.add", principal);
+      return publicProjectMemoryAddResponse(await service.addProjectMemory(parseProjectMemoryAddRequest(request)));
+    }
     const request = requestWithPrincipal<MemoryAddRequest>(body, "memory.add", principal);
     requireStringField(request, "content", "memory.add");
     const publicRequest: MemoryAddRequest = {
@@ -1210,6 +1222,61 @@ function publicSearchResponse(result: unknown): Record<string, unknown> {
   };
 }
 
+function publicProjectMemoryAddResponse(result: Awaited<ReturnType<MemoryService["addProjectMemory"]>>): Record<string, unknown> {
+  return {
+    task_id: result.taskId,
+    status: result.status,
+    memory_ids: result.memoryIds,
+    entries: result.entries.map((entry) => ({
+      id: entry.id,
+      kind: entry.kind,
+      topic_id: entry.topicId,
+      text: entry.text,
+      source_trace_ids: entry.sourceTraceIds
+    })),
+    server_time: result.serverTime
+  };
+}
+
+function publicProjectMemorySearchResponse(result: Awaited<ReturnType<MemoryService["searchProjectMemory"]>>): Record<string, unknown> {
+  return {
+    topic_detail_list: result.topicDetailList.map((topic) => {
+      const entries = topic.entries.map((entry) => ({
+        kind: entry.kind,
+        entry: entry.entry,
+        source_trace_ids: entry.sourceTraceIds,
+        update_time: entry.updateTime,
+        ...(entry.reason ? { reason: entry.reason } : {}),
+        ...(entry.changedAt ? { changed_at: entry.changedAt } : {})
+      }));
+      const standardEntry = (entry: typeof topic.entries[number]) => ({
+        content: entry.entry,
+        time: entry.changedAt ?? entry.updateTime,
+        user_ids: entry.userIds,
+        source_trace_ids: entry.sourceTraceIds,
+        ...(entry.reason ? { reason: entry.reason } : {})
+      });
+      return {
+        id: topic.topicId,
+        topic_id: topic.topicId,
+        space_id: topic.spaceId,
+        domain: topic.domain ?? "",
+        topic_name: topic.topicName,
+        topic_summary: topic.topicSummary,
+        topic_description: topic.topicDescription,
+        decisions: topic.entries.filter((entry) => entry.kind === "decision").map(standardEntry),
+        experiences: topic.entries.filter((entry) => entry.kind === "experience").map(standardEntry),
+        timeline: topic.entries.filter((entry) => entry.kind === "evolution").map(standardEntry),
+        relativity: topic.relativity,
+        update_time: topic.updateTime,
+        entries
+      };
+    }),
+    ...(result.answer ? { answer: result.answer } : {}),
+    server_time: result.serverTime
+  };
+}
+
 function publicSearchInjectedContextRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null
     ? value as Record<string, unknown>
@@ -1510,6 +1577,84 @@ function requestWithPrincipal<T extends RequestEnvelope>(
   principal: AuthPrincipal
 ): T {
   return envelopeWithPrincipal(asObject(body, routeName), principal) as unknown as T;
+}
+
+function includesProjectMemoryView(value: unknown): boolean {
+  return Array.isArray(value) && value.some((item) => item === "project");
+}
+
+function parseProjectMemoryAddRequest(value: Record<string, unknown> & RequestEnvelope): ProjectMemoryAddRequest {
+  const messages = Array.isArray(value.messages)
+    ? value.messages.map((message) => {
+        const record = isRecord(message) ? message : {};
+        const role: "user" | "assistant" | "system" | "tool" = record.role === "assistant" || record.role === "system" || record.role === "tool" ? record.role : "user";
+        return {
+          role,
+          content: typeof record.content === "string" ? record.content : JSON.stringify(record.content ?? ""),
+          ...(typeof record.chat_time === "string" ? { chatTime: record.chat_time } : {}),
+          ...(typeof record.role_id === "string" ? { roleId: record.role_id } : {}),
+          ...(typeof record.role_name === "string" ? { roleName: record.role_name } : {}),
+          ...(typeof record.source_trace_id === "string" ? { sourceTraceId: record.source_trace_id } : {})
+        };
+      })
+    : [];
+  return {
+    namespace: value.namespace,
+    timeZone: value.timeZone,
+    userId: parseStringOrStringArray(value.user_id, "user_id"),
+    conversationId: optionalString(value.conversation_id),
+    agentId: optionalString(value.agent_id),
+    appId: optionalString(value.app_id),
+    spaceIds: parseStringOrStringArray(value.space_ids, "space_ids"),
+    domains: value.domains === undefined ? undefined : parseStringOrStringArray(value.domains, "domains"),
+    allowMemoryView: parseProjectOptionalStringArray(value.allow_memory_view),
+    messages,
+    sourceTraceIds: parseProjectOptionalStringArray(value.source_trace_ids)
+  };
+}
+
+function parseProjectMemorySearchRequest(value: Record<string, unknown> & RequestEnvelope): ProjectMemorySearchRequest {
+  return {
+    namespace: value.namespace,
+    timeZone: value.timeZone,
+    userId: requireStringValue(value.user_id, "user_id"),
+    query: requireStringValue(value.query, "query"),
+    conversationId: optionalString(value.conversation_id),
+    agentId: optionalString(value.agent_id),
+    appId: optionalString(value.app_id),
+    spaceIds: parseStringOrStringArray(value.space_ids, "space_ids"),
+    domains: value.domains === undefined ? undefined : parseStringOrStringArray(value.domains, "domains"),
+    includeMemoryView: parseProjectOptionalStringArray(value.include_memory_view),
+    memoryLimitNumber: typeof value.memory_limit_number === "number" ? value.memory_limit_number : undefined,
+    generateAnswer: value.generate_answer === true
+  };
+}
+
+function parseStringOrStringArray(value: unknown, field: string): string | string[] {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (Array.isArray(value) && value.every((item) => typeof item === "string" && item.trim())) {
+    return value.map((item) => (item as string).trim());
+  }
+  throw new MemoryServiceError("invalid_argument", `${field} must be a non-empty string or string array`);
+}
+
+function parseProjectOptionalStringArray(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) {
+    throw new MemoryServiceError("invalid_argument", "expected an array of non-empty strings");
+  }
+  return value.map((item) => (item as string).trim());
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function requireStringValue(value: unknown, field: string): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new MemoryServiceError("invalid_argument", `${field} must be a non-empty string`);
+  }
+  return value.trim();
 }
 
 function envelopeWithPrincipal<T extends Record<string, unknown>>(

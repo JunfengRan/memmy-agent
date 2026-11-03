@@ -90,6 +90,9 @@ import type {
   MemoryReloadConfigResponse,
   MemoryRow,
   MemorySearchRequest,
+  ProjectMemoryAddRequest,
+  ProjectMemorySearchRequest,
+  ProjectMemoryMessage,
   RawTurnRedactRequest,
   RecallHit,
   RecallMemoryLayer,
@@ -200,6 +203,33 @@ import {
 import { WorkerRunner } from "./worker/worker-runner.js";
 
 const serviceLogger = createMemoryLogger("memory-service");
+
+const PROJECT_MEMORY_EXTRACTION_SYSTEM_PROMPT = `You extract project memory from a chronological conversation.
+Return JSON only in this shape:
+{"entries":[{"kind":"decision|experience|evolution","topic_id":"stable-kebab-topic","text":"current project statement","reason":"why this state or practice exists","source_trace_ids":["trace id"],"changed_at":"ISO timestamp or null","supersedes":["trace id"]}]}
+
+Rules:
+- Include only explicit project facts, decisions, reusable implementation experience, or concrete state changes.
+- Preserve the newest state when the conversation changes an earlier state; keep the earlier trace in supersedes.
+- Do not invent source trace IDs. Use the trace IDs attached to messages.
+- Keep each entry concise and answerable by a future project search.
+- Use one stable topic_id for the same work object.
+- Return an empty entries array when there is no project memory.`;
+
+const PROJECT_MEMORY_ANSWER_SYSTEM_PROMPT = `Answer the project question using only the supplied evidence.
+Prefer the latest changed_at/update_time state when entries conflict, and explain the change briefly when useful.
+Do not mention the retrieval process, do not invent facts, and do not repeat stale evidence as the current answer.
+Return only the answer text.`;
+
+interface ProjectMemoryExtractedEntry {
+  kind: "decision" | "experience" | "evolution";
+  topicId: string;
+  text: string;
+  reason?: string;
+  sourceTraceIds: string[];
+  changedAt?: string | null;
+  supersedes: string[];
+}
 
 function historySummaryFactCheckFromSources(sources: MemoryRow[]): "not_independently_verified" | "unknown" {
   // Older History sources have no fact-check marker. Never infer verification
@@ -1456,6 +1486,217 @@ export class MemoryService {
     serverTime: string;
   }> {
     return this.withModelTaskContext(() => this.retrieval.search(this.withTimeZone(request)));
+  }
+
+  async addProjectMemory(request: ProjectMemoryAddRequest): Promise<{
+    taskId: string;
+    status: "completed";
+    memoryIds: string[];
+    entries: Array<{ id: string; kind: "decision" | "experience" | "evolution"; topicId: string; text: string; sourceTraceIds: string[] }>;
+    serverTime: string;
+  }> {
+    this.assertMemoryAddEnabled();
+    const normalized = normalizeProjectMemoryAddRequest(request);
+    const serverTime = nowIso();
+    const sourceTraceIds = [...new Set([
+      ...(normalized.sourceTraceIds ?? []),
+      ...normalized.messages.map((message) => message.sourceTraceId).filter((value): value is string => Boolean(value))
+    ])];
+    const extracted = await this.extractProjectMemoryEntries(normalized.messages, sourceTraceIds);
+    const persisted: Array<{ id: string; kind: "decision" | "experience" | "evolution"; topicId: string; text: string; sourceTraceIds: string[] }> = [];
+    this.repos.transaction(() => {
+      for (const spaceId of normalized.spaceIds) {
+        for (const entry of extracted) {
+          const key = `project:${spaceId}:${stableHash([
+            normalized.userId[0], normalized.conversationId ?? null, entry.kind, entry.topicId, entry.text, entry.sourceTraceIds
+          ])}`;
+          const existing = this.repos.memories.getByKeyIncludingDeleted("L1", key);
+          if (existing && existing.status !== "deleted") {
+            persisted.push({ id: existing.id, ...entry });
+            continue;
+          }
+          const createdAt = entry.changedAt ?? latestProjectMessageTime(normalized.messages) ?? serverTime;
+          const memory = this.buildMemory({
+            userId: normalized.userId[0]!,
+            conversationId: normalized.conversationId,
+            agentId: normalized.agentId,
+            appId: normalized.appId,
+            projectId: spaceId,
+            layer: "L1",
+            kind: "work_memory",
+            memoryType: "LongTermMemory",
+            key,
+            value: entry.text,
+            tags: [
+              "project-memory",
+              `project-kind:${entry.kind}`,
+              `project-topic:${entry.topicId}`,
+              ...normalized.domains.map((domain) => `project-domain:${domain}`),
+              ...entry.sourceTraceIds.map((traceId) => `project-trace:${traceId}`)
+            ],
+            info: {
+              project_space_id: spaceId,
+              project_domain: normalized.domains[0],
+              project_entry_kind: entry.kind,
+              source_trace_ids: entry.sourceTraceIds,
+              reason: entry.reason,
+              changed_at: entry.changedAt,
+              supersedes: entry.supersedes,
+              source: "project_memory_add"
+            },
+            internal: {
+              work_topic: entry.topicId,
+              requirement: entry.text,
+              reason: entry.reason ?? "",
+              project_space_id: spaceId,
+              project_domain: normalized.domains[0],
+              project_entry_kind: entry.kind,
+              source_trace_ids: entry.sourceTraceIds,
+              changed_at: entry.changedAt,
+              supersedes: entry.supersedes,
+              schema_version: 2
+            },
+            createdAt
+          });
+          const saved = this.repos.memories.insert(memory);
+          persisted.push({ id: saved.id, ...entry });
+        }
+      }
+    });
+    return {
+      taskId: newId("project_task"),
+      status: "completed",
+      memoryIds: persisted.map((entry) => entry.id),
+      entries: persisted,
+      serverTime
+    };
+  }
+
+  async searchProjectMemory(request: ProjectMemorySearchRequest): Promise<{
+    topicDetailList: Array<{
+      topicId: string;
+      spaceId: string;
+      domain?: string;
+      topicName: string;
+      topicSummary: string;
+      topicDescription: string;
+      updateTime: string;
+      relativity: number;
+      entries: Array<{ kind: string; entry: string; sourceTraceIds: string[]; updateTime: string; reason?: string; changedAt?: string | null; userIds: string[] }>;
+    }>;
+    answer?: string;
+    serverTime: string;
+  }> {
+    this.assertMemorySearchEnabled();
+    const normalized = normalizeProjectMemorySearchRequest(request);
+    const terms = projectQueryTerms(normalized.query);
+    const rows = normalized.spaceIds.flatMap((spaceId) => this.repos.memories.list({
+      memoryLayer: "L1",
+      memoryKind: "work_memory",
+      status: ["activated", "resolving"],
+      workMemoryProjectId: spaceId
+    }, 1_000).filter((memory) => {
+      const domain = projectMemoryDomain(memory);
+      return normalized.domains.length === 0 || !domain || normalized.domains.includes(domain);
+    }));
+    const scored = rows.map((memory) => ({ memory, score: projectMemoryScore(memory, terms) }))
+      .filter(({ score }) => score > 0 || terms.length === 0)
+      .sort((left, right) => right.score - left.score || right.memory.updatedAt.localeCompare(left.memory.updatedAt));
+    const groups = new Map<string, typeof scored>();
+    for (const item of scored) {
+      const topicId = projectMemoryTopicId(item.memory);
+      const groupKey = [projectMemorySpaceId(item.memory), projectMemoryDomain(item.memory) ?? "", topicId].join("\u0000");
+      const group = groups.get(groupKey) ?? [];
+      group.push(item);
+      groups.set(groupKey, group);
+    }
+    const topicDetailList = [...groups.entries()]
+      .sort((left, right) => (right[1][0]?.score ?? 0) - (left[1][0]?.score ?? 0))
+      .slice(0, normalized.memoryLimitNumber)
+      .map(([, items]) => {
+        const topicId = projectMemoryTopicId(items[0]!.memory);
+        const spaceId = projectMemorySpaceId(items[0]!.memory);
+        const domain = projectMemoryDomain(items[0]!.memory);
+        const entries = items
+          .sort((left, right) => right.memory.updatedAt.localeCompare(left.memory.updatedAt))
+          .map(({ memory }) => projectMemoryEntryFromRow(memory));
+        const first = entries[0];
+        return {
+          topicId,
+          spaceId,
+          ...(domain ? { domain } : {}),
+          topicName: topicId,
+          topicSummary: first?.entry ?? "",
+          topicDescription: entries.map((entry) => entry.entry).join("\n"),
+          updateTime: items[0]?.memory.updatedAt ?? nowIso(),
+          relativity: items[0]?.score ?? 0,
+          entries
+        };
+      });
+    const answer = normalized.generateAnswer
+      ? await this.answerProjectMemory(normalized.query, topicDetailList)
+      : undefined;
+    return { topicDetailList, ...(answer ? { answer } : {}), serverTime: nowIso() };
+  }
+
+  private async extractProjectMemoryEntries(
+    messages: ProjectMemoryMessage[],
+    sourceTraceIds: string[]
+  ): Promise<ProjectMemoryExtractedEntry[]> {
+    const rendered = messages.map((message) => [
+      message.sourceTraceId ? `[trace:${message.sourceTraceId}]` : "",
+      message.chatTime ? `[time:${message.chatTime}]` : "",
+      `${message.role}: ${message.content}`
+    ].filter(Boolean).join(" ")).join("\n");
+    let output: Record<string, unknown> | undefined;
+    if (this.llm.isConfigured()) {
+      try {
+        output = await this.llm.completeJson<Record<string, unknown>>([
+          { role: "system", content: PROJECT_MEMORY_EXTRACTION_SYSTEM_PROMPT },
+          { role: "user", content: rendered }
+        ], {
+          operation: "capture.project_memory_extract",
+          thinkingMode: "disabled",
+          maxTokens: 4_096,
+          jsonMode: true
+        });
+      } catch (error) {
+        serviceLogger.warn("project_memory.extract_failed", memoryErrorFields(error));
+      }
+    }
+    const extracted = normalizeProjectMemoryExtraction(output, sourceTraceIds, messages);
+    if (extracted.length > 0) return extracted;
+    const fallback = messages.map((message) => message.content.trim()).filter(Boolean).join("\n").trim();
+    return fallback ? [{
+      kind: "experience",
+      topicId: "uncategorized",
+      text: fallback,
+      reason: "model did not return a structured project entry",
+      sourceTraceIds,
+      changedAt: latestProjectMessageTime(messages),
+      supersedes: []
+    }] : [];
+  }
+
+  private async answerProjectMemory(
+    query: string,
+    topics: Array<{ topicId: string; topicSummary: string; topicDescription: string; entries: Array<{ kind: string; entry: string; sourceTraceIds: string[]; updateTime: string; reason?: string; changedAt?: string | null }> }>
+  ): Promise<string> {
+    const evidence = topics.map((topic) => ({ topic_id: topic.topicId, entries: topic.entries }));
+    if (!this.llm.isConfigured()) return topics.flatMap((topic) => topic.entries.map((entry) => entry.entry)).join("\n");
+    try {
+      return (await this.llm.complete([
+        { role: "system", content: PROJECT_MEMORY_ANSWER_SYSTEM_PROMPT },
+        { role: "user", content: `Question:\n${query}\n\nEvidence:\n${JSON.stringify(evidence)}` }
+      ], {
+        operation: "retrieve.project_memory_answer",
+        thinkingMode: "disabled",
+        maxTokens: 1_024
+      })).trim();
+    } catch (error) {
+      serviceLogger.warn("project_memory.answer_failed", memoryErrorFields(error));
+      return topics.flatMap((topic) => topic.entries.map((entry) => entry.entry)).join("\n");
+    }
   }
 
 
@@ -3604,6 +3845,152 @@ export class MemoryService {
       }
     };
   }
+}
+
+function normalizeProjectMemoryAddRequest(request: ProjectMemoryAddRequest): ProjectMemoryAddRequest & { userId: string[]; spaceIds: string[]; domains: string[] } {
+  const userId = normalizeProjectStringList(request.userId, "userId", 20);
+  const spaceIds = normalizeProjectStringList(request.spaceIds, "spaceIds", 20);
+  const domains = request.domains === undefined ? [] : normalizeProjectStringList(request.domains, "domains", 20);
+  if (!Array.isArray(request.messages) || request.messages.length === 0) {
+    throw new MemoryServiceError("invalid_argument", "project memory add requires messages");
+  }
+  const messages = request.messages.filter((message) => typeof message.content === "string" && message.content.trim());
+  if (messages.length === 0) {
+    throw new MemoryServiceError("invalid_argument", "project memory add requires non-empty message content");
+  }
+  return { ...request, userId, spaceIds, domains, messages };
+}
+
+function normalizeProjectMemorySearchRequest(request: ProjectMemorySearchRequest): ProjectMemorySearchRequest & { spaceIds: string[]; domains: string[]; memoryLimitNumber: number } {
+  if (typeof request.userId !== "string" || !request.userId.trim()) {
+    throw new MemoryServiceError("invalid_argument", "project memory search requires userId");
+  }
+  if (typeof request.query !== "string" || !request.query.trim()) {
+    throw new MemoryServiceError("invalid_argument", "project memory search requires query");
+  }
+  const spaceIds = normalizeProjectStringList(request.spaceIds, "spaceIds", 20);
+  const domains = request.domains === undefined ? [] : normalizeProjectStringList(request.domains, "domains", 20);
+  const memoryLimitNumber = request.memoryLimitNumber ?? 9;
+  if (!Number.isInteger(memoryLimitNumber) || memoryLimitNumber < 1 || memoryLimitNumber > 25) {
+    throw new MemoryServiceError("invalid_argument", "memoryLimitNumber must be an integer between 1 and 25");
+  }
+  return { ...request, userId: request.userId.trim(), query: request.query.trim(), spaceIds, domains, memoryLimitNumber };
+}
+
+function normalizeProjectStringList(value: string | string[] | undefined, field: string, max: number): string[] {
+  const list = Array.isArray(value) ? value : value === undefined ? [] : [value];
+  const normalized = list.map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean);
+  if (normalized.length === 0 || normalized.length > max || normalized.length !== list.length) {
+    throw new MemoryServiceError("invalid_argument", `${field} must contain 1-${max} non-empty strings`);
+  }
+  return [...new Set(normalized)];
+}
+
+function normalizeProjectMemoryExtraction(
+  output: Record<string, unknown> | undefined,
+  sourceTraceIds: string[],
+  messages: ProjectMemoryMessage[]
+): ProjectMemoryExtractedEntry[] {
+  const rawEntries: unknown[] = Array.isArray(output?.entries)
+    ? output.entries
+    : Array.isArray(output?.topics)
+      ? output.topics.flatMap((topic) => isRecord(topic) && Array.isArray(topic.entries) ? topic.entries : [])
+      : [];
+  const allowedTraceIds = new Set(sourceTraceIds);
+  return rawEntries.flatMap((raw) => {
+    if (!isRecord(raw)) return [];
+    const kindValue = stringValue(raw.kind) ?? stringValue(raw.type) ?? "experience";
+    const kind = kindValue === "decision" || kindValue === "evolution" ? kindValue : "experience";
+    const text = stringValue(raw.text) ?? stringValue(raw.entry) ?? stringValue(raw.content) ?? stringValue(raw.summary);
+    if (!text) return [];
+    const topicId = (stringValue(raw.topic_id) ?? stringValue(raw.topicId) ?? stringValue(raw.topic_name) ?? "uncategorized").trim().slice(0, 120) || "uncategorized";
+    const traceValues = raw.source_trace_ids ?? raw.sourceTraceIds;
+    const traces = Array.isArray(traceValues)
+      ? traceValues.filter((value): value is string => typeof value === "string" && allowedTraceIds.has(value))
+      : [];
+    const changedAt = stringValue(raw.changed_at) ?? stringValue(raw.changedAt) ?? latestProjectMessageTime(messages) ?? null;
+    const supersedesValue = raw.supersedes;
+    const supersedes = Array.isArray(supersedesValue)
+      ? supersedesValue.filter((value): value is string => typeof value === "string" && allowedTraceIds.has(value))
+      : [];
+    const entry: ProjectMemoryExtractedEntry = {
+      kind,
+      topicId,
+      text: text.trim(),
+      reason: stringValue(raw.reason)?.trim() || undefined,
+      sourceTraceIds: traces.length ? [...new Set(traces)] : sourceTraceIds,
+      changedAt,
+      supersedes
+    };
+    return [entry];
+  });
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function latestProjectMessageTime(messages: ProjectMemoryMessage[]): string | undefined {
+  return messages.map((message) => message.chatTime).filter((value): value is string => Boolean(value))
+    .sort((left, right) => Date.parse(right) - Date.parse(left))[0];
+}
+
+function projectMemoryDomain(memory: MemoryRow): string | undefined {
+  const value = memory.properties.internal_info.project_domain ?? memory.info.project_domain;
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function projectMemorySpaceId(memory: MemoryRow): string {
+  const value = memory.properties.internal_info.project_space_id ?? memory.info.project_space_id;
+  return typeof value === "string" && value.trim() ? value.trim() : "unknown";
+}
+
+function projectMemoryTopicId(memory: MemoryRow): string {
+  const value = memory.properties.internal_info.work_topic ?? memory.info.project_topic_id;
+  return typeof value === "string" && value.trim() ? value.trim() : "uncategorized";
+}
+
+function projectMemoryEntryFromRow(memory: MemoryRow): {
+  kind: string;
+  entry: string;
+  sourceTraceIds: string[];
+  updateTime: string;
+  reason?: string;
+  changedAt?: string | null;
+  userIds: string[];
+} {
+  const internal = memory.properties.internal_info;
+  const sourceTraceIds = Array.isArray(internal.source_trace_ids)
+    ? internal.source_trace_ids.filter((value): value is string => typeof value === "string")
+    : [];
+  const reason = typeof internal.reason === "string" && internal.reason.trim() ? internal.reason : undefined;
+  const changedAt = typeof internal.changed_at === "string" ? internal.changed_at : null;
+  return {
+    kind: typeof internal.project_entry_kind === "string" ? internal.project_entry_kind : "experience",
+    entry: memory.memoryValue,
+    sourceTraceIds,
+    updateTime: memory.updatedAt,
+    userIds: [memory.userId],
+    ...(reason ? { reason } : {}),
+    changedAt
+  };
+}
+
+function projectQueryTerms(query: string): string[] {
+  const terms = new Set<string>();
+  for (const token of query.toLowerCase().match(/[\p{L}\p{N}_-]{2,}/gu) ?? []) terms.add(token);
+  const han = [...query.matchAll(/[\p{Script=Han}]/gu)].map((match) => match[0].toLowerCase());
+  for (let index = 0; index < han.length - 1; index += 1) terms.add(han.slice(index, index + 2).join(""));
+  return [...terms];
+}
+
+function projectMemoryScore(memory: MemoryRow, terms: string[]): number {
+  if (terms.length === 0) return 1;
+  const internal = memory.properties.internal_info;
+  const haystack = [memory.memoryValue, projectMemoryTopicId(memory), projectMemoryDomain(memory) ?? "", typeof internal.reason === "string" ? internal.reason : ""]
+    .join(" ").toLowerCase();
+  const hits = terms.reduce((count, term) => count + (haystack.includes(term) ? 1 : 0), 0);
+  return hits / terms.length;
 }
 
 function withDuplicateFlag(value: unknown): unknown {

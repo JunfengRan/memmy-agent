@@ -1020,6 +1020,7 @@ function isAnthropicAlwaysThinkingModel(model: string): boolean {
 function isAnthropicFixedTemperatureModel(model: string): boolean {
   const slug = modelSlug(model);
   return isAnthropicAlwaysThinkingModel(model) ||
+    /claude-(?:opus|sonnet|haiku)-5(?:[.-]|$)/.test(slug) ||
     /claude-sonnet-5(?:[.-]|$)/.test(slug) ||
     slug.includes("opus-4-7") ||
     slug.includes("opus-4.7") ||

@@ -504,6 +504,40 @@ export interface MemorySearchRequest extends RequestEnvelope {
   verbose?: boolean;
 }
 
+export interface ProjectMemoryMessage {
+  role: "user" | "assistant" | "system" | "tool";
+  content: string;
+  chatTime?: string;
+  roleId?: string;
+  roleName?: string;
+  sourceTraceId?: string;
+}
+
+export interface ProjectMemoryAddRequest extends RequestEnvelope {
+  userId: string | string[];
+  conversationId?: string;
+  agentId?: string;
+  appId?: string;
+  spaceIds: string | string[];
+  domains?: string | string[];
+  allowMemoryView?: string[];
+  messages: ProjectMemoryMessage[];
+  sourceTraceIds?: string[];
+}
+
+export interface ProjectMemorySearchRequest extends RequestEnvelope {
+  userId: string;
+  query: string;
+  conversationId?: string;
+  agentId?: string;
+  appId?: string;
+  spaceIds: string | string[];
+  domains?: string | string[];
+  includeMemoryView?: string[];
+  memoryLimitNumber?: number;
+  generateAnswer?: boolean;
+}
+
 export interface MemoryAddRequest extends RequestEnvelope {
   content: string;
   layer?: MemoryLayer;

@@ -3,7 +3,7 @@
   "source": "eval/project-memory/gold-add-memory/generated/live-memmy-run.json",
   "add": {
     "expected": 16,
-    "actual": 16,
+    "actual": 25,
     "matched": 0,
     "precision": 0,
     "recall": 0,
@@ -11,39 +11,27 @@
   },
   "search": {
     "questions": 30,
-    "evidenceRecall": 0,
-    "trapRate": 0,
+    "evidenceRecall": 0.8709677419354839,
+    "trapRate": 0.7037037037037037,
     "scopeLeakRate": 0,
-    "evidenceHits": 0,
+    "evidenceHits": 27,
     "evidenceTotal": 31,
-    "trapHits": 0,
+    "trapHits": 19,
     "trapTotal": 27,
     "scopeLeak": 0,
     "scopeTotal": 1
   },
   "answer": {
     "questions": 30,
-    "passed": 0,
-    "accuracy": 0,
+    "passed": 9,
+    "accuracy": 0.3,
     "trapRate": 0,
     "failures": [
-      {
-        "questionId": "q01",
-        "hit": false,
-        "trap": false,
-        "answer": ""
-      },
       {
         "questionId": "q02",
         "hit": false,
         "trap": false,
-        "answer": ""
-      },
-      {
-        "questionId": "q05",
-        "hit": false,
-        "trap": false,
-        "answer": ""
+        "answer": "月报金额现在直接从 `entries` 表新增的 `amount` 列读取，不再扫描 journal 正文。金额列为空的行不进入月报。汇总前按分录 id 去重，重复分录只保留最早的一条，金额在 `report.ts` 中按整数分累加，最后换算为元显示。\n\n此前“金额仍保存在 journal 正文中、读取时从正文解析”的决定已被后来的改动取代。"
       },
       {
         "questionId": "q20",
@@ -55,157 +43,115 @@
         "questionId": "q25",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "月报后来改为直接读取 entries 表的 amount 列，是因为扫描 journal 全文太慢。此前的方案是金额留在 journal 正文中、读取时再解析，后来被这一决定取代。改动后，金额为空的行不进月报。"
       },
       {
         "questionId": "q22",
         "hit": false,
         "trap": false,
-        "answer": ""
-      },
-      {
-        "questionId": "q26",
-        "hit": false,
-        "trap": false,
-        "answer": ""
-      },
-      {
-        "questionId": "q28",
-        "hit": false,
-        "trap": false,
-        "answer": ""
+        "answer": "按现有证据，这个月报属于 ledger 项目。相关记录多次把月报归在 ledger 下，例如 `report.ts` 按东八区切月、分录按 id 去重、金额按整数分累加，以及月报结果写入 `reports/` 目录。\n\n证据没有直接提到 `src` 目录下那个窗口，所以无法单独确认它的归属。另外，export 拷贝已撤掉，月报不需要 export。"
       },
       {
         "questionId": "q29",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "月报汇总前按分录 id 去重，同一 id 的重复分录只保留最早的一条，避免重复计金额。"
       },
       {
         "questionId": "q03",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "空客户的测试位于 tests/report.test.ts。较早的记录显示，空客户的分录原本不进入月报，并由该文件中的空客户测试覆盖。但最新记录（2026-10-21 09:40）已更新这一行为：客户名为空时整笔记录曾被丢弃，导致测试失败。现在读取逻辑只跳过金额为空的行，因此有金额的空客户记录会被保留。tests/fixtures/month.json 不是原因，其改动已撤回。\n\n现有证据没有给出该测试当前的具体断言，因此无法确定它现在具体如何编写。"
       },
       {
         "questionId": "q04",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "证据中没有测试代码本身，无法确认 `tests/report.test.ts` 里空客户测试的当前写法。\n\n较早的记录说该文件有一个空客户测试，断言空客户的分录不进入月报。但最新记录（2026-10-21 09:40）显示读取逻辑已改为：只跳过金额为空的行，客户为空但有金额的记录会保留。因此早先的断言已与当前行为冲突，不能作为现在的测试写法。需要查看 `tests/report.test.ts` 才能确定实际断言。"
       },
       {
         "questionId": "q15",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "不是。月报测试失败的根因在 `report.ts` 的读取逻辑：客户名为空时，整笔记录会被丢弃。样例文件 `tests/fixtures/month.json` 没有问题。\n\n此前曾怀疑样例过期并补全了其中的金额，但这一判断已被更新的结论取代，相关改动也已撤回。现在的修复方向是只跳过金额列为空的行，空客户但有金额的记录应保留。"
       },
       {
         "questionId": "q16",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "没有了，之前补全金额的改动已经撤回。较早的记录（09:05）曾补全 `tests/fixtures/month.json` 中的样例金额，但最新记录（09:40）说明样例文件不是测试失败的原因，该改动已撤回，真正的问题在 `report.ts` 的读取逻辑。"
       },
       {
         "questionId": "q17",
         "hit": false,
         "trap": false,
-        "answer": ""
-      },
-      {
-        "questionId": "q06",
-        "hit": false,
-        "trap": false,
-        "answer": ""
-      },
-      {
-        "questionId": "q07",
-        "hit": false,
-        "trap": false,
-        "answer": ""
+        "answer": "空客户的整行被丢弃，是因为 `report.ts` 的读取逻辑在客户名为空时会丢掉整笔记录。这是此前测试失败的根因，样例文件不是原因。\n\n较早的记录曾决定在汇总前按客户过滤，空客户分录不进入月报。这一结论已被更新。当前逻辑只跳过金额列为空的行，因此有金额的空客户记录会被保留。"
       },
       {
         "questionId": "q08",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "导出价格表时，如果 output 目录不存在，先创建该目录，再写入 `prices.csv`。导出格式为 CSV，不再使用 JSON。"
       },
       {
         "questionId": "q21",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "价格列表现在直接读取 price 表的 amount 列，不再拼装说明文字。金额输出前按两位小数取整显示。"
       },
       {
         "questionId": "q23",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "比较 sku 之前要做两件事：\n\n1. 统一转换为大写。\n2. 如果同一 sku 出现多条记录，只保留最后一条，忽略前面的记录。\n\n证据未说明这两步的先后顺序。"
       },
       {
         "questionId": "q24",
         "hit": false,
         "trap": false,
-        "answer": ""
-      },
-      {
-        "questionId": "q27",
-        "hit": false,
-        "trap": false,
-        "answer": ""
-      },
-      {
-        "questionId": "q30",
-        "hit": false,
-        "trap": false,
-        "answer": ""
-      },
-      {
-        "questionId": "q09",
-        "hit": false,
-        "trap": false,
-        "answer": ""
+        "answer": "价格表新增 amount 列，是为了加快价格查询。价格列表改为直接读取该列，不再在查询时拼装说明文字，从而减少开销。"
       },
       {
         "questionId": "q10",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "证据中没有记录你要求回复中如何写步骤。\n\n与操作步骤相关的记录中，较新的一条是：改动先放在 feature 分支，不直接修改 main（2026-10-21T07:10:00.000Z），它取代了较早的\"直接在 main 上修改\"（07:00:00.000Z）。"
       },
       {
         "questionId": "q11",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "现有资料没有提到\"清单\"或分段的问题，无法据此判断。资料只涉及报表读取逻辑：客户名为空时整行会被丢弃，应只跳过金额为空的行。"
       },
       {
         "questionId": "q12",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "不算冲突。只有两次修改对同一件事的结论相反时才算冲突，并且需要判断谁对。改了不同文件不属于冲突。\n\n此前“修改过文件即视为冲突”的说法已被更新的判断标准取代。"
       },
       {
         "questionId": "q13",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "不能。说明文档和普通记录里不放数据库连接串。数据库密码只保存在本机的 `.env` 中，不写入仓库或 README。连接串也已从 README 删除。"
       },
       {
         "questionId": "q14",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "没有。数据库连接串已从 README 删除，密码只保存在本机 `.env` 中，仓库和 README 里都不放连接串。"
       },
       {
         "questionId": "q18",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "记录中没有说明另一个窗口何时能知道 entries 表已有 amount 列。能确定的是：该决定的最新记录时间是 2026-10-21 08:40（UTC），它取代了 01:15 “entries 表结构保持不变”的决定。证据中没有显示该列已实际添加，也没有说明通知机制。"
       },
       {
         "questionId": "q19",
         "hit": false,
         "trap": false,
-        "answer": ""
+        "answer": "改动应放在 feature 分支上，不要直接修改 main。这条决定是 2026-10-21 07:10 更新的，比之前\"直接在 main 上改\"的记录（07:00）更新，所以以它为准。"
       }
     ]
   }
