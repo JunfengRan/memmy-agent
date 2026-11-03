@@ -1,0 +1,15 @@
+{
+  "source": "https://docs.anthropic.com/en/docs/about-claude/pricing",
+  "fetchedAt": "2026-11-03",
+  "unit": "USD per 1M tokens; input excludes cache hits, cachedInput is the cache-hit rate",
+  "models": {
+    "claude-haiku-5-5": {
+      "input": 0.1,
+      "cachedInput": 0.01,
+      "output": 0.5,
+      "longContext": { "overInputTokens": 100000, "input": 0.5, "cachedInput": 0.05, "output": 2.5 }
+    },
+    "claude-sonnet-5-5": { "input": 2, "cachedInput": 0.1, "output": 10 },
+    "claude-opus-5-5": { "input": 4, "cachedInput": 0.2, "output": 20 }
+  }
+}
