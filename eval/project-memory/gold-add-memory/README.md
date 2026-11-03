@@ -82,7 +82,7 @@ node eval/project-memory/gold-add-memory/run-pipeline-eval.mjs eval/project-memo
 **评委**
 
 - 默认使用 `~/.memmy/config.yaml` 当前 memorySummary 预设对应的 Anthropic 模型，现在是 claude-haiku-5-5，与被测模型相同，所以存在自评偏差。可以用 `MEMMY_EVAL_JUDGE_MODEL`、`MEMMY_EVAL_JUDGE_BASE_URL`、`MEMMY_EVAL_JUDGE_API_KEY` 换成别的评委。
-- 结果按输入哈希缓存在 `generated/judge-cache.json`，重复评分同一份运行结果不再调用模型。
+- 结果按输入哈希缓存在 `generated/judge-cache.json`，重复评分同一份运行结果不再调用模型。缓存默认只增不删；提交前加 `--prune-judge-cache`，只保留这次评分用到的结论，让缓存与提交的报告对应。
 - `--no-judge` 跳过所有评委指标。
 
 **退出码**

@@ -128,9 +128,9 @@ export function createJudge({ cachePath, config = resolveJudgeConfig() }) {
     }));
   }
 
-  // Keeps only the verdicts this report used, so the committed cache matches the committed report.
-  function save() {
-    const kept = Object.fromEntries(Object.entries(cache).filter(([key]) => used.has(key)));
+  // prune drops verdicts this run did not use, so a committed cache matches its committed report.
+  function save({ prune = false } = {}) {
+    const kept = prune ? Object.fromEntries(Object.entries(cache).filter(([key]) => used.has(key))) : cache;
     writeFileSync(cachePath, `${JSON.stringify(kept, null, 2)}\n`);
   }
 

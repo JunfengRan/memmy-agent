@@ -12,7 +12,7 @@
  * }
  *
  * Usage:
- *   node run-pipeline-eval.mjs run.json [--out report.json] [--no-judge] [--gate] [--min-entry-f1=0.85] [--min-recall-at-10=0.85] [--min-llm-score=0.85]
+ *   node run-pipeline-eval.mjs run.json [--out report.json] [--no-judge] [--prune-judge-cache] [--gate] [--min-entry-f1=0.85] [--min-recall-at-10=0.85] [--min-llm-score=0.85]
  *   node run-pipeline-eval.mjs --oracle   perfect output from gold; every quality metric must be 1
  *   node run-pipeline-eval.mjs --empty    empty output; every quality metric must be 0
  *
@@ -252,7 +252,7 @@ try {
   };
   report.efficiency = efficiency(measured, judge);
 } finally {
-  judge?.save();
+  judge?.save({ prune: flag("prune-judge-cache") });
 }
 if (outPath) writeFileSync(outPath, `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify(report, null, 2));
