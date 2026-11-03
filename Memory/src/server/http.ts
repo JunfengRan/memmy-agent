@@ -31,7 +31,7 @@ import type {
   TurnStartRequest
 } from "../types.js";
 import { DEFAULT_NAMESPACE_SOURCE } from "../types.js";
-import { MemoryService } from "../service/memory-service.js";
+import { MemoryService, type ProjectMemoryUsage } from "../service/memory-service.js";
 import { MemoryServiceError, statusForCode } from "../utils/error.js";
 import { stableHash } from "../utils/id.js";
 import { resolveTimeZone } from "../utils/time.js";
@@ -1234,7 +1234,18 @@ function publicProjectMemoryAddResponse(result: Awaited<ReturnType<MemoryService
       text: entry.text,
       source_trace_ids: entry.sourceTraceIds
     })),
+    usage: publicProjectMemoryUsage(result.usage),
     server_time: result.serverTime
+  };
+}
+
+function publicProjectMemoryUsage(usage: ProjectMemoryUsage): Record<string, unknown> {
+  return {
+    ...(usage.model ? { model: usage.model } : {}),
+    llm_calls: usage.llmCalls,
+    input_tokens: usage.inputTokens,
+    output_tokens: usage.outputTokens,
+    cached_input_tokens: usage.cachedInputTokens
   };
 }
 
@@ -1273,6 +1284,7 @@ function publicProjectMemorySearchResponse(result: Awaited<ReturnType<MemoryServ
       };
     }),
     ...(result.answer ? { answer: result.answer } : {}),
+    usage: publicProjectMemoryUsage(result.usage),
     server_time: result.serverTime
   };
 }

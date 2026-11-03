@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import {
   assertJsonValue,
   canonicalJson,
@@ -41,7 +42,8 @@ import {
   HttpByokTokenUsageRecorder,
   type HttpByokTokenUsageRecorderOptions,
   type MemoryLlmModelRole,
-  type MemoryModelUsageEvent
+  type MemoryModelUsageEvent,
+  type MemoryTokenUsageSink
 } from "../model/token-usage.js";
 import { TokenUsageOutbox } from "../storage/token-usage-outbox.js";
 import { MemoryTokenBudgetLedger } from "./memory-token-budget-ledger.js";
@@ -221,6 +223,14 @@ Prefer the latest changed_at/update_time state when entries conflict, and explai
 Do not mention the retrieval process, do not invent facts, and do not repeat stale evidence as the current answer.
 Return only the answer text.`;
 
+export interface ProjectMemoryUsage {
+  model?: string;
+  llmCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+}
+
 interface ProjectMemoryExtractedEntry {
   kind: "decision" | "experience" | "evolution";
   topicId: string;
@@ -334,6 +344,13 @@ export class MemoryService {
   private readonly embeddingRetryWorkerId = `embedding-retry-${newId("worker")}`;
   private readonly tokenBudgetLedger: MemoryTokenBudgetLedger;
   private readonly tokenUsageRecorder: HttpByokTokenUsageRecorder;
+  private readonly projectUsageScope = new AsyncLocalStorage<MemoryModelUsageEvent[]>();
+  private readonly usageSink: MemoryTokenUsageSink = {
+    record: (event) => {
+      this.projectUsageScope.getStore()?.push(event);
+      return this.tokenUsageRecorder.record(event);
+    }
+  };
   private readonly fetchAppMemoryBudgetFn: (signal?: AbortSignal) => Promise<{ dailyUsed: number; lifetimeUsed: number } | null>;
   private readonly budgetAbort = new AbortController();
   private appBudgetReconcile: {
@@ -778,7 +795,7 @@ export class MemoryService {
       modelRole === "memory_summary" ? config.summary : resolveEvolutionConfig(config),
       {
         modelRole,
-        usageRecorder: this.tokenUsageRecorder
+        usageRecorder: this.usageSink
       }
     );
   }
@@ -926,7 +943,7 @@ export class MemoryService {
     const evolution = this.options.skillLlm
       ?? this.createConfiguredMemoryLlm(taskConfig, "memory_evolution");
     const embedding = this.options.embedder ?? createEmbedder(taskConfig.embedding, {
-      usageRecorder: this.tokenUsageRecorder
+      usageRecorder: this.usageSink
     });
     freezeModelSelectionConfig(taskConfig);
     return {
@@ -1493,6 +1510,7 @@ export class MemoryService {
     status: "completed";
     memoryIds: string[];
     entries: Array<{ id: string; kind: "decision" | "experience" | "evolution"; topicId: string; text: string; sourceTraceIds: string[] }>;
+    usage: ProjectMemoryUsage;
     serverTime: string;
   }> {
     this.assertMemoryAddEnabled();
@@ -1502,7 +1520,8 @@ export class MemoryService {
       ...(normalized.sourceTraceIds ?? []),
       ...normalized.messages.map((message) => message.sourceTraceId).filter((value): value is string => Boolean(value))
     ])];
-    const extracted = await this.extractProjectMemoryEntries(normalized.messages, sourceTraceIds);
+    const usageEvents: MemoryModelUsageEvent[] = [];
+    const extracted = await this.projectUsageScope.run(usageEvents, () => this.extractProjectMemoryEntries(normalized.messages, sourceTraceIds));
     const persisted: Array<{ id: string; kind: "decision" | "experience" | "evolution"; topicId: string; text: string; sourceTraceIds: string[] }> = [];
     this.repos.transaction(() => {
       for (const spaceId of normalized.spaceIds) {
@@ -1568,6 +1587,7 @@ export class MemoryService {
       status: "completed",
       memoryIds: persisted.map((entry) => entry.id),
       entries: persisted,
+      usage: summarizeProjectMemoryUsage(usageEvents),
       serverTime
     };
   }
@@ -1585,6 +1605,7 @@ export class MemoryService {
       entries: Array<{ kind: string; entry: string; sourceTraceIds: string[]; updateTime: string; reason?: string; changedAt?: string | null; userIds: string[] }>;
     }>;
     answer?: string;
+    usage: ProjectMemoryUsage;
     serverTime: string;
   }> {
     this.assertMemorySearchEnabled();
@@ -1633,10 +1654,11 @@ export class MemoryService {
           entries
         };
       });
+    const usageEvents: MemoryModelUsageEvent[] = [];
     const answer = normalized.generateAnswer
-      ? await this.answerProjectMemory(normalized.query, topicDetailList)
+      ? await this.projectUsageScope.run(usageEvents, () => this.answerProjectMemory(normalized.query, topicDetailList))
       : undefined;
-    return { topicDetailList, ...(answer ? { answer } : {}), serverTime: nowIso() };
+    return { topicDetailList, ...(answer ? { answer } : {}), usage: summarizeProjectMemoryUsage(usageEvents), serverTime: nowIso() };
   }
 
   private async extractProjectMemoryEntries(
@@ -3924,6 +3946,17 @@ function normalizeProjectMemoryExtraction(
     };
     return [entry];
   });
+}
+
+function summarizeProjectMemoryUsage(events: MemoryModelUsageEvent[]): ProjectMemoryUsage {
+  const llmEvents = events.filter((event) => event.kind !== "embedding");
+  return {
+    ...(llmEvents[0]?.model ? { model: llmEvents[0].model } : {}),
+    llmCalls: llmEvents.length,
+    inputTokens: llmEvents.reduce((total, event) => total + event.usage.inputTokens, 0),
+    outputTokens: llmEvents.reduce((total, event) => total + event.usage.outputTokens, 0),
+    cachedInputTokens: llmEvents.reduce((total, event) => total + event.usage.cachedInputTokens, 0)
+  };
 }
 
 function stringValue(value: unknown): string | undefined {
