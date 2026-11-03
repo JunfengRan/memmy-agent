@@ -203,6 +203,7 @@ import {
   type EnqueueJobInput
 } from "./worker/job-handlers.js";
 import { WorkerRunner } from "./worker/worker-runner.js";
+import { PROJECT_MEMORY_TOPIC_SKILL } from "./project-memory/topic-skill.js";
 
 const serviceLogger = createMemoryLogger("memory-service");
 
@@ -215,8 +216,12 @@ Rules:
 - Preserve the newest state when the conversation changes an earlier state; keep the earlier trace in supersedes.
 - Do not invent source trace IDs. Use the trace IDs attached to messages.
 - Keep each entry concise and answerable by a future project search.
-- Use one stable topic_id for the same work object.
-- Return an empty entries array when there is no project memory.`;
+- Choose topic_id with the topic skill below; reuse an existing topic before creating one.
+- Return an empty entries array when there is no project memory.
+
+${PROJECT_MEMORY_TOPIC_SKILL}`;
+
+const PROJECT_MEMORY_TOPIC_CATALOG_LIMIT = 40;
 
 const PROJECT_MEMORY_ANSWER_SYSTEM_PROMPT = `Answer the project question using only the supplied evidence.
 Prefer the latest changed_at/update_time state when entries conflict, and explain the change briefly when useful.
@@ -229,6 +234,12 @@ export interface ProjectMemoryUsage {
   inputTokens: number;
   outputTokens: number;
   cachedInputTokens: number;
+}
+
+interface ProjectMemoryTopicSummary {
+  topicId: string;
+  entries: number;
+  latest: string;
 }
 
 interface ProjectMemoryExtractedEntry {
@@ -1520,8 +1531,9 @@ export class MemoryService {
       ...(normalized.sourceTraceIds ?? []),
       ...normalized.messages.map((message) => message.sourceTraceId).filter((value): value is string => Boolean(value))
     ])];
+    const existingTopics = projectMemoryTopicCatalog(this.listProjectMemoryRows(normalized.spaceIds, normalized.domains));
     const usageEvents: MemoryModelUsageEvent[] = [];
-    const extracted = await this.projectUsageScope.run(usageEvents, () => this.extractProjectMemoryEntries(normalized.messages, sourceTraceIds));
+    const extracted = await this.projectUsageScope.run(usageEvents, () => this.extractProjectMemoryEntries(normalized.messages, sourceTraceIds, existingTopics));
     const persisted: Array<{ id: string; kind: "decision" | "experience" | "evolution"; topicId: string; text: string; sourceTraceIds: string[] }> = [];
     this.repos.transaction(() => {
       for (const spaceId of normalized.spaceIds) {
@@ -1611,15 +1623,7 @@ export class MemoryService {
     this.assertMemorySearchEnabled();
     const normalized = normalizeProjectMemorySearchRequest(request);
     const terms = projectQueryTerms(normalized.query);
-    const rows = normalized.spaceIds.flatMap((spaceId) => this.repos.memories.list({
-      memoryLayer: "L1",
-      memoryKind: "work_memory",
-      status: ["activated", "resolving"],
-      workMemoryProjectId: spaceId
-    }, 1_000).filter((memory) => {
-      const domain = projectMemoryDomain(memory);
-      return normalized.domains.length === 0 || !domain || normalized.domains.includes(domain);
-    }));
+    const rows = this.listProjectMemoryRows(normalized.spaceIds, normalized.domains);
     const scored = rows.map((memory) => ({ memory, score: projectMemoryScore(memory, terms) }))
       .filter(({ score }) => score > 0 || terms.length === 0)
       .sort((left, right) => right.score - left.score || right.memory.updatedAt.localeCompare(left.memory.updatedAt));
@@ -1661,15 +1665,35 @@ export class MemoryService {
     return { topicDetailList, ...(answer ? { answer } : {}), usage: summarizeProjectMemoryUsage(usageEvents), serverTime: nowIso() };
   }
 
+  // workMemoryProjectId only narrows the query together with workMemoryUserId, and project
+  // memory is shared across users, so the space is checked on each row.
+  private listProjectMemoryRows(spaceIds: string[], domains: string[]): MemoryRow[] {
+    return spaceIds.flatMap((spaceId) => this.repos.memories.list({
+      memoryLayer: "L1",
+      memoryKind: "work_memory",
+      status: ["activated", "resolving"],
+      workMemoryProjectId: spaceId
+    }, 1_000).filter((memory) => {
+      if (projectMemorySpaceId(memory) !== spaceId) return false;
+      const domain = projectMemoryDomain(memory);
+      return domains.length === 0 || !domain || domains.includes(domain);
+    }));
+  }
+
   private async extractProjectMemoryEntries(
     messages: ProjectMemoryMessage[],
-    sourceTraceIds: string[]
+    sourceTraceIds: string[],
+    existingTopics: ProjectMemoryTopicSummary[]
   ): Promise<ProjectMemoryExtractedEntry[]> {
-    const rendered = messages.map((message) => [
+    const conversation = messages.map((message) => [
       message.sourceTraceId ? `[trace:${message.sourceTraceId}]` : "",
       message.chatTime ? `[time:${message.chatTime}]` : "",
       `${message.role}: ${message.content}`
     ].filter(Boolean).join(" ")).join("\n");
+    const catalog = existingTopics.length
+      ? existingTopics.map((topic) => `- ${topic.topicId} (${topic.entries} entries): ${topic.latest}`).join("\n")
+      : "none yet";
+    const rendered = `Existing topics in this project:\n${catalog}\n\nConversation:\n${conversation}`;
     let output: Record<string, unknown> | undefined;
     if (this.llm.isConfigured()) {
       try {
@@ -3981,6 +4005,24 @@ function projectMemorySpaceId(memory: MemoryRow): string {
 function projectMemoryTopicId(memory: MemoryRow): string {
   const value = memory.properties.internal_info.work_topic ?? memory.info.project_topic_id;
   return typeof value === "string" && value.trim() ? value.trim() : "uncategorized";
+}
+
+function projectMemoryTopicCatalog(rows: MemoryRow[]): ProjectMemoryTopicSummary[] {
+  const topics = new Map<string, { entries: number; latest: MemoryRow }>();
+  for (const memory of rows) {
+    const topicId = projectMemoryTopicId(memory);
+    if (topicId === "uncategorized") continue;
+    const topic = topics.get(topicId);
+    if (!topic) topics.set(topicId, { entries: 1, latest: memory });
+    else {
+      topic.entries += 1;
+      if (memory.updatedAt > topic.latest.updatedAt) topic.latest = memory;
+    }
+  }
+  return [...topics.entries()]
+    .sort(([, left], [, right]) => right.entries - left.entries || right.latest.updatedAt.localeCompare(left.latest.updatedAt))
+    .slice(0, PROJECT_MEMORY_TOPIC_CATALOG_LIMIT)
+    .map(([topicId, topic]) => ({ topicId, entries: topic.entries, latest: topic.latest.memoryValue.replace(/\s+/g, " ").slice(0, 160) }));
 }
 
 function projectMemoryEntryFromRow(memory: MemoryRow): {
