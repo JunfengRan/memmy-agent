@@ -1,7 +1,7 @@
 {
   "source": "eval/project-memory/dataset copied from dev-project-memory-alpha",
   "method": "mock-add-message-extraction",
-  "reviewedAt": "2026-11-02",
+  "reviewedAt": "2026-11-03",
   "standard": [
     "decision 只保留范围、对外约定或共同约定",
     "experience 记录可复用做法或已证实不可行的做法",
@@ -39,5 +39,100 @@
     "d_env",
     "d_branch",
     "d_notify"
-  ]
+  ],
+  "addedEntries": [
+    {
+      "traceId": "t_admin_bug",
+      "kind": "experience",
+      "goldTopic": "ledger-empty-customer",
+      "reason": "已证实补样例不能修复，问题在读取代码，是可复用的排查结论。"
+    },
+    {
+      "traceId": "t_ledger_tz",
+      "kind": "experience",
+      "goldTopic": "ledger-month-boundary",
+      "reason": "report.ts 切月规则是局部实现。"
+    },
+    {
+      "traceId": "t_ledger_round",
+      "kind": "experience",
+      "goldTopic": "ledger-amount-rounding",
+      "reason": "金额累加精度是局部实现。"
+    },
+    {
+      "traceId": "t_ledger_dup",
+      "kind": "experience",
+      "goldTopic": "ledger-entry-dedupe",
+      "reason": "去重规则是局部实现。"
+    },
+    {
+      "traceId": "t_ledger_loc",
+      "kind": "experience",
+      "goldTopic": "ledger-report-output",
+      "reason": "输出目录与文件名是局部实现，与 d_export 的复核口径一致。"
+    },
+    {
+      "traceId": "t_cat_round",
+      "kind": "experience",
+      "goldTopic": "catalog-amount-rounding",
+      "reason": "价格取整是局部实现。"
+    },
+    {
+      "traceId": "t_cat_tz",
+      "kind": "experience",
+      "goldTopic": "catalog-effective-date",
+      "reason": "生效日切换规则是局部实现。"
+    },
+    {
+      "traceId": "t_cat_sku",
+      "kind": "experience",
+      "goldTopic": "catalog-sku-normalization",
+      "reason": "sku 归一化是局部实现。"
+    },
+    {
+      "traceId": "t_cat_dup",
+      "kind": "experience",
+      "goldTopic": "catalog-duplicate-sku",
+      "reason": "重复 sku 取舍是局部实现。"
+    },
+    {
+      "traceId": "t_short",
+      "kind": "decision",
+      "goldTopic": "collab-reply-format",
+      "reason": "回复格式是用户与 agent 的共同约定，取代 t_verbose。"
+    },
+    {
+      "traceId": "t_admin_todo",
+      "kind": "decision",
+      "goldTopic": "collab-turn-split",
+      "reason": "admin 的协作约定，压过 t_write_split。"
+    },
+    {
+      "traceId": "t_admin_claim",
+      "kind": "decision",
+      "goldTopic": "collab-conflict-rule",
+      "reason": "admin 的冲突判定口径是共同约定，压过 t_write_edit。"
+    }
+  ],
+  "topicGroups": {
+    "ledger-amount-source": "月报金额从 journal 正文改为 entries.amount 列",
+    "ledger-empty-customer": "空客户行的处理与测试失败根因",
+    "ledger-export-copy": "catalog export 是否搬进 ledger",
+    "ledger-month-boundary": "月报切月时区",
+    "ledger-amount-rounding": "月报金额精度",
+    "ledger-entry-dedupe": "月报分录去重",
+    "ledger-report-output": "月报输出位置",
+    "catalog-price-amount": "price 表 amount 列",
+    "catalog-export-file": "价格表导出目录与格式",
+    "catalog-amount-rounding": "价格取整",
+    "catalog-effective-date": "价格生效日时区",
+    "catalog-sku-normalization": "sku 大小写归一",
+    "catalog-duplicate-sku": "重复 sku 取舍",
+    "collab-secrets": "连接串与 .env",
+    "collab-branch": "分支协作",
+    "collab-notify": "跨窗口通知 amount 列",
+    "collab-reply-format": "回复与清单格式",
+    "collab-turn-split": "无清单时是否拆段",
+    "collab-conflict-rule": "冲突判定口径"
+  }
 }
