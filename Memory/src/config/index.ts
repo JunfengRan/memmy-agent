@@ -601,7 +601,7 @@ function configFromEnv(): Record<string, unknown> {
     }),
     summary: compactRecord({
       provider: process.env.MEMMY_SUMMARY_PROVIDER,
-      vendor: process.env.MEMMY_SUMMARY_VENDOR,
+      sourceProvider: process.env.MEMMY_SUMMARY_VENDOR,
       endpoint: process.env.MEMMY_SUMMARY_ENDPOINT,
       model: process.env.MEMMY_SUMMARY_MODEL,
       apiKey: process.env.MEMMY_SUMMARY_API_KEY,
@@ -612,7 +612,7 @@ function configFromEnv(): Record<string, unknown> {
     }),
     evolution: compactRecord({
       provider: process.env.MEMMY_EVOLUTION_PROVIDER,
-      vendor: process.env.MEMMY_EVOLUTION_VENDOR,
+      sourceProvider: process.env.MEMMY_EVOLUTION_VENDOR,
       endpoint: process.env.MEMMY_EVOLUTION_ENDPOINT,
       model: process.env.MEMMY_EVOLUTION_MODEL,
       apiKey: process.env.MEMMY_EVOLUTION_API_KEY,

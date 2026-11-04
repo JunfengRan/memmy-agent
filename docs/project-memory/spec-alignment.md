@@ -45,5 +45,5 @@
 | 7 | 多轮拆分 | SDK 按用户消息拆 | Local 拆，SDK 只发一个请求 | v3 §6.4 #15 |
 | 8 | 混排 | 与其他种类统一排序 | 按种类分列表返回，总数受 `memory_limit_number` 约束 | v3 §6.4 #14 |
 | 9 | 原样提交 | 原样提交消息 | 例外：剥离 `<memos_context>` | v3 §6.4 #11 |
-| 10 | 会话开始 | PRD 11/03 删除 `start_conversation`，改为按 `space_id` 调 `get_memory` | v3 仍写 `start_conversation` | 待 v3 更新；见 open-questions Q-03 |
-| 11 | create_space | PRD 11/03：传 `space_name`，`space_id` 由 MemOS 生成；SDK 规格仍要求传 `space_id` | v3 未写明 | 按 PRD 11/03 实现；见 open-questions Q-04 |
+| 10 | 会话开始 | PRD 11/03 删除 `start_conversation`，改为按 `space_id` 调 `get_memory` | v3 仍写 `start_conversation` | 不实现 start_conversation；会话 ID 由调用方在 add/search 中提交（Q-03，11/04 决定）；待 v3 更新 |
+| 11 | create_space | PRD 11/03：传 `space_name`，`space_id` 由 MemOS 生成；SDK 规格仍要求传 `space_id` | v3 未写明 | 按 PRD 11/03 实现（Q-04，11/04 决定） |

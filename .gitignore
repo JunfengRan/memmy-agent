@@ -24,10 +24,13 @@ App/memmy-agent/package-lock.json
 .env
 .env.*
 !.env.example
-# Shared agent skills are versioned; local Claude settings stay ignored.
+# Shared agent skills are versioned; local Claude and Cursor settings stay ignored.
 !.claude/
 .claude/*
 !.claude/skills/
+!.cursor/
+.cursor/*
+!.cursor/skills/
 # Holds the Windows Computer History folder open until it has code: git does
 # not track empty directories, and `.*` above would otherwise drop the marker.
 !App/memmy-agent/src/tools/computer-history/win/.gitkeep
@@ -42,3 +45,8 @@ Memory/src/agent-source/integration/workspace-bridge/memmy-workspace-bridge.mjs
 
 # Fixture workspaces are initialized as empty git repos and have no commits.
 /eval/project-memory/workspaces/*/.git/
+
+# Eval outputs are regenerated per run; only metrics.md summaries are committed.
+/eval/project-memory/gold-add-memory/generated/
+/eval/project-memory/runs/
+/eval/project-memory/gold-add-memory/harness/memory-service/

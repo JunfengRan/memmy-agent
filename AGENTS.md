@@ -41,6 +41,7 @@
 
 ### 提示词与技能
 
+- 开发流程技能放在 `.cursor/skills/`（`pm-spec-sync`、`pm-dev-loop`、`pm-eval`、`pm-weekly-review`）。`.claude/skills/` 指向同一份，给 Claude Code 用。
 - 产品提示词放在 `project-memory/prompts/`，每个文件导出版本号。改提示词必须升版本，并在 [metrics.md](docs/project-memory/metrics.md) 追加一次评测。
 - 示例不得取自评测集的领域（ledger、catalog 等），避免泄漏金标。
 
