@@ -22,5 +22,5 @@ description: 跑项目记忆 add/search 评测并记录指标。在用户说「�
 2. 校验数据集：`node eval/project-memory/gold-add-memory/load-eval-set.mjs`，有错误就停。
 3. 先跑 `--oracle` 和 `--empty` 确认评分器正常（oracle 全 1、empty 全 0）。改过评分脚本时这一步必做。
 4. 启动服务，跑真实回放，再评分。
-5. 在 `docs/project-memory/metrics.md`「记录」表最上面追加一行，写全表头各列；工作区不干净时在备注写明。
+5. 在 `docs/project-memory/metrics.md` 按「记录模板」新增一条完整记录（放在「记录」最上面），并在索引表加一行。**「指标定义」里的每个指标都要填**：add、search、回答、效率四组，含按题型的分项；测不了写「不适用（原因）」。工作区不干净时在元数据写明。
 6. 与上一行对比，向用户汇报：哪些指标变了、可能的原因、离 v3 目标的差距、建议的下一步。指标退步且原因不明时，不要接着改提示词，先找原因。

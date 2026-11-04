@@ -24,13 +24,22 @@ App/memmy-agent/package-lock.json
 .env
 .env.*
 !.env.example
-# Shared agent skills are versioned; local Claude and Cursor settings stay ignored.
+# Shared agent rules and skills are versioned (.agents is the source; .claude/.cursor/.codex link to it);
+# local app settings stay ignored.
+!.agents/
 !.claude/
 .claude/*
 !.claude/skills/
 !.cursor/
 .cursor/*
 !.cursor/skills/
+!.cursor/rules/
+.cursor/rules/*
+!.cursor/rules/agent-collaboration.mdc
+!.codex/
+.codex/*
+!.codex/skills/
+!.codex/README.md
 # Holds the Windows Computer History folder open until it has code: git does
 # not track empty directories, and `.*` above would otherwise drop the marker.
 !App/memmy-agent/src/tools/computer-history/win/.gitkeep

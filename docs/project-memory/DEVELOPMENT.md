@@ -79,3 +79,7 @@ cd Memory && MEMMY_MEMORY_PORT=18961 MEMMY_MEMORY_DB=/tmp/pm-eval/memory.sqlite 
 - 一个提交只做一件事；行为变化和文档更新放同一个提交。
 - 提交前：typecheck、相关单测、必要时评测冒烟。
 - PR 用 `memtensor-new-pr` 技能，先有 issue。
+
+## 多 Agent 交接
+
+designer / developer / reviewer 之间的交接按 [.agents/README.md](../../.agents/README.md) 和 [.agents/protocol.md](../../.agents/protocol.md) 进行：每个 Roadmap 条目对应一个工作项 `.agents/work/<PM-xx-短名>/`，developer 写 `handoff-NN.md`，reviewer 写 `review-NN.md`，designer 写 `design-NN.md` 或更新架构文档 / ADR。

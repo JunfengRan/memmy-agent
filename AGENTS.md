@@ -2,6 +2,10 @@
 
 本文件对所有编码 Agent（Claude Code、Codex、Cursor）生效。`CLAUDE.md` 通过 `@AGENTS.md` 引用本文件，规则只在这里维护。
 
+## 多 Agent 协作（必读）
+
+本项目由不同应用里的多个 Agent 以 designer / developer / reviewer 角色接力完成，彼此只通过仓库文件交接。**开工前先读 [.agents/README.md](.agents/README.md)**，按 [.agents/protocol.md](.agents/protocol.md) 在 `.agents/work/<id>/` 读写交接记录：developer 用 `agent-handoff` 技能交给 reviewer 或下一个 developer，reviewer 用 `agent-review` 技能给出 MUST / SHOULD / NIT 意见，designer 通过架构文档、ADR 或 `design-NN.md` 裁决。
+
 ## 全仓约定
 
 - 改完代码先跑相关检查：`npm --prefix Memory run typecheck`，再用 `npx vitest run <path>` 跑受影响的测试。全量测试是 `npm test`。
@@ -41,7 +45,7 @@
 
 ### 提示词与技能
 
-- 开发流程技能放在 `.cursor/skills/`（`pm-spec-sync`、`pm-dev-loop`、`pm-eval`、`pm-weekly-review`）。`.claude/skills/` 指向同一份，给 Claude Code 用。
+- 共享技能只维护一份，放在 `.agents/skills/`（`agent-handoff`、`agent-review`、`pm-spec-sync`、`pm-dev-loop`、`pm-eval`、`pm-weekly-review`）。`.cursor/skills/`、`.claude/skills/`、`.codex/skills/` 是指向它的符号链接，不要在那里直接改。
 - 产品提示词放在 `project-memory/prompts/`，每个文件导出版本号。改提示词必须升版本，并在 [metrics.md](docs/project-memory/metrics.md) 追加一次评测。
 - 示例不得取自评测集的领域（ledger、catalog 等），避免泄漏金标。
 
