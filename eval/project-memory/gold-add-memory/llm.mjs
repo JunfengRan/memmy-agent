@@ -89,7 +89,8 @@ async function callOnce(config, system, user, maxTokens) {
   if (!response.ok) throw new Error(`${config.model} ${response.status}: ${JSON.stringify(body).slice(0, 300)}`);
   return {
     text: body.choices?.[0]?.message?.content ?? "",
-    inputTokens: body.usage?.prompt_tokens ?? 0,
+    // OpenAI prompt_tokens includes cache hits; inputTokens here excludes them, as Anthropic's does.
+    inputTokens: (body.usage?.prompt_tokens ?? 0) - (body.usage?.prompt_tokens_details?.cached_tokens ?? 0),
     outputTokens: body.usage?.completion_tokens ?? 0,
     cachedInputTokens: body.usage?.prompt_tokens_details?.cached_tokens ?? 0
   };
@@ -106,7 +107,8 @@ export function parseJsonObject(text) {
 export function createLlm({ config, cachePath, concurrency = 6, maxTokens = 2048 }) {
   const cache = cachePath && existsSync(cachePath) ? JSON.parse(readFileSync(cachePath, "utf8")) : {};
   const used = new Set();
-  const usage = { model: config?.model ?? null, calls: 0, cacheHits: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, latencyMs: [] };
+  // inputTokens excludes cache hits; perCall keeps each call's tokens so long-context pricing tiers apply per call.
+  const usage = { model: config?.model ?? null, calls: 0, cacheHits: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, perCall: [], latencyMs: [] };
   const limit = createLimiter(concurrency);
 
   async function complete(kind, system, payload) {
@@ -126,6 +128,7 @@ export function createLlm({ config, cachePath, concurrency = 6, maxTokens = 2048
           usage.inputTokens += result.inputTokens;
           usage.outputTokens += result.outputTokens;
           usage.cachedInputTokens += result.cachedInputTokens;
+          usage.perCall.push({ inputTokens: result.inputTokens, cachedInputTokens: result.cachedInputTokens, outputTokens: result.outputTokens });
           cache[key] = { kind, model: config.model, promptHash: sha256(system), text: result.text };
           return result.text;
         } catch (error) {

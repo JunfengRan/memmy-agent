@@ -35,14 +35,18 @@ const run = {
   sut: { model: process.env.MEMMY_EVAL_SUT_MODEL ?? null }, reader: { model: readerConfig.model, provider: readerConfig.provider },
   spaceMap: Object.fromEntries(ds.corpus.spaces.map((s) => [s.space_id, s.space_id])),
   final: Object.fromEntries(ds.corpus.spaces.map((s) => [s.space_id, []])),
-  questions: [], apiChecks: [], requests: [], usage: {}
+  questions: [], apiChecks: [], requests: [], phaseMs: {}, usage: {}
 };
 
-async function call(path, body) {
+// phase is add or search, as in run-memmy-live-eval.mjs, so the scorer splits efficiency the same way.
+async function call(path, body, phase) {
+  const at = Date.now();
   const startedAt = performance.now();
   const response = await fetch(`${endpoint}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
   const text = await response.text();
-  run.requests.push({ call: path, status: response.status, ms: performance.now() - startedAt });
+  const ms = performance.now() - startedAt;
+  run.requests.push({ call: path, phase, poll: false, at, status: response.status, ms });
+  run.phaseMs[phase] = (run.phaseMs[phase] ?? 0) + ms;
   if (!response.ok) throw new Error(`${path} ${response.status}: ${text.slice(0, 300)}`);
   return text ? JSON.parse(text) : undefined;
 }
@@ -65,11 +69,11 @@ try {
   for (const event of events) {
     if (event.trace) {
       const space = conversations.get(event.trace.conversation).space_id;
-      await call("/api/v1/memory/add", { namespace, content: `${event.trace.query}\n${event.trace.answer}`, layer: "L1", createdAt: event.trace.chat_time, tags: [`space:${space}`] });
+      await call("/api/v1/memory/add", { namespace, content: `${event.trace.query}\n${event.trace.answer}`, layer: "L1", createdAt: event.trace.chat_time, tags: [`space:${space}`] }, "add");
       continue;
     }
     const q = event.question;
-    const result = await call("/api/v1/memory/search", { namespace, query: q.question, limit: 9, filter: { tags: [`space:${q.space_id}`] }, includeInjectedContext: false, verbose: true });
+    const result = await call("/api/v1/memory/search", { namespace, query: q.question, limit: 9, filter: { tags: [`space:${q.space_id}`] }, includeInjectedContext: false, verbose: true }, "search");
     const hits = Array.isArray(result?.debug?.hits) ? result.debug.hits : [];
     const topics = hits.slice(0, 9).map((hit, index) => ({
       id: `hit_${q.id}_${index}`, space_id: q.space_id, domain: "", topic_name: "", topic_summary: "", topic_description: "",

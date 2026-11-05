@@ -65,9 +65,28 @@ export function groupMean(rows, key, value) {
     .map(([group, values]) => [group, { n: values.length, mean: mean(values) }]));
 }
 
-export function costUsd(usage, pricing) {
+// usage: {model, inputTokens (excluding cache hits), cachedInputTokens, outputTokens} of ONE call;
+// the long-context tier is chosen per call. tiered=false prices totals at the base tier.
+export function costUsd(usage, pricing, { tiered = true } = {}) {
   const price = usage?.model ? pricing.models[usage.model] : undefined;
   if (!price) return null;
-  const tier = price.longContext && (usage.inputTokens + usage.cachedInputTokens) > price.longContext.overInputTokens ? price.longContext : price;
+  const tier = tiered && price.longContext && (usage.inputTokens + usage.cachedInputTokens) > price.longContext.overInputTokens ? price.longContext : price;
   return (usage.inputTokens * tier.input + usage.cachedInputTokens * tier.cachedInput + usage.outputTokens * tier.output) / 1_000_000;
+}
+
+// calls: [{model, inputTokens, cachedInputTokens, outputTokens}]. Any call without a price makes the total null.
+export function priceCalls(calls, pricing) {
+  const unpriced = [...new Set(calls.filter((c) => !c.model || !pricing.models[c.model]).map((c) => c.model ?? "(no model)"))];
+  if (unpriced.length) return { costUsd: null, reason: `pricing.json has no price for ${unpriced.join(", ")}` };
+  return { costUsd: calls.reduce((total, c) => total + costUsd(c, pricing), 0), reason: null };
+}
+
+// Aggregate usage from llm.mjs (judge or reader). Uses perCall when present; otherwise prices the
+// totals at the base tier and says so.
+export function priceUsage(usage, pricing) {
+  if (!usage) return { costUsd: null, reason: "no usage recorded" };
+  if (!usage.calls) return { costUsd: 0, reason: null };
+  if (!usage.model || !pricing.models[usage.model]) return { costUsd: null, reason: `pricing.json has no price for ${usage.model ?? "(no model)"}` };
+  if (Array.isArray(usage.perCall) && usage.perCall.length === usage.calls) return priceCalls(usage.perCall.map((c) => ({ ...c, model: usage.model })), pricing);
+  return { costUsd: costUsd(usage, pricing, { tiered: false }), reason: "priced from totals at the base tier (no per-call usage recorded)" };
 }

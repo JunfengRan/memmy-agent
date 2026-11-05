@@ -10,6 +10,7 @@
  *
  * Usage:
  *   node run-pipeline-eval.mjs runs/<stamp>/live-run.json [--out report.json] [--gate] [--prune-judge-cache]
+ *       [--sut-usage <usage.jsonl>]   SUT model usage from harness/usage-proxy.mjs (or MEMMY_EVAL_SUT_USAGE)
  *       [--min-decision-state=0.8] [--min-topic-f1=0.8] [--min-entry-f1=0.8] [--min-recall-at-3=0.85] [--min-answer=0.8]
  *   node run-pipeline-eval.mjs --oracle   every score must be 1 and every error 0
  *   node run-pipeline-eval.mjs --empty    every score must be 0
@@ -22,7 +23,7 @@ import { loadDataset } from "./build-gold-baseline.mjs";
 import { JUDGE_PROMPT_VERSION, createJudge } from "./judge.mjs";
 import { assertJudgeFamily, createLlm, resolveModelConfig } from "./llm.mjs";
 import { LIMITS, length, loadGold } from "./load-eval-set.mjs";
-import { costUsd, mean, percentile, prf, tokenF1 } from "./metrics.mjs";
+import { mean, percentile, priceCalls, priceUsage, prf, tokenF1 } from "./metrics.mjs";
 import { buildEmptyRun, buildOracleRun } from "./oracle.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -85,23 +86,35 @@ export async function scoreRun(run, { ds, gold, judge }) {
   }
   await Promise.all(actual.map(async (a) => { a.attr = await judge.attribute(a, goldList[a.space] ?? [], negatives[a.space] ?? []); }));
 
-  // One-to-one matching (Kuhn): required gold first, then optional, so optional never steals a match.
+  // One-to-one matching (Kuhn), in four passes: required on same-kind edges, required on any edge,
+  // optional on same-kind edges, optional on any edge. Optional never takes a required entry's
+  // match, and a cross-kind write never takes a same-kind one: a gold entry already matched to a
+  // write of its own kind may only be moved to another write of its own kind. Candidates are
+  // ordered same kind first, then primary id (attr.ids[0]) first, then write order.
+  const kindOfWrite = new Map(actual.map((a) => [a.uid, a.kind]));
   const adjacency = new Map();
   for (const g of gold.entries) {
     const candidates = actual.filter((a) => a.space === g.space_id && a.attr.label === "match" && a.attr.ids.includes(g.id));
-    adjacency.set(g.id, candidates.sort((x, y) => (y.attr.ids[0] === g.id) - (x.attr.ids[0] === g.id)).map((a) => a.uid));
+    const rank = (a) => (a.kind === g.kind ? 0 : 2) + (a.attr.ids[0] === g.id ? 0 : 1);
+    adjacency.set(g.id, candidates.map((a, i) => ({ a, i })).sort((x, y) => rank(x.a) - rank(y.a) || x.i - y.i).map(({ a }) => a.uid));
   }
   const owner = new Map();
-  const tryAssign = (goldId, seen) => {
+  const tryAssign = (goldId, seen, sameKindOnly) => {
+    const kind = goldById.get(goldId).kind;
     for (const uid of adjacency.get(goldId)) {
-      if (seen.has(uid)) continue;
+      if (seen.has(uid) || (sameKindOnly && kindOfWrite.get(uid) !== kind)) continue;
       seen.add(uid);
       const current = owner.get(uid);
-      if (current === undefined || tryAssign(current, seen)) { owner.set(uid, goldId); return true; }
+      if (current === undefined || tryAssign(current, seen, kindOfWrite.get(uid) === goldById.get(current).kind)) { owner.set(uid, goldId); return true; }
     }
     return false;
   };
-  for (const g of [...required, ...gold.entries.filter((e) => e.optional)]) tryAssign(g.id, new Set());
+  const matchedGold = () => new Set(owner.values());
+  for (const group of [required, gold.entries.filter((e) => e.optional)]) {
+    for (const sameKindOnly of [true, false]) {
+      for (const g of group) if (!matchedGold().has(g.id)) tryAssign(g.id, new Set(), sameKindOnly);
+    }
+  }
   const pairOfGold = new Map([...owner.entries()].map(([uid, goldId]) => [goldId, actual.find((a) => a.uid === uid)]));
   const counted = actual.filter((a) => !(owner.has(a.uid) && goldById.get(owner.get(a.uid)).optional));
   const requiredPairs = required.filter((g) => pairOfGold.has(g.id)).map((g) => ({ g, a: pairOfGold.get(g.id) }));
@@ -266,7 +279,7 @@ export async function scoreRun(run, { ds, gold, judge }) {
   const sum = (field) => questionRows.reduce((total, row) => total + (typeof row[field] === "number" ? row[field] : 0), 0);
   const byQuestionKind = Object.fromEntries([...new Set(questionRows.map((r) => r.kind))].sort().map((kind) => {
     const rows = questionRows.filter((r) => r.kind === kind);
-    return [kind, { n: rows.length, answer: mean(rows.map((r) => (r.answer.correct ? 1 : 0))), entryHit: mean(rows.map((r) => r.entryHit)) }];
+    return [kind, { n: rows.length, answer: mean(rows.map((r) => (r.answer.correct ? 1 : 0))), tokenF1: mean(rows.map((r) => r.tokenF1)), entryHit: mean(rows.map((r) => r.entryHit)) }];
   }));
 
   const apiPassed = gold.apiChecks.filter((check) => (run.apiChecks ?? []).find((r) => r.id === check.id)?.passed === true).length;
@@ -298,6 +311,7 @@ export async function scoreRun(run, { ds, gold, judge }) {
     "answers.llm": ratio(questionRows.filter((r) => r.answer.correct).length, questionRows.length),
     "answers.rubric": ratio(sum("rubric"), questionRows.length),
     "answers.tokenF1": ratio(sum("tokenF1"), questionRows.length),
+    ...Object.fromEntries(Object.entries(byQuestionKind).flatMap(([kind, m]) => [[`answers.llm.${kind}`, m.answer], [`answers.tokenF1.${kind}`, m.tokenF1]])),
     "api.passRate": ratio(apiPassed, gold.apiChecks.length)
   };
   const errors = {
@@ -333,15 +347,137 @@ export async function scoreRun(run, { ds, gold, judge }) {
   };
 }
 
-function efficiency(run, judgeUsage, pricing) {
+// SUT model usage recorded by harness/usage-proxy.mjs, one JSON object per line:
+// {at, path, status, latencyMs, model, usage: {prompt_tokens, completion_tokens, prompt_tokens_details: {cached_tokens}}}
+// or {at, path, error} when the upstream call failed.
+export function loadSutUsage(path) {
+  const lines = [];
+  let unparsed = 0;
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    try { lines.push(JSON.parse(line)); } catch { unparsed += 1; }
+  }
+  return { path, lines, unparsed };
+}
+
+const PHASE_BY_PATH = { "/add/message": "add", "/get/status": "add", "/search/memory": "search", "/api/v1/memory/add": "add", "/api/v1/memory/search": "search" };
+const NO_USAGE = "no SUT usage file: pass --sut-usage <file> or MEMMY_EVAL_SUT_USAGE (written by harness/usage-proxy.mjs)";
+const OLD_RUNNER = "run was recorded by a runner without task timing and request phases (runnerRevision < 2)";
+const latency = (values) => ({ n: values.length, p50: percentile(values, 50), p95: percentile(values, 95) });
+
+// Efficiency per phase (metrics.md「指标定义 … 效率」). Averages of tokens are per SUT model call and
+// input tokens include cache hits; avgCostUsd is per product request (add/message or search/memory).
+// Fields that cannot be measured are null and explained in that block's `reasons`.
+export function efficiency(run, { judgeUsage, sutUsage, pricing }) {
+  const requests = run.requests ?? [];
+  const phased = requests.length > 0 && requests.every((r) => typeof r.phase === "string");
+  const phaseOf = (r) => (phased ? r.phase : PHASE_BY_PATH[r.call] ?? "other");
+  const isPoll = (r) => r.poll ?? r.call === "/get/status";
+
+  // SUT calls inside the run's time window; v0.1 search makes no model call, so all go to add.
+  let sut = null;
+  if (sutUsage) {
+    const from = run.startedAt ? Date.parse(run.startedAt) - 1_000 : -Infinity;
+    const to = run.startedAt && typeof run.wallclockMs === "number" ? Date.parse(run.startedAt) + run.wallclockMs + 5_000 : Infinity;
+    const inRun = sutUsage.lines.filter((line) => { const at = Date.parse(line.at); return !Number.isFinite(at) || (at >= from && at <= to); });
+    const calls = inRun.map((line) => {
+      const u = line.usage ?? null;
+      const prompt = u?.prompt_tokens ?? (u?.input_tokens !== undefined ? u.input_tokens + (u.cache_read_input_tokens ?? 0) : null);
+      const cached = u?.prompt_tokens_details?.cached_tokens ?? u?.cache_read_input_tokens ?? 0;
+      return { at: Date.parse(line.at), failed: Boolean(line.error) || !(line.status >= 200 && line.status < 300), hasUsage: prompt !== null, model: line.model ?? run.sut?.model ?? null, prompt: prompt ?? 0, cached, output: u?.completion_tokens ?? u?.output_tokens ?? 0, latencyMs: line.latencyMs };
+    });
+    const searchWindows = phased ? requests.filter((r) => phaseOf(r) === "search" && typeof r.at === "number").map((r) => [r.at, r.at + r.ms]) : null;
+    sut = {
+      file: sutUsage.path,
+      lines: sutUsage.lines.length,
+      unparsedLines: sutUsage.unparsed,
+      outsideRun: sutUsage.lines.length - inRun.length,
+      models: [...new Set(calls.map((c) => c.model))],
+      attribution: "v0.1 search makes no SUT model calls: every call in the usage file is attributed to add, search is 0 measured",
+      callsDuringSearchRequests: searchWindows ? calls.filter((c) => searchWindows.some(([a, b]) => c.at >= a && c.at <= b)).length : null,
+      calls
+    };
+    if (sut.callsDuringSearchRequests === null) sut.reasons = { callsDuringSearchRequests: OLD_RUNNER };
+  }
+
+  const tasks = (run.tasks ?? []).filter((t) => t.task_id);
+  const timedTasks = tasks.filter((t) => typeof t.completedMs === "number");
+
+  function block(name) {
+    const product = requests.filter((r) => phaseOf(r) === name && !isPoll(r));
+    const polls = requests.filter((r) => phaseOf(r) === name && isPoll(r));
+    const reasons = {};
+    const out = {
+      requests: product.length,
+      pollingRequests: polls.length,
+      wallclockMs: run.phaseMs?.[name] ?? null,
+      latencyMs: latency(product.map((r) => r.ms)),
+      llmCalls: null, failedLlmCalls: null, inputTokens: null, cachedInputTokens: null, outputTokens: null,
+      avgInputTokens: null, avgOutputTokens: null, avgCostUsd: null, totalCostUsd: null
+    };
+    if (!requests.length) reasons.requests = "run has no request log";
+    else if (!phased) reasons.requests = `${OLD_RUNNER}; requests are split by path, so API-check calls are included`;
+    if (out.wallclockMs === null) reasons.wallclockMs = run.phaseMs ? `no time was spent in ${name}` : `${OLD_RUNNER}; efficiency.wallclockMs is the whole run`;
+    if (!product.length) reasons.latencyMs = "no requests";
+    const calls = name === "add" ? sut?.calls ?? null : sut ? [] : null;
+    if (!calls) {
+      for (const field of ["llmCalls", "failedLlmCalls", "inputTokens", "cachedInputTokens", "outputTokens", "avgInputTokens", "avgOutputTokens", "avgCostUsd", "totalCostUsd"]) reasons[field] = NO_USAGE;
+    } else {
+      const withUsage = calls.filter((c) => c.hasUsage);
+      Object.assign(out, {
+        llmCalls: calls.length,
+        failedLlmCalls: calls.filter((c) => c.failed).length,
+        inputTokens: withUsage.reduce((t, c) => t + c.prompt, 0),
+        cachedInputTokens: withUsage.reduce((t, c) => t + c.cached, 0),
+        outputTokens: withUsage.reduce((t, c) => t + c.output, 0)
+      });
+      if (withUsage.length < calls.length) reasons.inputTokens = reasons.outputTokens = `${calls.length - withUsage.length} call(s) have no usage (upstream error); token sums cover the rest`;
+      if (name === "add") {
+        out.avgInputTokens = withUsage.length ? out.inputTokens / withUsage.length : null;
+        out.llmLatencyMs = latency(calls.map((c) => c.latencyMs).filter((v) => typeof v === "number"));
+      } else {
+        reasons.avgInputTokens = "measured for add only (metrics.md)";
+        reasons.llmCalls = sut.attribution;
+      }
+      out.avgOutputTokens = withUsage.length ? out.outputTokens / withUsage.length : null;
+      if (!withUsage.length) reasons.avgOutputTokens = `no SUT model calls in ${name}`;
+      if (name === "add" && !withUsage.length) reasons.avgInputTokens = "no SUT model calls in add";
+      const price = priceCalls(withUsage.map((c) => ({ model: c.model, inputTokens: c.prompt - c.cached, cachedInputTokens: c.cached, outputTokens: c.output })), pricing);
+      out.totalCostUsd = price.costUsd;
+      out.avgCostUsd = price.costUsd === null || !product.length ? null : price.costUsd / product.length;
+      if (price.reason) reasons.totalCostUsd = reasons.avgCostUsd = price.reason;
+      else if (!product.length) reasons.avgCostUsd = "no requests";
+    }
+    if (name === "add") {
+      out.task = timedTasks.length
+        ? { n: timedTasks.length, of: tasks.length, p50: percentile(timedTasks.map((t) => t.completedMs), 50), p95: percentile(timedTasks.map((t) => t.completedMs), 95), mean: mean(timedTasks.map((t) => t.completedMs)), detectionSlackMeanMs: mean(timedTasks.map((t) => t.detectionSlackMs ?? 0)) }
+        : null;
+      if (!out.task) reasons.task = tasks.length ? OLD_RUNNER : "no add tasks";
+    }
+    if (Object.keys(reasons).length) out.reasons = reasons;
+    return out;
+  }
+
+  const model = (usage) => {
+    if (!usage) return null;
+    const { perCall, latencyMs, ...rest } = usage;
+    const price = priceUsage(usage, pricing);
+    return { ...rest, costUsd: price.costUsd, ...(price.reason ? { reasons: { costUsd: price.reason } } : {}) };
+  };
   const byCall = {};
-  for (const request of run.requests ?? []) (byCall[request.call] ??= []).push(request.ms);
+  for (const request of requests) (byCall[request.call] ??= []).push(request.ms);
+  const checkRequests = requests.filter((r) => r.phase === "check");
   return {
+    notes: "avgInputTokens / avgOutputTokens are per SUT model call, input includes cache hits; avgCostUsd is per add/message or search/memory request; task.* is add/message response → the get/status poll that saw completed (upper bound, completion happened at most detectionSlackMs earlier); judge and reader are not part of the product",
     wallclockMs: run.wallclockMs ?? null,
-    requests: (run.requests ?? []).length,
-    latencyMs: Object.fromEntries(Object.entries(byCall).map(([call, values]) => [call, { n: values.length, p50: percentile(values, 50), p95: percentile(values, 95) }])),
-    reader: run.usage?.reader ?? null,
-    judge: { ...judgeUsage, latencyMs: undefined, costUsd: costUsd(judgeUsage, pricing) }
+    phaseWallclockMs: run.phaseMs ?? null,
+    add: block("add"),
+    search: block("search"),
+    checks: phased ? { requests: checkRequests.length } : { requests: null, reasons: { requests: OLD_RUNNER } },
+    sutUsage: sut ? { ...sut, calls: undefined } : { reasons: { file: NO_USAGE } },
+    latencyByCall: Object.fromEntries(Object.entries(byCall).map(([call, values]) => [call, latency(values)])),
+    reader: model(run.usage?.reader ?? null),
+    judge: model(judgeUsage)
   };
 }
 
@@ -355,6 +491,8 @@ function parseArgs(argv) {
     else if (arg === "--gate") options.gate = true;
     else if (arg === "--prune-judge-cache") options.prune = true;
     else if (arg === "--out") options.out = argv[++i];
+    else if (arg === "--sut-usage") options.sutUsage = argv[++i];
+    else if (name === "--sut-usage") options.sutUsage = value;
     else if (flags[name]) options.thresholds[flags[name]] = Number(value);
     else if (!arg.startsWith("--")) options.input = arg;
     else throw new Error(`unknown option ${arg}`);
@@ -392,12 +530,13 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     llm.save({ prune: options.prune });
   }
   const pricing = JSON.parse(readFileSync(join(root, "pricing.json"), "utf8"));
+  const sutUsagePath = options.sutUsage ?? process.env.MEMMY_EVAL_SUT_USAGE ?? null;
   const report = {
     reportVersion: 2,
     run: { kind: run.kind ?? "live", input: options.input ?? null, startedAt: run.startedAt ?? null, base: run.base ?? null, sut: run.sut ?? null, reader: run.reader ?? null },
     judge: { model: llm.config?.model ?? null, family: llm.config?.family ?? null, promptVersion: JUDGE_PROMPT_VERSION, temperature: 0 },
     ...result,
-    efficiency: efficiency(run, llm.usage, pricing)
+    efficiency: efficiency(run, { judgeUsage: llm.usage, sutUsage: sutUsagePath ? loadSutUsage(sutUsagePath) : null, pricing })
   };
   const failures = [];
   if (options.mode === "oracle") {
