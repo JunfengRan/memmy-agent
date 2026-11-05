@@ -26,7 +26,7 @@
 | ID | 条目 | 出处 | 验收 | 状态 |
 | --- | --- | --- | --- | --- |
 | PM-11 | 根据 v0.1 问题清单修订对齐表，起草给架构文档的修改意见 | — | open-questions 有提议和回复状态 | todo |
-| PM-11a | 关闭 v0.1 评审 MUST：代码 5 项（PM-05-09 review-01 R1-1～R1-5）、评测 3 项（PM-03 review-01 R1-1～R1-3） | .agents/work | 下一轮 review 全部关闭 | todo（W46 周一优先） |
+| PM-11a | 关闭 v0.1 评审 MUST：代码 5 项（PM-05-09 review-01 R1-1～R1-5）、评测 3 项（PM-03 review-01 R1-1～R1-3） | .agents/work | 下一轮 review 全部关闭 | doing（8 项已修复并交接：59547700、672919d5；待 review-02） |
 | PM-12 | M02 / M04 拆开：add 技能、topic 技能独立提示词 | v3 §2.2.5、§2.2.7 | 归类准确率、重复主题率有数 | todo |
 | PM-13 | 推迟机制：deferred_segments 与后续回填 | v3 §2.2.7 | 推迟内容回填 ≥90% | todo |
 | PM-14 | 决策补全 conflict_update / resolve / split；informed 由 recall_log + M02 信号判定 | v3 §2.2.9 | 决策 op golden 全过 | todo |
@@ -66,6 +66,7 @@
 | 日期 | 变化 | 原因 |
 | --- | --- | --- |
 | 2026-11-03 | 初版 | 用户要求 W45 先出基础版本 |
+| 2026-11-05 | PM-11a 提前开工：8 项评审 MUST 修复并交接，复测见 metrics R-20261105-02 | 用户要求先修 MUST |
 | 2026-11-05 | W45 收尾：v0.1 与数据集 v2 合入；评审各给出 changes-requested；新增 PM-11a 关闭评审 MUST | 两个独立会话完成开发，收尾会话评审与评测 |
 | 2026-11-04 | 增加多 Agent 交接规范（`.agents/`）；metrics 记录改为每条收录全部指标 | 多个应用的 Agent 以 designer / developer / reviewer 接力 |
 | 2026-11-04 | W45 增加评测基线：旧实现 + main 对照，被测模型改为 deepseek；token 限流与检索 LLM 过滤在评测配置中关闭 | 用户要求先有可比基线 |
