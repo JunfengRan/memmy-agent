@@ -11,7 +11,8 @@
 | [spec-alignment.md](spec-alignment.md) | 规格章节 → 代码 → 状态 → 测试，及与 PRD 的差异 | 每次改变行为的提交 |
 | [spec-snapshots.md](spec-snapshots.md) | 每次对齐时三份规格的日期和 sha256 | 跑 `pm-spec-sync` 时 |
 | [open-questions.md](open-questions.md) | 规格 TBD、实现中发现的问题和我们的提议 | 随时；周报汇总 |
-| [metrics.md](metrics.md) | 每次评测一行，对照 v3 目标 | 每次跑 `pm-eval` |
+| [metrics.md](metrics.md) | 每次评测完整记录全部指标，对照 v3 目标 | 每次跑 `pm-eval` |
+| [../../.agents/](../../.agents/README.md) | designer / developer / reviewer 的交接规范与工作项 | 每次交接 |
 | [decisions/](decisions/) | ADR，只追加 | 改契约、表结构或已定决策时 |
 | [weekly/](weekly/) | 周报 | 每周五 |
 

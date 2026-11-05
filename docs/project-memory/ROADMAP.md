@@ -11,14 +11,14 @@
 | ID | 条目 | 出处 | 验收 | 状态 |
 | --- | --- | --- | --- | --- |
 | PM-01 | 治理落地：AGENTS.md、技能、docs/project-memory | — | 新会话能加载规则；4 个技能可见 | done |
-| PM-02 | 评测清理：数据集只留一份，生成物移出 git | — | `git status` 不跟踪生成物 | doing（生成物已移出 git；三份副本待合并） |
-| PM-03 | 评测数据集 v2：语料补成员身份、金标按 v3 重推、冲突改为按作者、题目清理 | v3 §2.2.5–2.2.9 | `load-eval-set` 校验通过 | todo |
-| PM-04 | 评测脚本 v2：runner 只调规格接口，scorer 按 topic 计数、拆分 trap、独立评委 | v3 §3.2 | oracle 全 1、empty 全 0 | todo |
-| PM-05 | contract/ 与 schema v10 建表 | v3 §5.1.5、§5.3 | typecheck 通过，迁移测试 | todo |
-| PM-06 | SQLite Store：Space/domain、topic 读写、L03 条件写（revision、topic_seq、幂等键） | v3 §5.1.2、§2.2.10 | 409 后库不变；幂等重放无副本 | todo |
-| PM-07 | add v0.1：raw_turns → Space 串行任务 → 一次 LLM 调用完成 M02+M04 → M05（add/join/rewrite/conflict_append，经验带 history，轨迹追加）→ ChangeSet → 条件写，冲突重合并 ≤3 次 | v3 §2.1–2.3 | PRD 决策维护逐轮表 golden 通过 | todo |
-| PM-08 | search v0.1：project 一路，FTS5 + 向量，RRF + MMR + 时效/本会话优先，按 topic 截断，附 history/conflicts；get_memory、get_memory_by_id、get_task_status | v3 §3.2.2–3.2.5 | 检索确定性测试；topic_detail_list 形状 | todo |
-| PM-09 | 删除旧实现（memories 表里的 project 行和 /api/v1 分支） | ADR-0002 | 普通 L1 召回不再出现 project 行 | todo |
+| PM-02 | 评测清理：数据集只留一份，生成物移出 git | — | `git status` 不跟踪生成物 | done（9aabf84b） |
+| PM-03 | 评测数据集 v2：语料补成员身份、金标按 v3 重推、冲突改为按作者、题目清理 | v3 §2.2.5–2.2.9 | `load-eval-set` 校验通过 | done（9aabf84b；评审 3 项 MUST 待修，见 .agents/work/PM-03-eval-dataset-v2） |
+| PM-04 | 评测脚本 v2：runner 只调规格接口，scorer 按 topic 计数、拆分 trap、独立评委 | v3 §3.2 | oracle 全 1、empty 全 0 | done（同上） |
+| PM-05 | contract/ 与 schema v10 建表 | v3 §5.1.5、§5.3 | typecheck 通过，迁移测试 | done（44dcbb1e） |
+| PM-06 | SQLite Store：Space/domain、topic 读写、L03 条件写（revision、topic_seq、幂等键） | v3 §5.1.2、§2.2.10 | 409 后库不变；幂等重放无副本 | done（44dcbb1e） |
+| PM-07 | add v0.1：raw_turns → Space 串行任务 → 一次 LLM 调用完成 M02+M04 → M05（add/join/rewrite/conflict_append，经验带 history，轨迹追加）→ ChangeSet → 条件写，冲突重合并 ≤3 次 | v3 §2.1–2.3 | PRD 决策维护逐轮表 golden 通过 | done（44dcbb1e；split 未做，见 ADR-0005） |
+| PM-08 | search v0.1：project 一路，FTS5 + 向量，RRF + MMR + 时效/本会话优先，按 topic 截断，附 history/conflicts；get_memory、get_memory_by_id、get_task_status | v3 §3.2.2–3.2.5 | 检索确定性测试；topic_detail_list 形状 | done（44dcbb1e；只做 project 一路） |
+| PM-09 | 删除旧实现（memories 表里的 project 行和 /api/v1 分支） | ADR-0002 | 普通 L1 召回不再出现 project 行 | done（44dcbb1e） |
 | PM-10 | 跑 v2 评测出首批数；问题清单进 open-questions；ADR-0005 列出 v0.1 简化；W45 周报 | — | metrics.md 有第一行 | doing（v1 金标上旧实现与 main 对照已出数，见 metrics.md；v2 金标待评测组完成后重跑） |
 
 ## W46（11/9–11/13）M1：按问题修订文档，补全 add
@@ -26,6 +26,7 @@
 | ID | 条目 | 出处 | 验收 | 状态 |
 | --- | --- | --- | --- | --- |
 | PM-11 | 根据 v0.1 问题清单修订对齐表，起草给架构文档的修改意见 | — | open-questions 有提议和回复状态 | todo |
+| PM-11a | 关闭 v0.1 评审 MUST：代码 5 项（PM-05-09 review-01 R1-1～R1-5）、评测 3 项（PM-03 review-01 R1-1～R1-3） | .agents/work | 下一轮 review 全部关闭 | todo（W46 周一优先） |
 | PM-12 | M02 / M04 拆开：add 技能、topic 技能独立提示词 | v3 §2.2.5、§2.2.7 | 归类准确率、重复主题率有数 | todo |
 | PM-13 | 推迟机制：deferred_segments 与后续回填 | v3 §2.2.7 | 推迟内容回填 ≥90% | todo |
 | PM-14 | 决策补全 conflict_update / resolve / split；informed 由 recall_log + M02 信号判定 | v3 §2.2.9 | 决策 op golden 全过 | todo |
@@ -65,5 +66,6 @@
 | 日期 | 变化 | 原因 |
 | --- | --- | --- |
 | 2026-11-03 | 初版 | 用户要求 W45 先出基础版本 |
+| 2026-11-05 | W45 收尾：v0.1 与数据集 v2 合入；评审各给出 changes-requested；新增 PM-11a 关闭评审 MUST | 两个独立会话完成开发，收尾会话评审与评测 |
 | 2026-11-04 | 增加多 Agent 交接规范（`.agents/`）；metrics 记录改为每条收录全部指标 | 多个应用的 Agent 以 designer / developer / reviewer 接力 |
 | 2026-11-04 | W45 增加评测基线：旧实现 + main 对照，被测模型改为 deepseek；token 限流与检索 LLM 过滤在评测配置中关闭 | 用户要求先有可比基线 |

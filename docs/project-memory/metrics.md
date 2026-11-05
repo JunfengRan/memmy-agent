@@ -19,171 +19,115 @@
 | 输出确定性 | 100% | §3.6 |
 | 单路 / 总 P95 | ≤800 ms / ≤1.2 s | §3.2.3 |
 
-## 指标定义（与评测脚本一致）
+## 指标定义（数据集 v2，与 `run-pipeline-eval.mjs` 一致）
 
-**写入质量（add）**
+**归属与匹配**：最终状态里的每条条目由评委归属为 match / stale / conflict / negative / none，文本完全一致时按规则判定。然后一对一匹配：必写条目先匹配，optional 后匹配。
 
-- **Entry F1**：模型写入的条目与 gold 条目一对一匹配，要求 kind 相同且内容同一事实。不比较 topic 名和来源轨迹。同时报 kind 混淆矩阵、stale（写了旧版说法）条数、重复条数。
-- **内容 F1**：与 Entry F1 相同，不看 kind。
-- **Topic 归纳 B-cubed**：只对内容匹配上的条目，比较模型 topic 聚类与 gold topic；P 低说明不同事实被并进一个 topic，R 低说明同一工作被拆散。
-- **来源轨迹覆盖率**：gold 轨迹里有多少被任一模型条目引用；只看覆盖率，不参与 F1。
+**写入质量（add）**：分组条目 P/R/F1（decision / experience / timeline 与总体）、kind 正确率；决策的 content、conflicts、history、user_ids、time 逐项正确率与全对的 stateExact；有依据的原因比例；Topic B-cubed（含未匹配）；topic domain 正确率与摘要描述要点覆盖率。错误类：不该写入的误写率、旧版当当前、不一致结论单独成条、无法归属、重复、超长；原因臆造；重复主题与错误合并。
 
-**检索（search）**
+**检索（search）**：期望主题进入前 k 个返回主题的比例（topic Recall@1/3/9）；期望条目出现在正确位置的比例（entryHit / itemHit）；旧版本出现在 history / conflicts 的比例（预期行为）。错误类：旧版作为当前内容出现、跨空间泄漏、出现别处主题、超过 9 个主题。
 
-- **Retrieval Recall@k**（k=1/3/5/10，另加"全部上下文"）：按排名取前 k 条返回条目所引用的轨迹，计算证据轨迹被带进上下文的比例，按题宏平均，并按题型分组。
-- **trap rate**：上下文出现陷阱轨迹的题目比例。
+**回答**：评委判对错（总体与按题型）、mustInclude 全中的比例（rubric）、与标准答案的 Token F1（中文字级、英文词级；总体与按题型）。
 
-**回答**
-
-- **LLM score**：LLM 裁判对照题目、提问时间和标准答案判断回答对错，按题型和总体报。
-- **Token F1**：回答与标准答案的词重合度（中文按字切）。
-- **短语 rubric 准确率**：按 mustInclude / mustNotInclude 判，参考用。
-
-**效率（add 与 search 分开）**
-
-- wallclock 总耗时、请求数、LLM 调用数；
-- 平均输入 token（只统计 add，含缓存命中）、平均输出 token；
-- 平均费用和总费用（USD，按 `pricing.json` 单价；模型不在表里记为 null）；
-- 请求延迟 P50 / P95。
+**效率（add 与 search 分开，评委与阅读模型单独列）**：wallclock；请求数（不含 get/status 轮询）；被测系统 LLM 调用数；平均输入 token（含缓存命中）与输出 token；平均 / 总费用（USD，按 `pricing.json`，模型无单价记 null）；请求延迟 P50 / P95；异步 add 另记任务「受理 → 完成」的耗时；评委与阅读模型的调用数、token 与费用不计入产品。
 
 ## 记录
 
 ### 索引
 
-| 记录 | 日期 | 被测实现 | 数据集 | Entry F1 | 内容 F1 | Recall@10 | LLM score | Token F1 |
+| 记录 | 日期 | 被测实现 | 数据集 | entries.f1 | decisions.stateExact | Recall@3 | answers.llm | Token F1 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [R-20261104-02](#r-20261104-02) | 2026-11-04 | main 分支对照（无项目记忆） | v1 现行金标 | 0.000 | 0.000 | 0.117 | 0.100 | 0.054 |
-| [R-20261104-01](#r-20261104-01) | 2026-11-04 | 当前分支旧实现 | v1 现行金标 | 0.237 | 0.644 | 0.967 | 0.967 | 0.400 |
+| [R-20261105-01](#r-20261105-01) | 2026-11-05 | v0.1（本分支 `44dcbb1e`） | v2 | 0.651 | 0.800 | 0.913 | 0.609 | 0.431 |
+| [R-20261104-02](#r-20261104-02) | 2026-11-04 | main 分支对照（无项目记忆） | v1 | 0.000 | 不适用 | 0.117 | 0.100 | 0.054 |
+| [R-20261104-01](#r-20261104-01) | 2026-11-04 | 旧实现（Codex 版） | v1 | 0.237 | 不适用 | 0.700 | 0.967 | 0.400 |
 
-### R-20261104-02
-
-**元数据**
-
-| 项 | 值 |
-| --- | --- |
-| 被测实现 | `main` @ `6853b777`，无项目记忆；每条轨迹写成一条 L1 记忆，标签 `space:<项目>` 模拟 `space_ids` |
-| 回放脚本 | `harness/run-control-main.mjs` |
-| 评测配置 | `harness/eval-config.yaml`：token 限流关闭、检索 LLM 过滤关闭 |
-| 数据集 | v1 现行金标：28 条 / 7 topic / 30 题（2 个项目，34 条轨迹） |
-| 提示词版本 | 不适用（main 无项目记忆提示词） |
-| 被测模型 | deepseek-v4.1-flash-1017（网关返回 `deepseek-v4-1-flash-261017`） |
-| 评委模型 | claude-haiku-5-5 |
-| `memory_limit_number` | 10 |
-
-**写入质量（add）**
-
-| 指标 | 值 |
-| --- | --- |
-| Entry F1（P / R） | 0.000（0.000 / 0.000），匹配 0 / 28 |
-| 内容 F1（P / R） | 0.000（0.000 / 0.000） |
-| kind 混淆矩阵 | 不适用（没有项目条目） |
-| stale 条数 / 重复条数 | 0 / 0 |
-| 模型 topic 数 / gold topic 数 | 0 / 7 |
-| Topic 归纳 B-cubed F1（P / R） | 不适用（无匹配条目） |
-| 来源轨迹覆盖率 | 0.00（0 / 25） |
-
-**检索（search）**
-
-| 指标 | 值 |
-| --- | --- |
-| Recall@1 / @3 / @5 / @10 | 0.017 / 0.117 / 0.117 / 0.117 |
-| Recall（全部上下文） | 0.117 |
-| Recall@10 按题型 | cross-project 0.125（12）· overridden 0.000（5）· plain 0.000（3）· scope-leak 1.000（1）· stale 0.111（9） |
-| trap rate | 0.111 |
-
-**回答**
-
-| 指标 | 值 |
-| --- | --- |
-| LLM score（总体） | 0.100 |
-| LLM score 按题型 | cross-project 0.167 · overridden 0.000 · plain 0.000 · scope-leak 0.000 · stale 0.111 |
-| Token F1（总体） | 0.054 |
-| Token F1 按题型 | cross-project 0.048 · overridden 0.039 · plain 0.019 · scope-leak 0.136 · stale 0.074 |
-| 短语 rubric 准确率 | 0.100 |
-
-**效率**
-
-| 指标 | add | search |
-| --- | --- | --- |
-| wallclock（整轮） | 24.8 s | （同左，整轮合计） |
-| 请求数 | 34 | 30 |
-| LLM 调用数 | 0（摘要在后台 worker 里做，不计入请求） | 0 |
-| 平均输入 token | 不适用（请求内无 LLM 调用） | 不统计 |
-| 平均输出 token | 不适用 | 不适用 |
-| 平均费用 / 总费用（USD） | 不适用 | 不适用 |
-| 延迟 P50 / P95 | 2.2 ms / 11.0 ms | 958 ms / 1296 ms |
-| 评委开销（不计入产品） | 17 次调用，$0.0020，P50 1.6–2.1 s | |
-
-**备注**：search 回答直接拼接命中片段，不经模型生成，所以 LLM score 测的是"片段里有没有答案"。本地 embedding 在评测机上反复 `fetch failed`，通用检索的向量通道受影响，分数偏低有一部分是这个原因。
-
-### R-20261104-01
+### R-20261105-01
 
 **元数据**
 
 | 项 | 值 |
 | --- | --- |
-| 被测实现 | 本分支旧实现（Codex 版，`memories` 表 work_memory 行）。代码等同 `69cc0915`（评测时这部分改动尚未提交） |
-| 回放脚本 | `run-memmy-live-eval.mjs` |
-| 评测配置 | `harness/eval-config.yaml`：token 限流关闭、检索 LLM 过滤关闭 |
-| 数据集 | v1 现行金标：28 条 / 7 topic / 30 题（2 个项目，34 条轨迹） |
-| 提示词版本 | 旧实现抽取提示词 + topic skill（未带版本号） |
+| 被测实现 | `dev-project-memory-add-search-dev` @ `44dcbb1e`（工作区另含未提交的评测辅助脚本） |
+| 回放脚本 | `run-memmy-live-eval.mjs`；用量经 `harness/usage-proxy.mjs` 记录 |
+| 评测配置 | `harness/eval-config.yaml`：token 限流关闭、检索 LLM 过滤关闭、不扫描本机 Agent 会话 |
+| 数据集 | v2：35 轮、5 主题、23 必写 + 12 可选条目、10 条负例、23 题、4 项接口检查 |
+| 提示词版本 | `project-memory/prompts/organize.ts`（未带版本号，见 open-questions） |
 | 被测模型 | deepseek-v4.1-flash-1017（网关返回 `deepseek-v4-1-flash-261017`） |
-| 评委模型 | claude-haiku-5-5 |
-| `memory_limit_number` | 10 |
+| 评委 / 阅读模型 | claude-haiku-5-5 |
+| `memory_limit_number` | 9 |
 
 **写入质量（add）**
 
 | 指标 | 值 |
 | --- | --- |
-| Entry F1（P / R） | 0.237（0.226 / 0.250），匹配 7 / 28，模型写入 31 条 |
-| 内容 F1（P / R） | 0.644（0.613 / 0.679），匹配 19 / 28 |
-| kind 混淆矩阵（gold→模型） | decision→decision 5 · experience→decision 9 · evolution→evolution 1 · evolution→decision 4 |
-| stale 条数 / 重复条数 | 8 / 4 |
-| 模型 topic 数 / gold topic 数 | 5 / 7 |
-| Topic 归纳 B-cubed F1（P / R） | 0.813（0.707 / 0.957），23 条参与 |
-| 来源轨迹覆盖率 | 1.00（25 / 25） |
-| 未命中 gold | `decision_d_empty`、`experience_d_copy`、`decision_d_notify`、`experience_d_export`、`experience_d_csv`、`experience_t_admin_bug`、`decision_t_admin_todo`、`evolution_t_column`、`evolution_t_wait` |
+| entries.f1（P / R） | 0.651（0.700 / 0.609） |
+| decision P / R / F1 | 0.706 / 0.800 / 0.750 |
+| experience P / R / F1 | 0.000 / 0.000 / 0.000（数据集里只有 1 条必写经验） |
+| timeline P / R / F1 | 1.000 / 0.143 / 0.250 |
+| kind 正确率 | 0.565 |
+| decisions.content / conflicts / history / userIds / time | 0.800 / 0.800 / 0.800 / 0.800 / 0.800 |
+| decisions.stateExact | 0.800 |
+| decisions.reasons | 0.500 |
+| topics.bcubed P / R / F1 | 0.518 / 0.251 / 0.338（实际 10 个主题，金标 5 个） |
+| topics.domain | 1.000 |
+| topics.keyPoints | 0.357 |
+| 不该写入的误写率 | 0.100 |
+| 旧版当当前 / 不一致结论单独成条 / 无法归属 / 重复 / 超长 | 4 / 1 / 0 / 0 / 0 |
+| 原因臆造 | 1 |
+| 重复主题 / 错误合并 | 4 / 1 |
 
 **检索（search）**
 
 | 指标 | 值 |
 | --- | --- |
-| Recall@1 / @3 / @5 / @10 | 0.400 / 0.700 / 0.850 / 0.967 |
-| Recall（全部上下文） | 0.967 |
-| Recall@10 按题型 | cross-project 1.000（12）· overridden 1.000（5）· plain 1.000（3）· scope-leak 0.000（1）· stale 1.000（9） |
-| trap rate | 0.519 |
+| topic Recall@1 / @3 / @9 | 0.609 / 0.913 / 0.957 |
+| entryHit / itemHit | 0.565 / 0.577 |
+| 旧版在 history / conflicts（预期） | 0.167 |
+| 旧版作为当前内容出现 | 3 |
+| 跨空间泄漏 / 别处主题 / 超过 9 个主题 | 0 / 0 / 0 |
 
 **回答**
 
 | 指标 | 值 |
 | --- | --- |
-| LLM score（总体） | 0.967 |
-| LLM score 按题型 | cross-project 1.000 · overridden 1.000 · plain 1.000 · scope-leak 0.000 · stale 1.000 |
-| Token F1（总体） | 0.400 |
-| Token F1 按题型 | cross-project 0.443 · overridden 0.413 · plain 0.350 · scope-leak 0.000 · stale 0.396 |
-| 短语 rubric 准确率 | 0.367 |
+| answers.llm（总体） | 0.609 |
+| answers.llm 按题型 | conflict 0.667（3）· cross-project 0.900（10）· plain 0.400（5）· stale 0.200（5） |
+| answers.rubric（总体） | 0.696 |
+| Token F1（总体） | 0.431 |
+| Token F1 按题型 | 未按题型输出（评分器待改，见 PM-03 review R1-4） |
 
 **效率**
 
 | 指标 | add | search |
 | --- | --- | --- |
-| wallclock（整轮） | 55.3 s | （同左，整轮合计） |
-| 请求数 | 12 | 30 |
-| LLM 调用数 | 11 | 29 |
-| 平均输入 token | 1394（含缓存命中） | 不统计 |
-| 平均输出 token | 270 | 42 |
-| 平均费用 / 总费用（USD） | null（`pricing.json` 无该模型单价） | null |
-| 延迟 P50 / P95 | 1730 ms / 3355 ms | 1006 ms / 1529 ms |
-| 评委开销（不计入产品） | 15 次调用 + 43 次缓存命中，$0.0008 | |
+| wallclock（整轮含建 Space、读取最终状态与接口检查） | 169.2 s | （同左，整轮合计） |
+| 请求数（不含 get/status 轮询） | 37 | 30 |
+| 被测系统 LLM 调用数 | 35（每批一次，含重试） | 0 |
+| 平均输入 / 输出 token | 2215 / 219 | 不统计 |
+| 平均费用 / 总费用（USD） | null / null（`pricing.json` 无 deepseek 单价） | 不统计 |
+| 请求延迟 P50 / P95 | 2.1 ms / 2.5 ms（仅入队，异步） | 7.0 ms / 8.7 ms |
+| 任务「受理 → 完成」 | 平均 2102 ms，范围 746–3433 ms（35 个任务） | — |
+| 被测系统单次模型延迟 P50 / P95 | 2139 ms / 2999 ms（35 次） | — |
+| 评委开销（不计入产品） | 53 次调用 + 20 次缓存，$0.0070 | |
+| 阅读模型开销（不计入产品） | 23 次调用，输入 92 / 输出 6743 / 缓存 10280 token | |
 
-**备注**：search 带 `generate_answer`，回答由被测模型生成。scope-leak 一题（q20）走 L1 通用检索，本地 embedding 失败，返回空。
+**备注**：
 
-### 本轮口径说明（2026-11-04）
+- 接口检查 4 项全过，但按评审 R1-1 目前用 `!ok` 判通过，证据偏弱。
+- `topics.bcubed` 低主要是主题拆得过细（10 对 5）与 keyPoints 覆盖不足 0.357，与 `staleAsCurrent` 4 条同源：旧版说法被写成当前条目。
+- 按 ADR-0005，`split`、复述过滤、推迟回填、三路召回在本版未实现，相关指标会系统性偏低。
 
-- 两条记录用同一份金标、同一套脚本、同一评委，只有被测实现不同，可以直接对比。
-- 检索指标仍是**条目级 Recall**（按 topic 展开后逐条计）；v3 要求按 topic 计数，改口径放在数据集 v2 里做（ADR-0004），届时与这两条记录不能直接对比。
-- 网关把请求的 `deepseek-v4.1-flash-1017` 返回为 `deepseek-v4-1-flash-261017`，`pricing.json` 没有单价，费用为 null。补单价后可重算。
-- 评测配置关掉了生产环境的 token 限流和检索后的 LLM 过滤器，两者在正式环境默认开启。
+### 旧记录（v1 数据集，口径不同，不可与新记录逐项对比）
+
+之前两条记录用的是 v1 金标、条目级 Recall 与 28 条 trace 回显，保留仅作参照。指标定义见 ADR-0004。
+
+#### R-20261104-02（main 分支对照）
+
+被测实现 `main` @ `6853b777`，无项目记忆：每条轨迹写成一条 L1 记忆，标签模拟 `space_ids`；回答直接拼接命中片段。Entry / 内容 F1 为 0；条目级 Recall@1/3/5/10 为 0.017 / 0.117 / 0.117 / 0.117；LLM 0.100；Token F1 0.054；trap 0.111；add 34 次请求、2.2 ms / 11.0 ms，search 30 次、958 ms / 1296 ms；wallclock 24.8 s。本地 embedding 失败，向量通道不可用。
+
+#### R-20261104-01（旧实现）
+
+被测实现为 Codex 版旧实现。Entry F1 0.237（P 0.226 / R 0.250），内容 F1 0.644，模型 5 个主题对金标 7 个，B-cubed F1 0.813；条目级 Recall@1/3/5/10 为 0.400 / 0.700 / 0.850 / 0.967；LLM 0.967，Token F1 0.400，trap 0.519；add 12 次请求、11 次 LLM 调用、平均输入 1394 / 输出 270、1730 ms / 3355 ms，search 30 次、1006 ms / 1529 ms；wallclock 55.3 s。
 
 ## 记录模板
 
@@ -209,23 +153,23 @@
 
 | 指标 | 值 |
 | --- | --- |
-| Entry F1（P / R） | |
-| 内容 F1（P / R） | |
-| kind 混淆矩阵（gold→模型） | |
-| stale 条数 / 重复条数 | |
-| 模型 topic 数 / gold topic 数 | |
+| entries.f1（P / R） | |
+| decision / experience / timeline F1 | |
+| kind 正确率 | |
+| decisions.stateExact；content / conflicts / history / userIds / time | |
+| topics.bcubed P / R / F1；实际 / 金标主题数 | |
 | Topic 归纳 B-cubed F1（P / R） | |
-| 来源轨迹覆盖率 | |
-| 未命中 gold | |
+| topics.domain / keyPoints | |
+| 误写率；旧版当当前 / 不一致成条 / 重复 / 超长；原因臆造；重复主题 / 错误合并 | |
 
 **检索（search）**
 
 | 指标 | 值 |
 | --- | --- |
-| Recall@1 / @3 / @5 / @10 | |
-| Recall（全部上下文） | |
+| topic Recall@1 / @3 / @9 | |
+| entryHit / itemHit | |
 | Recall@10 按题型 | |
-| trap rate | |
+| 旧版在 history / conflicts；旧版作为当前 / 跨空间泄漏 / 别处主题 / 超限 | |
 
 **回答**
 
@@ -245,10 +189,11 @@
 | 请求数 | | |
 | LLM 调用数 | | |
 | 平均输入 token | | 不统计 |
+| 任务「受理 → 完成」 | | — |
 | 平均输出 token | | |
 | 平均费用 / 总费用（USD） | | |
 | 延迟 P50 / P95 | | |
-| 评委开销（不计入产品） | | |
+| 评委开销 / 阅读模型开销 | | |
 
 **备注**：
 ```
