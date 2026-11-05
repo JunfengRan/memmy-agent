@@ -192,6 +192,7 @@ node run-memmy-live-eval.mjs --api-checks-only ../runs/<stamp>/live-run.json   #
 | `selftest.mjs` | 不依赖服务与模型的自测：kind 优先匹配、接口检查在拒连 / 404 / 500 / 空检索下不通过、效率字段 |
 | `harness/run-reader-ceiling.mjs` | 阅读模型上限：把金标的 `topic_detail_list` 交给固定阅读模型，生成可评分的 run（记录见 metrics.md R-20261105-03） |
 | `harness/run-control-legacy.mjs` | 旧实现（`44dcbb1e^`）的同口径对照：驱动它的 `/api/v1/memory/add`、`search`，同一阅读模型、同一评分。旧实现没有 history / conflicts、没有 get_memory，写入类得分是下界，`api.passRate` 按构造为 0 |
+| `harness/run-legacy-eval.sh` | 一键跑旧实现对照：解出 `44dcbb1e^`、起用量代理和旧服务（配置复制到工作目录，服务回写不会弄脏仓库）、回放。需要环境变量 `SUT_ENV_FILE`（被测模型）、`JUDGE_ENV_FILE`（评委与阅读模型），密钥不进仓库 |
 | `harness/usage-proxy.mjs` | 被测系统模型调用的用量记录代理（JSONL），评分时用 `--sut-usage` 读入 |
 | `run-pipeline-eval.mjs` | 评分，以及 `--oracle` / `--empty` 自检和 `--gate` |
 | `oracle.mjs` | 从金标生成规格形状的 `topic_detail_list` |
