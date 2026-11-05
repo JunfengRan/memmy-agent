@@ -1,138 +1,106 @@
-import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import YAML from "yaml";
+// Judge prompts. Exact text matches are settled by rule, so --oracle and --empty never call a model.
+// Everything else goes to an explicitly configured judge (see llm.mjs), temperature 0, cached by
+// model + prompt hash + payload.
+import { parseJsonObject } from "./llm.mjs";
 
-const PROMPT_VERSION = 3;
+export const JUDGE_PROMPT_VERSION = 4;
 
-const ANSWER_SYSTEM = `你是项目记忆评测的裁判。给定题目、提问时间、标准答案和旧说法示例，判断被测回答是否答对。按意思判断，不要求与标准答案或示例字面一致。
-判定规则：
-- 只看一件事：回答是否把标准答案的核心事实当作提问时的当前状态说了出来。措辞不同可以。
-- 回答多出的细节（表名、文件名、实现细节等）只要不与标准答案矛盾，不扣分。
-- 回答把旧说法示例（或同义说法、别的项目的说法）当成当前答案，判错。回答给出当前结论，同时说明旧说法已被取代，判对。
-- 标准答案给出了明确结论，而回答说"无法确定""证据不足"或答非所问，判错。
-- 标准答案说这个窗口拿不到项目记忆时，回答带出了项目细节就判错。
-只返回 JSON：{"correct": true 或 false, "reason": "一句话理由"}`;
+const ATTRIBUTE_SYSTEM = `你是项目记忆写入评测的裁判。给定一个空间的标准条目（gold）、标准中不该写入的内容（negatives），以及系统写入的一条条目（candidate），判断 candidate 对应哪条标准。只看内容说的是不是同一件事，不看类型和措辞。
+标签：
+- "match"：candidate 与某条 gold.text（当前版本）说的是同一事实；改写、补充细节都算。candidate 同时覆盖多条 gold 时全部列出，最主要的放第一位。
+- "stale"：candidate 说的是某条 gold 的 staleTexts（旧版、已被取代的版本）之一。
+- "conflict"：candidate 说的是某条 gold 的 conflictTexts（尚未定论的另一项结论）之一，而不是它的当前版本。
+- "negative"：candidate 说的是某条 negatives.text（标准认为不该写入的内容）。
+- "none"：以上都不是。
+只返回 JSON：{"label": "match|stale|conflict|negative|none", "ids": ["<gold 或 negative 的 id>"], "reason": "一句话"}`;
 
-const ENTRY_SYSTEM = `你是项目记忆写入评测的裁判。给定同一项目的标准条目列表（gold）和一条模型写入的条目（candidate），逐条对照 gold 后给出标签：
-- "match"：candidate 与某条 gold.text 说的是同一事实；改写、换说法、补充细节都算。candidate 同时覆盖多条 gold 时，选最主要的一条。
-- "stale"：candidate 说的是某条 gold 的旧版或被压过的版本（与该 gold 的 staleTexts 之一同义），或与该 gold 的当前结论相反。
-- "none"：与所有 gold 都不是同一事实。
-不要考虑条目类型（kind）和 topic，只看内容。只返回 JSON：{"label": "match|stale|none", "gold": "<gold id，none 时为 null>", "reason": "一句话理由"}`;
+const ALIGN_SYSTEM = `你是项目记忆评测的裁判。给定两组短句 left 和 right，找出 left 中每一项在 right 里说同一事实的项（措辞可以不同，事实相反或不同不算）。每个 right 最多对应一个 left。
+只返回 JSON：{"pairs": [[left 下标, right 下标或 null], ...]}`;
 
-function createLimiter(concurrency) {
-  let active = 0;
-  const queue = [];
-  const next = () => {
-    if (active >= concurrency || !queue.length) return;
-    active += 1;
-    const { task, resolve, reject } = queue.shift();
-    task().then(resolve, reject).finally(() => { active -= 1; next(); });
-  };
-  return (task) => new Promise((resolve, reject) => { queue.push({ task, resolve, reject }); next(); });
-}
+const REASON_SYSTEM = `你是项目记忆评测的裁判。v3 规定：变更原因只能取自会话，会话没说就留空，不能推断。给定会话原文和系统写下的原因，判断原因是否有会话依据（会话里说过这个原因，换说法可以）。
+只返回 JSON：{"supported": true 或 false, "reason": "一句话"}`;
 
-export function resolveJudgeConfig(env = process.env) {
-  let model = env.MEMMY_EVAL_JUDGE_MODEL;
-  let baseUrl = env.MEMMY_EVAL_JUDGE_BASE_URL;
-  let apiKey = env.MEMMY_EVAL_JUDGE_API_KEY;
-  const configPath = env.MEMMY_CONFIG_PATH ?? join(homedir(), ".memmy/config.yaml");
-  if ((!model || !baseUrl || !apiKey) && existsSync(configPath)) {
-    const config = YAML.parse(readFileSync(configPath, "utf8")) ?? {};
-    const presetId = config.modelAssignments?.byok?.memorySummary ?? config.agents?.defaults?.modelPreset;
-    const preset = config.modelPresets?.[presetId];
-    const provider = config.providers?.[preset?.provider];
-    const endpoint = provider?.endpoints?.[preset?.endpoint];
-    if (preset?.provider === "anthropic") {
-      model ??= preset.model;
-      baseUrl ??= endpoint?.apiBase ?? "https://api.anthropic.com";
-      apiKey ??= endpoint?.apiKey ?? provider?.apiKey;
-    }
-  }
-  return model && baseUrl && apiKey ? { model, baseUrl: baseUrl.replace(/\/+$/, "").replace(/\/v1\/messages$/, ""), apiKey } : null;
-}
+const KEYPOINT_SYSTEM = `你是项目记忆评测的裁判。给定一组要点和一段主题文字，判断每个要点在文字中是否被表达（换说法可以，事实不同不算）。
+只返回 JSON：{"covered": [true 或 false, ...]}，顺序与要点一致。`;
 
-export function createJudge({ cachePath, config = resolveJudgeConfig() }) {
-  const cache = existsSync(cachePath) ? JSON.parse(readFileSync(cachePath, "utf8")) : {};
-  const used = new Set();
-  const usage = { model: config?.model, calls: 0, cacheHits: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, latencyMs: [] };
-  const limit = createLimiter(Number(process.env.MEMMY_EVAL_JUDGE_CONCURRENCY ?? 6));
-  const ask = (kind, system, payload) => limit(() => askOnce(kind, system, payload));
+const ANSWER_SYSTEM = `你是项目记忆评测的裁判。给定题目、标准答案、陷阱说法和被测回答，判断回答是否答对。
+- 回答把标准答案的核心事实当作当前状态说出来就算对，措辞不同、多出不矛盾的细节都不扣分。
+- 回答把陷阱说法（旧版本或别的项目的做法）当成当前答案，判错；提到旧版本但说明已被取代，判对。
+- 标准答案说存在两项不一致结论时，回答必须把两项都列出来。
+- 标准答案有明确结论而回答说"记忆中没有相关内容"、无法确定或答非所问，判错。
+只返回 JSON：{"correct": true 或 false, "reason": "一句话"}`;
 
-  async function askOnce(kind, system, payload) {
-    const key = createHash("sha256").update(JSON.stringify({ v: PROMPT_VERSION, model: config?.model, kind, payload })).digest("hex");
-    used.add(key);
-    if (cache[key]) { usage.cacheHits += 1; return cache[key].output; }
-    if (!config) throw new Error("judge credentials missing: set MEMMY_EVAL_JUDGE_MODEL / MEMMY_EVAL_JUDGE_BASE_URL / MEMMY_EVAL_JUDGE_API_KEY or configure an anthropic memorySummary preset");
-    let lastError;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const startedAt = performance.now();
-      try {
-        const response = await fetch(`${config.baseUrl}/v1/messages`, {
-          method: "POST",
-          headers: { "content-type": "application/json", "x-api-key": config.apiKey, "anthropic-version": "2023-06-01" },
-          body: JSON.stringify({
-            model: config.model,
-            max_tokens: 4096,
-            thinking: { type: "disabled" },
-            system,
-            messages: [{ role: "user", content: JSON.stringify(payload) }]
-          })
-        });
-        const body = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(`judge ${response.status}: ${JSON.stringify(body).slice(0, 300)}`);
-        usage.calls += 1;
-        usage.latencyMs.push(performance.now() - startedAt);
-        usage.inputTokens += body.usage?.input_tokens ?? 0;
-        usage.outputTokens += body.usage?.output_tokens ?? 0;
-        usage.cachedInputTokens += body.usage?.cache_read_input_tokens ?? 0;
-        const text = (body.content ?? []).filter((block) => block.type === "text").map((block) => block.text).join("");
-        const output = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
-        cache[key] = { kind, output };
-        return output;
-      } catch (error) {
-        lastError = error;
-        await new Promise((resolve) => setTimeout(resolve, 1_000 * (attempt + 1)));
-      }
-    }
-    throw lastError;
+const norm = (text) => String(text ?? "").replace(/\s+/g, "").trim();
+
+export function createJudge(llm) {
+  const ask = async (kind, system, payload) => parseJsonObject(await llm.complete(`${kind}-v${JUDGE_PROMPT_VERSION}`, system, payload));
+
+  // gold: [{id, kind, text, staleTexts, conflictTexts}], negatives: [{id, text}].
+  async function attribute(candidate, gold, negatives) {
+    const text = norm(candidate.content);
+    if (!text) return { label: "none", ids: [], source: "rule" };
+    const exact = gold.filter((g) => norm(g.text) === text).map((g) => g.id);
+    if (exact.length) return { label: "match", ids: exact, source: "rule" };
+    const stale = gold.find((g) => g.staleTexts.some((s) => norm(s) === text));
+    if (stale) return { label: "stale", ids: [stale.id], source: "rule" };
+    const conflict = gold.find((g) => g.conflictTexts.some((s) => norm(s) === text));
+    if (conflict) return { label: "conflict", ids: [conflict.id], source: "rule" };
+    const negative = negatives.find((n) => norm(n.text) === text);
+    if (negative) return { label: "negative", ids: [negative.id], source: "rule" };
+    if (!llm.config) return { label: "none", ids: [], source: "rule" };
+    const output = await ask("attribute", ATTRIBUTE_SYSTEM, { gold, negatives, candidate: { kind: candidate.kind, text: candidate.content } });
+    const known = new Set([...gold.map((g) => g.id), ...negatives.map((n) => n.id)]);
+    const label = ["match", "stale", "conflict", "negative"].includes(output.label) ? output.label : "none";
+    const ids = (Array.isArray(output.ids) ? output.ids : []).filter((id) => known.has(id));
+    return label !== "none" && ids.length ? { label, ids, reason: String(output.reason ?? ""), source: "llm" } : { label: "none", ids: [], reason: String(output.reason ?? ""), source: "llm" };
   }
 
-  async function judgeAnswer(question, answer) {
-    const text = String(answer ?? "").trim();
-    if (!text) return { correct: false, reason: "empty answer", source: "rule" };
-    if (text === question.goldAnswer.trim()) return { correct: true, reason: "identical to gold answer", source: "rule" };
-    const output = await ask("answer", ANSWER_SYSTEM, {
-      question: question.question,
-      askedAt: question.askedAt,
-      goldAnswer: question.goldAnswer,
-      staleClaimExamples: question.mustNotInclude,
-      answer: text
+  // Returns, for each left index, the matched right index or null. One-to-one.
+  async function align(left, right) {
+    const result = left.map(() => null);
+    const usedRight = new Set();
+    left.forEach((item, i) => {
+      const j = right.findIndex((other, k) => !usedRight.has(k) && norm(other) === norm(item));
+      if (j >= 0) { result[i] = j; usedRight.add(j); }
     });
+    const openLeft = result.map((value, i) => (value === null ? i : null)).filter((i) => i !== null);
+    const openRight = right.map((_, k) => k).filter((k) => !usedRight.has(k));
+    if (!openLeft.length || !openRight.length || !llm.config) return result;
+    const output = await ask("align", ALIGN_SYSTEM, { left: openLeft.map((i) => left[i]), right: openRight.map((k) => right[k]) });
+    for (const [a, b] of Array.isArray(output.pairs) ? output.pairs : []) {
+      const i = openLeft[a];
+      const k = openRight[b];
+      if (i === undefined || k === undefined || result[i] !== null || usedRight.has(k)) continue;
+      result[i] = k;
+      usedRight.add(k);
+    }
+    return result;
+  }
+
+  async function reasonSupported(reason, conversationText, goldReason) {
+    if (!norm(reason)) return { supported: true, source: "rule" };
+    if (goldReason && norm(goldReason) === norm(reason)) return { supported: true, source: "rule" };
+    if (norm(conversationText).includes(norm(reason))) return { supported: true, source: "rule" };
+    if (!llm.config) return { supported: false, source: "rule" };
+    const output = await ask("reason", REASON_SYSTEM, { conversation: conversationText, reason });
+    return { supported: output.supported === true, reason: String(output.reason ?? ""), source: "llm" };
+  }
+
+  async function keyPoints(points, text) {
+    const covered = points.map((point) => norm(text).includes(norm(point)));
+    if (covered.every(Boolean) || !norm(text) || !llm.config) return covered;
+    const output = await ask("keypoints", KEYPOINT_SYSTEM, { points, text });
+    return points.map((_, i) => covered[i] || output.covered?.[i] === true);
+  }
+
+  async function answer(question, text, trapTexts) {
+    const reply = String(text ?? "").trim();
+    if (!reply) return { correct: false, reason: "empty answer", source: "rule" };
+    if (norm(reply) === norm(question.goldAnswer)) return { correct: true, reason: "identical to gold answer", source: "rule" };
+    if (!llm.config) return { correct: false, reason: "no judge configured", source: "rule" };
+    const output = await ask("answer", ANSWER_SYSTEM, { question: question.question, askedAt: question.askedAt, goldAnswer: question.goldAnswer, trapTexts, answer: reply });
     return { correct: output.correct === true, reason: String(output.reason ?? ""), source: "llm" };
   }
 
-  async function labelEntries(goldEntries, candidates) {
-    const known = new Set(goldEntries.map((gold) => gold.id));
-    const goldList = goldEntries.map(({ id, text, staleTexts }) => ({ id, text, staleTexts }));
-    return Promise.all(candidates.map(async (candidate) => {
-      const text = String(candidate.text ?? "").trim();
-      const exact = goldEntries.find((gold) => gold.text.trim() === text);
-      if (exact) return { label: "match", gold: exact.id, source: "rule" };
-      const output = await ask("entry", ENTRY_SYSTEM, { gold: goldList, candidate: text });
-      const label = output.label === "match" || output.label === "stale" ? output.label : "none";
-      return label !== "none" && known.has(output.gold)
-        ? { label, gold: output.gold, reason: String(output.reason ?? ""), source: "llm" }
-        : { label: "none", gold: null, reason: String(output.reason ?? ""), source: "llm" };
-    }));
-  }
-
-  // prune drops verdicts this run did not use, so a committed cache matches its committed report.
-  function save({ prune = false } = {}) {
-    const kept = prune ? Object.fromEntries(Object.entries(cache).filter(([key]) => used.has(key))) : cache;
-    writeFileSync(cachePath, `${JSON.stringify(kept, null, 2)}\n`);
-  }
-
-  return { config, usage, judgeAnswer, labelEntries, save };
+  return { attribute, align, reasonSupported, keyPoints, answer };
 }

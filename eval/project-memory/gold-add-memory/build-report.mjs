@@ -1,57 +1,75 @@
-import { readFileSync, writeFileSync } from "node:fs";
+#!/usr/bin/env node
+// Renders dataset v2 gold (and optionally scored reports) as one HTML page.
+//   node build-report.mjs [report.json ...] [--template <explainer.html>] [--out <file>]
+// Template: --template or MEMMY_EVAL_REPORT_TEMPLATE (the MemTensor explainer template); without one
+// a minimal standalone page is written. Output defaults to eval/project-memory/runs/report.html.
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadGold } from "./load-eval-set.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const data = JSON.parse(readFileSync(join(root, "generated/extracted-gold.json"), "utf8"));
-const review = data.review;
-const template = readFileSync("/Users/junfengran/memtensor/templates/explainer.html", "utf8");
-const [head, bodyAndScripts] = template.split("<body>");
-const [bodyTemplate, scripts] = bodyAndScripts.split("  <script>\n    (() => {");
+const args = process.argv.slice(2);
+const option = (name) => { const i = args.indexOf(name); return i >= 0 ? args.splice(i, 2)[1] : undefined; };
+const templatePath = option("--template") ?? process.env.MEMMY_EVAL_REPORT_TEMPLATE;
+const out = option("--out") ?? join(root, "..", "runs", "report.html");
+const reports = args.map((path) => ({ path, report: JSON.parse(readFileSync(path, "utf8")) }));
+const gold = loadGold();
 
-const esc = (value) => String(value ?? "").replace(/[&<>\"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\\\"": "&quot;", "'": "&#39;" }[ch]));
+const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+export const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ESCAPES[ch]);
+const code = (text) => `<code>${esc(text)}</code>`;
 const tag = (text, cls = "") => `<span class="tag ${cls}">${esc(text)}</span>`;
-const date = (value) => new Date(value).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false, month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
-const metric = (value, label) => `<div class="metric"><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`;
+const day = (iso) => String(iso ?? "").slice(5, 16).replace("T", " ");
+const member = Object.fromEntries(gold.members.map((m) => [m.user_id, m.name]));
+const who = (ids) => (ids ?? []).map((id) => member[id] ?? id).join("、");
+const table = (head, rows) => `<div class="table-wrap"><table><thead><tr>${head.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+const fmt = (v) => (typeof v === "number" ? (Number.isInteger(v) ? String(v) : v.toFixed(3)) : esc(v ?? "—"));
 
-const timelineHtml = data.timelines.map((timeline, index) => `
-<article class="timeline-card">
-  <div class="timeline-head"><div><span class="sec-no">${String(index + 1).padStart(2, "0")}</span><h3>${esc(timeline.title)}</h3></div><span class="tag tag-memmy">${esc(timeline.projectId)}</span></div>
-  <div class="events">
-    ${timeline.events.map((event) => `<div class="event"><div class="event-time">${date(event.at)}<br><code>${esc(event.traceId)}</code></div><div><p class="event-query">用户：${esc(event.query)}</p><p>${esc(event.answer)}</p>${event.supersedes.length ? `<p class="muted">取代：${event.supersedes.map(esc).join("、")}</p>` : ""}</div></div>`).join("")}
-  </div>
-  <h4>这条时间线被问什么</h4>
-  <div class="question-list">${timeline.questions.map((question) => `<details class="question"><summary><code>${esc(question.id)}</code> ${tag(question.kind, question.kind === "plain" ? "tag-positive" : "tag-memos")} ${esc(question.question)}</summary><div class="question-body"><p><strong>提问时间：</strong>${date(question.askedAt)}；</p><p><strong>询问对象：</strong>${question.asksAbout.map((id) => `<code>${esc(id)}</code>`).join("、")}；<strong>陷阱：</strong>${question.trapEvidenceIds.length ? question.trapEvidenceIds.map((id) => `<code>${esc(id)}</code>`).join("、") : "无"}</p><p><strong>满分必要短语：</strong>${question.mustInclude.map(esc).join("；")}${question.mustNotInclude.length ? `；<strong>不得出现：</strong>${question.mustNotInclude.map(esc).join("；")}` : ""}</p><p><strong>gold：</strong>${esc(question.goldAnswer)}</p></div></details>`).join("")}</div>
-</article>`).join("\n");
+const entries = new Map(gold.entries.map((e) => [e.id, e]));
+const count = (pred) => gold.entries.filter(pred).length;
+const outcomes = gold.traceLabels.reduce((acc, t) => ({ ...acc, [t.outcome]: (acc[t.outcome] ?? 0) + 1 }), {});
+const scored = gold.questions.filter((q) => !q.excluded);
+const kinds = scored.reduce((acc, q) => ({ ...acc, [q.kind]: (acc[q.kind] ?? 0) + 1 }), {});
 
-const reviewHtml = review.findings.map((finding) => `<tr><td><code>${esc(finding.id)}</code></td><td>${esc(finding.original)}</td><td>${tag(finding.reviewed, "tag-positive")}</td><td>${esc(finding.reason)}</td></tr>`).join("");
-const addedHtml = review.addedEntries.map((added) => `<tr><td><code>${esc(added.traceId)}</code></td><td>${tag(added.kind, "tag-positive")}</td><td><code>${esc(added.goldTopic)}</code></td><td>${esc(added.reason)}</td></tr>`).join("");
-const topicHtml = Object.entries(review.topicGroups).map(([topic, title]) => `<tr><td><code>${esc(topic)}</code></td><td>${esc(title)}</td><td>${data.entries.filter((entry) => entry.goldTopic === topic).map((entry) => `<code>${esc(entry.id)}</code>`).join("、")}</td></tr>`).join("");
-const questionCountByKind = Object.entries(data.timelines.flatMap((t) => t.questions).reduce((acc, q) => { acc[q.kind] = (acc[q.kind] ?? 0) + 1; return acc; }, {})).map(([k, v]) => `${k} ${v}`).join(" · ");
+const spacesHtml = table(["空间", "已登记领域", "主题"], gold.spaces.map((s) => [code(s.space_id), s.domains.map((d) => esc(d.domain)).join("、"), gold.topics.filter((t) => t.space_id === s.space_id).map((t) => esc(t.topic_name)).join("、")]));
+const traceHtml = table(["轨迹", "空间", "结果", "写入", "不写原因"], gold.traceLabels.map((t) => [code(t.trace), code(t.space_id), tag(t.outcome, t.outcome === "not-written" ? "tag-memos" : "tag-positive"), t.ops.map(code).join(" "), esc(t.dropped.join("、"))]));
+const entryHtml = (e) => {
+  const lines = [`<li>${tag(e.kind, e.kind === "decision" ? "tag-memos" : "tag-memmy")}${e.category ? ` ${tag(e.category)}` : ""}${e.optional ? ` ${tag("optional")}` : ""} ${esc(e.content)} <span class="muted">（${day(e.time)}，${esc(who(e.user_ids))}）${code(e.id)}</span>`];
+  for (const c of e.conflicts ?? []) lines.push(`<br><span class="muted">不一致：</span>${esc(c.content)} <span class="muted">（${day(c.time)}，${esc(who(c.user_ids))}）</span>`);
+  for (const h of e.history ?? []) lines.push(`<br><span class="muted">此前：</span>${esc(h.content)} <span class="muted">（${day(h.time)}${h.reason ? `；原因：${esc(h.reason)}` : ""}）</span>`);
+  return `${lines.join("")}</li>`;
+};
+const topicHtml = gold.topics.map((t) => `<h3>${esc(t.topic_name)} ${tag(t.domain)} ${code(t.id)}</h3><p>${esc(t.summaryKeyPoints.join("；"))}</p><ul>${t.entries.map((id) => entryHtml(entries.get(id))).join("")}</ul>`).join("");
+const questionHtml = table(["题目", "类型", "提问时间", "问题", "标准答案", "期望", "陷阱"], gold.questions.map((q) => [
+  code(q.id) + (q.excluded ? ` ${tag("excluded")}` : ""), tag(q.kind), esc(day(q.askedAt)), esc(q.question), esc(q.goldAnswer),
+  q.expectedItems.map((i) => `${code(i.entry)} ${esc(i.part)}`).join("<br>"), q.trapItems.map((i) => `${code(i.entry)} ${esc(i.kind)}`).join("<br>")
+]));
+const negativeHtml = table(["不该写入", "轨迹", "原因"], gold.negatives.map((n) => [esc(n.text), code(n.trace), esc(n.reason)]));
+const resultHtml = reports.length ? reports.map(({ path, report }) => `<h3>${esc(report.run?.kind ?? "run")} ${code(path)}</h3><p>被测模型 ${code(report.run?.sut?.model ?? "—")} · 阅读模型 ${code(report.run?.reader?.model ?? "—")} · 评委 ${code(report.judge?.model ?? "rule-only")}</p>${table(["得分", "值"], Object.entries(report.scores).map(([k, v]) => [code(k), fmt(v)]))}${table(["错误", "值"], Object.entries(report.errors).map(([k, v]) => [code(k), fmt(v)]))}`).join("") : "<p>未传入评分报告。用法见 README。</p>";
 
-const body = `<body>
-  <div class="page-tools"><button type="button" class="diagram-edit-open" aria-pressed="false" title="点选后拖动、贴边缩放，双击改字">调整排版</button><button type="button" class="theme-toggle" data-theme-toggle aria-label="切换配色"></button></div>
-  <div class="layout">
-    <nav class="toc" aria-label="目录"><p class="toc-brand"><span class="toc-org">MemTensor</span><span class="toc-kind">研究文档</span></p><a href="#s1" aria-current="true"><span class="toc-no">01</span>结论与边界</a><a href="#s2"><span class="toc-no">02</span>数据集总览</a><a href="#s3"><span class="toc-no">03</span>五条时间线</a><a href="#s4"><span class="toc-no">04</span>Memmy 评测方法</a><a href="#appendix"><span class="toc-no">A</span>复核与文件</a></nav>
-    <main>
-      <header class="doc-head"><p class="eyebrow">应用深挖 ${tag("MemOS", "tag-memos")} ${tag("Memmy", "tag-memmy")}</p><h1>项目记忆 Search 基线：add_message Gold 数据集</h1><div class="title-rule" aria-hidden="true"></div><p class="lead"><strong>结论：</strong>本分支从 <code>main</code> 创建，复制 alpha 先行开发数据后，以 standard 的 add_message 三类条目规则复核字段。原始语料与问题答案保持不变。4 条把局部实现写成 decision 的旧标签改为 experience；题目依赖但旧金标漏掉的 ${review.addedEntries.length} 条当前状态事实已补齐；每条 entry 按工作对象归入 ${Object.keys(review.topicGroups).length} 个 gold topic，用来评估 topic 归纳。</p><dl class="meta"><div><dt>来源</dt><dd><code>dev-project-memory-alpha:eval/project-memory/dataset</code>（复制输入）</dd></div><div><dt>日期</dt><dd>${esc(review.reviewedAt)}</dd></div><div><dt>读者</dt><dd>Search / retrieval 开发与评测维护者</dd></div></dl></header>
-      <section id="s1"><h2><span class="sec-no">01</span>结论与边界</h2><p>这是一份可重放的项目记忆检索基线。语料有两个隔离项目（ledger、catalog）、34 条带时间的对话轨迹、30 个 relay 问题，以及决策、冲突、todolist 和评分规则。每个问题都落在下面五条时间线中的一条，并明确询问“谁的什么状态”。</p><div class="callout verify"><span class="callout-title">复核边界</span><p>reviewed gold 的抽取过程是 mock add_message：不调用线上写入接口，不重新手写问题答案；脚本读取复制后的 corpus、decisions、relay，按规则重建金标。Local 的 project add/search 已实现真实模型回放，真实结果单独记录在 <code>generated/live-report.json</code>，不覆盖金标。</p></div><div class="metric-grid">${metric("2", "项目")}${metric("34", "轨迹")}${metric("30", "问题")}${metric(String(data.entries.length), "reviewed entries")}${metric(String(Object.keys(review.topicGroups).length), "gold topics")}</div></section>
-      <section id="s2"><h2><span class="sec-no">02</span>数据集总览</h2><p>输入文件保留 alpha 的证据合同：<code>corpus.json</code> 是事实语料，<code>relay.json</code> 是问题和 gold rubric，<code>decisions.json</code> 是旧抽取结果，<code>conflicts.json</code>、<code>todolists.json</code> 与 <code>scheme.json</code> 用于写入链路和边界检查。复制后运行 <code>build-sessions.mjs</code> 生成项目会话文件，避免手写回放记录。</p><div class="table-wrap"><table><thead><tr><th>维度</th><th>内容</th><th>用途</th></tr></thead><tbody><tr><td>项目范围</td><td>ledger / catalog / global</td><td>验证 project scope 与 cross-project 陷阱</td></tr><tr><td>时间关系</td><td>旧结论 → 改口 → 修复/撤回</td><td>验证 stale、rephrase、supersedes</td></tr><tr><td>条目类型</td><td>decision / experience / evolution</td><td>对齐 standard §2.2.5 的抽取字段</td></tr><tr><td>题型分布</td><td>${esc(questionCountByKind)}</td><td>查询准确性、隔离性、过时信息抑制</td></tr></tbody></table></div><h3>当前抽取金标</h3><p>生成文件 <code>generated/extracted-gold.json</code> 把每条 entry 与 sourceTraceIds、goldTopic、asOf 和 staleTexts（旧版或被压过的说法）绑定。文本来自复制的 alpha 语料；新生成的只有结构和字段归类。</p></section>
-      <section id="s3"><h2><span class="sec-no">03</span>五条完整时间线与问题映射</h2><p>时间线按事件发生时间展示；“用户”是原始 query，“回复”是原始 answer。问题下方列出证据、陷阱、必要短语和 gold，因而可以直接审查题目到底在问哪条线上的哪一个状态。</p>${timelineHtml}</section>
-      <section id="s4"><h2><span class="sec-no">04</span>Memmy 中的评测方法</h2><h3>回放流程</h3><ol><li>Local 服务使用全新 SQLite；<code>run-memmy-live-eval.mjs</code> 开跑前确认项目空间为空。</li><li>题目按 <code>askedAt</code> 排序。每题提问前，只把 <code>at &lt;= askedAt</code> 的轨迹按会话分块写入 <code>POST /api/v1/memory/add</code>（<code>allow_memory_view:["project"]</code>），由 summary 模型抽取 decision、experience、evolution。q03、q01、q02 因此看到提问时的状态。</li><li>抽取请求附带该项目已有的 topic 目录（topic_id、条目数、最新一条），系统提示词带 topic skill（<code>Memory/src/service/project-memory/topic-skill.ts</code>）：先复用已有 topic；一个工作对象（模块、产出、单个 bug、一类规则）一个 topic，参数和边界情况不单独成 topic；一个项目通常 3 到 8 个。skill 的示例刻意不用本数据集的领域词。</li><li>调用 <code>POST /api/v1/memory/search</code>，传题目的 <code>space_ids</code> 和 <code>generate_answer:true</code>；服务先按空间硬过滤，再按词法证据排序，并由同一模型生成 <code>answer</code>。</li><li>每个请求记录延迟、状态和服务端返回的 <code>usage</code>；search 结果按 topic 顺序再按 entry 顺序保留 rank；整轮记录 wallclock。</li><li><code>run-pipeline-eval.mjs</code> 用评委模型和确定性规则打分，输出 <code>generated/live-report.json</code>。</li></ol><div class="callout verify"><span class="callout-title">结果不在本页</span><p>真实回放仍在初步测试，结果只写在 <code>generated/live-report.json</code>，本页不展示。</p></div><h3>指标定义</h3><pre><code>EntryF1    = PRF(一对一匹配：kind 相同且评委判定同一事实；不看 topicId 和 sourceTraceIds)
-ContentF1  = PRF(同上，不看 kind)；另报 kind 混淆、stale、重复条数
-TopicBCubed = B-cubed(模型 topic 聚类, goldTopic)，只用内容已匹配的条目，与标签名无关
-TraceCoverage = |gold sourceTraceIds ∩ 模型 sourceTraceIds| / |gold sourceTraceIds|
-Recall@k   = mean_q |evidence(q) ∩ traces(top-k entries)| / |evidence(q)|，k = 1, 3, 5, 10, 全部上下文
-TrapRate   = 上下文含陷阱轨迹的题目 / 有陷阱的题目
-LLMScore   = mean_q judge(question, askedAt, goldAnswer, staleClaims, answer)，按题型和总体报告
-TokenF1    = mean_q F1(answer 的字词, goldAnswer 的字词)，中文按字，英文和数字按词
-效率       = wallclock、请求数、LLM 调用数、add 平均输入 token、平均输出 token、平均费用 USD（pricing.json）、P50/P95</code></pre><p>空回答与空写入必须得 0，用 gold 自身作答必须得 1（<code>--oracle</code> / <code>--empty</code>，不调用评委）。旧的 scope leak rate 已删除；短语 rubric 只作参考。默认只出报告、退出码为 0，加 <code>--gate</code> 才按门槛返回 1。建议同一配置重复 3 次，报告均值和范围。</p><h3>Memmy 验收门槛</h3><div class="table-wrap"><table><thead><tr><th>检查</th><th>判定</th><th>失败时定位</th></tr></thead><tbody><tr><td>gold 一致性</td><td><code>node load-eval-set.mjs</code> 无 errors</td><td>证据时间、陷阱、rephrase pair 或 session 生成错误</td></tr><tr><td>问题分数</td><td>空答 0，gold 满分；每题由评委判对错，并报告 Token F1</td><td>先查召回内容，再查 answer 与评委理由</td></tr><tr><td>状态更新</td><td>q01/q02、q03/q04 这类跨改口 pair 必须回答不同状态</td><td>查 supersedes、topic merge 和旧条目抑制</td></tr><tr><td>范围隔离</td><td>cross-project 陷阱不得成为答案（看 trap rate 与 cross-project 的 LLM score）</td><td>查 project_id、workspace root 和 search scope</td></tr><tr><td>topic 归纳</td><td>B-cubed P 低是错并，R 低是拆散</td><td>查 topic skill 与传入的已有 topic 目录</td></tr><tr><td>三类字段</td><td>decision 不吸收局部步骤；evolution 只含产出状态变化</td><td>查 add_message extractor 输出与 reviewed gold</td></tr></tbody></table></div></section>
-      <section id="appendix"><h2><span class="sec-no">A</span>复核与文件索引</h2><h3>旧 gold 标签复核</h3><div class="table-wrap"><table><thead><tr><th>旧 ID</th><th>旧字段</th><th>reviewed 字段</th><th>原因</th></tr></thead><tbody>${reviewHtml}</tbody></table></div><p>保留 decision 的 5 条是金额方案、空客户规则、连接串安全、分支协作和跨窗口通知，均可解释为范围、共同约定或对外协作约束；其余 4 条仍可被搜索题使用，但不再污染 decision 精度。</p><h3>补齐的当前状态事实</h3><div class="table-wrap"><table><thead><tr><th>轨迹</th><th>字段</th><th>gold topic</th><th>原因</th></tr></thead><tbody>${addedHtml}</tbody></table></div><h3>gold topic 分组</h3><div class="table-wrap"><table><thead><tr><th>gold topic</th><th>工作对象</th><th>条目</th></tr></thead><tbody>${topicHtml}</tbody></table></div><h3>仓库产物</h3><ul><li><code>eval/project-memory/gold-add-memory/dataset/</code>：从 alpha 复制的输入语料。</li><li><code>eval/project-memory/gold-add-memory/generated/extracted-gold.json</code>：reviewed add_message mock 输出、时间线和全部 30 题映射。</li><li><code>eval/project-memory/gold-add-memory/generated/review.json</code>：标签复核记录。</li><li><code>eval/project-memory/gold-add-memory/build-gold-baseline.mjs</code>：可重复的复制后抽取脚本。</li><li><code>eval/project-memory/gold-add-memory/run-memmy-live-eval.mjs</code>：Local project add/search 按时间交错的真实回放。</li><li><code>eval/project-memory/gold-add-memory/run-pipeline-eval.mjs</code>、<code>judge.mjs</code>、<code>metrics.mjs</code>、<code>pricing.json</code>：评分器、评委、指标与单价。</li><li><code>eval/project-memory/gold-add-memory/generated/live-report.json</code>：初步测试的评分输出，本页不展示；<code>generated/judge-cache.json</code> 是评委缓存。</li><li><code>eval/project-memory/gold-add-memory/report.html</code>：本说明页。</li></ul><div class="callout positive"><span class="callout-title">可运行检查</span><p><code>node eval/project-memory/gold-add-memory/build-gold-baseline.mjs</code>、<code>node eval/project-memory/gold-add-memory/build-sessions.mjs</code>、<code>node eval/project-memory/gold-add-memory/load-eval-set.mjs</code> 应分别生成 ${data.entries.length} entries、sessions written、无 errors；<code>run-pipeline-eval.mjs --oracle</code> 各项质量指标为 1，<code>--empty</code> 为 0。</p></div></section>
-      <footer class="site-foot"><span>MEMTENSOR · 项目记忆 add + search 评测</span><span>生成于 ${esc(review.reviewedAt)}</span></footer>
-    </main>
-  </div>
-`;
-const customStyle = `<style>\n.metric-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--sp-md);margin:var(--sp-lg) 0}.metric{padding:var(--sp-md);background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);display:flex;flex-direction:column;gap:var(--sp-xs)}.metric strong{font-size:28px;color:var(--primary)}.metric span,.muted{color:var(--muted);font-size:13px}.timeline-card{margin:var(--sp-xl) 0;padding:var(--sp-lg);background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r-lg);box-shadow:var(--shadow-card)}.timeline-head{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-md)}.timeline-head>div{display:flex;align-items:center;gap:var(--sp-sm)}.timeline-head h3{margin:0}.events{display:flex;flex-direction:column;gap:var(--sp-sm);margin:var(--sp-lg) 0}.event{display:grid;grid-template-columns:120px 1fr;gap:var(--sp-md);padding:var(--sp-md);border-left:3px solid var(--primary);background:var(--panel);border-radius:var(--r-sm)}.event-time{font-family:var(--font-mono);font-size:12px;color:var(--muted)}.event-query{font-weight:600;margin:0 0 var(--sp-xs)}.question-list{display:flex;flex-direction:column;gap:var(--sp-xs)}.question{border:1px solid var(--line);border-radius:var(--r-sm);padding:var(--sp-sm) var(--sp-md);background:var(--canvas)}.question summary{cursor:pointer}.question-body{padding:var(--sp-sm) 0 0;color:var(--body)}.timeline-card h4{margin:var(--sp-lg) 0 var(--sp-sm)}@media(max-width:860px){.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.event{grid-template-columns:1fr}.timeline-head{align-items:flex-start;flex-direction:column}}</style>\n`;
-const html = head.replace("<title>研究文档模板</title>", "<title>项目记忆 Search 基线：add_message Gold 数据集</title>").replace("</head>", `${customStyle}</head>`) + body + "  <script>\n    (() => {" + scripts;
-writeFileSync(join(root, "report.html"), html);
+const title = "项目记忆评测数据集 v2";
+const main = `
+      <header class="doc-head"><p class="eyebrow">评测 ${tag("MemOS", "tag-memos")} ${tag("Memmy", "tag-memmy")}</p><h1>${title}</h1><div class="title-rule" aria-hidden="true"></div>
+      <p class="lead">金标按 v3 §2.2.5–§2.2.9 从 ${gold.traceLabels.length} 条轨迹重推：${count((e) => e.kind === "decision")} 条决策、${count((e) => e.kind === "experience")} 条经验、${count((e) => e.kind === "timeline" && !e.optional)} 条必写进展（另 ${count((e) => e.optional)} 条可写可不写），${gold.topics.length} 个主题，${gold.negatives.length} 条不该写入的内容；${scored.length} 道计分题（${Object.entries(kinds).map(([k, v]) => `${k} ${v}`).join(" · ")}），${gold.apiChecks.length} 项接口检查。轨迹结果：${Object.entries(outcomes).map(([k, v]) => `${k} ${v}`).join(" · ")}。</p></header>
+      <section id="s1"><h2><span class="sec-no">01</span>空间与轨迹</h2>${spacesHtml}${traceHtml}</section>
+      <section id="s2"><h2><span class="sec-no">02</span>金标主题与条目</h2>${topicHtml}<h3>不该写入的内容</h3>${negativeHtml}</section>
+      <section id="s3"><h2><span class="sec-no">03</span>题目</h2>${questionHtml}</section>
+      <section id="s4"><h2><span class="sec-no">04</span>评分结果</h2>${resultHtml}</section>`;
+
+let html;
+if (templatePath) {
+  const template = readFileSync(templatePath, "utf8");
+  const marker = "  <script>\n    (() => {";
+  if (!template.includes("<body>") || !template.includes(marker)) throw new Error(`${templatePath} is not the explainer template (missing <body> or the script marker)`);
+  const [head, rest] = template.split("<body>");
+  const scripts = rest.slice(rest.indexOf(marker) + marker.length);
+  const toc = `<nav class="toc" aria-label="目录"><p class="toc-brand"><span class="toc-org">MemTensor</span><span class="toc-kind">评测</span></p><a href="#s1" aria-current="true"><span class="toc-no">01</span>空间与轨迹</a><a href="#s2"><span class="toc-no">02</span>金标</a><a href="#s3"><span class="toc-no">03</span>题目</a><a href="#s4"><span class="toc-no">04</span>评分结果</a></nav>`;
+  const body = `<body>\n  <div class="page-tools"><button type="button" class="theme-toggle" data-theme-toggle aria-label="切换配色"></button></div>\n  <div class="layout">\n    ${toc}\n    <main>${main}\n    </main>\n  </div>\n`;
+  html = head.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`).replace("</head>", "<style>.muted{color:var(--muted);font-size:13px}</style></head>") + body + marker + scripts;
+} else {
+  html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>${title}</title><style>body{font:14px/1.6 system-ui,sans-serif;max-width:1100px;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%;margin:1rem 0}td,th{border:1px solid #ddd;padding:4px 8px;vertical-align:top;text-align:left}.tag{display:inline-block;padding:0 6px;border-radius:4px;background:#eef;font-size:12px}.muted{color:#777;font-size:13px}code{font-size:12px}</style></head><body><main>${main}</main></body></html>\n`;
+}
+mkdirSync(dirname(out), { recursive: true });
+writeFileSync(out, html);
+console.log(JSON.stringify({ out, template: templatePath ?? null, reports: reports.length }));

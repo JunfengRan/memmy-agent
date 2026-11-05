@@ -1,129 +1,170 @@
-# 项目记忆 add + search 评测
+# 项目记忆评测数据集 v2（gold-add-memory）
 
-本目录从上一轮的 `codex/project-memory-search-gold-baseline` 复制而来。`dataset/` 是从 alpha 先行开发版本复制的输入。`generated/extracted-gold.json` 是按 `design-docs/standard` 的 `add_message` 三类条目规则复核后的金标，可重复生成。
+评测项目记忆的写入（`add_message` → M02/M04/M05）和检索（`search_memory` → M09）。金标按 v3 §2.2.5–§2.2.9 的判定与合并规则重推，检索与返回结构按 v3 §3.2、§3.3.4。决定见 ADR-0004。
 
-## 生成与校验
+被测系统只通过规格接口调用；评测专用信息（轨迹 id、标注）不进任何请求。
 
-```bash
-node eval/project-memory/gold-add-memory/build-gold-baseline.mjs
-node eval/project-memory/gold-add-memory/build-sessions.mjs
-node eval/project-memory/gold-add-memory/load-eval-set.mjs
-node eval/project-memory/gold-add-memory/run-pipeline-eval.mjs --oracle
-node eval/project-memory/gold-add-memory/run-pipeline-eval.mjs --empty
-node eval/project-memory/gold-add-memory/build-report.mjs
-```
-
-期望输出：
-
-- `build-gold-baseline.mjs` 输出包含 `"entries":28` 和 `"topics":7`；
-- `build-sessions.mjs` 输出 `sessions written`；
-- `load-eval-set.mjs` 输出 `errors: []`；
-- `--oracle` 的各项质量指标为 1（Recall@1 例外，见下文）；
-- `--empty` 的各项质量指标为 0。
-
-oracle 和 empty 不调用评委模型。完全等于 goldAnswer 的回答、空回答，以及文本与 gold 完全一致的条目，都由规则直接判定。报告在 [report.html](./report.html)。
-
-## Reviewed gold
-
-- 原始文本、证据 ID、问题和 goldAnswer 均从 alpha 复制，没有重新手写。
-- `generated/review.json` 记录了以下复核：
-  - 旧 `decisions.json` 中有 4 条越界标签，`d_copy`、`d_price`、`d_export`、`d_csv` 改为 `experience`；
-  - 新补的 12 条当前状态事实（`addedEntries`）。以 `t_ledger_round`、`t_cat_tz`、`t_admin_claim` 为例，题目要问它们，但旧 gold 没有收录。
-- 每条 entry 带以下字段：
-  - `goldTopic`：按工作对象分成 7 组，说明见 `review.topicGroups`。一个模块、一份产出、一个单独排查的 bug 或一类协作规则是一个 topic；切月时区、取整、去重这类参数和边界情况归入所属对象，不单独成组。ledger 有 3 组（月报计算、空客户行、月报输出），catalog 有 2 组（价格数据口径、价格导出），协作规则有 2 组（仓库操作约定、沟通约定），每组 3 到 5 条；
-  - `asOf`：该状态成立的时间；
-  - `staleTexts`：这条事实的旧版或被压过的说法，由 `trace.supersedes` 与 `conflicts.json` 的胜负推出。
-- 被取代或被压过的轨迹（`t_verbose`、`t_copy`、`t_sample`、`t_write_*`、`t_silent`）不进当前状态 gold，只出现在 `staleTexts` 里。
-
-## 真实回放
-
-`run-memmy-live-eval.mjs` 按时间交错回放。题目按 `askedAt` 排序；每题提问前，只把 `at <= askedAt` 的轨迹按会话分块写入（`POST /api/v1/memory/add`），然后调用 `POST /api/v1/memory/search` 并设 `generate_answer: true`。q03（04:00）、q01（06:00）、q02（09:00）因此看到的是提问时的项目状态。
-
-每个请求都记录延迟、HTTP 状态和服务端返回的 `usage`（model、llm_calls、input/output/cached tokens），整轮还记录 wallclock。search 结果按"topic 顺序 → entry 顺序"保留 rank。
-
-被测模型按 topic skill 选 topic_id。skill 在 `Memory/src/service/project-memory/topic-skill.ts`，拼在抽取系统提示词后面；每次 add，服务端还会把该项目已有的 topic（topic_id、条目数、最新一条）放进请求，让模型先复用、再新建。skill 的示例刻意不用本数据集的领域词，避免把 gold topic 泄漏给被测模型。
-
-服务端的 `usage` 字段、topic skill 和已有 topic 目录只在 `dev-project-memory-add-search-dev` 分支的 Local 实现里有；`dev-project-memory-search-gold-baseline` 分支没有 project add/search 服务端，真实回放要在开发分支上跑。服务必须使用一个全新的 SQLite 文件，因为 project search 只按空间过滤，不按用户过滤。脚本开跑前会检查这一点，库不为空就退出。
+## 快速开始
 
 ```bash
-cd Memory && MEMMY_MEMORY_PORT=18961 MEMMY_MEMORY_DB=/tmp/pm-eval/memory.sqlite npx tsx src/server/index.ts
-node eval/project-memory/gold-add-memory/run-memmy-live-eval.mjs
-node eval/project-memory/gold-add-memory/run-pipeline-eval.mjs eval/project-memory/gold-add-memory/generated/live-memmy-run.json --out eval/project-memory/gold-add-memory/generated/live-report.json
+cd eval/project-memory/gold-add-memory
+node load-eval-set.mjs                 # 校验数据集，errors 必须为 []
+node run-pipeline-eval.mjs --oracle    # 金标自身作答：每项得分 1、每项错误 0
+node run-pipeline-eval.mjs --empty     # 什么都不写、不答：每项得分 0
 ```
 
-服务 token 默认读 `~/.memmy/config.yaml` 的 `memmyMemory.storage.token`，可以用 `MEMMY_EVAL_TOKEN` 覆盖。
+改了 `dataset/` 下的任何输入，先重建金标再校验：
 
-## 指标
+```bash
+node build-gold-baseline.mjs           # 写 dataset/gold.json（随数据集提交）
+node load-eval-set.mjs
+```
 
-**add**（用全部 add 写入的最终条目与 28 条 gold 比较）
+## 对着服务跑
 
-- **Entry F1**：一对一匹配，要求 kind 相同且评委判定内容是同一事实。不比较 topicId，因为每次运行模型给的 topic 名都不一样；也不比较 sourceTraceIds。
-- **内容 F1**：与 Entry F1 相同，但不看 kind。另外报告：
-  - kind 混淆矩阵（gold kind → 模型 kind）；
-  - stale 条数（模型写的是旧版说法）；
-  - 重复条数。
-- **Topic 归纳**：只看内容已匹配上的条目，计算模型 topic 聚类与 `goldTopic` 之间的 B-cubed P/R/F1。这个指标与 topic 标签名无关：P 低说明不同事实被并进了同一个 topic，R 低说明同一工作对象被拆散了。同时报告模型 topic 数和 gold topic 数。
-- **Source trace 覆盖率**：gold sourceTraceIds 的并集中，有多少出现在模型条目里。只看覆盖率，不参与 F1。
+服务需要提供 `http://127.0.0.1:18960/api/openmem/v1/` 下的 `create/space`、`create/domains`、`list/domains`、`add/message`、`get/status`、`search/memory`、`get/memory`。
 
-**search 与回答**
+```bash
+# 1. 回放：建空间与领域 → 每轮 add_message 并轮询 get/status → 按 askedAt 提问 → 读最终状态 → 接口检查
+export MEMMY_EVAL_BASE=http://127.0.0.1:18960/api/openmem/v1
+export MEMMY_EVAL_MODE=local                 # X-MemOS-Mode
+export MEMMY_EVAL_SUT_MODEL=<服务端 M02/M04/M05 用的模型>
+export MEMMY_EVAL_READER_PROVIDER=anthropic  # 或 openai（兼容 chat completions）
+export MEMMY_EVAL_READER_MODEL=<固定的阅读模型>
+export MEMMY_EVAL_READER_BASE_URL=... MEMMY_EVAL_READER_API_KEY=...
+node run-memmy-live-eval.mjs                 # 写 ../runs/<stamp>/live-run.json
 
-- **Recall@k**（k = 1、3、5、10，另加"全部上下文"）：按 rank 取前 k 条 entry 的 traceIds，计算证据轨迹的命中比例，按题宏平均，并按题型报告。q01 有两条证据，所以 oracle 的 Recall@1 是 0.983。
-- **检索 trap rate**：上下文里出现陷阱轨迹的题目比例。旧的 scope leak rate 已删除，q20 照常计入其他指标。
-- **LLM score**：评委对照题目、提问时间、goldAnswer 和旧说法示例判对错，按 plain、stale、overridden、cross-project、scope-leak 和总体报告。
-- **Token F1**：回答与 goldAnswer 的词重合。中文按字切，英文和数字按词切。
-- **短语 rubric 准确率**：沿用旧的 `mustInclude` / `mustNotInclude` 判法，只作参考。它会把语义正确但措辞不同的回答判错。
+# 2. 评分：评委必须显式配置，且与被测模型不同家族
+export MEMMY_EVAL_JUDGE_PROVIDER=openai MEMMY_EVAL_JUDGE_MODEL=<非被测家族的模型>
+export MEMMY_EVAL_JUDGE_BASE_URL=... MEMMY_EVAL_JUDGE_API_KEY=...
+node run-pipeline-eval.mjs ../runs/<stamp>/live-run.json --gate   # 写同目录 report.json
 
-**效率**（add 与 search 分开统计；评委开销单独列出，不计入产品）
+# 3. 报告（可选）
+node build-report.mjs ../runs/<stamp>/report.json [--template <explainer.html>]   # 写 ../runs/report.html
+```
 
-- wallclock、请求数、LLM 调用数；
-- 平均输入 token（只统计 add，含缓存命中）、平均输出 token；
-- 平均费用和总费用（USD）、延迟 P50/P95。
+- 每次回放给 `space_id`、`conversation_id` 加 `MEMMY_EVAL_RUN_TAG` 后缀（默认是时间戳），开跑前确认空间为空。
+- 回放遇到 HTTP 错误、`code ≠ 0` 或任务 `failed` 立即停止，把已有结果写到 `live-run.partial.json`，退出码 1。
+- 每轮的 `chat_time` 按 `YYYY-MM-DD HH:mm:ss` 发送，带 `X-MemOS-TZ: +08:00`。
+- 带 `searchBefore` 的轨迹（`t_informed`）先在同一会话检索一次，再写入，用来满足「已告知」。
+- 回答不由被测系统生成。`search_memory` 返回的 `topic_detail_list` 按模板三（§3.3.4）渲染后，交给固定的阅读模型作答。阅读模型只看渲染结果。
+- `harness/run-control-main.mjs` 是对照组：main 分支没有项目记忆，用通用 `/api/v1` 记忆写入与检索，命中片段包成伪主题，用同一个阅读模型作答、同一个评分脚本打分。写入和决策类得分按定义为 0，只有检索与回答可比；`harness/eval-config.yaml` 是对照组的服务配置。
 
-费用按 [pricing.json](./pricing.json) 中对应模型的单价计算，来源是 Anthropic 官方价格页（2026-11-03）。换模型时在这个文件里补单价；模型不在表里时，费用记为 null。
+生成物（回放、报告、评委与阅读缓存）都写在 `eval/project-memory/runs/`，已被忽略；只把指标摘要写进 `docs/project-memory/metrics.md`。
 
-**评委**
+## 数据集
 
-- 默认使用 `~/.memmy/config.yaml` 当前 memorySummary 预设对应的 Anthropic 模型，现在是 claude-haiku-5-5，与被测模型相同，所以存在自评偏差。可以用 `MEMMY_EVAL_JUDGE_MODEL`、`MEMMY_EVAL_JUDGE_BASE_URL`、`MEMMY_EVAL_JUDGE_API_KEY` 换成别的评委。
-- 结果按输入哈希缓存在 `generated/judge-cache.json`，重复评分同一份运行结果不再调用模型。缓存默认只增不删；提交前加 `--prune-judge-cache`，只保留这次评分用到的结论，让缓存与提交的报告对应。
-- `--no-judge` 跳过所有评委指标。
+| 文件 | 内容 |
+| --- | --- |
+| `dataset/corpus.json` | 2 个 Space（`space_ledger`：代码开发、工程规范；`space_catalog`：代码开发、产品设计），3 名成员，5 个会话（3 个写入会话、2 个只提问的会话），35 轮对话，每轮带 `chat_time`、`reply_time`（+2 分钟）、调用方指定的 `domain`。`annotations`（认可、已告知、裁决信号）只供金标校验，不发给被测系统 |
+| `dataset/labels.json` | 5 个主题（领域、名称、摘要与描述要点）；条目元数据（kind、决策类别、optional）；每轮的 M05 动作（`add` / `rewrite` / `update` / `conflict_append` / `conflict_update` / `resolve`），或不写入的原因 |
+| `dataset/conflicts.json` | 10 个分歧场景：作者、现有结论作者、认可、已告知，以及据此推出的动作 |
+| `dataset/questions.json` | 24 道题（1 道 excluded）与 4 项接口检查 |
+| `dataset/gold.json` | 由 `build-gold-baseline.mjs` 推出：最终条目（content、time、user_ids、conflicts、history）、不该写入的内容、每轮结果、每题提问时刻的期望条目与陷阱 |
 
-**退出码**
+### 标注规则
 
-- 默认只出报告，退出码为 0。
-- 加 `--gate` 后，Entry F1、Recall@10、LLM score 任一项低于门槛（默认 0.85，可用 `--min-entry-f1`、`--min-recall-at-10`、`--min-llm-score` 调整）时返回 1。
-- 输入错误返回 2。
+- **决策**只记范围、对外约定、共同约定三类（§2.2.5）。局部实现、执行步骤、未采纳、未决、重复、过程材料、无关内容不写入，每轮注明原因。
+- **输出约定算决策**：月报路径、导出格式都是决策；「不把 catalog 的 export 搬进 ledger」是范围决策（`dec_copy`）。
+- **进展**的 kind 名为 `timeline`，只记产出状态变化。较早的进展不是过时内容，不当陷阱。部分进展标 `optional`，写不写都对。
+- **作者**：`user_ids` 记交办或采纳的成员（不记 Agent），`time` 取用户消息的 `chat_time`，允许落在回复之前的 2 分钟窗口内。
+- **原因**只取自会话，每个非空 `reason` 都附 `reasonQuote`（会话原文），会话没说就留 `null`。
+- **分歧**（§2.2.9，规格不设成员权限）：
+  - 作者已在 content 中，或会话体现认可 → `rewrite`，旧结论进 history；
+  - 作者在某一项 conflicts 中 → `conflict_update`；
+  - 都不是 → `conflict_append`；
+  - 已告知后成员裁决 → `resolve`，清空 conflicts 并写 history。
+- **主题**：月报计算与空客户处理合为一个主题；回复格式偏好不算项目记忆（标为 `unrelated`）。
 
-## 当前真实结果
+### 与 v1 相比
 
-2026-11-03 用 claude-haiku-5-5 跑了一次交错回放，结果在 `generated/live-report.json`。这是单次真实模型结果，同一配置重复运行会有波动，不能与 oracle 的 1.0 混用。仍在初步测试，`report.html` 不展示这些结果。
+| 变化 | 说明 |
+| --- | --- |
+| 删除 | 顶层 `dataset/`、`workspaces/`、`load-eval-set.mjs`、`build-sessions.mjs`；`gold-add-memory/source/`、`workspaces/`、`build-sessions.mjs`、`generated/`；`decisions/relay/scheme/scoring/todolists.json`；入库的 `report.html` |
+| 删题 | q08（执行步骤不写入，无记忆可答）、q10–q12、q18、q20、q22 |
+| scope-leak | 改为接口检查：不带 `space_ids` 检索必须被拒；`space_ids=[catalog]` 检索 ledger 的题目，返回的 ledger 主题必须为 0 |
+| 改题 | q17 改为 plain；q21 保持 excluded，不提问也不计分；q01–q04、q13、q15、q19 的标准答案按新金标重写；新增 q31（裁决后的当前状态） |
+| 语料 | 新增 `t_informed`、`t_resolve`；`t_wait` 改为体现认可的说法 |
 
-这次结果是以下改动之前跑的，还没有重跑：
+## 校验（`load-eval-set.mjs`）
 
-- 当时 gold 有 19 个 topic，现在合并成 7 个，下表的 topic 归纳分数不能直接与新 gold 对照；
-- 当时抽取还没有 topic skill 和已有 topic 目录；
-- 当时 project search 实际上没有按空间过滤：仓储层的 `workMemoryProjectId` 条件只在同时给出 `workMemoryUserId` 时才生效，所以会读到所有项目的条目。现在服务端逐行检查 `project_space_id`。trap rate 和 cross-project 的分数可能受了影响。
+- **语料**：
+  - 成员与会话完整；ledger-build 与 ledger-follow 是不同成员；
+  - 领域已在所属空间登记；时间为 ISO 8601 且带 `+08:00`，同一会话内按时间递增；
+  - 文本里不出现标注词。
+- **标注**：
+  - kind ∈ decision / experience / timeline；决策类别只有三类；
+  - 条目只写进本空间、本次请求领域的主题；
+  - 字段长度：`topic_name` 20、摘要 80、描述 400、决策与进展 100、经验 200；
+  - 非空原因必须附会话原文；不写入的轮次必须有原因。
+- **分歧**：
+  - 从作者、现有结论作者和会话信号推出动作，与 `conflicts.json` 和 `labels.json` 三方一致；
+  - 每个非 `add` 的决策动作都有对应场景；
+  - 「已告知」要求同一会话有 `searchBefore` 和 informed 信号。
+- **金标**：`gold.json` 必须与重建结果逐字一致。
+- **题目**：
+  - 从本空间只提问的会话发问；只期望一个本空间主题；
+  - 期望条目的证据早于 `askedAt`；
+  - 题型与陷阱相符：stale 有旧版陷阱，cross-project 的陷阱来自另一空间，conflict 期望 conflicts，plain 无陷阱；
+  - `mustInclude` 出现在标准答案中；题目不照抄回复。
 
-| 阶段 | 指标 | 值 |
-| --- | --- | --- |
-| add | Entry F1（P / R） | 0.241（0.233 / 0.250） |
-| add | 内容 F1 | 0.724 |
-| add | Topic 归纳 B-cubed F1（P / R） | 0.950（1.000 / 0.905），模型 28 个 topic，gold 19 个 |
-| add | Source trace 覆盖率 | 0.96（缺 `t_tell`） |
-| search | Recall@1 / @3 / @5 / @10 | 0.667 / 0.850 / 0.867 / 0.867 |
-| search | 检索 trap rate | 0.556 |
-| 回答 | LLM score | 0.867 |
-| 回答 | Token F1 | 0.300 |
-| 效率 | wallclock | 193.6 s |
-| 效率 | add：请求数，P50 / P95 | 12 次，7.19 s / 12.01 s |
-| 效率 | add：平均输入 / 输出 token，平均费用 | 889 / 417，$0.00030 |
-| 效率 | search：请求数，P50 / P95 | 30 次，3.84 s / 6.37 s |
-| 效率 | search：平均输出 token，平均费用 | 260，$0.00018 |
+## 指标（`run-pipeline-eval.mjs`）
 
-LLM score 按题型：cross-project 0.833、overridden 1.0、plain 1.0、scope-leak 0、stale 0.889。
+**归属与匹配**：最终状态里的每条条目由评委归属为 match / stale / conflict / negative / none，文本完全一致时按规则判定。然后做一对一二分匹配：必写条目先匹配，optional 后匹配，匹配到 optional 的条目不计入分母。
 
-结果解读：
+| 得分（oracle = 1，empty = 0） | 定义 |
+| --- | --- |
+| `entries.{decision,experience,timeline}.{precision,recall,f1}` | 内容匹配且 kind 一致才算命中；另报总体 P/R/F1 与 `kindCorrect` |
+| `decisions.content / conflicts / history / userIds / time / stateExact` | 逐条必写决策：内容匹配；conflicts 条数与内容一一对上且成员一致；history 一一对上；user_ids 一致（允许 `alternatives`）；time 在窗口内；以上全对才算 `stateExact` |
+| `decisions.reasons` | 金标中有原因的 history 项，系统写出了有会话依据的原因 |
+| `topics.bcubed.{precision,recall,f1}` | 扩展 B-cubed：未匹配的写入稀释精确率，未写出的金标召回为 0 |
+| `topics.domain / keyPoints` | 每个金标主题的主对应主题领域正确；摘要与描述要点覆盖率 |
+| `search.recall@{1,3,9}` | 期望主题出现在前 k 个返回主题中（按最终状态的主题对应关系） |
+| `search.entryHit / itemHit` | 期望条目出现在正确的位置（content 为当前内容，conflicts 为不一致结论） |
+| `search.staleTrapInHistory` | 旧版本出现在 history 或 conflicts 中（这是预期行为） |
+| `answers.llm / rubric / tokenF1` | 评委判对错；`mustInclude` 全部出现；与标准答案的字词 F1 |
+| `api.passRate` | 4 项接口检查通过率 |
 
-- Entry F1 与内容 F1 差距很大，主要原因是 kind：8 条 gold experience 被写成 decision，4 条 evolution 被写成 decision。抽取 prompt（`Memory/src/service/memory-service.ts` 的 `PROJECT_MEMORY_EXTRACTION_SYSTEM_PROMPT`）没有写 standard 的三类条目规则。
-- 9 条 stale 条目说明，后来的 add 没有取代早先写入的旧状态。
-- q20 的空回答来自环境问题：本地 embedding 模型下载失败，L1 那条 global 轨迹没有建好向量。这不是评分器的问题。
-- 评委与被测是同一个模型，复查时看到个别题判得偏严（例如 q23），单题判定可能有 ±1 的波动。
+| 错误（oracle = 0） | 定义 |
+| --- | --- |
+| `notWritten.falseWriteRate` | 不该写入的内容被写入的比例 |
+| `writes.staleAsCurrent / conflictAsEntry / unattributed / duplicate / fieldLimitViolations` | 旧版本当作当前条目、不一致结论单独成条、无法归属、重复写入、超长字段 |
+| `decisions.reasonFabricated` | 没有会话依据的原因 |
+| `topics.duplicateTopics / wrongMerges` | 一个金标主题被拆成多个；一个主题混入多个金标主题 |
+| `search.staleShownAsCurrent` | 旧版本在检索结果中作为当前内容出现 |
+| `search.crossProjectLeak / foreignTopics / overLimit` | 别的空间的内容或主题出现在结果中；返回主题超过 9 个 |
+
+- **`--gate` 门槛**：`decisions.stateExact` ≥ 0.8、`topics.bcubed.f1` ≥ 0.8、`entries.f1` ≥ 0.8、`search.recall@3` ≥ 0.85、`answers.llm` ≥ 0.8、`api.passRate` = 1，且 `staleShownAsCurrent`、`crossProjectLeak`、`foreignTopics`、`reasonFabricated`、`wrongMerges` 为 0。可以用 `--min-*` 调整。
+- **评委**：只读显式环境变量，不回落到 `~/.memmy` 或服务配置；与 `MEMMY_EVAL_SUT_MODEL` 同家族时拒绝运行；温度 0；缓存键包含模型、提示词哈希和输入，提示词一改即失效。缓存在 `runs/judge-cache.json`，`--prune-judge-cache` 只保留本次用到的项。
+
+## 规格含糊处
+
+下面这些按注明的方式处理；以后规格明确了，再改标注并重建金标。
+
+1. **`dec_env` 是 join 还是 rewrite 加合并**：林工先定「连接串写进 README」（t_write_secret），周工给出相反结论「.env 留在本机、说明里不放连接串」（t_admin_env，`conflict_append`）。之后林工自己改成与周工一致（t_env）。金标按作者 `rewrite`，再按不变式 1 把变得相同的那项 conflicts 合并进 content，user_ids 为林工、周工；`alternatives` 也接受不合并、保留 conflicts 的结果。合并掉的那项不进 history，规格没说要不要留痕。
+2. **认可者是否进 user_ids**：t_wait 周工经林工认可改写。金标只记周工，`dec_copy` 的 `alternatives` 也接受「周工、林工」。
+3. **决策时间**：取用户消息还是回复的 `chat_time`。金标取用户消息，评分接受两者之间的 2 分钟窗口。
+4. **resolve 后的 user_ids**：林工裁决选周工的结论后，金标的 user_ids 只记周工，不加入裁决者。
+5. **t_bug 用 `conflict_update` 还是 join**：周工更新的是自己那一项不一致结论，金标按 `conflict_update`。
+6. **进展粒度**：改代码、改 README 这类变化算不算产出状态变化，规格没有给界线。这些条目标为 optional。
+7. **`t_write_edit`、`t_admin_claim` 定为无关**：两轮讨论的是「什么算冲突」，对象是 Agent 自己怎么记修改，不是 ledger 的产出。也可以读成团队对协作方式的共同约定，规格没有给出界线。
+8. **`memory_limit_number`**：§3.2.2 示例传 3，规则写默认 9。评测固定传 9。
+9. **题目清单重叠**：任务里 q11、q12 同时出现在删除和改答案两处，按删除处理。
+10. **q15 没有分歧**：`t_sample` 是假设加执行步骤，不构成一项结论。
+11. **get_memory 分页**：规格没写 `size` 上限，回放按 50 翻页直到 `pages`。
+
+## 文件
+
+| 文件 | 作用 |
+| --- | --- |
+| `build-gold-baseline.mjs` | 回放标注动作并校验分歧规则，写 `dataset/gold.json` |
+| `load-eval-set.mjs` | v2 校验，同时导出 `LIMITS` 与 `loadGold()` |
+| `run-memmy-live-eval.mjs` | 只走规格接口的回放 |
+| `run-pipeline-eval.mjs` | 评分，以及 `--oracle` / `--empty` 自检和 `--gate` |
+| `oracle.mjs` | 从金标生成规格形状的 `topic_detail_list` |
+| `reader.mjs` | 模板三渲染与固定阅读模型 |
+| `judge.mjs` | 评委提示词，完全一致时按规则判定 |
+| `llm.mjs` | 显式配置、家族检查、温度 0、带提示词哈希的缓存 |
+| `metrics.mjs` | 通用指标函数 |
+| `build-report.mjs` | HTML 报告 |
+| `pricing.json` | 评委费用估算 |

@@ -1,316 +1,223 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
+#!/usr/bin/env node
+// Validates dataset v2 against the v3 rules it encodes and checks that dataset/gold.json is the
+// exact output of build-gold-baseline.mjs. Exit 0 only when there are no errors.
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { buildGold, GOLD_PATH, loadDataset, orderedTraces, renderGold, replay } from "./build-gold-baseline.mjs";
 
-const root = dirname(fileURLToPath(import.meta.url));
-const labeled = /决定|主张|决策|\bD\d|\bT\d/;
-const kinds = new Set(["plain", "stale", "overridden", "cross-project", "scope-leak"]);
-const meta = /噪声|第\s*\d+\s*次|重复一遍|旁注/;
+export const LIMITS = { topic_name: 20, topic_summary: 80, topic_description: 400, decision: 100, timeline: 100, experience: 200 };
+export const length = (text) => [...String(text ?? "")].length;
 
-export function evalRoot() {
-  return root;
+const KINDS = new Set(["decision", "experience", "timeline"]);
+const CATEGORIES = new Set(["范围", "对外约定", "共同约定"]);
+const QUESTION_KINDS = new Set(["plain", "stale", "conflict", "cross-project"]);
+const ISO_LOCAL = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+08:00$/;
+const ALPHA_FIELDS = ["memoryScope", "level", "supersedes", "needsTodolist", "mergedFrom", "workspacePath", "gitRoot", "projectId", "sessionId", "canSee"];
+const LABELED = /决策|主张|\bD\d|\bT\d/;
+
+export function loadGold() {
+  return JSON.parse(readFileSync(GOLD_PATH, "utf8"));
 }
 
-export function loadEvalSet(dir = join(root, "dataset")) {
-  return {
-    corpus: readJson(join(dir, "corpus.json")),
-    decisions: readJson(join(dir, "decisions.json")),
-    relay: readJson(join(dir, "relay.json")),
-    conflicts: readJson(join(dir, "conflicts.json")),
-    scheme: readJson(join(dir, "scheme.json")),
-    scoring: readJson(join(dir, "scoring.json")),
-    todolists: readJson(join(dir, "todolists.json"))
-  };
-}
-
-export function scoreAnswer(answer, question) {
-  const text = String(answer ?? "");
-  const hit = question.mustInclude.every((phrase) => text.includes(phrase));
-  const trap = question.mustNotInclude.some((phrase) => text.includes(phrase));
-  return hit && !trap;
-}
-
-export function longestSlice(question, text) {
-  const haystack = String(text ?? "");
-  let best = 0;
-  for (let size = question.length; size >= 2; size -= 1) {
-    for (let index = 0; index + size <= question.length; index += 1) {
-      const slice = question.slice(index, index + size);
-      if (slice.trim().length < 2 || /^\s+$/.test(slice)) continue;
-      if (haystack.includes(slice)) return size;
-    }
-  }
-  return best;
-}
-
-export function unscopedPicks(question, traces) {
-  let best = [];
-  let bestLen = -1;
-  for (const trace of traces) {
-    const len = longestSlice(question.question, trace.answer);
-    if (len > bestLen) {
-      best = [trace];
-      bestLen = len;
-    } else if (len === bestLen) {
-      best.push(trace);
-    }
-  }
-  return best;
-}
-
-export function validateEvalSet(set) {
+export function validateDataset(ds) {
   const errors = [];
-  const projects = new Map(set.corpus.projects.map((project) => [project.id, project]));
-  const sessions = new Map(set.corpus.sessions.map((session) => [session.id, session]));
-  const traces = new Map(set.corpus.traces.map((trace) => [trace.id, trace]));
-  const decisions = new Map(set.decisions.decisions.map((decision) => [decision.id, decision]));
-  const traceCounts = new Map();
-  for (const trace of set.corpus.traces) {
-    traceCounts.set(trace.sessionId, (traceCounts.get(trace.sessionId) ?? 0) + 1);
+  const err = (message) => errors.push(message);
+  const { corpus, labels, conflicts, questions } = ds;
+  for (const [name, file] of Object.entries(ds)) if (file.datasetVersion !== 2) err(`${name}.json datasetVersion must be 2`);
+
+  // Spaces, members, conversations.
+  const spaces = new Map(corpus.spaces.map((space) => [space.space_id, space]));
+  if (spaces.size !== 2 || spaces.size !== corpus.spaces.length) err("need exactly two distinct spaces");
+  for (const space of corpus.spaces) {
+    const names = space.domains.map((d) => d.domain);
+    if (!names.length || names.length > 20) err(`${space.space_id} must register 1–20 domains`);
+    if (new Set(names).size !== names.length || names.some((n) => !String(n).trim())) err(`${space.space_id} domain names must be unique and non-empty`);
+  }
+  const members = new Map(corpus.members.map((m) => [m.user_id, m]));
+  const conversations = new Map(corpus.conversations.map((c) => [c.id, c]));
+  if (new Set(corpus.conversations.map((c) => c.conversation_id)).size !== corpus.conversations.length) err("conversation_id must be unique");
+  for (const c of corpus.conversations) {
+    if (!spaces.has(c.space_id)) err(`${c.id} space ${c.space_id} missing`);
+    if (!members.has(c.user_id)) err(`${c.id} user ${c.user_id} missing`);
+  }
+  const ledgerAuthors = new Set(corpus.conversations.filter((c) => c.id === "ledger-build" || c.id === "ledger-follow").map((c) => c.user_id));
+  if (ledgerAuthors.size !== 2) err("ledger-build and ledger-follow must be different members");
+
+  // Traces.
+  const traces = new Map();
+  const lastTime = new Map();
+  for (const trace of corpus.traces) {
+    if (traces.has(trace.id)) err(`${trace.id} duplicated`);
+    traces.set(trace.id, trace);
+    for (const field of ALPHA_FIELDS) if (Object.hasOwn(trace, field)) err(`${trace.id} still has alpha field ${field}`);
+    const c = conversations.get(trace.conversation);
+    if (!c) { err(`${trace.id} conversation ${trace.conversation} missing`); continue; }
+    if (c.askOnly) err(`${trace.id} is in ask-only conversation ${c.id}`);
+    if (!spaces.get(c.space_id)?.domains.some((d) => d.domain === trace.domain)) err(`${trace.id} domain ${trace.domain} is not registered in ${c.space_id}`);
+    if (!ISO_LOCAL.test(trace.chat_time) || !ISO_LOCAL.test(trace.reply_time)) err(`${trace.id} times must be ISO 8601 with +08:00`);
+    if (trace.reply_time <= trace.chat_time) err(`${trace.id} reply must come after the user message`);
+    if ((lastTime.get(c.id) ?? "") >= trace.chat_time) err(`${trace.id} is out of order in ${c.id}`);
+    lastTime.set(c.id, trace.reply_time);
+    if (LABELED.test(`${trace.query}${trace.answer}`)) err(`${trace.id} text carries a label word`);
+    for (const note of trace.annotations ?? []) {
+      if (!["approval", "informed", "resolve"].includes(note.type)) err(`${trace.id} unknown annotation ${note.type}`);
+      if (!`${trace.query}\n${trace.answer}`.includes(note.quote ?? "\u0000")) err(`${trace.id} ${note.type} quote is not in the conversation`);
+      for (const who of [note.by, note.pick].filter(Boolean)) if (!members.has(who)) err(`${trace.id} ${note.type} member ${who} missing`);
+    }
+    if (trace.searchBefore && !trace.searchBefore.query) err(`${trace.id} searchBefore needs a query`);
+  }
+  for (const c of corpus.conversations.filter((c) => c.askOnly)) {
+    if (corpus.traces.some((t) => t.conversation === c.id)) err(`${c.id} must stay empty; it only asks`);
   }
 
-  if (set.corpus.projects.length !== 2) errors.push("need two projects");
-  if ([...projects.keys()].some((id) => id === "memmy-agent" || id === "MemOS")) errors.push("eval projects must leave the product repos");
-  const ledger = set.corpus.projects.find((project) => project.name === "ledger");
-  const catalog = set.corpus.projects.find((project) => project.name === "catalog");
-  if (!ledger || !catalog || ledger.id === catalog.id) errors.push("ledger and catalog must be different projects");
-  for (const project of set.corpus.projects) {
-    const dir = join(root, project.root);
-    if (!existsSync(dir) || !statSync(dir).isDirectory()) errors.push(`${project.id} workspace missing`);
-    if (!existsSync(join(dir, "src"))) errors.push(`${project.id} has no source files`);
+  // Labels.
+  const topics = new Map(labels.topics.map((t) => [t.id, t]));
+  for (const topic of labels.topics) {
+    const space = spaces.get(topic.space_id);
+    if (!space) err(`${topic.id} space missing`);
+    else if (!space.domains.some((d) => d.domain === topic.domain)) err(`${topic.id} domain ${topic.domain} not registered`);
+    if (length(topic.topic_name) > LIMITS.topic_name) err(`${topic.id} topic_name over ${LIMITS.topic_name}`);
+    if (length(topic.summaryKeyPoints.join("；")) > LIMITS.topic_summary) err(`${topic.id} summary key points over ${LIMITS.topic_summary}`);
+    if (length(topic.descriptionKeyPoints.join("；")) > LIMITS.topic_description) err(`${topic.id} description key points over ${LIMITS.topic_description}`);
+    if (!topic.summaryKeyPoints.length || !topic.descriptionKeyPoints.length) err(`${topic.id} needs summary and description key points`);
   }
-
-  if (set.decisions.decisions.length < 6) errors.push("need at least 6 decisions");
-  const projectIds = new Set(set.decisions.decisions.map((decision) => decision.projectId));
-  if (!projectIds.has(ledger?.id) || !projectIds.has(catalog?.id)) errors.push("decisions must cover both projects");
-  const rewritten = set.decisions.decisions.filter((decision) => decision.changedAt && decision.textBefore && decision.textBefore !== decision.textAfter);
-  if (!rewritten.some((decision) => decision.projectId === ledger?.id)) errors.push("ledger needs a rewritten decision");
-  for (const decision of set.decisions.decisions) {
-    if (decision.extractor !== "model") errors.push(`${decision.id} decision extractor must be model`);
-    if (labeled.test(`${decision.textBefore ?? ""}\n${decision.textAfter}`)) errors.push(`${decision.id} decision text is labeled`);
-    for (const traceId of decision.sourceTraceIds) {
-      if (!traces.has(traceId)) errors.push(`${decision.id} source ${traceId} missing`);
-    }
+  for (const [id, meta] of Object.entries(labels.entries)) {
+    if (!KINDS.has(meta.kind)) err(`${id} kind ${meta.kind} invalid (timeline, not evolution)`);
+    if (meta.kind === "decision" && !CATEGORIES.has(meta.category)) err(`${id} decision category must be 范围 / 对外约定 / 共同约定`);
+    if (meta.kind !== "decision" && meta.category) err(`${id} only decisions carry a category`);
+    if (!topics.has(meta.topic)) err(`${id} topic ${meta.topic} missing`);
+    if (meta.optional && meta.kind === "decision") err(`${id} decisions cannot be optional`);
   }
-
-  for (const trace of set.corpus.traces) {
-    if (!sessions.has(trace.sessionId)) errors.push(`${trace.id} session missing`);
-    if (trace.memoryScope === "project" && !projects.has(trace.projectId)) errors.push(`${trace.id} project missing`);
-    if (trace.memoryScope === "global" && trace.projectId !== null) errors.push(`${trace.id} global trace has a project`);
-    if (labeled.test(trace.answer)) errors.push(`${trace.id} answer is labeled`);
-    if (meta.test(`${trace.query}${trace.answer}`)) errors.push(`${trace.id} text announces itself as noise`);
-    if (trace.toolCalls || trace.captureMode || Object.hasOwn(trace, "toolCallStart")) errors.push(`${trace.id} has a prebuilt checkpoint`);
-    if (trace.needsTodolist) {
-      if (!Array.isArray(trace.mergedFrom) || trace.mergedFrom.length < 2) errors.push(`${trace.id} merged query missing`);
-    } else if (trace.mergedFrom !== null) {
-      errors.push(`${trace.id} single-step query should not be merged`);
-    }
-    const session = sessions.get(trace.sessionId);
-    if (session?.canSee?.length) errors.push(`${trace.sessionId} can see another session`);
-  }
-
-  const rootTrace = set.corpus.traces.find((trace) => trace.workspacePath === ledger?.root);
-  const subdirTrace = set.corpus.traces.find((trace) => trace.workspacePath === `${ledger?.root}/src`);
-  if (!rootTrace || !subdirTrace || rootTrace.projectId !== subdirTrace.projectId || subdirTrace.gitRoot !== ledger?.root) {
-    errors.push("src session must stay on the ledger git root");
-  }
-
-  if (set.relay.questions.length !== 30) errors.push(`relay questions must be 30, got ${set.relay.questions.length}`);
-  if (set.scoring.noProjectMemoryExpectedScore !== 0) errors.push("baseline score must be 0");
-  const ruleFields = new Set(["projectRoot", "memoryScope", "checkpointBoundary", "checkpointSummary"]);
-  const modelFields = new Set(["todolist", "decision", "rephrase", "topicAssign", "conflictReal"]);
-  for (const row of set.scheme.extractors) {
-    const expected = ruleFields.has(row.field) ? "rule" : modelFields.has(row.field) ? "model" : "";
-    if (!expected || row.extractor !== expected) errors.push(`${row.field} extractor mismatch`);
-  }
-
-  for (const question of set.relay.questions) {
-    const session = sessions.get(question.sessionId);
-    if (!session || (traceCounts.get(question.sessionId) ?? 0) !== 0) errors.push(`${question.id} asking session is not empty`);
-    if (session?.projectId !== question.projectId) errors.push(`${question.id} session project mismatch`);
-    if (labeled.test(question.goldAnswer)) errors.push(`${question.id} gold is labeled`);
-    if (!kinds.has(question.kind)) errors.push(`${question.id} kind missing`);
-    if (!question.mustInclude?.length) errors.push(`${question.id} rubric missing`);
-    if (question.kind !== "plain" && (!question.mustNotInclude?.length || !question.trapEvidenceIds?.length)) {
-      errors.push(`${question.id} ${question.kind} question needs a trap`);
-    }
-    if (question.kind === "plain" && (question.mustNotInclude?.length || question.trapEvidenceIds?.length)) {
-      errors.push(`${question.id} plain question should not carry a trap`);
-    }
-    for (const trace of set.corpus.traces) {
-      for (const sentence of trace.answer.split(/[。！？]/).map((part) => part.trim()).filter((part) => part.length >= 8)) {
-        if (question.question.includes(sentence)) errors.push(`${question.id} question copies a reply from ${trace.id}`);
-      }
-    }
-    const evidence = textsFor(question.evidenceIds, traces, errors, question.id);
-    const traps = textsFor(question.trapEvidenceIds, traces, errors, question.id);
-    const evidenceText = evidence.join("\n");
-    const trapText = traps.join("\n");
-    for (const phrase of question.mustInclude ?? []) {
-      if (!evidenceText.includes(phrase)) errors.push(`${question.id} gold phrase missing from evidence`);
-      if (trapText.includes(phrase)) errors.push(`${question.id} gold phrase also in trap`);
-      if (!question.goldAnswer.includes(phrase)) errors.push(`${question.id} gold answer misses ${phrase}`);
-    }
-    for (const phrase of question.mustNotInclude ?? []) {
-      if (evidenceText.includes(phrase)) errors.push(`${question.id} trap phrase is in the current evidence`);
-      if (!trapText.includes(phrase)) errors.push(`${question.id} trap phrase missing from trap`);
-      if (question.goldAnswer.includes(phrase)) errors.push(`${question.id} gold answer hits the trap`);
-    }
-    const asked = Date.parse(question.askedAt);
-    const newestEvidence = Math.max(...(question.evidenceIds ?? []).map((id) => Date.parse(traces.get(id)?.at ?? "")));
-    for (const traceId of question.trapEvidenceIds ?? []) {
-      const trap = traces.get(traceId);
-      if (!trap) continue;
-      if (question.kind === "stale" && (trap.projectId !== question.projectId || Date.parse(trap.at) >= newestEvidence)) {
-        errors.push(`${question.id} stale trap ${traceId} must be an older reply in the same project`);
-      }
-      if (question.kind === "overridden" && (trap.projectId !== question.projectId || trap.level !== "write")) {
-        errors.push(`${question.id} overridden trap ${traceId} must be a write-level reply in the same project`);
-      }
-      if (question.kind === "cross-project" && (trap.projectId === question.projectId || !trap.projectId)) {
-        errors.push(`${question.id} cross-project trap ${traceId} must belong to the other project`);
-      }
-      if (question.kind === "scope-leak" && (question.projectId !== null || !trap.projectId)) {
-        errors.push(`${question.id} scope-leak trap ${traceId} must be project memory asked from a window with no project`);
-      }
-    }
-    if (!Number.isFinite(newestEvidence) || newestEvidence >= asked) errors.push(`${question.id} evidence is not older than the question`);
-    // Any same-project reply that lands between the evidence and the question must not contradict it.
-    for (const later of set.corpus.traces) {
-      const at = Date.parse(later.at);
-      if (at > newestEvidence && at < asked && later.projectId === question.projectId && (later.supersedes ?? []).some((id) => question.evidenceIds.includes(id))) {
-        errors.push(`${question.id} evidence is superseded by ${later.id}`);
-      }
-    }
-    for (const traceId of [...(question.evidenceIds ?? []), ...(question.trapEvidenceIds ?? [])]) {
-      const trace = traces.get(traceId);
-      if (!trace) continue;
-      if (Date.parse(trace.at) >= Date.parse(question.askedAt)) errors.push(`${question.id} uses ${traceId} from the future`);
-      if (question.evidenceIds.includes(traceId) && trace.projectId && trace.projectId !== question.projectId) {
-        errors.push(`${question.id} evidence ${traceId} is another project`);
-      }
-    }
-    if (scoreAnswer("", question) || !scoreAnswer(question.goldAnswer, question)) errors.push(`${question.id} score rubric broken`);
-    const askFile = sessionFile(session, projects);
-    if (askFile && existsSync(askFile)) {
-      const body = readFileSync(askFile, "utf8");
-      for (const phrase of [...(question.mustInclude ?? []), ...(question.mustNotInclude ?? [])]) {
-        if (body.includes(phrase)) errors.push(`${question.id} asking session file contains ${phrase}`);
-      }
+  const dropReasons = new Set(Object.keys(labels.dropReasons));
+  for (const id of Object.keys(labels.traces)) if (!traces.has(id)) err(`label for unknown trace ${id}`);
+  for (const trace of corpus.traces) {
+    const label = labels.traces[trace.id];
+    if (!label) { err(`${trace.id} has no label`); continue; }
+    const text = `${trace.query}\n${trace.answer}`;
+    const space = conversations.get(trace.conversation)?.space_id;
+    if (!label.ops.length && !(label.dropped ?? []).length) err(`${trace.id} writes nothing and gives no reason`);
+    for (const drop of label.dropped ?? []) if (!dropReasons.has(drop.reason)) err(`${trace.id} drop reason ${drop.reason} invalid`);
+    for (const op of label.ops) {
+      const meta = labels.entries[op.entry];
+      if (!meta) { err(`${trace.id} op on unknown entry ${op.entry}`); continue; }
+      const topic = topics.get(meta.topic);
+      if (topic && topic.space_id !== space) err(`${trace.id} writes ${op.entry} into another space`);
+      if (topic && topic.domain !== trace.domain) err(`${trace.id} writes ${op.entry} into domain ${topic.domain}, but the caller asked for ${trace.domain}`);
+      if (op.content !== undefined && length(op.content) > LIMITS[meta.kind]) err(`${trace.id} ${op.entry} content over ${LIMITS[meta.kind]} chars`);
+      if (op.reason && !op.reasonQuote) err(`${trace.id} ${op.entry} reason needs a reasonQuote from the conversation`);
+      if (op.reasonQuote && !text.includes(op.reasonQuote)) err(`${trace.id} ${op.entry} reasonQuote is not in the conversation`);
     }
   }
 
-  const pairs = new Map();
-  for (const question of set.relay.questions) {
-    if (!question.rephrasePairId) continue;
-    const group = pairs.get(question.rephrasePairId) ?? [];
-    group.push(question);
-    pairs.set(question.rephrasePairId, group);
-  }
-  if (pairs.size === 0) errors.push("missing a rephrase pair");
-  for (const [pairId, group] of pairs) {
-    if (new Set(group.map((question) => question.goldAnswer)).size < 2) errors.push(`${pairId} gold answers do not change`);
-    const decision = decisions.get(group[0]?.decisionId ?? "");
-    if (!decision?.changedAt) {
-      errors.push(`${pairId} missing decision`);
-      continue;
+  // Conflict cases: the expected op follows from authorship and signals, and matches the label.
+  const covered = new Set();
+  for (const item of conflicts.cases) {
+    const trace = traces.get(item.incoming);
+    if (!trace) { err(`${item.id} incoming ${item.incoming} missing`); continue; }
+    const before = replay(ds, trace.chat_time).state.get(item.decision);
+    if (!before) { err(`${item.id} ${item.decision} does not exist before ${item.incoming}`); continue; }
+    const author = conversations.get(trace.conversation)?.user_id;
+    if (author !== item.author) err(`${item.id} author should be ${author}`);
+    if (JSON.stringify([...before.user_ids].sort()) !== JSON.stringify([...item.contentAuthors].sort())) err(`${item.id} contentAuthors should be ${before.user_ids.join(",")}`);
+    const notes = trace.annotations ?? [];
+    const approval = notes.some((n) => n.type === "approval");
+    if (approval !== item.approval) err(`${item.id} approval flag disagrees with the conversation`);
+    let informed = false;
+    if (item.informedBy) {
+      const by = traces.get(item.informedBy);
+      informed = Boolean(by?.searchBefore) && by.conversation === trace.conversation && (by.annotations ?? []).some((n) => n.type === "informed");
     }
-    const times = group.map((question) => Date.parse(question.askedAt));
-    const changedAt = Date.parse(decision.changedAt);
-    if (Math.min(...times) >= changedAt || Math.max(...times) <= changedAt) errors.push(`${pairId} does not straddle the rewrite`);
-    if (decision.textBefore === decision.textAfter) errors.push(`${pairId} decision text does not change`);
+    if (informed !== item.informed) err(`${item.id} informed flag needs a same-conversation trace with searchBefore and an informed signal`);
+    const derived = informed && notes.some((n) => n.type === "resolve") ? "resolve"
+      : before.user_ids.includes(author) || approval ? "rewrite"
+      : before.conflicts.some((c) => c.user_ids.includes(author)) ? "conflict_update"
+      : "conflict_append";
+    if (derived !== item.expectedOp) err(`${item.id} expectedOp should be ${derived}`);
+    const op = labels.traces[item.incoming]?.ops.find((o) => o.entry === item.decision);
+    if (op?.op !== item.expectedOp) err(`${item.id} label op is ${op?.op}, case says ${item.expectedOp}`);
+    covered.add(`${item.incoming}:${item.decision}`);
   }
-
-  if (!set.relay.questions.some((question) => question.trapEvidenceIds?.some((id) => traces.get(id)?.projectId === catalog?.id))) {
-    errors.push("catalog needs a near-synonym trap");
-  }
-
-  if (set.conflicts.conflicts.length !== 10) errors.push("conflicts must be 10");
-  const same = set.conflicts.conflicts.filter((conflict) => conflict.levelRelation === "same");
-  const different = set.conflicts.conflicts.filter((conflict) => conflict.levelRelation === "different");
-  if (same.length !== 5 || different.length !== 5) errors.push("conflicts must be 5 same and 5 different");
-  for (const conflict of set.conflicts.conflicts) {
-    if (!conflict.systemUpdateMustContain || !conflict.winner) errors.push(`${conflict.id} missing resolution`);
-    for (const side of [conflict.sideA, conflict.sideB]) {
-      const evidence = textsFor(side.evidenceIds, traces, errors, conflict.id).join("\n");
-      if (!evidence.includes(side.claim)) errors.push(`${conflict.id} claim is not in evidence`);
-      for (const traceId of side.evidenceIds) {
-        const trace = traces.get(traceId);
-        const level = trace?.level ?? "write";
-        if (level !== side.level) errors.push(`${conflict.id} level does not match ${traceId}`);
-      }
-    }
-    const sameLevel = conflict.sideA.level === conflict.sideB.level;
-    if (conflict.levelRelation === "same" && (!sameLevel || conflict.expectOpen !== true)) errors.push(`${conflict.id} same level must stay open`);
-    if (conflict.levelRelation === "different" && (sameLevel || conflict.expectOpen !== false)) errors.push(`${conflict.id} different level must resolve`);
-  }
-
-  if (set.todolists.todolistStatus === "generated") {
-    const byId = new Map((set.todolists.items ?? []).map((item) => [item.traceId, item]));
-    for (const trace of set.corpus.traces.filter((item) => item.needsTodolist)) {
-      const item = byId.get(trace.id);
-      if (!item || !Array.isArray(item.todos) || item.todos.length < 2) errors.push(`${trace.id} todolist missing`);
-      if (JSON.stringify(item).includes("toolCallStart")) errors.push(`${trace.id} todolist invented a checkpoint range`);
-    }
-  } else if (set.todolists.todolistStatus !== "ungenerated") {
-    errors.push("todolist status missing");
-  } else if ((set.todolists.items ?? []).length > 0) {
-    errors.push("ungenerated todolist still has items");
-  }
-  if (JSON.stringify(set.todolists).includes("toolCallStart")) errors.push("checkpoint range was written by hand");
-
-  for (const session of set.corpus.sessions) {
-    if (session.projectId === null) continue;
-    const file = sessionFile(session, projects);
-    if (!file || !existsSync(file)) {
-      errors.push(`${session.id} session file missing`);
-    } else if (readFileSync(file, "utf8") !== renderSession(session, set.corpus.traces)) {
-      errors.push(`${session.id} session file differs from corpus; run build-sessions.mjs`);
+  for (const [traceId, label] of Object.entries(labels.traces)) {
+    for (const op of label.ops) {
+      if (labels.entries[op.entry]?.kind === "decision" && op.op !== "add" && !covered.has(`${traceId}:${op.entry}`)) err(`${traceId}:${op.entry} ${op.op} has no conflicts.json case`);
     }
   }
 
-  return errors;
-}
+  // Gold derivation.
+  const { gold, errors: goldErrors } = buildGold(ds);
+  errors.push(...goldErrors.map((e) => `gold: ${e}`));
+  if (!existsSync(GOLD_PATH)) err("dataset/gold.json missing; run build-gold-baseline.mjs");
+  else if (readFileSync(GOLD_PATH, "utf8") !== renderGold(gold)) err("dataset/gold.json is out of date; run build-gold-baseline.mjs");
+  for (const entry of gold.entries) {
+    if (length(entry.content) > LIMITS[entry.kind]) err(`${entry.id} final content over limit`);
+    for (const item of [...(entry.conflicts ?? []), ...(entry.history ?? [])]) if (length(item.content) > LIMITS[entry.kind]) err(`${entry.id} item over limit`);
+  }
 
-function textsFor(ids, traces, errors, label) {
-  return (ids ?? []).map((id) => {
-    const trace = traces.get(id);
-    if (!trace) {
-      errors.push(`${label} evidence ${id} missing`);
-      return "";
+  // Questions.
+  const questionIds = new Set();
+  const entrySpace = new Map(gold.entries.map((e) => [e.id, e.space_id]));
+  const entryTopic = new Map(gold.entries.map((e) => [e.id, e.topic]));
+  const replySentences = corpus.traces.flatMap((t) => t.answer.split(/[。！？]/).map((s) => s.trim()).filter((s) => length(s) >= 8));
+  for (const question of questions.questions) {
+    const where = question.id;
+    if (questionIds.has(where)) err(`${where} duplicated`);
+    questionIds.add(where);
+    if (!QUESTION_KINDS.has(question.kind)) err(`${where} kind ${question.kind} invalid`);
+    const asker = conversations.get(question.conversation);
+    if (!asker?.askOnly || asker.space_id !== question.space_id) err(`${where} must be asked from an empty ask-only conversation of its space`);
+    if (!ISO_LOCAL.test(question.askedAt)) err(`${where} askedAt must be ISO 8601 with +08:00`);
+    if (question.excluded && !question.excludedReason) err(`${where} excluded needs a reason`);
+    if (!question.mustInclude?.length) err(`${where} needs mustInclude`);
+    for (const phrase of question.mustInclude ?? []) if (!question.goldAnswer.includes(phrase)) err(`${where} goldAnswer misses ${phrase}`);
+    for (const sentence of replySentences) if (question.question.includes(sentence)) err(`${where} copies a reply`);
+    if (question.expect.topics.length !== 1) err(`${where} should expect exactly one topic`);
+    for (const topicId of question.expect.topics) if (topics.get(topicId)?.space_id !== question.space_id) err(`${where} expects ${topicId} from another space`);
+    for (const want of question.expect.entries) {
+      if (!question.expect.topics.includes(entryTopic.get(want.entry))) err(`${where} expects ${want.entry} outside the expected topics`);
     }
-    return `${trace.query}\n${trace.answer}`;
-  });
-}
-
-export function renderSession(session, traces) {
-  const own = traces.filter((trace) => trace.sessionId === session.id).sort((left, right) => left.at.localeCompare(right.at));
-  if (own.length === 0) return `# ${session.id}\n\n这个窗口还没有消息。\n`;
-  const blocks = own.map((trace) => `## ${trace.at}\n\n用户：${trace.query}\n\n回复：${trace.answer}\n`);
-  return `# ${session.id}\n\n${blocks.join("\n")}`;
-}
-
-export function sessionFile(session, projects) {
-  if (!session?.projectId) return null;
-  const project = projects.get(session.projectId);
-  if (!project) return null;
-  return join(root, project.root, "sessions", `${session.id}.md`);
-}
-
-function readJson(path) {
-  return JSON.parse(readFileSync(path, "utf8"));
+    const traps = question.traps ?? [];
+    for (const trap of traps) {
+      if (trap.kind === "cross-project" && entrySpace.get(trap.entry) === question.space_id) err(`${where} cross-project trap ${trap.entry} is in the same space`);
+      if (trap.kind === "stale" && entrySpace.get(trap.entry) !== question.space_id) err(`${where} stale trap ${trap.entry} must be in the same space`);
+    }
+    if (question.kind === "plain" && traps.length) err(`${where} plain questions carry no trap`);
+    if (question.kind === "stale" && !traps.some((t) => t.kind === "stale")) err(`${where} stale question needs a stale trap`);
+    if (question.kind === "cross-project" && !traps.some((t) => t.kind === "cross-project")) err(`${where} cross-project question needs a cross-project trap`);
+    if (question.kind === "conflict" && !question.expect.entries.some((e) => e.parts.includes("conflicts"))) err(`${where} conflict question must expect conflicts`);
+    const asked = question.askedAt;
+    const goldQuestion = gold.questions.find((q) => q.id === where);
+    for (const item of goldQuestion?.expectedItems ?? []) {
+      const sources = gold.entries.find((e) => e.id === item.entry)?.sources ?? [];
+      const first = sources.map((id) => traces.get(id)).sort((a, b) => a.reply_time.localeCompare(b.reply_time))[0];
+      if (!first || first.reply_time >= asked) err(`${where} evidence for ${item.entry} is not before askedAt`);
+    }
+  }
+  for (const check of questions.apiChecks) {
+    for (const id of check.questionTexts ?? []) if (!questionIds.has(id)) err(`${check.id} refers to unknown question ${id}`);
+    if (check.space_id && !spaces.has(check.space_id)) err(`${check.id} space missing`);
+    if (check.domain && spaces.get(check.space_id)?.domains.some((d) => d.domain === check.domain)) err(`${check.id} domain must be unregistered`);
+  }
+  return { errors, gold };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const set = loadEvalSet();
-  const errors = validateEvalSet(set);
-  const amount = set.relay.questions.filter((question) => question.rephrasePairId === "amount-column");
-  const rubricSound = set.relay.questions.every((question) => scoreAnswer("", question) === false && scoreAnswer(question.goldAnswer, question) === true);
+  const ds = loadDataset();
+  const { errors, gold } = validateDataset(ds);
+  const scored = gold.questions.filter((q) => !q.excluded);
+  const byKind = Object.fromEntries([...new Set(scored.map((q) => q.kind))].sort().map((k) => [k, scored.filter((q) => q.kind === k).length]));
+  const outcomes = Object.fromEntries(["written", "optional-only", "not-written"].map((o) => [o, gold.traceLabels.filter((t) => t.outcome === o).length]));
   process.stdout.write(`${JSON.stringify({
     errors,
-    questions: set.relay.questions.length,
-    amountPairGold: new Set(amount.map((question) => question.goldAnswer)).size,
-    rubricSound
+    datasetVersion: 2,
+    traces: orderedTraces(ds.corpus).length,
+    traceOutcomes: outcomes,
+    topics: gold.topics.length,
+    entries: gold.entries.filter((e) => !e.optional).length,
+    optionalEntries: gold.entries.filter((e) => e.optional).length,
+    negatives: gold.negatives.length,
+    questions: scored.length,
+    questionsByKind: byKind,
+    apiChecks: gold.apiChecks.length
   })}\n`);
-  process.exit(errors.length === 0 && rubricSound ? 0 : 1);
+  process.exit(errors.length ? 1 : 0);
 }

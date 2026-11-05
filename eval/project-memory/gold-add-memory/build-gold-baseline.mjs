@@ -1,229 +1,230 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+#!/usr/bin/env node
+// Derives dataset v2 gold from the corpus and the per-trace labels by replaying the labelled
+// M05 ops in chat_time order (v3 §2.2.9). The result is committed as dataset/gold.json;
+// load-eval-set.mjs rebuilds it and fails when the committed copy drifts.
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const dataset = join(root, "dataset");
-const read = (name) => JSON.parse(readFileSync(join(dataset, name), "utf8"));
-const corpus = read("corpus.json");
-const decisions = read("decisions.json").decisions;
-const relay = read("relay.json").questions;
-const conflicts = read("conflicts.json").conflicts;
-const traces = new Map(corpus.traces.map((trace) => [trace.id, trace]));
+export const DATASET_DIR = join(root, "dataset");
+export const GOLD_PATH = join(DATASET_DIR, "gold.json");
 
-// This is a deterministic mock of add_message extraction. The text and source ids are
-// copied from the alpha gold; only the field assignment is reviewed against standard §2.2.5.
-const review = {
-  source: "eval/project-memory/dataset copied from dev-project-memory-alpha",
-  method: "mock-add-message-extraction",
-  reviewedAt: "2026-11-03",
-  standard: [
-    "decision 只保留范围、对外约定或共同约定",
-    "experience 记录可复用做法或已证实不可行的做法",
-    "evolution 只记录产出状态变化，不记录开始做某事或局部步骤"
-  ],
-  findings: [
-    { id: "d_copy", original: "decision", reviewed: "experience", reason: "不把 catalog export 搬进 ledger 是局部实现取舍，不是范围、对外约定或共同约定。" },
-    { id: "d_price", original: "decision", reviewed: "experience", reason: "price 表增加 amount 列是局部实现方案，不能作为项目决策金标。" },
-    { id: "d_export", original: "decision", reviewed: "experience", reason: "先创建 output 目录再写文件是执行步骤，按 standard 不进入决策字段。" },
-    { id: "d_csv", original: "decision", reviewed: "experience", reason: "选择 prices.csv 是局部实现细节；保留为经验/当前做法供检索题使用。" }
-  ],
-  acceptedDecisionIds: decisions.map((d) => d.id).filter((id) => !new Set(["d_copy", "d_price", "d_export", "d_csv"]).has(id)),
-  // Facts that relay questions ask about but the alpha decisions never extracted. Text is the
-  // trace answer verbatim; superseded (t_verbose, t_copy, t_sample) and overridden low-level
-  // traces (t_write_*) are not current state and stay out of gold.
-  addedEntries: [
-    { traceId: "t_admin_bug", kind: "experience", goldTopic: "ledger-empty-customer", reason: "已证实补样例不能修复，问题在读取代码，是可复用的排查结论。" },
-    { traceId: "t_ledger_tz", kind: "experience", goldTopic: "ledger-report-calculation", reason: "report.ts 切月规则是局部实现。" },
-    { traceId: "t_ledger_round", kind: "experience", goldTopic: "ledger-report-calculation", reason: "金额累加精度是局部实现。" },
-    { traceId: "t_ledger_dup", kind: "experience", goldTopic: "ledger-report-calculation", reason: "去重规则是局部实现。" },
-    { traceId: "t_ledger_loc", kind: "experience", goldTopic: "ledger-report-output", reason: "输出目录与文件名是局部实现，与 d_export 的复核口径一致。" },
-    { traceId: "t_cat_round", kind: "experience", goldTopic: "catalog-price-data", reason: "价格取整是局部实现。" },
-    { traceId: "t_cat_tz", kind: "experience", goldTopic: "catalog-price-data", reason: "生效日切换规则是局部实现。" },
-    { traceId: "t_cat_sku", kind: "experience", goldTopic: "catalog-price-data", reason: "sku 归一化是局部实现。" },
-    { traceId: "t_cat_dup", kind: "experience", goldTopic: "catalog-price-data", reason: "重复 sku 取舍是局部实现。" },
-    { traceId: "t_short", kind: "decision", goldTopic: "collab-communication", reason: "回复格式是用户与 agent 的共同约定，取代 t_verbose。" },
-    { traceId: "t_admin_todo", kind: "decision", goldTopic: "collab-communication", reason: "admin 的协作约定，压过 t_write_split。" },
-    { traceId: "t_admin_claim", kind: "decision", goldTopic: "collab-repo-safety", reason: "admin 的冲突判定口径是共同约定，压过 t_write_edit。" }
-  ],
-  // goldTopic groups entries by work object (module, output or rule area), not by single fact.
-  // Topic induction is scored with label-free clustering, so these names never need to match
-  // model topic ids.
-  topicGroups: {
-    "ledger-report-calculation": "月报怎么算：金额来源、精度、切月时区、分录去重",
-    "ledger-empty-customer": "空客户行的处理规则与测试失败根因",
-    "ledger-report-output": "月报输出：写到哪里，以及是否搬用 catalog export",
-    "catalog-price-data": "价格数据口径：amount 列、取整、生效日时区、sku 归一与重复取舍",
-    "catalog-price-export": "价格表导出：目录与文件格式",
-    "collab-repo-safety": "仓库操作约定：连接串与 .env、分支、冲突判定",
-    "collab-communication": "沟通约定：回复格式、无清单时是否拆段、跨窗口通知"
+export function loadDataset(dir = DATASET_DIR) {
+  const read = (name) => JSON.parse(readFileSync(join(dir, name), "utf8"));
+  return { corpus: read("corpus.json"), labels: read("labels.json"), conflicts: read("conflicts.json"), questions: read("questions.json") };
+}
+
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const union = (left, right) => [...new Set([...left, ...right])];
+
+export function orderedTraces(corpus) {
+  return corpus.traces.map((trace, index) => ({ trace, index }))
+    .sort((a, b) => a.trace.chat_time.localeCompare(b.trace.chat_time) || a.index - b.index)
+    .map(({ trace }) => trace);
+}
+
+// Replays labelled ops for every trace whose reply landed at or before `until`.
+// Returns entry states keyed by gold entry id, plus rule violations found on the way.
+export function replay(ds, until = "9999") {
+  const conversations = new Map(ds.corpus.conversations.map((c) => [c.id, c]));
+  const meta = ds.labels.entries;
+  const state = new Map();
+  const errors = [];
+  const informedConversations = new Set();
+  for (const trace of orderedTraces(ds.corpus)) {
+    if (trace.reply_time > until) continue;
+    const conversation = conversations.get(trace.conversation);
+    const label = ds.labels.traces[trace.id];
+    if (!label) { errors.push(`${trace.id} has no label`); continue; }
+    const notes = trace.annotations ?? [];
+    if (notes.some((n) => n.type === "informed")) informedConversations.add(trace.conversation);
+    for (const op of label.ops) {
+      const where = `${trace.id}:${op.op}:${op.entry}`;
+      const by = op.by ?? conversation?.user_id;
+      const at = { time: trace.chat_time, timeWindow: [trace.chat_time, trace.reply_time] };
+      const kind = meta[op.entry]?.kind;
+      if (!kind) { errors.push(`${where} unknown entry`); continue; }
+      let entry = state.get(op.entry);
+      if (op.op === "add") {
+        if (entry) { errors.push(`${where} adds an entry that already exists`); continue; }
+        state.set(op.entry, { content: op.content, ...at, user_ids: [by], history: [], conflicts: [], sources: [trace.id], superseded: [] });
+        continue;
+      }
+      if (!entry) { errors.push(`${where} targets an entry that does not exist yet`); continue; }
+      entry.sources = union(entry.sources, [trace.id]);
+      const inContent = entry.user_ids.includes(by);
+      const conflictIndex = entry.conflicts.findIndex((item) => item.user_ids.includes(by));
+      const approval = notes.some((n) => n.type === "approval");
+      if (op.op === "conflict_append") {
+        if (kind !== "decision") errors.push(`${where} conflicts exist only on decisions`);
+        if (inContent || conflictIndex >= 0 || approval) errors.push(`${where} author already owns a conclusion or was approved; conflict_append is wrong`);
+        entry.conflicts.push({ content: op.content, ...at, user_ids: [by] });
+      } else if (op.op === "conflict_update") {
+        const item = entry.conflicts[op.target];
+        if (!item || !item.user_ids.includes(by)) { errors.push(`${where} author does not own conflicts[${op.target}]`); continue; }
+        entry.superseded.push(item.content);
+        Object.assign(item, { content: op.content, ...at });
+      } else if (op.op === "rewrite" || op.op === "update") {
+        if (op.op === "rewrite" && kind !== "decision") errors.push(`${where} rewrite is for decisions`);
+        if (op.op === "update" && kind !== "experience") errors.push(`${where} update is for experiences`);
+        if (op.op === "rewrite" && !inContent && !approval) errors.push(`${where} neither author nor approved; must be conflict_append`);
+        if (op.op === "rewrite" && op.via !== (inContent ? "author" : "approval")) errors.push(`${where} via should be ${inContent ? "author" : "approval"}`);
+        if (op.reason === undefined) errors.push(`${where} must state reason (null when the conversation gives none)`);
+        entry.history.push({ content: entry.content, time: entry.time, timeWindow: entry.timeWindow, user_ids: entry.user_ids, reason: op.reason ?? null });
+        Object.assign(entry, { content: op.content, ...at, user_ids: [by] });
+        if (op.mergeConflict !== undefined) {
+          const [merged] = entry.conflicts.splice(op.mergeConflict, 1);
+          if (!merged) errors.push(`${where} mergeConflict ${op.mergeConflict} missing`);
+          else entry.user_ids = union(entry.user_ids, merged.user_ids);
+        }
+      } else if (op.op === "resolve") {
+        const picked = entry.conflicts[op.target];
+        if (!picked) { errors.push(`${where} conflicts[${op.target}] missing`); continue; }
+        if (!notes.some((n) => n.type === "resolve")) errors.push(`${where} needs a resolve signal`);
+        if (!informedConversations.has(trace.conversation)) errors.push(`${where} conversation was never informed`);
+        const reason = op.reason ?? null;
+        const losers = [{ content: entry.content, time: entry.time, timeWindow: entry.timeWindow, user_ids: entry.user_ids }, ...entry.conflicts.filter((_, i) => i !== op.target)];
+        for (const loser of losers) entry.history.push({ ...loser, reason });
+        Object.assign(entry, { content: picked.content, time: picked.time, timeWindow: picked.timeWindow, user_ids: picked.user_ids, conflicts: [] });
+      } else {
+        errors.push(`${where} unknown op`);
+      }
+    }
   }
-};
+  return { state, errors };
+}
 
-const decisionTopic = {
-  d_amount: "ledger-report-calculation",
-  d_empty: "ledger-empty-customer",
-  d_copy: "ledger-report-output",
-  d_env: "collab-repo-safety",
-  d_branch: "collab-repo-safety",
-  d_notify: "collab-communication",
-  d_price: "catalog-price-data",
-  d_export: "catalog-price-export",
-  d_csv: "catalog-price-export"
-};
-const latestTraceAt = (ids) => ids.map((id) => traces.get(id).at).sort().at(-1);
+export function buildGold(ds) {
+  const { corpus, labels, questions } = ds;
+  const { state, errors } = replay(ds);
+  const topics = new Map(labels.topics.map((topic) => [topic.id, topic]));
+  const conversations = new Map(corpus.conversations.map((c) => [c.id, c]));
+  const entries = Object.entries(labels.entries).map(([id, meta]) => {
+    const final = state.get(id);
+    if (!final) { errors.push(`${id} is labelled but never written`); return null; }
+    const topic = topics.get(meta.topic);
+    if (!topic) errors.push(`${id} topic ${meta.topic} missing`);
+    const staleVersions = [...final.history.map((item) => item.content), ...final.superseded];
+    return {
+      id,
+      kind: meta.kind,
+      ...(meta.category ? { category: meta.category } : {}),
+      optional: meta.optional === true,
+      topic: meta.topic,
+      space_id: topic?.space_id,
+      content: final.content,
+      time: final.time,
+      timeWindow: final.timeWindow,
+      user_ids: final.user_ids,
+      ...(meta.kind === "decision" ? { conflicts: final.conflicts, history: final.history } : {}),
+      ...(meta.kind === "experience" ? { history: final.history } : {}),
+      staleVersions,
+      sources: final.sources,
+      ...(meta.alternatives ? { alternatives: meta.alternatives } : {})
+    };
+  }).filter(Boolean);
 
-const findingById = new Map(review.findings.map((finding) => [finding.id, finding]));
-const entries = [];
-for (const decision of decisions) {
-  const finding = findingById.get(decision.id);
-  const kind = finding ? "experience" : "decision";
-  entries.push({
-    id: `${kind}_${decision.id}`,
-    kind,
-    projectId: decision.projectId,
-    goldTopic: decisionTopic[decision.id],
-    text: decision.textAfter,
-    reason: decision.reason,
-    sourceTraceIds: decision.sourceTraceIds,
-    asOf: latestTraceAt(decision.sourceTraceIds),
-    changedAt: decision.changedAt,
-    relation: decision.relation,
-    source: "copied-alpha-gold-reviewed"
+  const negatives = [];
+  const traceLabels = orderedTraces(corpus).map((trace) => {
+    const label = labels.traces[trace.id] ?? { ops: [] };
+    const space_id = conversations.get(trace.conversation)?.space_id;
+    for (const [index, drop] of (label.dropped ?? []).entries()) {
+      if (drop.nw) negatives.push({ id: `nw_${trace.id}${index ? `_${index}` : ""}`, trace: trace.id, space_id, text: drop.nw, reason: drop.reason });
+    }
+    const required = label.ops.filter((op) => !labels.entries[op.entry]?.optional);
+    return {
+      trace: trace.id,
+      space_id,
+      outcome: required.length ? "written" : label.ops.length ? "optional-only" : "not-written",
+      ops: label.ops.map((op) => `${op.op}:${op.entry}`),
+      dropped: (label.dropped ?? []).map((drop) => drop.reason)
+    };
   });
-}
 
-for (const added of review.addedEntries) {
-  const trace = traces.get(added.traceId);
-  entries.push({
-    id: `${added.kind}_${added.traceId}`,
-    kind: added.kind,
-    projectId: trace.projectId,
-    goldTopic: added.goldTopic,
-    text: trace.answer,
-    reason: added.reason,
-    sourceTraceIds: [added.traceId],
-    asOf: trace.at,
-    source: "copied-alpha-corpus-reviewed"
-  });
-}
+  const goldTopics = labels.topics.map((topic) => ({ ...topic, entries: entries.filter((entry) => entry.topic === topic.id).map((entry) => entry.id) }));
 
-// Evolution is restricted to output status changes represented by supersedes or explicit
-// completed/reverted/fixed outcomes in the copied corpus. Query/answer text is never rewritten.
-const evolutionTopic = {
-  t_column: "ledger-report-calculation",
-  t_wait: "ledger-report-output",
-  t_csv: "catalog-price-export",
-  t_bug: "ledger-empty-customer",
-  t_env: "collab-repo-safety",
-  t_tell: "collab-communication",
-  t_dryrun: "ledger-report-output"
-};
-for (const [id, goldTopic] of Object.entries(evolutionTopic)) {
-  const trace = traces.get(id);
-  entries.push({
-    id: `evolution_${id}`,
-    kind: "evolution",
-    projectId: trace.projectId,
-    goldTopic,
-    text: trace.answer,
-    sourceTraceIds: [id],
-    asOf: trace.at,
-    at: trace.at,
-    supersedes: trace.supersedes ?? [],
-    source: "copied-alpha-corpus"
-  });
-}
-// Earlier or overridden statements of each gold fact. The judge uses them to tell a stale
-// model entry apart from an unrelated one; they never count as correct.
-const staleByWinner = new Map();
-const addStale = (winner, loser) => staleByWinner.set(winner, new Set([...(staleByWinner.get(winner) ?? []), loser]));
-for (const trace of corpus.traces) for (const id of trace.supersedes ?? []) addStale(trace.id, id);
-for (const conflict of conflicts) {
-  const [winner, loser] = conflict.winner === "a" ? [conflict.sideA, conflict.sideB] : [conflict.sideB, conflict.sideA];
-  for (const w of winner.evidenceIds) for (const l of loser.evidenceIds) addStale(w, l);
-}
-const textBeforeById = new Map(decisions.map((decision) => [decision.id, decision.textBefore]));
-for (const entry of entries) {
-  if (!review.topicGroups[entry.goldTopic]) throw new Error(`${entry.id} has unknown goldTopic ${entry.goldTopic}`);
-  const staleIds = entry.sourceTraceIds.flatMap((id) => [...(staleByWinner.get(id) ?? [])]);
-  const before = textBeforeById.get(entry.id.replace(/^(decision|experience)_/, ""));
-  entry.staleTexts = [...new Set([...(before ? [before] : []), ...staleIds.map((id) => traces.get(id).answer)])];
-}
-
-const timelineSpecs = [
-  {
-    id: "ledger-amount",
-    title: "ledger 月报金额来源",
-    projectId: "proj_ledger",
-    traceIds: ["t_journal", "t_report", "t_column", "t_ledger_round", "t_ledger_tz", "t_ledger_loc", "t_ledger_dup"],
-    questionIds: ["q01", "q02", "q05", "q20", "q25", "q22", "q26", "q28", "q29"]
-  },
-  {
-    id: "ledger-empty-customer",
-    title: "ledger 空客户行处理",
-    projectId: "proj_ledger",
-    traceIds: ["t_report", "t_sample", "t_admin_bug", "t_bug"],
-    questionIds: ["q03", "q04", "q15", "q16", "q17"]
-  },
-  {
-    id: "catalog-export",
-    title: "catalog 价格导出",
-    projectId: "proj_catalog",
-    traceIds: ["t_price", "t_export", "t_cat_sku", "t_cat_round", "t_cat_tz", "t_cat_dup", "t_csv"],
-    questionIds: ["q06", "q07", "q08", "q21", "q23", "q24", "q27", "q30"]
-  },
-  {
-    id: "cross-project-copy",
-    title: "catalog 导出方案是否进入 ledger",
-    projectId: "proj_ledger",
-    traceIds: ["t_copy", "t_wait", "t_dryrun"],
-    questionIds: ["q09"]
-  },
-  {
-    id: "cross-session-policy",
-    title: "协作与安全策略",
-    projectId: "proj_ledger",
-    traceIds: ["t_verbose", "t_short", "t_write_split", "t_admin_todo", "t_write_secret", "t_admin_env", "t_write_edit", "t_admin_claim", "t_write_main", "t_admin_branch", "t_env", "t_silent", "t_tell"],
-    questionIds: ["q10", "q11", "q12", "q13", "q14", "q18", "q19"]
-  }
-];
-
-const output = {
-  schemaVersion: 1,
-  generatedAt: "2026-11-02T00:00:00.000Z",
-  provenance: {
-    sourceBranch: "dev-project-memory-alpha",
-    sourcePath: "eval/project-memory/dataset",
-    copiedBeforeReview: true,
-    extraction: "mock add_message; no live add_message call",
-    sourceIntegrity: "all answer text and evidence ids are copied; no question answer was manually regenerated"
-  },
-  review,
-  entries,
-  timelines: timelineSpecs.map((timeline) => ({
-    ...timeline,
-    events: timeline.traceIds.map((id) => {
-      const trace = traces.get(id);
-      return { traceId: id, at: trace.at, query: trace.query, answer: trace.answer, supersedes: trace.supersedes ?? [] };
-    }).sort((left, right) => left.at.localeCompare(right.at)),
-    questions: timeline.questionIds.map((id) => relay.find((question) => question.id === id)).filter(Boolean).map((question) => ({
+  const goldQuestions = questions.questions.map((question) => {
+    const { state: snap } = replay(ds, question.askedAt);
+    const expectedItems = [];
+    for (const want of question.expect.entries) {
+      const entry = snap.get(want.entry);
+      if (!entry) { errors.push(`${question.id} expects ${want.entry} before it exists`); continue; }
+      for (const part of want.parts) {
+        if (part === "content") expectedItems.push({ entry: want.entry, part, text: entry.content });
+        else if (part === "conflicts") {
+          if (!entry.conflicts.length) errors.push(`${question.id} expects conflicts on ${want.entry} but there are none at askedAt`);
+          entry.conflicts.forEach((item, index) => expectedItems.push({ entry: want.entry, part, index, text: item.content }));
+        } else errors.push(`${question.id} unknown part ${part}`);
+      }
+    }
+    const trapItems = [];
+    for (const trap of question.traps) {
+      const entry = snap.get(trap.entry);
+      if (!entry) { errors.push(`${question.id} trap ${trap.entry} does not exist at askedAt`); continue; }
+      if (trap.kind === "stale") {
+        const item = entry.history[trap.history];
+        if (!item) errors.push(`${question.id} stale trap ${trap.entry} history[${trap.history}] missing at askedAt`);
+        else trapItems.push({ entry: trap.entry, kind: "stale", text: item.content });
+      } else if (trap.kind === "cross-project") {
+        const texts = [entry.content, ...entry.conflicts.map((c) => c.content), ...entry.history.map((h) => h.content)];
+        trapItems.push({ entry: trap.entry, kind: "cross-project", texts });
+      } else errors.push(`${question.id} unknown trap kind ${trap.kind}`);
+    }
+    return {
       id: question.id,
       kind: question.kind,
       askedAt: question.askedAt,
-      sessionId: question.sessionId,
-      projectId: question.projectId,
+      conversation: question.conversation,
+      space_id: question.space_id,
       question: question.question,
-      asksAbout: question.evidenceIds,
-      trapEvidenceIds: question.trapEvidenceIds ?? [],
+      goldAnswer: question.goldAnswer,
       mustInclude: question.mustInclude,
-      mustNotInclude: question.mustNotInclude ?? [],
-      goldAnswer: question.goldAnswer
-    }))
-  }))
-};
+      ...(question.excluded ? { excluded: true, excludedReason: question.excludedReason } : {}),
+      expectedTopics: question.expect.topics,
+      expectedItems,
+      trapItems
+    };
+  });
 
-mkdirSync(join(root, "generated"), { recursive: true });
-writeFileSync(join(root, "generated/extracted-gold.json"), `${JSON.stringify(output, null, 2)}\n`);
-writeFileSync(join(root, "generated/review.json"), `${JSON.stringify(review, null, 2)}\n`);
-console.log(JSON.stringify({ entries: entries.length, decisions: review.acceptedDecisionIds.length, reclassified: review.findings.length, added: review.addedEntries.length, topics: Object.keys(review.topicGroups).length, timelines: timelineSpecs.length, questions: relay.length }));
+  return {
+    gold: {
+      datasetVersion: 2,
+      derivedFrom: ["dataset/corpus.json", "dataset/labels.json", "dataset/questions.json"],
+      spaces: corpus.spaces,
+      members: corpus.members,
+      topics: goldTopics,
+      entries,
+      negatives,
+      traceLabels,
+      questions: goldQuestions,
+      apiChecks: questions.apiChecks
+    },
+    errors
+  };
+}
+
+export function renderGold(gold) {
+  return `${JSON.stringify(gold, null, 2)}\n`;
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const { gold, errors } = buildGold(loadDataset());
+  if (errors.length) {
+    console.error(JSON.stringify({ errors }, null, 2));
+    process.exit(1);
+  }
+  writeFileSync(GOLD_PATH, renderGold(gold));
+  const count = (kind, optional) => gold.entries.filter((e) => e.kind === kind && e.optional === optional).length;
+  console.log(JSON.stringify({
+    output: "dataset/gold.json",
+    topics: gold.topics.length,
+    decisions: count("decision", false),
+    experiences: count("experience", false),
+    timeline: count("timeline", false),
+    optionalTimeline: count("timeline", true),
+    negatives: gold.negatives.length,
+    questions: gold.questions.filter((q) => !q.excluded).length,
+    apiChecks: gold.apiChecks.length
+  }));
+}

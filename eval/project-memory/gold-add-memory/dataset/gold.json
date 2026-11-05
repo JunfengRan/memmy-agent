@@ -1,0 +1,2239 @@
+{
+  "datasetVersion": 2,
+  "derivedFrom": [
+    "dataset/corpus.json",
+    "dataset/labels.json",
+    "dataset/questions.json"
+  ],
+  "spaces": [
+    {
+      "space_id": "space_ledger",
+      "instructions": "ledger 是记账服务，按客户出月度账务报表。",
+      "domains": [
+        {
+          "domain": "代码开发",
+          "description": "月报与分录的代码实现与测试"
+        },
+        {
+          "domain": "工程规范",
+          "description": "仓库、分支与密钥的协作约定"
+        }
+      ]
+    },
+    {
+      "space_id": "space_catalog",
+      "instructions": "catalog 是商品价格目录服务，提供价格查询与价格表导出。",
+      "domains": [
+        {
+          "domain": "代码开发",
+          "description": "价格数据与导出的代码实现"
+        },
+        {
+          "domain": "产品设计",
+          "description": "价格展示的产品规则"
+        }
+      ]
+    }
+  ],
+  "members": [
+    {
+      "user_id": "u_lin",
+      "name": "林工"
+    },
+    {
+      "user_id": "u_zhou",
+      "name": "周工"
+    },
+    {
+      "user_id": "u_chen",
+      "name": "陈工"
+    }
+  ],
+  "topics": [
+    {
+      "id": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "domain": "代码开发",
+      "topic_name": "ledger 月报生成",
+      "summaryKeyPoints": [
+        "按客户汇总生成 ledger 的月度账务报表"
+      ],
+      "descriptionKeyPoints": [
+        "月报按 entries 的 amount 列汇总",
+        "空客户的处理尚有不一致结论",
+        "report.ts 丢弃空客户整行的问题已修复"
+      ],
+      "entries": [
+        "dec_amount",
+        "dec_empty",
+        "dec_tz",
+        "dec_report_path",
+        "dec_round",
+        "dec_dup",
+        "exp_fixture",
+        "tl_report",
+        "tl_column",
+        "tl_bug",
+        "tl_sample",
+        "tl_ledger_tz",
+        "tl_ledger_loc",
+        "tl_ledger_round",
+        "tl_ledger_dup"
+      ]
+    },
+    {
+      "id": "tp_ledger_export",
+      "space_id": "space_ledger",
+      "domain": "代码开发",
+      "topic_name": "月报导出方案",
+      "summaryKeyPoints": [
+        "决定 ledger 月报是否复用 catalog 的导出做法"
+      ],
+      "descriptionKeyPoints": [
+        "dry-run 报告显示月报用不上 export，不搬进 ledger",
+        "ledger 里的 export 拷贝已撤回"
+      ],
+      "entries": [
+        "dec_copy",
+        "tl_copy",
+        "tl_wait"
+      ]
+    },
+    {
+      "id": "tp_ledger_repo",
+      "space_id": "space_ledger",
+      "domain": "工程规范",
+      "topic_name": "仓库协作规范",
+      "summaryKeyPoints": [
+        "约定 ledger 仓库的分支与数据库密钥管理方式"
+      ],
+      "descriptionKeyPoints": [
+        "数据库密码只留在本机 .env",
+        "分支策略尚有不一致结论"
+      ],
+      "entries": [
+        "dec_env",
+        "dec_branch",
+        "tl_env",
+        "tl_write_secret"
+      ]
+    },
+    {
+      "id": "tp_cat_price",
+      "space_id": "space_catalog",
+      "domain": "代码开发",
+      "topic_name": "价格查询与展示",
+      "summaryKeyPoints": [
+        "为价格列表提供快速、口径一致的价格数据"
+      ],
+      "descriptionKeyPoints": [
+        "price 表已加 amount 列，价格列表直接读取"
+      ],
+      "entries": [
+        "dec_price",
+        "dec_cat_sku",
+        "dec_cat_round",
+        "dec_cat_tz",
+        "dec_cat_dup",
+        "tl_price",
+        "tl_cat_sku",
+        "tl_cat_round",
+        "tl_cat_tz",
+        "tl_cat_dup"
+      ]
+    },
+    {
+      "id": "tp_cat_export",
+      "space_id": "space_catalog",
+      "domain": "代码开发",
+      "topic_name": "价格表导出",
+      "summaryKeyPoints": [
+        "把价格表导出成文件"
+      ],
+      "descriptionKeyPoints": [
+        "价格表导出已完成，当前写 prices.csv"
+      ],
+      "entries": [
+        "dec_export_format",
+        "tl_export",
+        "tl_csv"
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "id": "dec_amount",
+      "kind": "decision",
+      "category": "共同约定",
+      "optional": false,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "给 entries 加 amount 列，月报直接按这列汇总，不再扫描 journal 全文，因为扫全文太慢。",
+      "time": "2026-10-21T16:40:00+08:00",
+      "timeWindow": [
+        "2026-10-21T16:40:00+08:00",
+        "2026-10-21T16:42:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhou"
+      ],
+      "conflicts": [],
+      "history": [
+        {
+          "content": "entries 表结构不变，月报金额继续写在 journal 正文里，读取时再从正文挑出。",
+          "time": "2026-10-21T09:15:00+08:00",
+          "timeWindow": [
+            "2026-10-21T09:15:00+08:00",
+            "2026-10-21T09:17:00+08:00"
+          ],
+          "user_ids": [
+            "u_lin"
+          ],
+          "reason": "林工确定以周工的结论为准"
+        }
+      ],
+      "staleVersions": [
+        "entries 表结构不变，月报金额继续写在 journal 正文里，读取时再从正文挑出。"
+      ],
+      "sources": [
+        "t_journal",
+        "t_column",
+        "t_resolve"
+      ]
+    },
+    {
+      "id": "dec_empty",
+      "kind": "decision",
+      "category": "对外约定",
+      "optional": false,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "空客户的处理：没有客户名时这笔不进月报。",
+      "time": "2026-10-21T11:30:00+08:00",
+      "timeWindow": [
+        "2026-10-21T11:30:00+08:00",
+        "2026-10-21T11:32:00+08:00"
+      ],
+      "user_ids": [
+        "u_lin"
+      ],
+      "conflicts": [
+        {
+          "content": "空客户的处理：只跳过金额列为空的行，空客户但金额还在的保留在月报里。",
+          "time": "2026-10-21T17:40:00+08:00",
+          "timeWindow": [
+            "2026-10-21T17:40:00+08:00",
+            "2026-10-21T17:42:00+08:00"
+          ],
+          "user_ids": [
+            "u_zhou"
+          ]
+        }
+      ],
+      "history": [],
+      "staleVersions": [
+        "空客户的处理：只有金额列为空时才不进月报。"
+      ],
+      "sources": [
+        "t_report",
+        "t_column",
+        "t_bug"
+      ]
+    },
+    {
+      "id": "dec_tz",
+      "kind": "decision",
+      "category": "对外约定",
+      "optional": false,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "月报的月初月末按 UTC+8（东八区）切分，不用 UTC。",
+      "time": "2026-10-21T11:20:00+08:00",
+      "timeWindow": [
+        "2026-10-21T11:20:00+08:00",
+        "2026-10-21T11:22:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhou"
+      ],
+      "conflicts": [],
+      "history": [],
+      "staleVersions": [],
+      "sources": [
+        "t_ledger_tz"
+      ]
+    },
+    {
+      "id": "dec_report_path",
+      "kind": "decision",
+      "category": "对外约定",
+      "optional": false,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "月报结果写到 reports/ 目录，文件按月份命名，如 2026-10.txt。",
+      "time": "2026-10-21T12:50:00+08:00",
+      "timeWindow": [
+        "2026-10-21T12:50:00+08:00",
+        "2026-10-21T12:52:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhou"
+      ],
+      "conflicts": [],
+      "history": [],
+      "staleVersions": [],
+      "sources": [
+        "t_ledger_loc"
+      ]
+    },
+    {
+      "id": "dec_round",
+      "kind": "decision",
+      "category": "共同约定",
+      "optional": false,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "月报金额按整数分累加，不用浮点，最后再换算成元显示。",
+      "time": "2026-10-21T13:40:00+08:00",
+      "timeWindow": [
+        "2026-10-21T13:40:00+08:00",
+        "2026-10-21T13:42:00+08:00"
+      ],
+      "user_ids": [
+        "u_lin"
+      ],
+      "conflicts": [],
+      "history": [],
+      "staleVersions": [],
+      "sources": [
+        "t_ledger_round"
+      ]
+    },
+    {
+      "id": "dec_dup",
+      "kind": "decision",
+      "category": "对外约定",
+      "optional": false,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "重复的分录按 id 去重，只留最早一条。",
+      "time": "2026-10-21T15:20:00+08:00",
+      "timeWindow": [
+        "2026-10-21T15:20:00+08:00",
+        "2026-10-21T15:22:00+08:00"
+      ],
+      "user_ids": [
+        "u_lin"
+      ],
+      "conflicts": [],
+      "history": [],
+      "staleVersions": [],
+      "sources": [
+        "t_ledger_dup"
+      ]
+    },
+    {
+      "id": "exp_fixture",
+      "kind": "experience",
+      "optional": false,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "测试失败时先查读取代码再动样例：月报空客户被丢掉是 report.ts 在客户名为空时整行丢弃；改 month.json 填样例金额修不好，已撤回。",
+      "time": "2026-10-21T17:40:00+08:00",
+      "timeWindow": [
+        "2026-10-21T17:40:00+08:00",
+        "2026-10-21T17:42:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhou"
+      ],
+      "history": [
+        {
+          "content": "测试失败时先查读取代码，不要先怀疑样例文件：月报空客户被丢掉是 report.ts 的读取问题，不是样例文件旧了。",
+          "time": "2026-10-21T17:20:00+08:00",
+          "timeWindow": [
+            "2026-10-21T17:20:00+08:00",
+            "2026-10-21T17:22:00+08:00"
+          ],
+          "user_ids": [
+            "u_zhou"
+          ],
+          "reason": null
+        }
+      ],
+      "staleVersions": [
+        "测试失败时先查读取代码，不要先怀疑样例文件：月报空客户被丢掉是 report.ts 的读取问题，不是样例文件旧了。"
+      ],
+      "sources": [
+        "t_admin_bug",
+        "t_bug"
+      ]
+    },
+    {
+      "id": "tl_report",
+      "kind": "timeline",
+      "optional": false,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "月报按客户过滤汇总已完成，空客户测试已补充。",
+      "time": "2026-10-21T11:30:00+08:00",
+      "timeWindow": [
+        "2026-10-21T11:30:00+08:00",
+        "2026-10-21T11:32:00+08:00"
+      ],
+      "user_ids": [
+        "u_lin"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_report"
+      ]
+    },
+    {
+      "id": "tl_column",
+      "kind": "timeline",
+      "optional": false,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "entries 已增加 amount 列，月报改为按这列汇总，空客户测试已同步修改。",
+      "time": "2026-10-21T16:40:00+08:00",
+      "timeWindow": [
+        "2026-10-21T16:40:00+08:00",
+        "2026-10-21T16:42:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhou"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_column"
+      ]
+    },
+    {
+      "id": "tl_bug",
+      "kind": "timeline",
+      "optional": false,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "month.json 的改动已撤回，report.ts 丢弃空客户整行的问题已修复。",
+      "time": "2026-10-21T17:40:00+08:00",
+      "timeWindow": [
+        "2026-10-21T17:40:00+08:00",
+        "2026-10-21T17:42:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhou"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_bug"
+      ]
+    },
+    {
+      "id": "tl_sample",
+      "kind": "timeline",
+      "optional": true,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "month.json 的样例金额已填上。",
+      "time": "2026-10-21T17:05:00+08:00",
+      "timeWindow": [
+        "2026-10-21T17:05:00+08:00",
+        "2026-10-21T17:07:00+08:00"
+      ],
+      "user_ids": [
+        "u_lin"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_sample"
+      ]
+    },
+    {
+      "id": "tl_ledger_tz",
+      "kind": "timeline",
+      "optional": true,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "report.ts 已改为按 UTC+8 切分月初月末。",
+      "time": "2026-10-21T11:20:00+08:00",
+      "timeWindow": [
+        "2026-10-21T11:20:00+08:00",
+        "2026-10-21T11:22:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhou"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_ledger_tz"
+      ]
+    },
+    {
+      "id": "tl_ledger_loc",
+      "kind": "timeline",
+      "optional": true,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "月报结果已改为写到 reports/ 目录。",
+      "time": "2026-10-21T12:50:00+08:00",
+      "timeWindow": [
+        "2026-10-21T12:50:00+08:00",
+        "2026-10-21T12:52:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhou"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_ledger_loc"
+      ]
+    },
+    {
+      "id": "tl_ledger_round",
+      "kind": "timeline",
+      "optional": true,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "report.ts 已改为按整数分累加金额。",
+      "time": "2026-10-21T13:40:00+08:00",
+      "timeWindow": [
+        "2026-10-21T13:40:00+08:00",
+        "2026-10-21T13:42:00+08:00"
+      ],
+      "user_ids": [
+        "u_lin"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_ledger_round"
+      ]
+    },
+    {
+      "id": "tl_ledger_dup",
+      "kind": "timeline",
+      "optional": true,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "report.ts 已加上汇总前按 id 去重。",
+      "time": "2026-10-21T15:20:00+08:00",
+      "timeWindow": [
+        "2026-10-21T15:20:00+08:00",
+        "2026-10-21T15:22:00+08:00"
+      ],
+      "user_ids": [
+        "u_lin"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_ledger_dup"
+      ]
+    },
+    {
+      "id": "dec_copy",
+      "kind": "decision",
+      "category": "范围",
+      "optional": false,
+      "topic": "tp_ledger_export",
+      "space_id": "space_ledger",
+      "content": "不把 catalog 的 export 搬进 ledger：dry-run 报告显示月报用不上 export。",
+      "time": "2026-10-21T19:10:00+08:00",
+      "timeWindow": [
+        "2026-10-21T19:10:00+08:00",
+        "2026-10-21T19:12:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhou"
+      ],
+      "conflicts": [],
+      "history": [
+        {
+          "content": "ledger 的月报导出复用 catalog 的 export 做法，把它抄进 ledger。",
+          "time": "2026-10-21T13:00:00+08:00",
+          "timeWindow": [
+            "2026-10-21T13:00:00+08:00",
+            "2026-10-21T13:02:00+08:00"
+          ],
+          "user_ids": [
+            "u_lin"
+          ],
+          "reason": null
+        },
+        {
+          "content": "先不把 catalog 的 export 搬进 ledger，等 dry-run 报告出来再决定。",
+          "time": "2026-10-21T13:20:00+08:00",
+          "timeWindow": [
+            "2026-10-21T13:20:00+08:00",
+            "2026-10-21T13:22:00+08:00"
+          ],
+          "user_ids": [
+            "u_zhou"
+          ],
+          "reason": "dry-run 报告显示月报用不上 export"
+        }
+      ],
+      "staleVersions": [
+        "ledger 的月报导出复用 catalog 的 export 做法，把它抄进 ledger。",
+        "先不把 catalog 的 export 搬进 ledger，等 dry-run 报告出来再决定。"
+      ],
+      "sources": [
+        "t_copy",
+        "t_wait",
+        "t_dryrun"
+      ],
+      "alternatives": [
+        {
+          "user_ids": [
+            "u_zhou",
+            "u_lin"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tl_copy",
+      "kind": "timeline",
+      "optional": false,
+      "topic": "tp_ledger_export",
+      "space_id": "space_ledger",
+      "content": "catalog 的 export 已抄进 ledger。",
+      "time": "2026-10-21T13:00:00+08:00",
+      "timeWindow": [
+        "2026-10-21T13:00:00+08:00",
+        "2026-10-21T13:02:00+08:00"
+      ],
+      "user_ids": [
+        "u_lin"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_copy"
+      ]
+    },
+    {
+      "id": "tl_wait",
+      "kind": "timeline",
+      "optional": false,
+      "topic": "tp_ledger_export",
+      "space_id": "space_ledger",
+      "content": "ledger 里的 export 拷贝已撤回。",
+      "time": "2026-10-21T13:20:00+08:00",
+      "timeWindow": [
+        "2026-10-21T13:20:00+08:00",
+        "2026-10-21T13:22:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhou"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_wait"
+      ]
+    },
+    {
+      "id": "dec_env",
+      "kind": "decision",
+      "category": "共同约定",
+      "optional": false,
+      "topic": "tp_ledger_repo",
+      "space_id": "space_ledger",
+      "content": "数据库密码只留在本机 .env，不写进仓库，README 里也不放连接串。",
+      "time": "2026-10-21T17:50:00+08:00",
+      "timeWindow": [
+        "2026-10-21T17:50:00+08:00",
+        "2026-10-21T17:52:00+08:00"
+      ],
+      "user_ids": [
+        "u_lin",
+        "u_zhou"
+      ],
+      "conflicts": [],
+      "history": [
+        {
+          "content": "数据库连接串写进 README，方便别人查。",
+          "time": "2026-10-21T14:25:00+08:00",
+          "timeWindow": [
+            "2026-10-21T14:25:00+08:00",
+            "2026-10-21T14:27:00+08:00"
+          ],
+          "user_ids": [
+            "u_lin"
+          ],
+          "reason": null
+        }
+      ],
+      "staleVersions": [
+        "数据库连接串写进 README，方便别人查。"
+      ],
+      "sources": [
+        "t_write_secret",
+        "t_admin_env",
+        "t_env"
+      ],
+      "alternatives": [
+        {
+          "user_ids": [
+            "u_lin"
+          ],
+          "conflicts": [
+            {
+              "content": ".env 留在本机，说明和普通记录里都不放数据库连接串。",
+              "time": "2026-10-21T14:40:00+08:00",
+              "user_ids": [
+                "u_zhou"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dec_branch",
+      "kind": "decision",
+      "category": "共同约定",
+      "optional": false,
+      "topic": "tp_ledger_repo",
+      "space_id": "space_ledger",
+      "content": "改动直接在 main 上改，不开分支，省得合并。",
+      "time": "2026-10-21T15:00:00+08:00",
+      "timeWindow": [
+        "2026-10-21T15:00:00+08:00",
+        "2026-10-21T15:02:00+08:00"
+      ],
+      "user_ids": [
+        "u_lin"
+      ],
+      "conflicts": [
+        {
+          "content": "改动先放 feature 分支，不直接改 main。",
+          "time": "2026-10-21T15:10:00+08:00",
+          "timeWindow": [
+            "2026-10-21T15:10:00+08:00",
+            "2026-10-21T15:12:00+08:00"
+          ],
+          "user_ids": [
+            "u_zhou"
+          ]
+        }
+      ],
+      "history": [],
+      "staleVersions": [],
+      "sources": [
+        "t_write_main",
+        "t_admin_branch"
+      ]
+    },
+    {
+      "id": "tl_env",
+      "kind": "timeline",
+      "optional": true,
+      "topic": "tp_ledger_repo",
+      "space_id": "space_ledger",
+      "content": "README 里的数据库连接串已删除。",
+      "time": "2026-10-21T17:50:00+08:00",
+      "timeWindow": [
+        "2026-10-21T17:50:00+08:00",
+        "2026-10-21T17:52:00+08:00"
+      ],
+      "user_ids": [
+        "u_lin"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_env"
+      ]
+    },
+    {
+      "id": "tl_write_secret",
+      "kind": "timeline",
+      "optional": true,
+      "topic": "tp_ledger_repo",
+      "space_id": "space_ledger",
+      "content": "数据库连接串已写进 README。",
+      "time": "2026-10-21T14:25:00+08:00",
+      "timeWindow": [
+        "2026-10-21T14:25:00+08:00",
+        "2026-10-21T14:27:00+08:00"
+      ],
+      "user_ids": [
+        "u_lin"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_write_secret"
+      ]
+    },
+    {
+      "id": "dec_price",
+      "kind": "decision",
+      "category": "共同约定",
+      "optional": false,
+      "topic": "tp_cat_price",
+      "space_id": "space_catalog",
+      "content": "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。",
+      "time": "2026-10-21T11:40:00+08:00",
+      "timeWindow": [
+        "2026-10-21T11:40:00+08:00",
+        "2026-10-21T11:42:00+08:00"
+      ],
+      "user_ids": [
+        "u_chen"
+      ],
+      "conflicts": [],
+      "history": [],
+      "staleVersions": [],
+      "sources": [
+        "t_price"
+      ]
+    },
+    {
+      "id": "dec_cat_sku",
+      "kind": "decision",
+      "category": "共同约定",
+      "optional": false,
+      "topic": "tp_cat_price",
+      "space_id": "space_catalog",
+      "content": "比较 sku 前先统一转成大写。",
+      "time": "2026-10-21T12:40:00+08:00",
+      "timeWindow": [
+        "2026-10-21T12:40:00+08:00",
+        "2026-10-21T12:42:00+08:00"
+      ],
+      "user_ids": [
+        "u_chen"
+      ],
+      "conflicts": [],
+      "history": [],
+      "staleVersions": [],
+      "sources": [
+        "t_cat_sku"
+      ]
+    },
+    {
+      "id": "dec_cat_round",
+      "kind": "decision",
+      "category": "对外约定",
+      "optional": false,
+      "topic": "tp_cat_price",
+      "space_id": "space_catalog",
+      "content": "价格显示保留两位小数，输出前按两位小数取整。",
+      "time": "2026-10-21T13:30:00+08:00",
+      "timeWindow": [
+        "2026-10-21T13:30:00+08:00",
+        "2026-10-21T13:32:00+08:00"
+      ],
+      "user_ids": [
+        "u_chen"
+      ],
+      "conflicts": [],
+      "history": [],
+      "staleVersions": [],
+      "sources": [
+        "t_cat_round"
+      ]
+    },
+    {
+      "id": "dec_cat_tz",
+      "kind": "decision",
+      "category": "对外约定",
+      "optional": false,
+      "topic": "tp_cat_price",
+      "space_id": "space_catalog",
+      "content": "价格生效日按 UTC 零点切换，不看本地时区。",
+      "time": "2026-10-21T14:00:00+08:00",
+      "timeWindow": [
+        "2026-10-21T14:00:00+08:00",
+        "2026-10-21T14:02:00+08:00"
+      ],
+      "user_ids": [
+        "u_chen"
+      ],
+      "conflicts": [],
+      "history": [],
+      "staleVersions": [],
+      "sources": [
+        "t_cat_tz"
+      ]
+    },
+    {
+      "id": "dec_cat_dup",
+      "kind": "decision",
+      "category": "对外约定",
+      "optional": false,
+      "topic": "tp_cat_price",
+      "space_id": "space_catalog",
+      "content": "同一个 sku 出现多条价格时取最后一条，前面的忽略。",
+      "time": "2026-10-21T15:00:00+08:00",
+      "timeWindow": [
+        "2026-10-21T15:00:00+08:00",
+        "2026-10-21T15:02:00+08:00"
+      ],
+      "user_ids": [
+        "u_chen"
+      ],
+      "conflicts": [],
+      "history": [],
+      "staleVersions": [],
+      "sources": [
+        "t_cat_dup"
+      ]
+    },
+    {
+      "id": "tl_price",
+      "kind": "timeline",
+      "optional": false,
+      "topic": "tp_cat_price",
+      "space_id": "space_catalog",
+      "content": "price 表已增加 amount 列，价格列表改为直接读这一列。",
+      "time": "2026-10-21T11:40:00+08:00",
+      "timeWindow": [
+        "2026-10-21T11:40:00+08:00",
+        "2026-10-21T11:42:00+08:00"
+      ],
+      "user_ids": [
+        "u_chen"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_price"
+      ]
+    },
+    {
+      "id": "tl_cat_sku",
+      "kind": "timeline",
+      "optional": true,
+      "topic": "tp_cat_price",
+      "space_id": "space_catalog",
+      "content": "price.ts 已改为比较 sku 前先转成大写。",
+      "time": "2026-10-21T12:40:00+08:00",
+      "timeWindow": [
+        "2026-10-21T12:40:00+08:00",
+        "2026-10-21T12:42:00+08:00"
+      ],
+      "user_ids": [
+        "u_chen"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_cat_sku"
+      ]
+    },
+    {
+      "id": "tl_cat_round",
+      "kind": "timeline",
+      "optional": true,
+      "topic": "tp_cat_price",
+      "space_id": "space_catalog",
+      "content": "listAmounts 已改为输出前按两位小数取整。",
+      "time": "2026-10-21T13:30:00+08:00",
+      "timeWindow": [
+        "2026-10-21T13:30:00+08:00",
+        "2026-10-21T13:32:00+08:00"
+      ],
+      "user_ids": [
+        "u_chen"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_cat_round"
+      ]
+    },
+    {
+      "id": "tl_cat_tz",
+      "kind": "timeline",
+      "optional": true,
+      "topic": "tp_cat_price",
+      "space_id": "space_catalog",
+      "content": "价格生效日已改为按 UTC 零点切换。",
+      "time": "2026-10-21T14:00:00+08:00",
+      "timeWindow": [
+        "2026-10-21T14:00:00+08:00",
+        "2026-10-21T14:02:00+08:00"
+      ],
+      "user_ids": [
+        "u_chen"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_cat_tz"
+      ]
+    },
+    {
+      "id": "tl_cat_dup",
+      "kind": "timeline",
+      "optional": true,
+      "topic": "tp_cat_price",
+      "space_id": "space_catalog",
+      "content": "price.ts 已改为重复 sku 取最后一条。",
+      "time": "2026-10-21T15:00:00+08:00",
+      "timeWindow": [
+        "2026-10-21T15:00:00+08:00",
+        "2026-10-21T15:02:00+08:00"
+      ],
+      "user_ids": [
+        "u_chen"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_cat_dup"
+      ]
+    },
+    {
+      "id": "dec_export_format",
+      "kind": "decision",
+      "category": "对外约定",
+      "optional": false,
+      "topic": "tp_cat_export",
+      "space_id": "space_catalog",
+      "content": "价格表导出为 csv，写成 prices.csv，不再用 json。",
+      "time": "2026-10-21T16:20:00+08:00",
+      "timeWindow": [
+        "2026-10-21T16:20:00+08:00",
+        "2026-10-21T16:22:00+08:00"
+      ],
+      "user_ids": [
+        "u_chen"
+      ],
+      "conflicts": [],
+      "history": [
+        {
+          "content": "价格表导出写到 output 目录下的 prices.json。",
+          "time": "2026-10-21T12:10:00+08:00",
+          "timeWindow": [
+            "2026-10-21T12:10:00+08:00",
+            "2026-10-21T12:12:00+08:00"
+          ],
+          "user_ids": [
+            "u_chen"
+          ],
+          "reason": null
+        }
+      ],
+      "staleVersions": [
+        "价格表导出写到 output 目录下的 prices.json。"
+      ],
+      "sources": [
+        "t_export",
+        "t_csv"
+      ]
+    },
+    {
+      "id": "tl_export",
+      "kind": "timeline",
+      "optional": false,
+      "topic": "tp_cat_export",
+      "space_id": "space_catalog",
+      "content": "价格表导出（export.ts）已完成。",
+      "time": "2026-10-21T12:10:00+08:00",
+      "timeWindow": [
+        "2026-10-21T12:10:00+08:00",
+        "2026-10-21T12:12:00+08:00"
+      ],
+      "user_ids": [
+        "u_chen"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_export"
+      ]
+    },
+    {
+      "id": "tl_csv",
+      "kind": "timeline",
+      "optional": true,
+      "topic": "tp_cat_export",
+      "space_id": "space_catalog",
+      "content": "价格表导出已改为写 prices.csv。",
+      "time": "2026-10-21T16:20:00+08:00",
+      "timeWindow": [
+        "2026-10-21T16:20:00+08:00",
+        "2026-10-21T16:22:00+08:00"
+      ],
+      "user_ids": [
+        "u_chen"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_csv"
+      ]
+    }
+  ],
+  "negatives": [
+    {
+      "id": "nw_t_verbose",
+      "trace": "t_verbose",
+      "space_id": "space_ledger",
+      "text": "回复正文里按顺序写完每一个步骤，不另开清单。",
+      "reason": "unrelated"
+    },
+    {
+      "id": "nw_t_short",
+      "trace": "t_short",
+      "space_id": "space_ledger",
+      "text": "回复只留结果，步骤记在清单里。",
+      "reason": "unrelated"
+    },
+    {
+      "id": "nw_t_write_split",
+      "trace": "t_write_split",
+      "space_id": "space_ledger",
+      "text": "回复按句子拆开，每句一段。",
+      "reason": "unrelated"
+    },
+    {
+      "id": "nw_t_admin_todo",
+      "trace": "t_admin_todo",
+      "space_id": "space_ledger",
+      "text": "没有清单时不把一轮拆成几段。",
+      "reason": "unrelated"
+    },
+    {
+      "id": "nw_t_export",
+      "trace": "t_export",
+      "space_id": "space_catalog",
+      "text": "导出前目录不存在就先创建 output 目录，再写文件。",
+      "reason": "execution_step"
+    },
+    {
+      "id": "nw_t_write_edit",
+      "trace": "t_write_edit",
+      "space_id": "space_ledger",
+      "text": "只要改了文件就把修改记成冲突。",
+      "reason": "unrelated"
+    },
+    {
+      "id": "nw_t_admin_claim",
+      "trace": "t_admin_claim",
+      "space_id": "space_ledger",
+      "text": "只有两边对同一件事结论相反才算冲突，改了不同文件不算。",
+      "reason": "unrelated"
+    },
+    {
+      "id": "nw_t_sample",
+      "trace": "t_sample",
+      "space_id": "space_ledger",
+      "text": "月报测试失败是样例文件过期，填上样例金额即可。",
+      "reason": "unresolved"
+    },
+    {
+      "id": "nw_t_silent",
+      "trace": "t_silent",
+      "space_id": "space_ledger",
+      "text": "改表的事只留在当前窗口，不告诉别的会话。",
+      "reason": "unrelated"
+    },
+    {
+      "id": "nw_t_tell",
+      "trace": "t_tell",
+      "space_id": "space_ledger",
+      "text": "另一个窗口下次开口时要告诉它 entries 已有 amount 列。",
+      "reason": "unrelated"
+    }
+  ],
+  "traceLabels": [
+    {
+      "trace": "t_journal",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "add:dec_amount"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_verbose",
+      "space_id": "space_ledger",
+      "outcome": "not-written",
+      "ops": [],
+      "dropped": [
+        "unrelated"
+      ]
+    },
+    {
+      "trace": "t_short",
+      "space_id": "space_ledger",
+      "outcome": "not-written",
+      "ops": [],
+      "dropped": [
+        "unrelated"
+      ]
+    },
+    {
+      "trace": "t_write_split",
+      "space_id": "space_ledger",
+      "outcome": "not-written",
+      "ops": [],
+      "dropped": [
+        "unrelated"
+      ]
+    },
+    {
+      "trace": "t_admin_todo",
+      "space_id": "space_ledger",
+      "outcome": "not-written",
+      "ops": [],
+      "dropped": [
+        "unrelated"
+      ]
+    },
+    {
+      "trace": "t_ledger_tz",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "add:dec_tz",
+        "add:tl_ledger_tz"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_report",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "add:dec_empty",
+        "add:tl_report"
+      ],
+      "dropped": [
+        "restatement"
+      ]
+    },
+    {
+      "trace": "t_price",
+      "space_id": "space_catalog",
+      "outcome": "written",
+      "ops": [
+        "add:dec_price",
+        "add:tl_price"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_export",
+      "space_id": "space_catalog",
+      "outcome": "written",
+      "ops": [
+        "add:dec_export_format",
+        "add:tl_export"
+      ],
+      "dropped": [
+        "execution_step"
+      ]
+    },
+    {
+      "trace": "t_cat_sku",
+      "space_id": "space_catalog",
+      "outcome": "written",
+      "ops": [
+        "add:dec_cat_sku",
+        "add:tl_cat_sku"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_ledger_loc",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "add:dec_report_path",
+        "add:tl_ledger_loc"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_copy",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "add:dec_copy",
+        "add:tl_copy"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_wait",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "rewrite:dec_copy",
+        "add:tl_wait"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_cat_round",
+      "space_id": "space_catalog",
+      "outcome": "written",
+      "ops": [
+        "add:dec_cat_round",
+        "add:tl_cat_round"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_ledger_round",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "add:dec_round",
+        "add:tl_ledger_round"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_cat_tz",
+      "space_id": "space_catalog",
+      "outcome": "written",
+      "ops": [
+        "add:dec_cat_tz",
+        "add:tl_cat_tz"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_write_secret",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "add:dec_env",
+        "add:tl_write_secret"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_admin_env",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "conflict_append:dec_env"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_write_edit",
+      "space_id": "space_ledger",
+      "outcome": "not-written",
+      "ops": [],
+      "dropped": [
+        "unrelated"
+      ]
+    },
+    {
+      "trace": "t_admin_claim",
+      "space_id": "space_ledger",
+      "outcome": "not-written",
+      "ops": [],
+      "dropped": [
+        "unrelated"
+      ]
+    },
+    {
+      "trace": "t_write_main",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "add:dec_branch"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_cat_dup",
+      "space_id": "space_catalog",
+      "outcome": "written",
+      "ops": [
+        "add:dec_cat_dup",
+        "add:tl_cat_dup"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_admin_branch",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "conflict_append:dec_branch"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_ledger_dup",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "add:dec_dup",
+        "add:tl_ledger_dup"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_csv",
+      "space_id": "space_catalog",
+      "outcome": "written",
+      "ops": [
+        "rewrite:dec_export_format",
+        "add:tl_csv"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_column",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "conflict_append:dec_amount",
+        "conflict_append:dec_empty",
+        "add:tl_column"
+      ],
+      "dropped": [
+        "process_material"
+      ]
+    },
+    {
+      "trace": "t_sample",
+      "space_id": "space_ledger",
+      "outcome": "optional-only",
+      "ops": [
+        "add:tl_sample"
+      ],
+      "dropped": [
+        "unresolved"
+      ]
+    },
+    {
+      "trace": "t_admin_bug",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "add:exp_fixture"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_bug",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "update:exp_fixture",
+        "conflict_update:dec_empty",
+        "add:tl_bug"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_env",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "rewrite:dec_env",
+        "add:tl_env"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_silent",
+      "space_id": "space_ledger",
+      "outcome": "not-written",
+      "ops": [],
+      "dropped": [
+        "unrelated"
+      ]
+    },
+    {
+      "trace": "t_tell",
+      "space_id": "space_ledger",
+      "outcome": "not-written",
+      "ops": [],
+      "dropped": [
+        "unrelated"
+      ]
+    },
+    {
+      "trace": "t_dryrun",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "rewrite:dec_copy"
+      ],
+      "dropped": []
+    },
+    {
+      "trace": "t_informed",
+      "space_id": "space_ledger",
+      "outcome": "not-written",
+      "ops": [],
+      "dropped": [
+        "restatement"
+      ]
+    },
+    {
+      "trace": "t_resolve",
+      "space_id": "space_ledger",
+      "outcome": "written",
+      "ops": [
+        "resolve:dec_amount"
+      ],
+      "dropped": []
+    }
+  ],
+  "questions": [
+    {
+      "id": "q03",
+      "kind": "plain",
+      "askedAt": "2026-10-21T12:00:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "空客户的测试现在是怎么写的？",
+      "goldAnswer": "没有客户名时这笔不进月报。",
+      "mustInclude": [
+        "没有客户名时这笔不进月报"
+      ],
+      "expectedTopics": [
+        "tp_ledger_report"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_empty",
+          "part": "content",
+          "text": "空客户的处理：没有客户名时这笔不进月报。"
+        }
+      ],
+      "trapItems": []
+    },
+    {
+      "id": "q01",
+      "kind": "cross-project",
+      "askedAt": "2026-10-21T14:00:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "ledger 月报的金额现在是从哪里取的？",
+      "goldAnswer": "entries 表结构不变，金额继续写在 journal 正文里，月报读取时再从正文里挑出来。",
+      "mustInclude": [
+        "journal 正文"
+      ],
+      "expectedTopics": [
+        "tp_ledger_report"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_amount",
+          "part": "content",
+          "text": "entries 表结构不变，月报金额继续写在 journal 正文里，读取时再从正文挑出。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_price",
+          "kind": "cross-project",
+          "texts": [
+            "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q02",
+      "kind": "conflict",
+      "askedAt": "2026-10-21T17:00:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "ledger 月报的金额现在是从哪里取的？",
+      "goldAnswer": "这一项还没有定论，有两项不一致结论：林工的结论是 entries 表结构不变，金额写在 journal 正文里、读取时挑出来；周工的结论是给 entries 加 amount 列，月报直接按这列汇总，因为扫全文太慢，代码已按这个改了。需要成员确认以哪项为准。",
+      "mustInclude": [
+        "journal 正文",
+        "amount 列"
+      ],
+      "expectedTopics": [
+        "tp_ledger_report"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_amount",
+          "part": "content",
+          "text": "entries 表结构不变，月报金额继续写在 journal 正文里，读取时再从正文挑出。"
+        },
+        {
+          "entry": "dec_amount",
+          "part": "conflicts",
+          "index": 0,
+          "text": "给 entries 加 amount 列，月报直接按这列汇总，不再扫描 journal 全文，因为扫全文太慢。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_price",
+          "kind": "cross-project",
+          "texts": [
+            "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q04",
+      "kind": "conflict",
+      "askedAt": "2026-10-21T19:20:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "空客户的测试现在是怎么写的？",
+      "goldAnswer": "空客户的规则还有两项不一致结论：林工最初的测试是没有客户名时这笔不进月报；周工改为只跳过金额列为空的行，空客户但金额还在的会留下，并修好了 report.ts 把空客户整行丢掉的问题。需要成员确认以哪项为准。",
+      "mustInclude": [
+        "没有客户名时这笔不进月报",
+        "空客户但金额还在的会留下"
+      ],
+      "expectedTopics": [
+        "tp_ledger_report"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_empty",
+          "part": "content",
+          "text": "空客户的处理：没有客户名时这笔不进月报。"
+        },
+        {
+          "entry": "dec_empty",
+          "part": "conflicts",
+          "index": 0,
+          "text": "空客户的处理：只跳过金额列为空的行，空客户但金额还在的保留在月报里。"
+        }
+      ],
+      "trapItems": []
+    },
+    {
+      "id": "q05",
+      "kind": "cross-project",
+      "askedAt": "2026-10-21T19:30:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "ledger 月报里的金额是怎么算的，精度上有什么要求？",
+      "goldAnswer": "金额按整数分累加，不用浮点，最后再换算成元显示。",
+      "mustInclude": [
+        "整数分"
+      ],
+      "expectedTopics": [
+        "tp_ledger_report"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_round",
+          "part": "content",
+          "text": "月报金额按整数分累加，不用浮点，最后再换算成元显示。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_cat_round",
+          "kind": "cross-project",
+          "texts": [
+            "价格显示保留两位小数，输出前按两位小数取整。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q06",
+      "kind": "cross-project",
+      "askedAt": "2026-10-21T19:31:00+08:00",
+      "conversation": "catalog-ask",
+      "space_id": "space_catalog",
+      "question": "价格列表里的金额怎么取整？",
+      "goldAnswer": "价格显示保留两位小数，输出前按两位小数取整。",
+      "mustInclude": [
+        "两位小数"
+      ],
+      "expectedTopics": [
+        "tp_cat_price"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_cat_round",
+          "part": "content",
+          "text": "价格显示保留两位小数，输出前按两位小数取整。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_round",
+          "kind": "cross-project",
+          "texts": [
+            "月报金额按整数分累加，不用浮点，最后再换算成元显示。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q07",
+      "kind": "stale",
+      "askedAt": "2026-10-21T19:32:00+08:00",
+      "conversation": "catalog-ask",
+      "space_id": "space_catalog",
+      "question": "catalog 导出的价格表现在是什么格式？",
+      "goldAnswer": "导出为 csv，写成 prices.csv，不再写 prices.json。",
+      "mustInclude": [
+        "prices.csv"
+      ],
+      "expectedTopics": [
+        "tp_cat_export"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_export_format",
+          "part": "content",
+          "text": "价格表导出为 csv，写成 prices.csv，不再用 json。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_export_format",
+          "kind": "stale",
+          "text": "价格表导出写到 output 目录下的 prices.json。"
+        }
+      ]
+    },
+    {
+      "id": "q09",
+      "kind": "stale",
+      "askedAt": "2026-10-21T19:34:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "catalog 的导出做法抄进 ledger 了吗，后面还搬吗？",
+      "goldAnswer": "不搬了。林工曾把 catalog 的 export 抄进 ledger；周工和林工确认后撤回了拷贝，等 dry-run 报告；报告出来后确定月报用不上 export，不再恢复，也不往 ledger 搬。",
+      "mustInclude": [
+        "用不上 export"
+      ],
+      "expectedTopics": [
+        "tp_ledger_export"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_copy",
+          "part": "content",
+          "text": "不把 catalog 的 export 搬进 ledger：dry-run 报告显示月报用不上 export。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_copy",
+          "kind": "stale",
+          "text": "ledger 的月报导出复用 catalog 的 export 做法，把它抄进 ledger。"
+        },
+        {
+          "entry": "dec_copy",
+          "kind": "stale",
+          "text": "先不把 catalog 的 export 搬进 ledger，等 dry-run 报告出来再决定。"
+        }
+      ]
+    },
+    {
+      "id": "q13",
+      "kind": "stale",
+      "askedAt": "2026-10-21T19:39:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "数据库连接串能写进说明或普通记录吗？",
+      "goldAnswer": "不能。数据库密码和连接串只留在本机 .env，不写进仓库、说明或普通记录；早先把连接串写进 README 的做法已经改掉。",
+      "mustInclude": [
+        ".env"
+      ],
+      "expectedTopics": [
+        "tp_ledger_repo"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_env",
+          "part": "content",
+          "text": "数据库密码只留在本机 .env，不写进仓库，README 里也不放连接串。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_env",
+          "kind": "stale",
+          "text": "数据库连接串写进 README，方便别人查。"
+        }
+      ]
+    },
+    {
+      "id": "q14",
+      "kind": "stale",
+      "askedAt": "2026-10-21T19:40:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "README 里现在还有数据库连接串吗？",
+      "goldAnswer": "没有了，README 里的连接串已经删掉，密码只留在本机 .env。",
+      "mustInclude": [
+        ".env"
+      ],
+      "expectedTopics": [
+        "tp_ledger_repo"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_env",
+          "part": "content",
+          "text": "数据库密码只留在本机 .env，不写进仓库，README 里也不放连接串。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_env",
+          "kind": "stale",
+          "text": "数据库连接串写进 README，方便别人查。"
+        }
+      ]
+    },
+    {
+      "id": "q15",
+      "kind": "plain",
+      "askedAt": "2026-10-21T19:41:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "月报测试失败是因为样例文件旧了吗？",
+      "goldAnswer": "不是，是 report.ts 的读取问题：客户名为空时整行被丢掉；改样例文件修不好，那次改动已经撤回。",
+      "mustInclude": [
+        "report.ts"
+      ],
+      "expectedTopics": [
+        "tp_ledger_report"
+      ],
+      "expectedItems": [
+        {
+          "entry": "exp_fixture",
+          "part": "content",
+          "text": "测试失败时先查读取代码再动样例：月报空客户被丢掉是 report.ts 在客户名为空时整行丢弃；改 month.json 填样例金额修不好，已撤回。"
+        }
+      ],
+      "trapItems": []
+    },
+    {
+      "id": "q16",
+      "kind": "plain",
+      "askedAt": "2026-10-21T19:42:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "tests/fixtures/month.json 现在还留着之前的改动吗？",
+      "goldAnswer": "没有，month.json 的改动已经撤回。",
+      "mustInclude": [
+        "撤回"
+      ],
+      "expectedTopics": [
+        "tp_ledger_report"
+      ],
+      "expectedItems": [
+        {
+          "entry": "tl_bug",
+          "part": "content",
+          "text": "month.json 的改动已撤回，report.ts 丢弃空客户整行的问题已修复。"
+        }
+      ],
+      "trapItems": []
+    },
+    {
+      "id": "q17",
+      "kind": "plain",
+      "askedAt": "2026-10-21T19:43:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "空客户的账为什么会被整行丢掉？",
+      "goldAnswer": "因为 report.ts 读取时客户名为空就把整行丢掉；现在已经修好，只跳过金额列为空的行。",
+      "mustInclude": [
+        "客户名为空"
+      ],
+      "expectedTopics": [
+        "tp_ledger_report"
+      ],
+      "expectedItems": [
+        {
+          "entry": "tl_bug",
+          "part": "content",
+          "text": "month.json 的改动已撤回，report.ts 丢弃空客户整行的问题已修复。"
+        }
+      ],
+      "trapItems": []
+    },
+    {
+      "id": "q19",
+      "kind": "conflict",
+      "askedAt": "2026-10-21T19:45:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "改动应该放在哪个分支上？",
+      "goldAnswer": "还没有定论，有两项不一致结论：林工主张直接在 main 上改，省得合并；周工要求改动先放 feature 分支，不直接改 main。需要成员确认以哪项为准。",
+      "mustInclude": [
+        "main",
+        "feature 分支"
+      ],
+      "expectedTopics": [
+        "tp_ledger_repo"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_branch",
+          "part": "content",
+          "text": "改动直接在 main 上改，不开分支，省得合并。"
+        },
+        {
+          "entry": "dec_branch",
+          "part": "conflicts",
+          "index": 0,
+          "text": "改动先放 feature 分支，不直接改 main。"
+        }
+      ],
+      "trapItems": []
+    },
+    {
+      "id": "q21",
+      "kind": "cross-project",
+      "askedAt": "2026-10-21T19:48:00+08:00",
+      "conversation": "catalog-ask",
+      "space_id": "space_catalog",
+      "question": "catalog 的价格列表现在是怎么读金额的？",
+      "goldAnswer": "列表直接读 amount 列，不再拼装说明文字。",
+      "mustInclude": [
+        "amount 列"
+      ],
+      "excluded": true,
+      "excludedReason": "与 q24 问同一条决策，v1 起就排除在评分外；runner 不提问、scorer 不计分",
+      "expectedTopics": [
+        "tp_cat_price"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_price",
+          "part": "content",
+          "text": "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_amount",
+          "kind": "cross-project",
+          "texts": [
+            "entries 表结构不变，月报金额继续写在 journal 正文里，读取时再从正文挑出。",
+            "给 entries 加 amount 列，月报直接按这列汇总，不再扫描 journal 全文，因为扫全文太慢。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q23",
+      "kind": "plain",
+      "askedAt": "2026-10-21T19:51:00+08:00",
+      "conversation": "catalog-ask",
+      "space_id": "space_catalog",
+      "question": "比较 sku 之前要先做什么处理？",
+      "goldAnswer": "先统一转成大写。",
+      "mustInclude": [
+        "大写"
+      ],
+      "expectedTopics": [
+        "tp_cat_price"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_cat_sku",
+          "part": "content",
+          "text": "比较 sku 前先统一转成大写。"
+        }
+      ],
+      "trapItems": []
+    },
+    {
+      "id": "q24",
+      "kind": "cross-project",
+      "askedAt": "2026-10-21T19:52:00+08:00",
+      "conversation": "catalog-ask",
+      "space_id": "space_catalog",
+      "question": "catalog 的价格表为什么要新增一列金额？",
+      "goldAnswer": "因为价格查询太慢；加了 amount 列后，价格列表直接读这一列。",
+      "mustInclude": [
+        "价格查询太慢"
+      ],
+      "expectedTopics": [
+        "tp_cat_price"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_price",
+          "part": "content",
+          "text": "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_amount",
+          "kind": "cross-project",
+          "texts": [
+            "entries 表结构不变，月报金额继续写在 journal 正文里，读取时再从正文挑出。",
+            "给 entries 加 amount 列，月报直接按这列汇总，不再扫描 journal 全文，因为扫全文太慢。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q25",
+      "kind": "cross-project",
+      "askedAt": "2026-10-21T19:53:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "月报为什么后来要改成直接读 entries 的一列？",
+      "goldAnswer": "因为月报扫 journal 全文太慢。这是周工的结论，和林工把金额留在 journal 正文的结论之间还没有裁决。",
+      "mustInclude": [
+        "全文太慢"
+      ],
+      "expectedTopics": [
+        "tp_ledger_report"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_amount",
+          "part": "conflicts",
+          "index": 0,
+          "text": "给 entries 加 amount 列，月报直接按这列汇总，不再扫描 journal 全文，因为扫全文太慢。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_price",
+          "kind": "cross-project",
+          "texts": [
+            "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q26",
+      "kind": "cross-project",
+      "askedAt": "2026-10-21T19:54:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "月报的月初月末按哪个时区切？",
+      "goldAnswer": "按 UTC+8（东八区）切月初月末，不用 UTC。",
+      "mustInclude": [
+        "UTC+8"
+      ],
+      "expectedTopics": [
+        "tp_ledger_report"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_tz",
+          "part": "content",
+          "text": "月报的月初月末按 UTC+8（东八区）切分，不用 UTC。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_cat_tz",
+          "kind": "cross-project",
+          "texts": [
+            "价格生效日按 UTC 零点切换，不看本地时区。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q27",
+      "kind": "cross-project",
+      "askedAt": "2026-10-21T19:55:00+08:00",
+      "conversation": "catalog-ask",
+      "space_id": "space_catalog",
+      "question": "价格的生效日按哪个时间切换？",
+      "goldAnswer": "按 UTC 零点切换，不看本地时区。",
+      "mustInclude": [
+        "UTC 零点"
+      ],
+      "expectedTopics": [
+        "tp_cat_price"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_cat_tz",
+          "part": "content",
+          "text": "价格生效日按 UTC 零点切换，不看本地时区。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_tz",
+          "kind": "cross-project",
+          "texts": [
+            "月报的月初月末按 UTC+8（东八区）切分，不用 UTC。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q28",
+      "kind": "cross-project",
+      "askedAt": "2026-10-21T19:56:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "月报结果写到哪里？",
+      "goldAnswer": "写到 reports/ 目录下，文件按月份命名，比如 2026-10.txt。",
+      "mustInclude": [
+        "reports/"
+      ],
+      "expectedTopics": [
+        "tp_ledger_report"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_report_path",
+          "part": "content",
+          "text": "月报结果写到 reports/ 目录，文件按月份命名，如 2026-10.txt。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_export_format",
+          "kind": "cross-project",
+          "texts": [
+            "价格表导出为 csv，写成 prices.csv，不再用 json。",
+            "价格表导出写到 output 目录下的 prices.json。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q29",
+      "kind": "cross-project",
+      "askedAt": "2026-10-21T19:57:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "月报里重复的分录怎么处理？",
+      "goldAnswer": "按 id 去重，只留最早一条。",
+      "mustInclude": [
+        "最早"
+      ],
+      "expectedTopics": [
+        "tp_ledger_report"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_dup",
+          "part": "content",
+          "text": "重复的分录按 id 去重，只留最早一条。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_cat_dup",
+          "kind": "cross-project",
+          "texts": [
+            "同一个 sku 出现多条价格时取最后一条，前面的忽略。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q30",
+      "kind": "cross-project",
+      "askedAt": "2026-10-21T19:58:00+08:00",
+      "conversation": "catalog-ask",
+      "space_id": "space_catalog",
+      "question": "同一个 sku 出现多条价格怎么取？",
+      "goldAnswer": "取最后一条，前面的忽略。",
+      "mustInclude": [
+        "最后一条"
+      ],
+      "expectedTopics": [
+        "tp_cat_price"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_cat_dup",
+          "part": "content",
+          "text": "同一个 sku 出现多条价格时取最后一条，前面的忽略。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_dup",
+          "kind": "cross-project",
+          "texts": [
+            "重复的分录按 id 去重，只留最早一条。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q31",
+      "kind": "stale",
+      "askedAt": "2026-10-21T20:40:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "question": "ledger 月报的金额现在以什么为准？",
+      "goldAnswer": "以 entries 的 amount 列为准，月报按这列汇总。林工已确定以周工的结论为准，把金额留在 journal 正文里的旧结论已转入历史。",
+      "mustInclude": [
+        "amount 列"
+      ],
+      "expectedTopics": [
+        "tp_ledger_report"
+      ],
+      "expectedItems": [
+        {
+          "entry": "dec_amount",
+          "part": "content",
+          "text": "给 entries 加 amount 列，月报直接按这列汇总，不再扫描 journal 全文，因为扫全文太慢。"
+        }
+      ],
+      "trapItems": [
+        {
+          "entry": "dec_amount",
+          "kind": "stale",
+          "text": "entries 表结构不变，月报金额继续写在 journal 正文里，读取时再从正文挑出。"
+        },
+        {
+          "entry": "dec_price",
+          "kind": "cross-project",
+          "texts": [
+            "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。"
+          ]
+        }
+      ]
+    }
+  ],
+  "apiChecks": [
+    {
+      "id": "search_requires_space_ids",
+      "spec": "v3 §3.2.2：include_memory_view 含 project 时 space_ids 必填；§5.1.5 INVALID_PARAMS",
+      "call": "search/memory",
+      "omit": [
+        "space_ids"
+      ],
+      "expect": "rejected"
+    },
+    {
+      "id": "add_requires_space_ids",
+      "spec": "v3 §2.2.1：allow_memory_view 含 project 时 user_id、space_ids 必填",
+      "call": "add/message",
+      "omit": [
+        "space_ids"
+      ],
+      "expect": "rejected"
+    },
+    {
+      "id": "search_space_isolation",
+      "spec": "v3 §3.2.4：硬过滤在存储侧强制，返回其他 Space 内容 0",
+      "call": "search/memory",
+      "space_id": "space_catalog",
+      "questionTexts": [
+        "q01",
+        "q05",
+        "q19",
+        "q26",
+        "q29"
+      ],
+      "expect": "no topic outside space_catalog"
+    },
+    {
+      "id": "add_unregistered_domain",
+      "spec": "v3 §2.2.4：请求的 domains 有未登记名称 → DOMAIN_INVALID，整个任务 failed，任何空间都不写",
+      "call": "add/message",
+      "space_id": "space_ledger",
+      "domain": "未登记领域",
+      "expect": "DOMAIN_INVALID"
+    }
+  ]
+}

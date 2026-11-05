@@ -55,7 +55,8 @@ Memory/src/agent-source/integration/workspace-bridge/memmy-workspace-bridge.mjs
 # Fixture workspaces are initialized as empty git repos and have no commits.
 /eval/project-memory/workspaces/*/.git/
 
-# Eval outputs are regenerated per run; only metrics.md summaries are committed.
+# Eval outputs (runs, reports, judge and reader caches) go to eval/project-memory/runs/ and are
+# regenerated per run; only dataset/gold.json and metrics.md summaries are committed.
 /eval/project-memory/gold-add-memory/generated/
 /eval/project-memory/runs/
 /eval/project-memory/gold-add-memory/harness/memory-service/
