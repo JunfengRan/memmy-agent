@@ -3337,11 +3337,16 @@ export class RuntimeRepository {
 
   /** Allocate the next FIFO sequence for Work Memory jobs in a merge scope. */
   nextWorkMemoryScopeSeq(scopeKey: string): number {
+    return this.nextScopeSeq("work_memory_extract", scopeKey);
+  }
+
+  /** Allocate the next FIFO sequence for a scope-serialized job type. */
+  nextScopeSeq(jobType: "work_memory_extract" | "project_memory_organize", scopeKey: string): number {
     const row = this.db.prepare(
       `SELECT COALESCE(MAX(scope_seq), 0) + 1 AS next_seq
        FROM evolution_jobs
-       WHERE job_type = 'work_memory_extract' AND scope_key = ?`
-    ).get(scopeKey) as { next_seq: number };
+       WHERE job_type = ? AND scope_key = ?`
+    ).get(jobType, scopeKey) as { next_seq: number };
     return Number(row.next_seq);
   }
 
@@ -3687,7 +3692,7 @@ export class RuntimeRepository {
                OR CAST(json_extract(payload_json, '$.runAfter') AS TEXT) <= ?
              )
              AND (
-               job_type NOT IN ('l3_world_model_update', 'work_memory_extract')
+               job_type NOT IN ('l3_world_model_update', 'work_memory_extract', 'project_memory_organize')
                OR (
                  scope_key IS NOT NULL
                  AND scope_seq IS NOT NULL
@@ -8202,6 +8207,7 @@ function evolutionJobPrioritySql(): string {
              WHEN job_type = 'import_summary'
                OR (job_type = 'embedding' AND ${importedTarget}) THEN 2
              WHEN job_type = 'embedding' THEN 3
+             WHEN job_type = 'project_memory_organize' THEN 5
              WHEN job_type = 'episode_idle_close' THEN 10
              WHEN job_type = 'episode_title' THEN 15
              WHEN job_type = 'reflection' THEN 20
