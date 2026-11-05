@@ -30,7 +30,7 @@ import type {
 } from "../types.js";
 import { DEFAULT_NAMESPACE_SOURCE } from "../types.js";
 import { MemoryService } from "../service/memory-service.js";
-import { OPENMEM_PREFIX, errorEnvelope } from "../service/project-memory/api.js";
+import { OPENMEM_PREFIX, errorEnvelope, openMemRouteWrites } from "../service/project-memory/api.js";
 import { ProjectMemoryError } from "../service/project-memory/contract/errors.js";
 import { MemoryServiceError, statusForCode } from "../utils/error.js";
 import { stableHash } from "../utils/id.js";
@@ -62,17 +62,6 @@ import {
 
 const logger = createMemoryLogger("http");
 const workerLogger = createMemoryLogger("worker");
-
-const OPENMEM_WRITE_ROUTES = new Set([
-  "add/message",
-  "delete/memory",
-  "create/space",
-  "update/space",
-  "delete/space",
-  "create/domains",
-  "update/domains",
-  "delete/domains"
-]);
 
 const OPENMEM_ROUTES = [
   "POST /api/openmem/v1/add/message",
@@ -275,8 +264,7 @@ export function createMemoryHttpServer(options: MemoryHttpServerOptions): Server
         }
       }
       if (url.pathname.startsWith(OPENMEM_PREFIX)) {
-        const route = url.pathname.slice(OPENMEM_PREFIX.length);
-        if (OPENMEM_WRITE_ROUTES.has(route)) requireMemoryWrite(principal);
+        if (openMemRouteWrites(url.pathname)) requireMemoryWrite(principal);
         else requireMemoryRead(principal);
         const openMem = await options.service.handleProjectMemoryRequest({
           method: request.method,

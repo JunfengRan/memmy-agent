@@ -151,7 +151,9 @@ function parseDecisionTarget(value: unknown, conflicts: number[]): DecisionTarge
 export function parseOrganizeOutput(raw: Json, input: OrganizeInput): OrganizeResult {
   if (!Array.isArray(raw.drafts)) throw new ModelOutputError("drafts must be an array");
   const candidates = new Map(input.candidates.map((topic) => [topic.topicId, topic]));
+  // Authors are members who spoke in this conversation (v3 §2.2.9).
   const participants = new Set(participantsOf([...input.context, ...input.messages]).map((item) => item.user_id));
+  const batchSpeakers = new Set(participantsOf(input.messages).map((item) => item.user_id));
   const fallbackUser = participantsOf(input.messages)[0]?.user_id ?? [...participants][0] ?? null;
 
   const newTopics = new Map<string, NewTopicDraft>();
@@ -197,17 +199,13 @@ export function parseOrganizeOutput(raw: Json, input: OrganizeInput): OrganizeRe
       return;
     }
 
-    let userIds = asStringArray(record.user_ids).filter((id) => participants.has(id));
-    if (userIds.length === 0) {
-      const author = message.role === "user" && message.roleId ? message.roleId : fallbackUser;
-      userIds = author ? [author] : [];
-    }
+    const userIds = draftAuthors(message, messageIdx, asStringArray(record.user_ids), input.messages, batchSpeakers, fallbackUser);
     if (userIds.length === 0) return;
     const base = {
       draftId: `d${index}`,
       content: clampText(content, KIND_LIMIT[kind]),
       time: message.chatTime,
-      userIds: [...new Set(userIds)],
+      userIds,
       messageIdx,
       target
     };
@@ -225,7 +223,9 @@ export function parseOrganizeOutput(raw: Json, input: OrganizeInput): OrganizeRe
         reason: asString(record.reason),
         sameQuestionAs: decision?.id ?? null,
         sameAs: decision ? parseDecisionTarget(record.same_as, seqs) : null,
-        approvedBy: asStringArray(record.approved_by),
+        // Merge only honours an approver who holds the current conclusion. Whether a
+        // second-hand approval ("已和用户B 确认") counts is open-questions Q-12.
+        approvedBy: asStringArray(record.approved_by).filter((id) => !userIds.includes(id)),
         resolve: decision && pick ? { pick } : null
       });
     } else if (kind === "experience") {
@@ -265,6 +265,29 @@ export function parseOrganizeOutput(raw: Json, input: OrganizeInput): OrganizeRe
     informedDecisionIds: new Set(asStringArray(raw.informed_decision_ids)),
     deferred
   };
+}
+
+/**
+ * Authors are derived from the transcript, not trusted from the model: a user message is
+ * authored by its speaker, and Agent output by the members who delegated it in this batch.
+ * A model that names someone else would otherwise let a non-author rewrite a decision.
+ */
+function draftAuthors(
+  message: RawTurnRecord,
+  messageIdx: number,
+  claimed: string[],
+  messages: RawTurnRecord[],
+  batchSpeakers: Set<string>,
+  fallbackUser: string | null
+): string[] {
+  if (message.role === "user" && message.roleId) return [message.roleId];
+  const delegators = claimed.filter((id) => batchSpeakers.has(id));
+  if (delegators.length > 0) return [...new Set(delegators)];
+  for (let idx = messageIdx - 1; idx >= 0; idx -= 1) {
+    const earlier = messages[idx]!;
+    if (earlier.role === "user" && earlier.roleId) return [earlier.roleId];
+  }
+  return fallbackUser ? [fallbackUser] : [];
 }
 
 /** One model call per attempt; malformed output is retried, then the task fails. */

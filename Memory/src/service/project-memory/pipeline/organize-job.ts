@@ -105,6 +105,9 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
   let candidates: TopicSnapshot[] = [];
   let topicSeq: Record<string, number> = {};
   const unavailable = new Set<string>();
+  // Topics another writer created since our last recall (v3 §2.3.1). They must reach the
+  // model on the next attempt even when lexical recall would rank them outside topic_k.
+  const mustConsider = new Set<string>();
   let lastConflict: CommitResult | null = null;
 
   for (let attempt = 1; attempt <= PROJECT_MEMORY_LIMITS.commitAttempts; attempt += 1) {
@@ -119,7 +122,8 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
         entryK: 0
       });
       topicSeq = recall.topicSeq;
-      candidates = await store.getTopicsFull(payload.spaceId, recall.results[0]?.topics.map((topic) => topic.topicId) ?? []);
+      const recalled = recall.results[0]?.topics.map((topic) => topic.topicId) ?? [];
+      candidates = await store.getTopicsFull(payload.spaceId, [...new Set([...mustConsider, ...recalled])]);
       if (!llm.isConfigured()) fail("organize", "MODEL_NOT_CONFIGURED");
       try {
         organized = await organizeBatch(llm, {
@@ -177,6 +181,7 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
       case "VERSION_CONFLICT":
         break;
       case "TOPIC_SET_CHANGED":
+        for (const topicId of result.newTopicIds) mustConsider.add(topicId);
         organized = null;
         break;
       case "TOPIC_NOT_FOUND":

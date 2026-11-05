@@ -838,6 +838,17 @@ const statements = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_pm_raw_turns_conversation ON pm_raw_turns (conversation_id, chat_time)`,
   `CREATE INDEX IF NOT EXISTS idx_pm_raw_turns_task ON pm_raw_turns (task_id)`,
+  // A message is stored once per conversation, but every task that submits it organizes it:
+  // the same turns can be sent to another Space or with other domains later.
+  `CREATE TABLE IF NOT EXISTS pm_task_turns (
+    task_id TEXT NOT NULL,
+    turn_id TEXT NOT NULL,
+    PRIMARY KEY (task_id, turn_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_pm_task_turns_turn ON pm_task_turns (turn_id)`,
+  `INSERT OR IGNORE INTO pm_task_turns (task_id, turn_id)
+   SELECT task_id, turn_id FROM pm_raw_turns
+   WHERE NOT EXISTS (SELECT 1 FROM pm_task_turns LIMIT 1)`,
   `CREATE TABLE IF NOT EXISTS pm_recall_log (
     conversation_id TEXT NOT NULL,
     seq INTEGER NOT NULL,

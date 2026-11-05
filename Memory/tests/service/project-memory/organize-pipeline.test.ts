@@ -162,4 +162,88 @@ describe("project memory organize pipeline", () => {
     expect(status.data.error).toMatchObject({ reason: "MODEL_CALL_FAILED" });
     expect((await call(service, "get/memory", { space_id: "space_a" })).data.total).toBe(0);
   });
+
+  it("organizes messages again for another space after they were stored for the first", async () => {
+    stubModel((payload) => newTopicReply(payload, "推送失败后指数退避重试三次。"));
+    const { service } = harness.createService();
+    await setupSpace(service, "space_a");
+    await setupSpace(service, "space_b");
+    const turn = message("user_a", "2026-10-29 10:00:00", "推送失败就指数退避重试三次。");
+    await add(service, { user_id: "user_a", conversation_id: "c1", space_ids: ["space_a"], messages: [turn] });
+    await drain(service);
+    const second = await add(service, { user_id: "user_a", conversation_id: "c1", space_ids: ["space_b"], messages: [turn] });
+    await drain(service);
+
+    const status = await call(service, "get/status", { task_id: second });
+    expect(status.data).toMatchObject({ status: "completed", memory_views: { added: 1 } });
+    expect((await call(service, "get/memory", { space_id: "space_b" })).data.total).toBe(1);
+  });
+
+  it("shows topics another writer created to the model on the retry after TOPIC_SET_CHANGED", async () => {
+    let concurrentStore: SqliteProjectMemoryStore | null = null;
+    let concurrentTopicId: string | null = null;
+    // Eleven topics that match the batch lexically, so a topic created concurrently with
+    // unrelated wording would rank outside topic_k=10 on recall alone.
+    const seedTexts = Array.from({ length: 11 }, (_, index) => `推送通道 ${index} 失败后重试。`);
+    const stub = stubModel((payload, index) => {
+      if (index <= seedTexts.length) return newTopicReply(payload, seedTexts[index - 1]!);
+      if (index === seedTexts.length + 1) {
+        void concurrentStore!.commitChangeSet({
+          spaceId: "space_a",
+          taskId: "other",
+          sourceBatchId: "other",
+          idempotencyKey: "other",
+          topics: [{
+            op: "create",
+            topicId: "topic_concurrent",
+            domain: "代码开发",
+            expectedTopicSeq: seedTexts.length,
+            topicName: "账单导出",
+            topicSummary: "为账单导出约定文件格式",
+            topicDescription: "",
+            decisions: [{ op: "add", decisionId: "dec_concurrent", content: "账单导出为 CSV。", time: "2026-10-29T10:30:00+08:00", userIds: ["user_x"] }],
+            experiences: [],
+            timelineAppend: [],
+            sourcesAppend: []
+          }]
+        }, { acceptedAt: new Date().toISOString() }).then(() => { concurrentTopicId = "topic_concurrent"; });
+      }
+      return newTopicReply(payload, "推送失败后改为重试五次。");
+    });
+    const { service, db } = harness.createService();
+    concurrentStore = new SqliteProjectMemoryStore({ db: db.db });
+    await setupSpace(service, "space_a");
+    for (const [index, text] of seedTexts.entries()) {
+      await add(service, { user_id: "user_a", conversation_id: `seed${index}`, space_ids: ["space_a"], messages: [message("user_a", `2026-10-28 0${Math.floor(index / 6)}:${String(index % 6)}0:00`, text)] });
+      await drain(service);
+    }
+    const taskId = await add(service, { user_id: "user_b", conversation_id: "c2", space_ids: ["space_a"], messages: [message("user_b", "2026-10-29 11:00:00", "推送失败改成重试五次吧。")] });
+    await drain(service);
+
+    expect(concurrentTopicId).toBe("topic_concurrent");
+    expect((await call(service, "get/status", { task_id: taskId })).data.status).toBe("completed");
+    const retry = stub.organizeCalls.at(-1)!;
+    expect(stub.organizeCalls).toHaveLength(seedTexts.length + 2);
+    expect(retry.candidate_topics.map((topic) => topic.topic_id)).toContain("topic_concurrent");
+  });
+
+  it("keeps a non-author's different conclusion in conflicts even when the model names the author", async () => {
+    stubModel((payload, index) => index === 1
+      ? newTopicReply(payload, "推送失败后指数退避重试三次。")
+      // The model wrongly credits user_b's message to user_a, the content author.
+      : existingTopicReply(payload, "推送失败后改为重试五次。", { user_ids: ["user_a"] }));
+    const { service } = harness.createService();
+    await setupSpace(service, "space_a");
+    await add(service, { user_id: "user_a", conversation_id: "c1", space_ids: ["space_a"], messages: [message("user_a", "2026-10-29 10:00:00", "推送失败就指数退避重试三次。")] });
+    await drain(service);
+    // Same conversation, so user_a is a participant and the old participant filter kept the claim.
+    await add(service, { user_id: "user_b", conversation_id: "c1", space_ids: ["space_a"], messages: [message("user_b", "2026-10-29 11:00:00", "推送失败改成重试五次吧。")] });
+    await drain(service);
+
+    const decision = (await call(service, "get/memory", { space_id: "space_a" })).data.topic_detail_list[0].decisions[0];
+    expect(decision.content).toBe("推送失败后指数退避重试三次。");
+    expect(decision.user_ids).toEqual(["user_a"]);
+    expect(decision.conflicts).toEqual([expect.objectContaining({ content: "推送失败后改为重试五次。", user_ids: ["user_b"] })]);
+  });
 });
+

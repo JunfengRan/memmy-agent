@@ -137,7 +137,13 @@ export class ProjectLocalState {
            content, content_hash, tool_calls_json, created_at
          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
+      const storedTurn = this.db.prepare(
+        `SELECT turn_id FROM pm_raw_turns
+         WHERE conversation_id = ? AND role = ? AND chat_time = ? AND content_hash = ?`
+      );
+      const link = this.db.prepare(`INSERT OR IGNORE INTO pm_task_turns (task_id, turn_id) VALUES (?, ?)`);
       for (const turn of turns) {
+        const contentHash = createHash("sha256").update(turn.content).digest("hex");
         insert.run(
           `turn_${randomUUID()}`,
           input.taskId,
@@ -148,10 +154,12 @@ export class ProjectLocalState {
           turn.chatTime,
           turn.chatTimeInferred ? 1 : 0,
           turn.content,
-          createHash("sha256").update(turn.content).digest("hex"),
+          contentHash,
           JSON.stringify(turn.toolCalls),
           now
         );
+        const stored = storedTurn.get(turn.conversationId, turn.role, turn.chatTime, contentHash) as { turn_id: string };
+        link.run(input.taskId, stored.turn_id);
       }
       return { task: this.getTask(input.taskId)!, created: true };
     })();
@@ -212,7 +220,10 @@ export class ProjectLocalState {
 
   taskTurns(taskId: string): RawTurnRecord[] {
     return (this.db.prepare(
-      `SELECT * FROM pm_raw_turns WHERE task_id = ? ORDER BY chat_time, rowid`
+      `SELECT t.* FROM pm_raw_turns t
+       JOIN pm_task_turns l ON l.turn_id = t.turn_id
+       WHERE l.task_id = ?
+       ORDER BY t.chat_time, t.rowid`
     ).all(taskId) as TurnRow[]).map(turnFromRow);
   }
 
@@ -220,10 +231,11 @@ export class ProjectLocalState {
   contextTurns(conversationId: string, taskId: string, before: string, limit: number): RawTurnRecord[] {
     const rows = this.db.prepare(
       `SELECT * FROM pm_raw_turns
-       WHERE conversation_id = ? AND task_id != ? AND chat_time <= ?
+       WHERE conversation_id = ? AND chat_time <= ?
+         AND turn_id NOT IN (SELECT turn_id FROM pm_task_turns WHERE task_id = ?)
        ORDER BY chat_time DESC, rowid DESC
        LIMIT ?`
-    ).all(conversationId, taskId, before, limit) as TurnRow[];
+    ).all(conversationId, before, taskId, limit) as TurnRow[];
     return rows.map(turnFromRow).reverse();
   }
 

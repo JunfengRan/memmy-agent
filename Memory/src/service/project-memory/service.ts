@@ -48,8 +48,8 @@ export class ProjectMemoryService {
 
   // ---------------------------------------------------------------- spaces
 
-  async createSpace(input: { spaceId?: string; spaceName?: string | null; instructions?: string | null; domains: DomainRecord[] }): Promise<SpaceRecord> {
-    const spaceId = input.spaceId ?? `space_${randomBytes(8).toString("hex")}`;
+  async createSpace(input: { spaceName: string; instructions?: string | null; domains: DomainRecord[] }): Promise<SpaceRecord> {
+    const spaceId = `space_${randomBytes(8).toString("hex")}`;
     const { space } = await this.store.createSpace({ ...input, spaceId });
     return space;
   }

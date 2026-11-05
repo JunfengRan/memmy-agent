@@ -15,9 +15,17 @@ afterEach(async () => {
   await harness.cleanup();
 });
 
-async function startServer() {
+async function startServer(options: { token?: string; scopes?: string[] } = {}) {
   const { service } = harness.createService();
-  const server = createMemoryHttpServer({ service });
+  const server = createMemoryHttpServer({
+    service,
+    ...(options.token ? {
+      auth: {
+        mode: "dev" as const,
+        scopedApiKeys: { [options.token]: { namespace: { source: "memmy", profileId: "default", userId: "pm-user" }, scopes: options.scopes ?? [] } }
+      }
+    } : {})
+  });
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
@@ -26,7 +34,11 @@ async function startServer() {
   return async (route: string, body: Record<string, unknown>) => {
     const response = await realFetch(`${base}/${route}`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-memos-tz": "Asia/Shanghai" },
+      headers: {
+        "content-type": "application/json",
+        "x-memos-tz": "Asia/Shanghai",
+        ...(options.token ? { authorization: `Bearer ${options.token}` } : {})
+      },
       body: JSON.stringify(body)
     });
     return { status: response.status, body: await response.json() as { code: number; message: string; data: any } };
@@ -113,13 +125,19 @@ describe("openmem HTTP contract", () => {
     expect(missing.status).toBe(404);
     expect(missing.body).toMatchObject({ code: 40401, message: "SPACE_NOT_FOUND" });
 
-    const space = await post("create/space", { space_id: "space_a", domains: [{ domain: "代码开发", description: "" }] });
+    const withId = await post("create/space", { space_id: "space_a", space_name: "A" });
+    expect(withId.status).toBe(400);
+    expect(withId.body).toMatchObject({ code: 40001, message: "INVALID_PARAMS" });
+    const space = await post("create/space", { space_name: "A", domains: [{ domain: "代码开发", description: "" }] });
     expect(space.body.code).toBe(0);
+    const spaceA = space.body.data.space_id as string;
+    const again = await post("create/space", { space_name: "A" });
+    expect(again.body.data.space_id).not.toBe(spaceA);
 
     const multiUser = await post("add/message", {
       user_id: ["user_a", "user_b"],
       agent_id: "codex",
-      space_ids: ["space_a"],
+      space_ids: [spaceA],
       allow_memory_view: ["project"],
       messages: [{ role: "user", content: "hi" }]
     });
@@ -129,7 +147,7 @@ describe("openmem HTTP contract", () => {
     const badDomain = await post("add/message", {
       user_id: "user_a",
       agent_id: "codex",
-      space_ids: ["space_a"],
+      space_ids: [spaceA],
       allow_memory_view: ["project"],
       domains: ["运维"],
       messages: [{ role: "user", content: "hi" }]
@@ -139,5 +157,15 @@ describe("openmem HTTP contract", () => {
     const unknownTask = await post("get/status", { task_id: "task_missing" });
     expect(unknownTask.status).toBe(404);
     expect(unknownTask.body.code).toBe(40403);
+  });
+
+  it("requires write scope for write routes even with a trailing slash", async () => {
+    stubModel(() => emptyReply());
+    const post = await startServer({ token: "read-only", scopes: ["memory:read"] });
+    for (const route of ["delete/space/", "add/message/", "create/space//"]) {
+      const response = await post(route, { space_id: "space_missing", space_name: "x" });
+      expect(response.status, route).toBe(403);
+    }
+    expect((await post("get/space/", { space_id: "space_missing" })).status).toBe(404);
   });
 });

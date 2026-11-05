@@ -121,13 +121,13 @@ export async function drain(service: MemoryService): Promise<void> {
   await runWorkerRounds(service, 4);
 }
 
+/**
+ * Creates a Space with a fixed id so fixtures can name it. The public `create/space`
+ * always generates the id (open-questions Q-04), so this goes through the store.
+ */
 export async function setupSpace(service: MemoryService, spaceId: string, domains: string[] = ["代码开发"]): Promise<void> {
-  const created = await call(service, "create/space", {
-    space_id: spaceId,
-    space_name: spaceId,
-    domains: domains.map((domain) => ({ domain, description: "" }))
-  });
-  if (created.code !== 0) throw new Error(JSON.stringify(created));
+  const store = (service as unknown as { projectMemory: { store: { createSpace(input: unknown): Promise<unknown> } } }).projectMemory.store;
+  await store.createSpace({ spaceId, spaceName: spaceId, domains: domains.map((domain) => ({ domain, description: "" })) });
 }
 
 export function emptyReply(): Record<string, unknown> {
