@@ -1,6 +1,9 @@
 import { priorityFor } from "../../../algorithm/plugin-algorithms.js";
+import { createMemoryLogger, memoryErrorFields } from "../../../logging/logger.js";
 import { PROJECT_MEMORY_LIMITS } from "../contract/limits.js";
 import type { RecallEntry, RecallLogInput, RecallTopic, TopicSnapshot } from "../contract/types.js";
+import type { DecisionTopicRouter } from "../decisions/client.js";
+import { briefFromTopic, orderSearchByJev } from "../decisions/topic-choice.js";
 import type { ProjectLocalState } from "../store/sqlite/local-state.js";
 import type { ProjectMemoryStore } from "../store/store.js";
 import { textTokens, tokenOverlap, uniqueTokens } from "../text.js";
@@ -9,7 +12,9 @@ import { timeMs } from "../time.js";
 /**
  * M09 (local): fuse lexical and vector ranks with RRF, boost recent and
  * same-conversation topics, de-duplicate with MMR, trim entries, attach the full
- * decision history and conflicts. No model rerank: equal input, equal output.
+ * decision history and conflicts. The default path does not call a model: equal
+ * input, equal output. An opt-in OpenAI Decisions selector may move one topic
+ * to the front and is absent unless MEMMY_DECISION_TOPIC=1 (ADR-0006).
  */
 export interface SearchInput {
   spaceIds: string[];
@@ -46,6 +51,8 @@ export interface SearchOutput {
   topics: SearchTopicView[];
   degraded: string[];
 }
+
+const log = createMemoryLogger("project-memory.search");
 
 const RRF_K = 60;
 const RECENCY_HALF_LIFE_DAYS = 14;
@@ -129,7 +136,7 @@ function topicView(snapshot: TopicSnapshot, entries: RecallEntry[], relativity: 
 
 export async function searchProjectMemory(
   input: SearchInput,
-  deps: { store: ProjectMemoryStore; local: ProjectLocalState }
+  deps: { store: ProjectMemoryStore; local: ProjectLocalState; decision?: DecisionTopicRouter | null }
 ): Promise<SearchOutput> {
   const queryTokens = uniqueTokens(input.query);
   const recall = await deps.store.recall({
@@ -169,7 +176,8 @@ export async function searchProjectMemory(
     };
   }).filter((candidate) => candidate.fused > 0);
 
-  const selected = mmr(candidates, Math.min(input.memoryLimit, PROJECT_MEMORY_LIMITS.memoryLimitMax));
+  const limit = Math.min(input.memoryLimit, PROJECT_MEMORY_LIMITS.memoryLimitMax);
+  const selected = await selectWithOptionalDecision(input.query, candidates, mmr(candidates, limit), limit, deps);
   let ceiling = 1;
   const scored = selected.map((candidate) => {
     ceiling = Math.min(ceiling, candidate.relevance);
@@ -179,17 +187,17 @@ export async function searchProjectMemory(
   const snapshots = new Map((await deps.store.getTopicsFull(null, scored.map((item) => item.candidate.topic.topicId)))
     .map((snapshot) => [snapshot.topicId, snapshot]));
   const views: SearchTopicView[] = [];
-  const log: RecallLogInput[] = [];
+  const recallLog: RecallLogInput[] = [];
   for (const { candidate, relativity } of scored) {
     const snapshot = snapshots.get(candidate.topic.topicId);
     if (!snapshot) continue;
     const view = topicView(snapshot, candidate.entries, relativity);
     views.push(view);
     if (input.conversationId) {
-      log.push({ conversationId: input.conversationId, via: "turn_start", topicId: snapshot.topicId, decisionId: null, hadConflicts: false });
+      recallLog.push({ conversationId: input.conversationId, via: "turn_start", topicId: snapshot.topicId, decisionId: null, hadConflicts: false });
       for (const decision of snapshot.decisions) {
         if (!candidate.entries.some((entry) => entry.id === decision.id)) continue;
-        log.push({
+        recallLog.push({
           conversationId: input.conversationId,
           via: "turn_start",
           topicId: snapshot.topicId,
@@ -199,6 +207,30 @@ export async function searchProjectMemory(
       }
     }
   }
-  deps.local.appendRecallLog(log);
+  deps.local.appendRecallLog(recallLog);
   return { topics: views, degraded: recall.degraded };
+}
+
+async function selectWithOptionalDecision(
+  query: string,
+  pool: Candidate[],
+  selected: Candidate[],
+  limit: number,
+  deps: { store: ProjectMemoryStore; decision?: DecisionTopicRouter | null }
+): Promise<Candidate[]> {
+  if (!deps.decision || pool.length === 0) return selected;
+  try {
+    const snapshots = new Map((await deps.store.getTopicsFull(null, pool.map((candidate) => candidate.topic.topicId)))
+      .map((snapshot) => [snapshot.topicId, snapshot]));
+    const choice = await deps.decision.chooseSearch({
+      query,
+      topics: pool.map((candidate) => briefFromTopic(snapshots.get(candidate.topic.topicId) ?? candidate.topic))
+    });
+    const ordered = orderSearchByJev(selected, pool, choice, limit, (candidate) => candidate.topic.topicId);
+    log.info("decision.search", { choice: choice.choice, confidence: choice.confidence, pool: pool.length });
+    return ordered;
+  } catch (error) {
+    log.warn("decision.search.failed", memoryErrorFields(error));
+    return selected;
+  }
 }

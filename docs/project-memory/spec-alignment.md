@@ -16,7 +16,7 @@
 | §2.2.4 | Space / domain 校验 | contract/ | 未开始 | | |
 | §2.2.5 M02 | 抽取：是否写入、回复拆分、字段判定 | organize/organizer.ts + prompts/organize.ts | 部分对齐（与 M04 合成一次调用，ADR-0005 #2） | 数据集 v2 add 指标 | 不输出 dropped 原因 |
 | §2.2.6 M03 | 归类用候选召回 | sqlite-store.ts | 已对齐（topic_k=10，纯词法兜底） | | |
-| §2.2.7 M04 | 归入 / 新建 / 推迟，摘要描述改写 | organize/organizer.ts | 部分对齐（推迟只存不回填） | 数据集 v2 topics 指标 | ADR-0005 #4 |
+| §2.2.7 M04 | 归入 / 新建 / 推迟，摘要描述改写 | organize/organizer.ts | 部分对齐（推迟只存不回填） | 数据集 v2 topics 指标 | ADR-0005 #4；Decisions 主题实验默认关闭（ADR-0006） |
 | §2.2.8 | 全量读 | sqlite-store.ts | 已对齐 | decision golden | |
 | §2.2.9 M05 | 决策 7 种 op、经验 4 种 op、轨迹 | merge/merge.ts | 部分对齐：缺 `split`；作者与 approved_by 未校验 | decision-golden.test.ts | review R1-4、ADR-0005 #1 |
 | §2.2.10 | ChangeSet、条件写、结果码 | apply.ts、organize-job.ts | 部分对齐：deferred 事务、TOPIC_SET_CHANGED 未带 newTopicIds | store-commit.test.ts | review R1-3、R1-6 |
@@ -25,7 +25,7 @@
 | §3.2.1 | 会话开始索引（get_memory） | api.ts | 已对齐（按 space_id 读） | | 无 start_conversation（Q-03） |
 | §3.2.2–3.2.3 M08 | search_memory 三路召回 | retrieve/search.ts | 部分对齐：只有 project 一路 | 数据集 v2 search 指标 | ADR-0005 #6 |
 | §3.2.4 | L01 召回（FTS5 + 向量） | sqlite-store.ts | 已对齐 | search.test.ts | 有任一过期向量即整体退词法 |
-| §3.2.5、§3.5 M09 | RRF、MMR、条目裁剪、截断、recall_log | retrieve/search.ts | 部分对齐：条目裁剪只用词法 | 确定性测试 | RRF k=60（Q-01） |
+| §3.2.5、§3.5 M09 | RRF、MMR、条目裁剪、截断、recall_log | retrieve/search.ts | 部分对齐：条目裁剪只用词法 | 确定性测试 | RRF k=60（Q-01）；Decisions 选题默认关闭（ADR-0006） |
 | §3.3 M10 | 注入模板 1–4、检索工具 | — | 未开始 | 渲染 golden | v3 放在 SDK；W47 |
 | §3.4 | 三层剥离 | — | 未开始 | | W46（PM-15） |
 | §5.2 | 云端存储服务接口 | — | 未开始 | mock 契约测试 | W48（PM-24） |

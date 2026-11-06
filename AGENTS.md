@@ -33,7 +33,7 @@
 
 ### 模块边界
 
-- 项目记忆代码只放在 `Memory/src/service/project-memory/`，按 v3 模块分目录：`contract/`、`store/`、`organize/`、`merge/`、`pipeline/`、`retrieve/`、`inject/`、`prompts/`。
+- 项目记忆代码只放在 `Memory/src/service/project-memory/`，按 v3 模块分目录：`contract/`、`store/`、`organize/`、`merge/`、`pipeline/`、`retrieve/`、`inject/`、`prompts/`。另有 `decisions/`，放默认关闭的主题选择实验（ADR-0006），不属于 v3 模块。
 - `memory-service.ts` 和 `server/http.ts` 只做薄委托，不写项目记忆逻辑。
 - 不复用 `memories` 表和 `work_memory` kind。项目记忆有自己的表（v3 §5.3）。
 - 存储一律经过 `ProjectMemoryStore`，按 `capabilities()` 分支，不写 `if (mode === ...)`（v3 §5.1）。
@@ -42,7 +42,7 @@
 ### 算法红线（v3）
 
 - 不做模型重排；排序只用确定性信号，同样输入必须得到同样输出（§6.1 #9）。
-- 模型调用只出现在 M02、M04、M05；存储层和云端不调模型。
+- 模型调用只出现在 M02、M04、M05；存储层和云端不调模型。唯一例外是 `decisions/` 的实验，只在 `MEMMY_DECISION_TOPIC=1` 时调用，不能设为默认。
 - 归类失败不保守新建主题（§2.2.7）；原因只取自会话，不推断。
 - `domain` 由调用方指定，MemOS 不判定领域（§6.1 #12）。
 - 延迟提交的内容不得改写时间更晚的决策；非作者且未经认可的不同结论只能进 `conflicts`（§2.2.9）。

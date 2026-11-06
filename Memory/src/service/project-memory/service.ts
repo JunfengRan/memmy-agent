@@ -4,6 +4,7 @@ import type { EvolutionJobRecord, Repositories } from "../../storage/repositorie
 import { newId } from "../../utils/id.js";
 import { ProjectMemoryError } from "./contract/errors.js";
 import type { DomainRecord, RawTurnInput, SpaceRecord, TaskRecord, TopicSnapshot } from "./contract/types.js";
+import { createDecisionTopicRouter, type DecisionTopicRouter } from "./decisions/client.js";
 import { collectTurns } from "./organize/collect.js";
 import { runOrganizeJob, type OrganizeJobPayload } from "./pipeline/organize-job.js";
 import { searchProjectMemory, type SearchInput, type SearchOutput } from "./retrieve/search.js";
@@ -19,6 +20,8 @@ export interface ProjectMemoryServiceDeps {
   embedder?: Embedder | null;
   now?: () => Date;
   store?: ProjectMemoryStore;
+  /** Pass null to force the experiment off. Omit to read MEMMY_DECISION_TOPIC, which defaults off. */
+  decision?: DecisionTopicRouter | null;
 }
 
 export interface AddMessageInput {
@@ -39,11 +42,13 @@ export class ProjectMemoryService {
   readonly store: ProjectMemoryStore;
   readonly local: ProjectLocalState;
   private readonly now: () => Date;
+  private readonly decision: DecisionTopicRouter | null;
 
   constructor(private readonly deps: ProjectMemoryServiceDeps) {
     this.now = deps.now ?? (() => new Date());
     this.store = deps.store ?? new SqliteProjectMemoryStore({ db: deps.repos.db, embedder: () => deps.embedder ?? null, now: this.now });
     this.local = new ProjectLocalState(deps.repos.db, this.now);
+    this.decision = deps.decision !== undefined ? deps.decision : createDecisionTopicRouter();
   }
 
   // ---------------------------------------------------------------- spaces
@@ -150,7 +155,8 @@ export class ProjectMemoryService {
     await runOrganizeJob(job.payload as unknown as OrganizeJobPayload, {
       store: this.store,
       local: this.local,
-      llm: this.deps.llm
+      llm: this.deps.llm,
+      decision: this.decision
     });
   }
 
@@ -158,7 +164,7 @@ export class ProjectMemoryService {
 
   async search(input: SearchInput): Promise<SearchOutput> {
     await this.validateScope(input.spaceIds, input.domains ?? [], false);
-    return searchProjectMemory(input, { store: this.store, local: this.local });
+    return searchProjectMemory(input, { store: this.store, local: this.local, decision: this.decision });
   }
 
   async listTopics(spaceId: string, page: number, size: number, relatedId?: string): Promise<{ topics: TopicSnapshot[]; total: number }> {

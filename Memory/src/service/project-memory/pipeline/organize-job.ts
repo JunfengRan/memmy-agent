@@ -4,6 +4,8 @@ import { createMemoryLogger, memoryErrorFields } from "../../../logging/logger.j
 import { ProjectMemoryError } from "../contract/errors.js";
 import { PROJECT_MEMORY_LIMITS } from "../contract/limits.js";
 import type { CommitResult, RawTurnRecord, TaskError, TopicSnapshot } from "../contract/types.js";
+import type { DecisionTopicRouter } from "../decisions/client.js";
+import { briefFromTopic, narrowAddCandidates } from "../decisions/topic-choice.js";
 import { mergeDrafts } from "../merge/merge.js";
 import { resolveNewTopicDomain } from "../organize/collect.js";
 import { organizeBatch, type OrganizeResult } from "../organize/organizer.js";
@@ -25,6 +27,8 @@ export interface OrganizeJobDeps {
   store: ProjectMemoryStore;
   local: ProjectLocalState;
   llm: LlmClient;
+  /** Opt-in topic choice. Absent on the default path, which never calls the decision model. */
+  decision?: DecisionTopicRouter | null;
 }
 
 class TaskFailure extends Error {
@@ -124,6 +128,7 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
       topicSeq = recall.topicSeq;
       const recalled = recall.results[0]?.topics.map((topic) => topic.topicId) ?? [];
       candidates = await store.getTopicsFull(payload.spaceId, [...new Set([...mustConsider, ...recalled])]);
+      candidates = await narrowCandidatesWithJev(deps.decision, payload.taskId, turns, candidates);
       if (!llm.isConfigured()) fail("organize", "MODEL_NOT_CONFIGURED");
       try {
         organized = await organizeBatch(llm, {
@@ -196,4 +201,33 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
     }
   }
   fail("commit", "VERSION_CONFLICT_RETRY_EXHAUSTED", lastConflict && !lastConflict.ok ? lastConflict.error : undefined);
+}
+
+/**
+ * When the experiment is on, the decision model may keep a single candidate or
+ * clear the list (`new`). `none` and any call failure leave the recalled candidates in place,
+ * so a bad call cannot drop the batch.
+ */
+async function narrowCandidatesWithJev(
+  decision: DecisionTopicRouter | null | undefined,
+  taskId: string,
+  turns: RawTurnRecord[],
+  candidates: TopicSnapshot[]
+): Promise<TopicSnapshot[]> {
+  if (!decision) return candidates;
+  try {
+    const query = turns.filter((turn) => turn.role === "user").map((turn) => turn.content).join("\n");
+    const answer = turns.filter((turn) => turn.role === "assistant").map((turn) => turn.content).join("\n");
+    const choice = await decision.chooseAdd({
+      query,
+      answer,
+      topics: candidates.map((topic) => briefFromTopic(topic, { includeEntries: true }))
+    });
+    const narrowed = narrowAddCandidates(candidates, choice, (topic) => topic.topicId);
+    log.info("decision.add", { taskId, choice: choice.choice, confidence: choice.confidence, candidates: candidates.length, kept: narrowed.length });
+    return narrowed;
+  } catch (error) {
+    log.warn("decision.add.failed", { taskId, ...memoryErrorFields(error) });
+    return candidates;
+  }
 }

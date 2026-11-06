@@ -36,6 +36,7 @@ unchanged during migration so failures remain searchable with `rg` and Vitest
 | Bundle        | Cross-namespace export  | `bundle/bundle.test.ts`                   | `MemoryService / bundle`                          | bundle contents across user namespaces                                     | integration |
 | REST contract | HTTP seam               | `../contract/memory-rest-service.test.ts` | `MemoryService / REST contract`                   | auth, DTOs, routes, worker drain, startup, shutdown                        | contract    |
 | REST contract | Panel and viewer        | `../contract/rest-panel-events.test.ts`   | `REST panel contract`                             | viewer HTML, panel reads, search, detail, deletion                         | contract    |
+| Project memory | Decision topic experiment | `project-memory/jev-topic.test.ts`     | `OpenAI decision topic choice`                    | opt-in add/search topic choice, default off                                | unit        |
 
 ## Find and run tests
 
