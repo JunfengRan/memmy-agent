@@ -103,6 +103,26 @@ function mmr(candidates: Candidate[], limit: number): Candidate[] {
   return chosen;
 }
 
+/**
+ * `relativity` must not rise down the returned list (v3 §3.2.5), so each topic shows the
+ * running minimum of relevance in output order. The threshold is checked against each
+ * topic's own relevance first: MMR can place a less relevant topic ahead, and its lower
+ * score must not push a more relevant topic below the threshold.
+ */
+export function assignRelativity<T extends { relevance: number }>(
+  selected: readonly T[],
+  threshold?: number
+): Array<{ item: T; relativity: number }> {
+  let ceiling = 1;
+  return selected
+    .map((item) => ({ item, own: Math.round(item.relevance * 10_000) / 10_000 }))
+    .filter(({ own }) => threshold === undefined || own >= threshold)
+    .map(({ item, own }) => {
+      ceiling = Math.min(ceiling, own);
+      return { item, relativity: ceiling };
+    });
+}
+
 function topicText(topic: RecallTopic): string {
   return `${topic.topicName}\n${topic.topicSummary}\n${topic.topicDescription}`;
 }
@@ -178,11 +198,8 @@ export async function searchProjectMemory(
 
   const limit = Math.min(input.memoryLimit, PROJECT_MEMORY_LIMITS.memoryLimitMax);
   const selected = await selectWithOptionalDecision(input.query, candidates, mmr(candidates, limit), limit, deps);
-  let ceiling = 1;
-  const scored = selected.map((candidate) => {
-    ceiling = Math.min(ceiling, candidate.relevance);
-    return { candidate, relativity: Math.round(ceiling * 10_000) / 10_000 };
-  }).filter((item) => input.relativity === undefined || item.relativity >= input.relativity);
+  const scored = assignRelativity(selected, input.relativity)
+    .map(({ item, relativity }) => ({ candidate: item, relativity }));
 
   const snapshots = new Map((await deps.store.getTopicsFull(null, scored.map((item) => item.candidate.topic.topicId)))
     .map((snapshot) => [snapshot.topicId, snapshot]));

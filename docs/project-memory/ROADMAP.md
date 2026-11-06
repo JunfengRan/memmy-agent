@@ -28,11 +28,11 @@
 | PM-11 | 根据 v0.1 问题清单修订对齐表，起草给架构文档的修改意见 | — | open-questions 有提议和回复状态 | todo |
 | PM-11a | 关闭 v0.1 评审 MUST：代码 5 项（PM-05-09 review-01 R1-1～R1-5）、评测 3 项（PM-03 review-01 R1-1～R1-3） | .agents/work | 下一轮 review 全部关闭 | doing（8 项已修复并交接：59547700、672919d5；待 review-02） |
 | PM-11b | 登记并跟踪 v0.1 缺口：`gaps-v01.md` 的 G-01～G-12、E-01～E-06；跑旧实现同口径对照；E-02、E-03 的数据集修订走 PM-17 | gaps-v01.md | 每条缺口有证据、归属条目与状态；E-01 有数 | doing（清单已建，E-01 已关闭） |
-| PM-12 | M02 / M04 拆开：add 技能、topic 技能独立提示词（收回 G-02、G-03、G-04、G-08、G-09） | v3 §2.2.5、§2.2.7 | 归类准确率、重复主题率有数；进展 R 与经验 F1 不再为 0 | todo |
-| PM-13 | 推迟机制：deferred_segments 与后续回填（收回 G-01） | v3 §2.2.7 | 推迟内容回填 ≥90% | todo |
+| PM-12 | M02 / M04 拆开：add 技能、topic 技能独立提示词（收回 G-02、G-03、G-04、G-08、G-09）。同时：M03 按草稿各出一条 query（v0.1 整批一条，召回漏掉候选会新建重复主题）；merge 召回的 `degraded` 透传给 M04；`TOPIC_SET_CHANGED` 只重跑 M04，不再重跑抽取（review-triage Add-2、Add-5） | v3 §2.2.5、§2.2.6、§2.2.7 | 归类准确率、重复主题率有数；进展 R 与经验 F1 不再为 0 | todo |
+| PM-13 | 推迟机制：deferred_segments 与后续回填（收回 G-01）。`topic_unavailable`（主题已被删除）的片段不回填，否则等于为已删主题重建（review-triage Add-3） | v3 §2.2.7、§4.5 | 推迟内容回填 ≥90%；已删除的主题被重建 0 | todo |
 | PM-14 | 决策补全 conflict_update / resolve / split；informed 由 recall_log + M02 信号判定（收回 G-06、G-10） | v3 §2.2.9 | 决策 op golden 全过 | todo |
 | PM-15 | 迟交规则、按 conversation_id 去重、复述过滤（收回 G-05） | v3 §2.2.3、§3.4 | 迟交改写更晚决策 = 0；旧版当当前 = 0 | todo |
-| PM-16 | TOPIC_SET_CHANGED 重做、幂等键、任务失败原因 | v3 §2.2.10、§2.2.11 | 并发验收表 | todo |
+| PM-16 | TOPIC_SET_CHANGED 重做、幂等键、任务失败原因。含：`chat_time` 缺失时的批次键（Q-15）；失败批次可重新提交（Q-16）；热点 Space 并发新建耗尽 3 次预算的情形写进并发用例（review-triage Add-1、Add-2） | v3 §2.2.2、§2.2.10、§2.2.11 | 并发验收表；缺 `chat_time` 的两次同文提交各自整理；冲突超限的批次重交后能写入 | todo |
 | PM-17 | 数据集 v2.1：多成员、多空间、多 domain、迟交、推迟、重复提交、闲聊负样本、相似名称对照组，约 50 个 topic；同时修 E-02（oracle 摘要随时间变化）、E-03（q17 答案与金标状态）、E-04（阅读模型样本） | v3 §2.2.7 验收 | 能测重复率与错误合并率；金标作被测系统时 answers.llm = 1 | todo |
 | PM-18 | 11/13 交付评测集方案（PRD 待办 3） | PRD 待办 3 | 方案文档 | todo |
 
@@ -40,10 +40,10 @@
 
 | ID | 条目 | 出处 | 验收 | 状态 |
 | --- | --- | --- | --- | --- |
-| PM-19 | M08 三路召回：①用户记忆 ②agent L1/Skill ③project，降级标记 degraded | v3 §3.2.3 | 三路齐全或标记降级 100% | todo |
-| PM-20 | M09 跨路 RRF、relativity 归一化、条目裁剪 | v3 §3.2.5、§3.5 | 确定性 100% | todo |
-| PM-21 | 渐进式披露：会话开始 get_memory 索引、每轮 memories、工具 search_project_memory、get_memory_by_id | v3 §3.1–3.3 | 每轮注入 ≤ 全量的 30% | todo |
-| PM-22 | 注入模板 1–4、strip_injected、search 技能 | v3 §3.3、§3.4 | 注入块回写 M02 = 0 | todo |
+| PM-19 | M08 三路召回：①用户记忆 ②agent L1/Skill ③project，降级标记 degraded。② 路的 LLM 过滤、分层、墙钟时效和失效的 `contextBudget` 按 Q-20 处理（review-triage Search-6、Search-7） | v3 §3.2.3 | 三路齐全或标记降级 100% | todo |
+| PM-20 | M09 跨路 RRF、relativity 归一化、条目裁剪。三路只按名次融合，不拼接各路分数；relativity 改为 Q-01 的融合分归一（v0.1 用词法 / 向量相关度，阈值已改为按每个主题自身的相关度过滤，review-triage Search-3） | v3 §3.2.5、§3.5 | 确定性 100%；relativity 单调 | todo |
+| PM-21 | 渐进式披露：会话开始 get_memory 索引、每轮 memories、工具 search_project_memory、get_memory_by_id。工具检索写 `via=tool`、不算本轮开始（Q-17）；宿主技能改查 `/api/openmem/v1/search/memory`，不再落到个人记忆（review-triage Search-4、Search-8、Search-9） | v3 §3.1–3.3 | 每轮注入 ≤ 全量的 30%；工具检索的召回记录 `via=tool` 100% | todo |
+| PM-22 | 注入模板 1–4、strip_injected、search 技能。`degraded` 非空时模板与技能里可见（Q-21，review-triage Search-12） | v3 §3.3、§3.4 | 注入块回写 M02 = 0；降级结果渲染出提示 100% | todo |
 | PM-23 | 检索延迟与 Recall@K | v3 §3.6 | 单路 P95 ≤800 ms，总 ≤1.2 s | todo |
 
 ## W48（11/23–11/27）M3：云端契约与验收
@@ -66,6 +66,7 @@
 
 | 日期 | 变化 | 原因 |
 | --- | --- | --- |
+| 2026-11-06 | 评审意见分诊（`.agents/work/20261106-review-triage`）：relativity 阈值改为按自身相关度过滤，`recallQuery` 改用 `clampText`；其余各条并入 PM-12、PM-13、PM-16、PM-19～PM-22 的范围与验收；需要裁决的写成 Q-15～Q-21 | 用户转来一组 add / search 评审意见 |
 | 2026-11-06 | 主题归属实验改为 `gpt-6-luna` 的 chat completions 选择题（网关无 `/v1/decisions`），配置读 `~/.openai.env`，产品开关默认关闭。单独评测见 metrics R-20261106-01 | 用户要求用内部中转上的 gpt-6-luna 做选题实验，评测后不要挡住主开发 |
 | 2026-11-03 | 初版 | 用户要求 W45 先出基础版本 |
 | 2026-11-05 | 修正过期状态（PM-03、PM-10）；新增 PM-11b 与 `gaps-v01.md`（实现缺口 G-01～G-12、评测缺口 E-01～E-06）；PM-12～PM-15、PM-17 条目标明收回哪些缺口；增加金标作被测系统的阅读模型上限（R-20261105-03）和旧实现同口径对照（R-20261105-04：answers.llm 0.565，对 v0.1 的 0.609） | 用户要求核对项目状态，并解释 v1 的 95% 与 v2 的 60% 的差异：口径变了为主，v0.1 也有真实缺口 |

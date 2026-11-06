@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { assignRelativity } from "../../../src/service/project-memory/retrieve/search.js";
 import { call, createProjectMemoryHarness, drain, emptyReply, setupSpace, stubModel, type OrganizePayload } from "./helpers.js";
 
 const harness = createProjectMemoryHarness();
@@ -86,6 +87,19 @@ describe("project memory search", () => {
     expect(strict.data.topic_detail_list.every((topic: { relativity: number }) => topic.relativity >= 0.99)).toBe(true);
 
     expect((await search(service, { memory_limit_number: 26 })).code).toBe(40001);
+  });
+
+  it("filters relativity on each topic's own relevance and keeps the list monotonic", () => {
+    // MMR placed a weaker topic first; the stronger one behind it must survive the threshold.
+    const ordered = [{ id: "weak", relevance: 0.4 }, { id: "strong", relevance: 0.9 }, { id: "noise", relevance: 0.2 }];
+
+    const kept = assignRelativity(ordered, 0.5);
+    expect(kept.map(({ item }) => item.id)).toEqual(["strong"]);
+    expect(kept[0]!.relativity).toBe(0.9);
+
+    const all = assignRelativity(ordered);
+    expect(all.map(({ item, relativity }) => [item.id, relativity])).toEqual([["weak", 0.4], ["strong", 0.4], ["noise", 0.2]]);
+    expect(assignRelativity(ordered, 0.4).every(({ relativity }) => relativity >= 0.4)).toBe(true);
   });
 
   it("falls back to lexical recall and reports it when embeddings are unavailable", async () => {

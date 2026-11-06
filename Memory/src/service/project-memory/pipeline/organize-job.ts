@@ -11,6 +11,7 @@ import { resolveNewTopicDomain } from "../organize/collect.js";
 import { organizeBatch, type OrganizeResult } from "../organize/organizer.js";
 import type { ProjectLocalState, SpaceOutcome } from "../store/sqlite/local-state.js";
 import type { ProjectMemoryStore } from "../store/store.js";
+import { clampText } from "../text.js";
 
 const log = createMemoryLogger("project-memory.organize");
 
@@ -48,7 +49,7 @@ function batchHash(turns: RawTurnRecord[]): string {
 }
 
 function recallQuery(turns: RawTurnRecord[]): string {
-  return [...turns.map((turn) => turn.content).join("\n")].slice(0, 4000).join("");
+  return clampText(turns.map((turn) => turn.content).join("\n"), 4000);
 }
 
 /**
