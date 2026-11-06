@@ -1,0 +1,1980 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem("memtensor-doc-theme");
+        if (theme === "light" || theme === "dark") document.documentElement.setAttribute("data-theme", theme);
+      } catch (e) { /* 读不到本地记录时继续跟随系统 */ }
+    })();
+  </script>
+  <title>项目记忆评测数据集 v2</title>
+  <style>
+    /* 变量逐个取自 DESIGN.md；改颜色先改 DESIGN.md。 */
+    :root {
+      color-scheme: light dark;
+
+      --primary: light-dark(#4044ED, #7275F7);
+      --primary-soft: light-dark(#EEF0FF, #0F163E);
+      --primary-line: light-dark(#D8DAFB, #20277A);
+      --brand-blue: #408DFC;
+      --brand-violet: #AA75EF;
+      --ink: light-dark(#141D32, #E2E8F0);
+      --body: light-dark(#364153, #CBD5E1);
+      --muted: light-dark(#62748E, #90A1B9);
+      --line: light-dark(#E2E8F0, #1E293B);
+      --line-strong: light-dark(#CAD5E2, #2E3B58);
+      --surface: light-dark(#FFFFFF, #080F21);
+      --panel: light-dark(#F8FAFC, #0A132D);
+      --canvas: light-dark(#FAFAFF, #080F21);
+      --risk: light-dark(#DC2626, #F87171);
+      --risk-ink: light-dark(#B91C1C, #F87171);
+      --risk-soft: light-dark(#FEF2F2, #141D32);
+      --verify: light-dark(#D97706, #FBBF24);
+      --verify-ink: light-dark(#B45309, #FBBF24);
+      --verify-soft: light-dark(#FFFBEB, #141D32);
+      --positive: light-dark(#16A34A, #4ADE80);
+      --positive-ink: light-dark(#15803D, #4ADE80);
+      --positive-soft: light-dark(#F0FDF4, #141D32);
+      --memmy: light-dark(#0E9D88, #5CBFAE);
+      --memmy-ink: light-dark(#0B7D6D, #5CBFAE);
+      --memmy-soft: light-dark(#E7F7F3, #141D32);
+      --clawforce: #F1623D;
+      --clawforce-ink: light-dark(#C2410C, #F1623D);
+      --clawforce-soft: light-dark(#FFF1EC, #141D32);
+
+      --grad-brand: linear-gradient(90deg, var(--brand-blue), var(--primary) 55%, var(--brand-violet));
+      --grad-brand-v: linear-gradient(180deg, var(--brand-blue), var(--primary) 55%, var(--brand-violet));
+      --nav-active-text: light-dark(#4044ED, #E2E8F0);
+
+      --d-group-fill: light-dark(#FFFFFF, #0A132D);
+      --d-group-line: light-dark(#D8DAFB, #1E293B);
+      --d-node-fill: light-dark(#FFFFFF, #0A132D);
+      --d-node-line: light-dark(#E2E8F0, #2E3B58);
+      --d-focus-fill: light-dark(#EEF0FF, #141D32);
+      --d-focus-line: #4044ED;
+      --d-focus-text: light-dark(#4044ED, #01C6FA);
+      --d-chip-fill: light-dark(#FFFFFF, #0A132D);
+      --d-chip-line: light-dark(#D8DAFB, #20277A);
+      --d-chip-text: light-dark(#4044ED, #7275F7);
+      --d-badge-fill: light-dark(#EEF0FF, #0F163E);
+      --d-badge-line: light-dark(transparent, #20277A);
+      --d-risk-fill: light-dark(#FEF2F2, #141D32);
+      --d-risk-line: light-dark(#DC2626, #F87171);
+      --d-risk-text: light-dark(#B91C1C, #F87171);
+      --d-main: light-dark(#4044ED, #01C6FA);
+      --d-edge: light-dark(#62748E, #90A1B9);
+      --d-ext: light-dark(#CAD5E2, #2E3B58);
+      --d-title: light-dark(#141D32, #E2E8F0);
+      --d-sub: light-dark(#62748E, #90A1B9);
+      --d-msg: light-dark(#364153, #CBD5E1);
+
+      --font-display: "Alibaba PuHuiTi 3.0", -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", sans-serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+      --sp-xs: 4px;
+      --sp-sm: 8px;
+      --sp-md: 12px;
+      --sp-base: 16px;
+      --sp-lg: 24px;
+      --sp-xl: 32px;
+      --sp-2xl: 48px;
+      --nav-width: 248px;
+      --content-width: 720px;
+      --page-width: 1160px;
+
+      --r-sm: 4px;
+      --r-md: 8px;
+      --r-lg: 12px;
+      --r-full: 9999px;
+
+      --shadow-card: 0 1px 2px rgba(20, 29, 50, 0.04), 0 8px 24px rgba(64, 68, 237, 0.05);
+      --glow-focus: 0 0 0 transparent;
+    }
+
+    :root[data-theme="light"] { color-scheme: light; }
+    :root[data-theme="dark"] { color-scheme: dark; }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --grad-brand: linear-gradient(90deg, #1D4ED8, #01C6FA);
+        --grad-brand-v: linear-gradient(180deg, #1D4ED8, #01C6FA);
+        --shadow-card: 0 0 0 1px rgba(64, 68, 237, 0.22), 0 0 40px rgba(1, 198, 250, 0.06);
+        --glow-focus: 0 0 10px rgba(1, 198, 250, 0.35);
+      }
+    }
+    :root[data-theme="dark"] {
+      --grad-brand: linear-gradient(90deg, #1D4ED8, #01C6FA);
+      --grad-brand-v: linear-gradient(180deg, #1D4ED8, #01C6FA);
+      --shadow-card: 0 0 0 1px rgba(64, 68, 237, 0.22), 0 0 40px rgba(1, 198, 250, 0.06);
+      --glow-focus: 0 0 10px rgba(1, 198, 250, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-padding-top: var(--sp-lg); }
+    body {
+      margin: 0;
+      background: var(--surface);
+      color: var(--body);
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.75;
+      -webkit-font-smoothing: antialiased;
+    }
+    ::selection { background: var(--primary-soft); color: var(--ink); }
+    a {
+      color: var(--primary);
+      text-decoration: underline;
+      text-decoration-color: var(--primary-line);
+      text-underline-offset: 3px;
+      transition: color 150ms, text-decoration-color 150ms, background-color 150ms;
+    }
+    a:hover { text-decoration-color: var(--primary); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: var(--nav-width) minmax(0, 1fr);
+      max-width: var(--page-width);
+      margin: 0 auto;
+    }
+
+    nav.toc {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      overflow-y: auto;
+      padding: var(--sp-2xl) var(--sp-base) var(--sp-xl) var(--sp-lg);
+      border-right: 1px solid var(--line);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .toc-brand { display: flex; flex-direction: column; gap: 2px; margin: 0 0 var(--sp-lg); }
+    .toc-brand::after {
+      content: "";
+      width: 24px;
+      height: 3px;
+      margin-top: var(--sp-sm);
+      border-radius: var(--r-full);
+      background: var(--grad-brand);
+    }
+    .toc-org {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink);
+    }
+    .toc-kind { font-size: 12px; color: var(--muted); }
+    nav.toc a {
+      position: relative;
+      display: flex;
+      align-items: baseline;
+      gap: var(--sp-sm);
+      margin: 2px 0;
+      padding: 6px var(--sp-md);
+      border-radius: var(--r-sm);
+      color: var(--muted);
+      text-decoration: none;
+    }
+    nav.toc a:hover { color: var(--ink); }
+    nav.toc a[aria-current="true"] {
+      background: var(--primary-soft);
+      color: var(--nav-active-text);
+      font-weight: 600;
+    }
+    nav.toc a[aria-current="true"]::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 6px;
+      bottom: 6px;
+      width: 3px;
+      border-radius: var(--r-full);
+      background: var(--grad-brand-v);
+    }
+    .toc-no {
+      min-width: 1.75em;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      color: var(--primary);
+    }
+
+    main {
+      position: relative;
+      min-width: 0;
+      max-width: calc(var(--content-width) + 2 * var(--sp-2xl));
+      padding: var(--sp-2xl) var(--sp-2xl) 96px;
+    }
+
+    .doc-head { margin-bottom: var(--sp-xl); }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      margin: 0 0 var(--sp-md);
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+    }
+    .title-rule {
+      width: 56px;
+      height: 3px;
+      margin: var(--sp-base) 0 var(--sp-lg);
+      border-radius: var(--r-full);
+      background: var(--grad-brand);
+    }
+    .lead {
+      position: relative;
+      margin: 0 0 var(--sp-base);
+      padding: var(--sp-base) var(--sp-lg);
+      border-radius: var(--r-md);
+      background: var(--primary-soft);
+      color: var(--ink);
+      font-size: 17px;
+      line-height: 1.65;
+    }
+    .lead::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      border-radius: var(--r-md) 0 0 var(--r-md);
+      background: var(--grad-brand-v);
+    }
+    .lead strong { color: var(--primary); }
+    .meta { display: flex; flex-wrap: wrap; gap: var(--sp-sm); margin: 0; }
+    .meta div {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px var(--sp-md);
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--panel);
+      font-size: 12px;
+      line-height: 1.8;
+    }
+    .meta dt { color: var(--muted); }
+    .meta dd { margin: 0; font-family: var(--font-mono); color: var(--ink); }
+
+    section { margin-top: var(--sp-2xl); }
+    h2 {
+      display: flex;
+      align-items: baseline;
+      gap: var(--sp-md);
+      margin: 0 0 var(--sp-base);
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+    .sec-no {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--primary);
+    }
+    h3 {
+      margin: var(--sp-xl) 0 var(--sp-sm);
+      color: var(--ink);
+      font-size: 17px;
+      font-weight: 600;
+      line-height: 1.5;
+    }
+    p, ul, ol { margin: 0 0 var(--sp-base); }
+    ul, ol { padding-left: 1.4em; }
+    li + li { margin-top: var(--sp-xs); }
+    strong { color: var(--ink); font-weight: 600; }
+
+    code, pre { font-family: var(--font-mono); }
+    code {
+      padding: 1px 6px;
+      border: 1px solid var(--line);
+      border-radius: var(--r-sm);
+      background: var(--panel);
+      color: var(--ink);
+      font-size: 0.875em;
+    }
+    pre {
+      margin: 0 0 var(--sp-base);
+      padding: var(--sp-base);
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: var(--panel);
+      color: var(--ink);
+      font-size: 13.5px;
+      line-height: 1.6;
+    }
+    pre code { padding: 0; border: 0; background: none; font-size: inherit; }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 var(--sp-sm);
+      border-radius: var(--r-full);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0;
+      text-transform: none;
+      white-space: nowrap;
+      vertical-align: 1px;
+    }
+    .tag-memos { background: var(--primary-soft); color: var(--primary); }
+    .tag-memmy { background: var(--memmy-soft); color: var(--memmy-ink); }
+    .tag-clawforce { background: var(--clawforce-soft); color: var(--clawforce-ink); }
+    .tag-positive { background: var(--positive-soft); color: var(--positive-ink); }
+
+    .callout {
+      position: relative;
+      margin: var(--sp-lg) 0;
+      padding: var(--sp-md) var(--sp-base) var(--sp-md) calc(var(--sp-base) + 3px);
+      border-radius: var(--r-md);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .callout::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      border-radius: var(--r-md) 0 0 var(--r-md);
+      background: var(--callout-line);
+    }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { color: inherit; }
+    .callout-title {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--callout-title);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+    .callout.info { --callout-line: var(--primary); --callout-title: var(--primary); background: var(--primary-soft); color: var(--body); }
+    .callout.verify { --callout-line: var(--verify); --callout-title: var(--verify-ink); background: var(--verify-soft); color: var(--verify-ink); }
+    .callout.risk { --callout-line: var(--risk); --callout-title: var(--risk-ink); background: var(--risk-soft); color: var(--risk-ink); }
+
+    ol.steps { list-style: none; counter-reset: step; margin: var(--sp-lg) 0; padding: 0; }
+    ol.steps li { position: relative; margin: 0; padding: 0 0 var(--sp-lg) 40px; counter-increment: step; }
+    ol.steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 2px;
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: var(--r-full);
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+    }
+    ol.steps li::after {
+      content: "";
+      position: absolute;
+      left: 11.5px;
+      top: 32px;
+      bottom: var(--sp-xs);
+      width: 1px;
+      background: var(--line);
+    }
+    ol.steps li:last-child { padding-bottom: 0; }
+    ol.steps li:last-child::after { display: none; }
+    ol.steps strong { display: block; }
+
+    .table-wrap {
+      margin: var(--sp-lg) 0;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.6; }
+    th {
+      padding: 10px var(--sp-base);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-align: left;
+      white-space: nowrap;
+    }
+    td { padding: 10px var(--sp-base); border-top: 1px solid var(--line); color: var(--body); vertical-align: top; }
+    td:first-child { color: var(--ink); font-weight: 600; }
+    th.num, td.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    tr.row-ours td { background: var(--primary-soft); color: var(--ink); }
+    tr.row-ours td:first-child { color: var(--primary); }
+
+    figure.diagram {
+      margin: var(--sp-xl) 0;
+      padding: var(--sp-lg) var(--sp-lg) var(--sp-base);
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      background-color: var(--canvas);
+      box-shadow: var(--shadow-card);
+    }
+    figure.diagram svg { display: block; width: 100%; min-width: 560px; height: auto; }
+    figcaption { margin-top: var(--sp-md); color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .fig-no {
+      margin-right: var(--sp-sm);
+      color: var(--primary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .diagram svg text { font-family: var(--font-sans); }
+    .diagram .t-mono { font-family: var(--font-mono); }
+    .diagram .group { fill: var(--d-group-fill); stroke: var(--d-group-line); }
+    .diagram .node { fill: var(--d-node-fill); stroke: var(--d-node-line); }
+    .diagram .node-focus { fill: var(--d-focus-fill); stroke: var(--d-focus-line); filter: drop-shadow(var(--glow-focus)); }
+    .diagram .chip { fill: var(--d-chip-fill); stroke: var(--d-chip-line); }
+    .diagram .badge { fill: var(--d-badge-fill); stroke: var(--d-badge-line); }
+    .diagram .risk { fill: var(--d-risk-fill); stroke: var(--d-risk-line); }
+    .diagram .legend-box { fill: var(--d-node-fill); stroke: var(--d-node-line); }
+    .diagram .edge-main { stroke: var(--d-main); }
+    .diagram .edge, .diagram .edge-async { stroke: var(--d-edge); }
+    .diagram .edge-ext { stroke: var(--d-ext); }
+    .diagram .arrow-main { fill: var(--d-main); }
+    .diagram .arrow { fill: var(--d-edge); }
+    .diagram .t-title { fill: var(--d-title); font-weight: 600; }
+    .diagram .t-sub { fill: var(--d-sub); }
+    .diagram .t-label { fill: var(--d-sub); font-weight: 600; letter-spacing: 0.08em; }
+    .diagram .t-chip { fill: var(--d-chip-text); font-weight: 500; }
+    .diagram .t-focus { fill: var(--d-focus-text); font-weight: 600; }
+    .diagram .t-risk { fill: var(--d-risk-text); font-weight: 600; }
+    .diagram .t-msg { fill: var(--d-msg); }
+    .diagram .t-guard { fill: var(--d-sub); }
+    .diagram .t-msg, .diagram .t-guard { stroke: var(--canvas); paint-order: stroke; }
+    .diagram .group.frame { fill: none; }
+
+    .page-tools {
+      position: fixed;
+      top: var(--sp-base);
+      right: var(--sp-base);
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+    }
+    .theme-toggle {
+      --icon-sun: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%224%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.6%22%2F%3E%3Cpath%20d%3D%22M12%202.5v2.5M12%2019v2.5M2.5%2012H5M19%2012h2.5M5.2%205.2l1.8%201.8M17%2017l1.8%201.8M18.8%205.2%2017%207M7%2017l-1.8%201.8%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E");
+      --icon-moon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M16%203.2A8.2%208.2%200%201%200%2020.8%2015%206.4%206.4%200%200%201%2016%203.2z%22%20fill%3D%22black%22%2F%3E%3C%2Fsvg%3E");
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      margin: 0;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+    }
+    .theme-toggle::before {
+      content: "";
+      width: 16px;
+      height: 16px;
+      background: currentColor;
+      -webkit-mask: var(--icon-sun) center / contain no-repeat;
+      mask: var(--icon-sun) center / contain no-repeat;
+    }
+    :root[data-theme="dark"] .theme-toggle::before {
+      -webkit-mask-image: var(--icon-moon);
+      mask-image: var(--icon-moon);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .theme-toggle::before {
+        -webkit-mask-image: var(--icon-moon);
+        mask-image: var(--icon-moon);
+      }
+    }
+    .diagram-edit-open {
+      padding: var(--sp-xs) var(--sp-md);
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--surface);
+      color: var(--muted);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .diagram-edit-open[aria-pressed="true"] { color: var(--primary); border-color: var(--primary-line); }
+    .diagram-edit-bar:not([hidden]) {
+      position: fixed;
+      top: 60px;
+      right: var(--sp-base);
+      z-index: 30;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--sp-sm);
+      max-width: min(440px, calc(100% - 32px));
+      padding: var(--sp-sm) var(--sp-md);
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      background: var(--surface);
+      box-shadow: var(--shadow-card);
+      color: var(--body);
+      font-family: var(--font-sans);
+      font-size: 13px;
+    }
+    .diagram-edit-bar.is-plain label { opacity: 0.45; pointer-events: none; }
+    .diagram-edit-bar label { display: flex; align-items: center; gap: var(--sp-xs); color: var(--muted); }
+    .diagram-edit-bar select,
+    .diagram-edit-bar input[type="number"] {
+      border: 1px solid var(--line);
+      border-radius: var(--r-sm);
+      background: var(--panel);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      padding: var(--sp-xs);
+    }
+    .diagram-edit-bar select { max-width: 148px; }
+    .diagram-edit-bar input[type="number"] { width: 64px; }
+    .diagram-edit-bar button {
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--panel);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      cursor: pointer;
+      padding: var(--sp-xs) var(--sp-md);
+    }
+    .diagram-edit-tools {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--sp-sm);
+      flex: 0 0 auto;
+    }
+    .diagram-edit-bar.is-code {
+      flex-direction: column;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      width: min(440px, calc(100% - 32px));
+    }
+    .diagram-edit-code:not([hidden]) {
+      flex: 1 1 auto;
+      align-self: stretch;
+      width: auto;
+      min-width: 0;
+      min-height: 0;
+      max-height: 220px;
+      margin: 0;
+      overflow: auto;
+      white-space: pre;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+    .diagram-edit-bar.is-sized .diagram-edit-code:not([hidden]) {
+      max-height: none;
+    }
+    .diagram-edit-resize {
+      position: absolute;
+      z-index: 2;
+      touch-action: none;
+    }
+    .diagram-edit-resize[data-resize="w"] {
+      left: -4px;
+      top: 0;
+      bottom: 8px;
+      width: 8px;
+      cursor: ew-resize;
+      box-shadow: inset 2px 0 0 var(--line-strong);
+    }
+    .diagram-edit-resize[data-resize="s"] {
+      left: 8px;
+      right: 0;
+      bottom: -4px;
+      height: 8px;
+      cursor: ns-resize;
+      box-shadow: inset 0 -2px 0 var(--line-strong);
+    }
+    .diagram-edit-resize[data-resize="sw"] {
+      left: -4px;
+      bottom: -4px;
+      width: 8px;
+      height: 8px;
+      cursor: nesw-resize;
+      background: var(--line-strong);
+    }
+    .edit-spacer {
+      visibility: hidden;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .diagram-edit-text {
+      position: fixed;
+      z-index: 32;
+      min-width: 4em;
+      margin: 0;
+      padding: var(--sp-xs);
+      border: 1px solid var(--primary);
+      border-radius: var(--r-sm);
+      background: var(--surface);
+      color: var(--ink);
+      outline: none;
+    }
+    body.is-diagram-edit [data-editable] { cursor: grab; touch-action: none; }
+    body.is-diagram-edit [data-editable].is-editing { cursor: text; touch-action: auto; }
+    body.is-diagram-edit .diagram rect,
+    body.is-diagram-edit .diagram text { cursor: grab; }
+    .edit-frame {
+      position: fixed;
+      z-index: 28;
+      border: 1px solid var(--primary);
+      pointer-events: none;
+    }
+    .edit-frame [data-edge] {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      margin: -4px 0 0 -4px;
+      border: 1px solid var(--primary);
+      border-radius: 1px;
+      background: var(--surface);
+      pointer-events: auto;
+    }
+    .edit-frame [data-edge="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+    .edit-frame [data-edge="n"] { left: 50%; top: 0; cursor: ns-resize; }
+    .edit-frame [data-edge="ne"] { left: 100%; top: 0; cursor: nesw-resize; }
+    .edit-frame [data-edge="e"] { left: 100%; top: 50%; cursor: ew-resize; }
+    .edit-frame [data-edge="se"] { left: 100%; top: 100%; cursor: nwse-resize; }
+    .edit-frame [data-edge="s"] { left: 50%; top: 100%; cursor: ns-resize; }
+    .edit-frame [data-edge="sw"] { left: 0; top: 100%; cursor: nesw-resize; }
+    .edit-frame [data-edge="w"] { left: 0; top: 50%; cursor: ew-resize; }
+
+    details {
+      margin: var(--sp-base) 0;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: var(--surface);
+    }
+    summary {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: var(--sp-md) var(--sp-base);
+      color: var(--ink);
+      font-weight: 600;
+      cursor: pointer;
+      list-style: none;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::before { content: "+"; width: 1em; color: var(--primary); font-family: var(--font-mono); }
+    details[open] summary { border-bottom: 1px solid var(--line); }
+    details[open] summary::before { content: "−"; }
+    .details-body { padding: var(--sp-base); }
+    .details-body > :last-child { margin-bottom: 0; }
+    .details-body .table-wrap { margin: 0; }
+
+    .site-foot {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: var(--sp-base);
+      margin-top: 64px;
+      padding-top: var(--sp-base);
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+    }
+
+    @media (max-width: 860px) {
+      body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: stretch;
+      }
+      .layout { display: contents; }
+      .page-tools {
+        position: sticky;
+        top: 0;
+        right: auto;
+        grid-column: 2;
+        grid-row: 1;
+        z-index: 11;
+        align-self: stretch;
+        height: auto;
+        margin: 0;
+        padding: var(--sp-sm) var(--sp-base);
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+      }
+      .diagram-edit-open { display: none; }
+      nav.toc {
+        position: sticky;
+        top: 0;
+        grid-column: 1;
+        grid-row: 1;
+        align-self: stretch;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: var(--sp-xs);
+        min-width: 0;
+        height: auto;
+        overflow-x: auto;
+        padding: var(--sp-sm) var(--sp-base);
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        background: var(--surface);
+        white-space: nowrap;
+        scrollbar-width: none;
+      }
+      nav.toc::-webkit-scrollbar { display: none; }
+      .toc-brand { display: none; }
+      nav.toc a { margin: 0; padding: var(--sp-xs) var(--sp-md); }
+      nav.toc a[aria-current="true"]::before {
+        top: auto;
+        right: var(--sp-md);
+        bottom: 0;
+        left: var(--sp-md);
+        width: auto;
+        height: 2px;
+        background: var(--grad-brand);
+      }
+      main {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        padding: var(--sp-xl) var(--sp-base) 64px;
+      }
+    }
+    @media (max-width: 480px) {
+      .page-tools { gap: var(--sp-xs); padding: var(--sp-xs) var(--sp-sm); }
+      nav.toc { padding: var(--sp-xs) var(--sp-sm); }
+    }
+
+    @media print {
+      body { display: block; }
+      nav.toc { display: none; }
+      .layout { display: block; }
+      main { max-width: none; padding: 0; }
+      figure.diagram { break-inside: avoid; box-shadow: none; }
+      .page-tools, .diagram-edit-bar, .edit-frame { display: none !important; }
+      a { text-decoration: none; }
+    }
+  
+    .metric-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--sp-md); margin: var(--sp-lg) 0; }
+    .metric { padding: var(--sp-md); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); display: flex; flex-direction: column; gap: var(--sp-xs); }
+    .metric strong { font-size: 28px; color: var(--primary); font-weight: 700; }
+    .metric span, .event-effect { color: var(--muted); font-size: 13px; }
+    .timeline-card { margin: var(--sp-xl) 0; padding: var(--sp-lg); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-card); }
+    .timeline-head { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-md); }
+    .timeline-head > div { display: flex; align-items: center; gap: var(--sp-sm); }
+    .timeline-head h3 { margin: 0; }
+    .events { display: flex; flex-direction: column; gap: var(--sp-sm); margin: var(--sp-lg) 0; }
+    .event { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: var(--sp-md); padding: var(--sp-md); border-left: 3px solid var(--primary); background: var(--panel); border-radius: var(--r-sm); }
+    .event-time { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+    .event-query { font-weight: 600; margin: 0 0 var(--sp-xs); color: var(--ink); }
+    .event p { margin: 0 0 var(--sp-xs); }
+    .event p:last-child { margin-bottom: 0; }
+    .question-list { display: flex; flex-direction: column; gap: var(--sp-xs); }
+    .timeline-card h4 { margin: var(--sp-lg) 0 var(--sp-sm); font-size: 17px; color: var(--ink); }
+    @media (max-width: 860px) {
+      .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .event { grid-template-columns: 1fr; }
+      .timeline-head { align-items: flex-start; flex-direction: column; }
+    }
+</style>
+</head>
+<body>
+  <div class="page-tools">
+    <button type="button" class="diagram-edit-open" aria-pressed="false" title="点选后拖动、贴边缩放，双击改字">调整排版</button>
+    <button type="button" class="theme-toggle" data-theme-toggle aria-label="切换配色"></button>
+  </div>
+  <div class="layout">
+    <nav class="toc" aria-label="目录">
+      <p class="toc-brand"><span class="toc-org">MemTensor</span><span class="toc-kind">评测数据集</span></p>
+      <a href="#s1" aria-current="true"><span class="toc-no">01</span>怎么读</a>
+      <a href="#tl-amount"><span class="toc-no">02</span>月报金额</a>
+      <a href="#tl-empty"><span class="toc-no">03</span>空客户</a>
+      <a href="#tl-price"><span class="toc-no">04</span>价格目录</a>
+      <a href="#tl-copy"><span class="toc-no">05</span>搬不搬导出</a>
+      <a href="#tl-repo"><span class="toc-no">06</span>仓库与闲话</a>
+      <a href="#appendix"><span class="toc-no">A</span>文件</a>
+    </nav>
+    <main>
+      <header class="doc-head">
+        <p class="eyebrow">应用深挖 <span class="tag tag-memos">MemOS</span> <span class="tag tag-memmy">Memmy</span></p>
+        <h1>项目记忆评测数据集 v2</h1>
+        <div class="title-rule" aria-hidden="true"></div>
+        <p class="lead">35 轮对话收成五条时间线。同一句话在不同时刻问，答案跟着线上当时的状态变：14:00 月报金额还在 journal 正文里，20:40 已经改成 entries 的 amount 列。</p>
+        <dl class="meta">
+          <div><dt>来源</dt><dd>dataset/ 版本 2，2026-10-21 一天</dd></div>
+          <div><dt>日期</dt><dd>2026-11-05</dd></div>
+          <div><dt>读者</dt><dd>新进入项目的同事和负责人</dd></div>
+        </dl>
+      </header>
+      <section id="s1">
+        <h2><span class="sec-no">01</span>怎么读</h2>
+        <p>ledger 是按客户出月报的记账服务，catalog 是价格目录。写 ledger 的是林工和周工，写 catalog 的是陈工。每一轮左边是时刻和轨迹编号，右边第一句是用户原话，第二句是当时的回复，第三句是这一轮留下或丢掉的记忆。时间都是 2026-10-21。</p>
+        <div class="metric-grid"><div class="metric"><strong>2</strong><span>空间</span></div><div class="metric"><strong>3</strong><span>成员</span></div><div class="metric"><strong>35</strong><span>轮对话</span></div><div class="metric"><strong>5</strong><span>条时间线</span></div><div class="metric"><strong>23</strong><span>道计分题</span></div></div>
+        <p><code>t_report</code> 和 <code>t_column</code> 同时碰了金额和空客户，所以在两条线上各出现一次。其余 33 轮只出现一次。后一条不一定盖过前一条：作者不同、会话里又没有认可时，新说法放进未裁决，旧结论仍是当前。</p>
+        <div class="callout info"><span class="callout-title">跑分不在这页</span><p>这页用来读语料。某一次回放的分数在指标记录里。带分数的表由评分脚本另写，不覆盖本文件。</p></div>
+      </section>
+      <section id="tl-amount">
+  <h2><span class="sec-no">02</span>月报金额：从正文到列，最后由林工裁决</h2>
+  <p><span class="tag tag-memmy">ledger</span> 20:30 之后，当前结论是周工的说法：给 entries 加 amount 列，月报按这列汇总，因为扫全文太慢。林工早上「金额留在 journal 正文」转入历史。时区、输出路径、整数分、按 id 留最早一条，这四条从写下之后没有第二个人改口。</p>
+  <div class="events"><div class="event"><div class="event-time">10/21 09:15<br><code>t_journal</code><br>林工 · 代码开发</div><div><p class="event-query">林工：月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。</p><p>没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。</p><p class="event-effect">写入 dec_amount：entries 表结构不变，月报金额继续写在 journal 正文里，读取时再从正文挑出</p></div></div><div class="event"><div class="event-time">10/21 11:20<br><code>t_ledger_tz</code><br>周工 · 代码开发</div><div><p class="event-query">周工：月报的月初月末按东八区算，别用 UTC。</p><p>report.ts 切月份时按 UTC+8 算月初月末，不再用 UTC。</p><p class="event-effect">写入 dec_tz：月报的月初月末按 UTC+8（东八区）切分，不用 UTC。写入 tl_ledger_tz：report.ts 已改为按 UTC+8 切分月初月末</p></div></div><div class="event"><div class="event-time">10/21 11:30<br><code>t_report</code><br>林工 · 代码开发</div><div><p class="event-query">林工：月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。</p><p>report.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。</p><p class="event-effect">写入 dec_empty：空客户的处理：没有客户名时这笔不进月报。写入 tl_report：月报按客户过滤汇总已完成，空客户测试已补充。只复述已经存在的结论，不新写条目</p></div></div><div class="event"><div class="event-time">10/21 12:50<br><code>t_ledger_loc</code><br>周工 · 代码开发</div><div><p class="event-query">周工：月报结果写到 reports 目录下，按月份命名。</p><p>月报结果写到 reports/ 下，文件名按月份，比如 2026-10.txt。</p><p class="event-effect">写入 dec_report_path：月报结果写到 reports/ 目录，文件按月份命名，如 2026-10.txt。写入 tl_ledger_loc：月报结果已改为写到 reports/ 目录</p></div></div><div class="event"><div class="event-time">10/21 13:40<br><code>t_ledger_round</code><br>林工 · 代码开发</div><div><p class="event-query">林工：月报金额按整数分算，别用浮点。</p><p>report.ts 里金额按整数分累加，最后再换算成元显示。</p><p class="event-effect">写入 dec_round：月报金额按整数分累加，不用浮点，最后再换算成元显示。写入 tl_ledger_round：report.ts 已改为按整数分累加金额</p></div></div><div class="event"><div class="event-time">10/21 15:20<br><code>t_ledger_dup</code><br>林工 · 代码开发</div><div><p class="event-query">林工：重复的分录按 id 去重，留最早那条。</p><p>report.ts 汇总前先按 id 去重，重复的只留最早一条。</p><p class="event-effect">写入 dec_dup：重复的分录按 id 去重，只留最早一条。写入 tl_ledger_dup：report.ts 已加上汇总前按 id 去重</p></div></div><div class="event"><div class="event-time">10/21 16:40<br><code>t_column</code><br>周工 · 代码开发</div><div><p class="event-query">周工：月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。</p><p>entries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。</p><p class="event-effect">不同结论放进未裁决 dec_amount：给 entries 加 amount 列，月报直接按这列汇总，不再扫描 journal 全文，因为扫全文太慢。不同结论放进未裁决 dec_empty：空客户的处理：只有金额列为空时才不进月报。写入 tl_column：entries 已增加 amount 列，月报改为按这列汇总，空客户测试已同步修改。不写入（过程材料）：「改的是 src 里的文件，仓库还是 ledger」是背景说明</p></div></div><div class="event"><div class="event-time">10/21 20:20<br><code>t_informed</code><br>林工 · 代码开发</div><div><p class="event-query">林工：月报的金额现在从哪里取？</p><p>这一项有两项不一致结论，还没有定：林工的结论是 entries 表结构不变，金额继续写在 journal 正文里，读取时再挑出来；周工的结论是给 entries 加 amount 列，月报直接按这列汇总，因为扫全文太慢。请确认以哪项为准。</p><p class="event-effect">只复述已经存在的结论，不新写条目</p></div></div><div class="event"><div class="event-time">10/21 20:30<br><code>t_resolve</code><br>林工 · 代码开发</div><div><p class="event-query">林工：以周工的为准，金额读 amount 列。</p><p>好的，月报金额以 entries 的 amount 列为准，journal 正文不再作为金额来源。</p><p class="event-effect">裁决并清空未裁决 dec_amount：林工确定以周工的结论为准</p></div></div></div>
+  <h3>这条时间线被问什么</h3>
+  <div class="question-list"><details><summary><code>q01</code> <span class="tag">跨空间</span> ledger 月报的金额现在是从哪里取的？</summary><div class="details-body"><p>10/21 14:00，从 ledger 的只读会话发出。期望看到 tp_ledger_report 里的 dec_amount 的当前结论。陷阱：另一空间的 dec_price。</p><p>标准答案：entries 表结构不变，金额继续写在 journal 正文里，月报读取时再从正文里挑出来。</p></div></details><details><summary><code>q02</code> <span class="tag">未裁决</span> ledger 月报的金额现在是从哪里取的？</summary><div class="details-body"><p>10/21 17:00，从 ledger 的只读会话发出。期望看到 tp_ledger_report 里的 dec_amount 的当前结论、未裁决。陷阱：另一空间的 dec_price。</p><p>标准答案：这一项还没有定论，有两项不一致结论：林工的结论是 entries 表结构不变，金额写在 journal 正文里、读取时挑出来；周工的结论是给 entries 加 amount 列，月报直接按这列汇总，因为扫全文太慢，代码已按这个改了。需要成员确认以哪项为准。</p></div></details><details><summary><code>q05</code> <span class="tag">跨空间</span> ledger 月报里的金额是怎么算的，精度上有什么要求？</summary><div class="details-body"><p>10/21 19:30，从 ledger 的只读会话发出。期望看到 tp_ledger_report 里的 dec_round 的当前结论。陷阱：另一空间的 dec_cat_round。</p><p>标准答案：金额按整数分累加，不用浮点，最后再换算成元显示。</p></div></details><details><summary><code>q25</code> <span class="tag">跨空间</span> 月报为什么后来要改成直接读 entries 的一列？</summary><div class="details-body"><p>10/21 19:53，从 ledger 的只读会话发出。期望看到 tp_ledger_report 里的 dec_amount 的未裁决。陷阱：另一空间的 dec_price。</p><p>标准答案：因为月报扫 journal 全文太慢。这是周工的结论，和林工把金额留在 journal 正文的结论之间还没有裁决。</p></div></details><details><summary><code>q26</code> <span class="tag">跨空间</span> 月报的月初月末按哪个时区切？</summary><div class="details-body"><p>10/21 19:54，从 ledger 的只读会话发出。期望看到 tp_ledger_report 里的 dec_tz 的当前结论。陷阱：另一空间的 dec_cat_tz。</p><p>标准答案：按 UTC+8（东八区）切月初月末，不用 UTC。</p></div></details><details><summary><code>q28</code> <span class="tag">跨空间</span> 月报结果写到哪里？</summary><div class="details-body"><p>10/21 19:56，从 ledger 的只读会话发出。期望看到 tp_ledger_report 里的 dec_report_path 的当前结论。陷阱：另一空间的 dec_export_format。</p><p>标准答案：写到 reports/ 目录下，文件按月份命名，比如 2026-10.txt。</p></div></details><details><summary><code>q29</code> <span class="tag">跨空间</span> 月报里重复的分录怎么处理？</summary><div class="details-body"><p>10/21 19:57，从 ledger 的只读会话发出。期望看到 tp_ledger_report 里的 dec_dup 的当前结论。陷阱：另一空间的 dec_cat_dup。</p><p>标准答案：按 id 去重，只留最早一条。</p></div></details><details><summary><code>q31</code> <span class="tag">旧结论</span> ledger 月报的金额现在以什么为准？</summary><div class="details-body"><p>10/21 20:40，从 ledger 的只读会话发出。期望看到 tp_ledger_report 里的 dec_amount 的当前结论。陷阱：dec_amount 的旧说法，在历史第 1 条；另一空间的 dec_price。</p><p>标准答案：以 entries 的 amount 列为准，月报按这列汇总。林工已确定以周工的结论为准，把金额留在 journal 正文里的旧结论已转入历史。</p></div></details></div>
+</section>
+<section id="tl-empty">
+  <h2><span class="sec-no">03</span>空客户：两条规则一直并存</h2>
+  <p><span class="tag tag-memmy">ledger</span> 林工 11:30 的规则仍是当前结论：没有客户名时这笔不进月报。周工 17:40 的修法停在未裁决：只跳过金额列为空的行，空客户但金额还在的留下。数据集里唯一的经验是「测试失败先查读取代码」。这条线没有裁决。</p>
+  <div class="events"><div class="event"><div class="event-time">10/21 11:30<br><code>t_report</code><br>林工 · 代码开发</div><div><p class="event-query">林工：月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。</p><p>report.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。</p><p class="event-effect">写入 dec_empty：空客户的处理：没有客户名时这笔不进月报。写入 tl_report：月报按客户过滤汇总已完成，空客户测试已补充。只复述已经存在的结论，不新写条目</p></div></div><div class="event"><div class="event-time">10/21 16:40<br><code>t_column</code><br>周工 · 代码开发</div><div><p class="event-query">周工：月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。</p><p>entries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。</p><p class="event-effect">不同结论放进未裁决 dec_amount：给 entries 加 amount 列，月报直接按这列汇总，不再扫描 journal 全文，因为扫全文太慢。不同结论放进未裁决 dec_empty：空客户的处理：只有金额列为空时才不进月报。写入 tl_column：entries 已增加 amount 列，月报改为按这列汇总，空客户测试已同步修改。不写入（过程材料）：「改的是 src 里的文件，仓库还是 ledger」是背景说明</p></div></div><div class="event"><div class="event-time">10/21 17:05<br><code>t_sample</code><br>林工 · 代码开发</div><div><p class="event-query">林工：月报测试出现问题了，我看样例文件是不是过期了。</p><p>我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。</p><p class="event-effect">写入 tl_sample：month.json 的样例金额已填上。不写入（未决猜测）：月报测试失败是样例文件过期，填上样例金额即可</p></div></div><div class="event"><div class="event-time">10/21 17:20<br><code>t_admin_bug</code><br>周工 · 代码开发</div><div><p class="event-query">周工：这个失败以读取代码为准。</p><p>空客户被丢掉是 report.ts 的读取问题，不是样例文件旧了。</p><p class="event-effect">写入 exp_fixture：测试失败时先查读取代码，不要先怀疑样例文件：月报空客户被丢掉是 report.ts 的读取问题，不是样例文件旧了</p></div></div><div class="event"><div class="event-time">10/21 17:40<br><code>t_bug</code><br>周工 · 代码开发</div><div><p class="event-query">周工：测试失败不是样例文件造成的。空客户进来时 report.ts 把整笔记丢了，把 month.json 的改动撤回，修读取。</p><p>month.json 已撤回。问题在 report.ts：客户名为空时整行被丢掉。现在只跳过金额列为空的行，空客户但金额还在的会留下。</p><p class="event-effect">更新已有条目 exp_fixture：测试失败时先查读取代码再动样例：月报空客户被丢掉是 report.ts 在客户名为空时整行丢弃；改 month.json 填样例金额修不好，已撤回。更新自己的未裁决 dec_empty：空客户的处理：只跳过金额列为空的行，空客户但金额还在的保留在月报里。写入 tl_bug：month.json 的改动已撤回，report.ts 丢弃空客户整行的问题已修复</p></div></div></div>
+  <h3>这条时间线被问什么</h3>
+  <div class="question-list"><details><summary><code>q03</code> <span class="tag">直接问</span> 空客户的测试现在是怎么写的？</summary><div class="details-body"><p>10/21 12:00，从 ledger 的只读会话发出。期望看到 tp_ledger_report 里的 dec_empty 的当前结论。陷阱：没有陷阱。</p><p>标准答案：没有客户名时这笔不进月报。</p></div></details><details><summary><code>q04</code> <span class="tag">未裁决</span> 空客户的测试现在是怎么写的？</summary><div class="details-body"><p>10/21 19:20，从 ledger 的只读会话发出。期望看到 tp_ledger_report 里的 dec_empty 的当前结论、未裁决。陷阱：没有陷阱。</p><p>标准答案：空客户的规则还有两项不一致结论：林工最初的测试是没有客户名时这笔不进月报；周工改为只跳过金额列为空的行，空客户但金额还在的会留下，并修好了 report.ts 把空客户整行丢掉的问题。需要成员确认以哪项为准。</p></div></details><details><summary><code>q15</code> <span class="tag">直接问</span> 月报测试失败是因为样例文件旧了吗？</summary><div class="details-body"><p>10/21 19:41，从 ledger 的只读会话发出。期望看到 tp_ledger_report 里的 exp_fixture 的当前结论。陷阱：没有陷阱。</p><p>标准答案：不是，是 report.ts 的读取问题：客户名为空时整行被丢掉；改样例文件修不好，那次改动已经撤回。</p></div></details><details><summary><code>q16</code> <span class="tag">直接问</span> tests/fixtures/month.json 现在还留着之前的改动吗？</summary><div class="details-body"><p>10/21 19:42，从 ledger 的只读会话发出。期望看到 tp_ledger_report 里的 tl_bug 的当前结论。陷阱：没有陷阱。</p><p>标准答案：没有，month.json 的改动已经撤回。</p></div></details><details><summary><code>q17</code> <span class="tag">直接问</span> 空客户的账为什么会被整行丢掉？</summary><div class="details-body"><p>10/21 19:43，从 ledger 的只读会话发出。期望看到 tp_ledger_report 里的 tl_bug 的当前结论。陷阱：没有陷阱。</p><p>标准答案：因为 report.ts 读取时客户名为空就把整行丢掉；现在已经修好，只跳过金额列为空的行。</p></div></details></div>
+</section>
+<section id="tl-price">
+  <h2><span class="sec-no">04</span>价格目录：五条约定没改口，导出格式改了一次</h2>
+  <p><span class="tag tag-memmy">catalog</span> 陈工一个人写完。价格列、sku 大写、两位小数、UTC 零点、重复 sku 取最后一条，之后没有人改。导出先写成 prices.json，16:20 由陈工自己改成 prices.csv，json 那句进入历史。这些说法和 ledger 用了相近的词，串过去就算错。</p>
+  <div class="events"><div class="event"><div class="event-time">10/21 11:40<br><code>t_price</code><br>陈工 · 代码开发</div><div><p class="event-query">陈工：价格查询太慢。给 price 表加 amount 列，列表改成直接读这一列。</p><p>price 表加了 amount 列。列表不再拼装说明文字，直接读 amount 列，查询更快。</p><p class="event-effect">写入 dec_price：price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。写入 tl_price：price 表已增加 amount 列，价格列表改为直接读这一列</p></div></div><div class="event"><div class="event-time">10/21 12:10<br><code>t_export</code><br>陈工 · 代码开发</div><div><p class="event-query">陈工：导出价格表。目录没有就先建，再写文件。</p><p>export.ts 会先创建 output 目录，再把价格表写成 prices.json。</p><p class="event-effect">写入 dec_export_format：价格表导出写到 output 目录下的 prices.json。写入 tl_export：价格表导出（export.ts）已完成。不写入（执行步骤）：导出前目录不存在就先创建 output 目录，再写文件</p></div></div><div class="event"><div class="event-time">10/21 12:40<br><code>t_cat_sku</code><br>陈工 · 代码开发</div><div><p class="event-query">陈工：sku 比较前统一转大写。</p><p>price.ts 在比较 sku 前先统一转成大写。</p><p class="event-effect">写入 dec_cat_sku：比较 sku 前先统一转成大写。写入 tl_cat_sku：price.ts 已改为比较 sku 前先转成大写</p></div></div><div class="event"><div class="event-time">10/21 13:30<br><code>t_cat_round</code><br>陈工 · 代码开发</div><div><p class="event-query">陈工：价格显示保留两位小数。</p><p>listAmounts 输出前按两位小数取整。</p><p class="event-effect">写入 dec_cat_round：价格显示保留两位小数，输出前按两位小数取整。写入 tl_cat_round：listAmounts 已改为输出前按两位小数取整</p></div></div><div class="event"><div class="event-time">10/21 14:00<br><code>t_cat_tz</code><br>陈工 · 代码开发</div><div><p class="event-query">陈工：价格生效日按 UTC 零点切。</p><p>价格生效日按 UTC 零点切换，不看本地时区。</p><p class="event-effect">写入 dec_cat_tz：价格生效日按 UTC 零点切换，不看本地时区。写入 tl_cat_tz：价格生效日已改为按 UTC 零点切换</p></div></div><div class="event"><div class="event-time">10/21 15:00<br><code>t_cat_dup</code><br>陈工 · 代码开发</div><div><p class="event-query">陈工：同一个 sku 出现多条，取最后一条。</p><p>price.ts 遇到重复 sku 取最后一条，前面的忽略。</p><p class="event-effect">写入 dec_cat_dup：同一个 sku 出现多条价格时取最后一条，前面的忽略。写入 tl_cat_dup：price.ts 已改为重复 sku 取最后一条</p></div></div><div class="event"><div class="event-time">10/21 16:20<br><code>t_csv</code><br>陈工 · 代码开发</div><div><p class="event-query">陈工：导出别写 json 了，改成 csv。</p><p>export.ts 现在写 prices.csv，不再用 json。</p><p class="event-effect">改写当前结论 dec_export_format：价格表导出为 csv，写成 prices.csv，不再用 json。写入 tl_csv：价格表导出已改为写 prices.csv</p></div></div></div>
+  <h3>这条时间线被问什么</h3>
+  <div class="question-list"><details><summary><code>q06</code> <span class="tag">跨空间</span> 价格列表里的金额怎么取整？</summary><div class="details-body"><p>10/21 19:31，从 catalog 的只读会话发出。期望看到 tp_cat_price 里的 dec_cat_round 的当前结论。陷阱：另一空间的 dec_round。</p><p>标准答案：价格显示保留两位小数，输出前按两位小数取整。</p></div></details><details><summary><code>q07</code> <span class="tag">旧结论</span> catalog 导出的价格表现在是什么格式？</summary><div class="details-body"><p>10/21 19:32，从 catalog 的只读会话发出。期望看到 tp_cat_export 里的 dec_export_format 的当前结论。陷阱：dec_export_format 的旧说法，在历史第 1 条。</p><p>标准答案：导出为 csv，写成 prices.csv，不再写 prices.json。</p></div></details><details><summary><code>q21</code> <span class="tag">跨空间</span> <span class="tag">排除，不提问</span> catalog 的价格列表现在是怎么读金额的？</summary><div class="details-body"><p>10/21 19:48，从 catalog 的只读会话发出。期望看到 tp_cat_price 里的 dec_price 的当前结论。陷阱：另一空间的 dec_amount。</p><p>标准答案：列表直接读 amount 列，不再拼装说明文字。</p></div></details><details><summary><code>q23</code> <span class="tag">直接问</span> 比较 sku 之前要先做什么处理？</summary><div class="details-body"><p>10/21 19:51，从 catalog 的只读会话发出。期望看到 tp_cat_price 里的 dec_cat_sku 的当前结论。陷阱：没有陷阱。</p><p>标准答案：先统一转成大写。</p></div></details><details><summary><code>q24</code> <span class="tag">跨空间</span> catalog 的价格表为什么要新增一列金额？</summary><div class="details-body"><p>10/21 19:52，从 catalog 的只读会话发出。期望看到 tp_cat_price 里的 dec_price 的当前结论。陷阱：另一空间的 dec_amount。</p><p>标准答案：因为价格查询太慢；加了 amount 列后，价格列表直接读这一列。</p></div></details><details><summary><code>q27</code> <span class="tag">跨空间</span> 价格的生效日按哪个时间切换？</summary><div class="details-body"><p>10/21 19:55，从 catalog 的只读会话发出。期望看到 tp_cat_price 里的 dec_cat_tz 的当前结论。陷阱：另一空间的 dec_tz。</p><p>标准答案：按 UTC 零点切换，不看本地时区。</p></div></details><details><summary><code>q30</code> <span class="tag">跨空间</span> 同一个 sku 出现多条价格怎么取？</summary><div class="details-body"><p>10/21 19:58，从 catalog 的只读会话发出。期望看到 tp_cat_price 里的 dec_cat_dup 的当前结论。陷阱：另一空间的 dec_dup。</p><p>标准答案：取最后一条，前面的忽略。</p></div></details></div>
+</section>
+<section id="tl-copy">
+  <h2><span class="sec-no">05</span>月报不搬 catalog 的导出</h2>
+  <p><span class="tag tag-memmy">ledger</span> 最终结论是范围决策：不把 catalog 的 export 搬进 ledger，因为 dry-run 报告显示月报用不上。中间林工抄进去过，周工跟林工确认后撤回，报告出来后再改成确定不搬。两句旧结论都在历史里。</p>
+  <div class="events"><div class="event"><div class="event-time">10/21 13:00<br><code>t_copy</code><br>林工 · 代码开发</div><div><p class="event-query">林工：catalog 那个导出做法能用，我把它抄进 ledger。</p><p>export 已经抄进 ledger，月报导出前会先建 output 目录。</p><p class="event-effect">写入 dec_copy：ledger 的月报导出复用 catalog 的 export 做法，把它抄进 ledger。写入 tl_copy：catalog 的 export 已抄进 ledger</p></div></div><div class="event"><div class="event-time">10/21 13:20<br><code>t_wait</code><br>周工 · 代码开发</div><div><p class="event-query">周工：先别抄，我跟林工确认过了。等 dry-run 报告出来再看要不要搬。</p><p>export 那份拷贝我撤掉了。ledger 不建 output 目录，等 dry-run 报告。</p><p class="event-effect">改写当前结论 dec_copy：先不把 catalog 的 export 搬进 ledger，等 dry-run 报告出来再决定。写入 tl_wait：ledger 里的 export 拷贝已撤回</p></div></div><div class="event"><div class="event-time">10/21 19:10<br><code>t_dryrun</code><br>周工 · 代码开发</div><div><p class="event-query">周工：dry-run 报告出来了，export 在月报里用不上。</p><p>看了 dry-run 报告：月报用不上 export，那份拷贝不再恢复，也不往 ledger 搬。</p><p class="event-effect">改写当前结论 dec_copy：不把 catalog 的 export 搬进 ledger：dry-run 报告显示月报用不上 export</p></div></div></div>
+  <h3>这条时间线被问什么</h3>
+  <div class="question-list"><details><summary><code>q09</code> <span class="tag">旧结论</span> catalog 的导出做法抄进 ledger 了吗，后面还搬吗？</summary><div class="details-body"><p>10/21 19:34，从 ledger 的只读会话发出。期望看到 tp_ledger_export 里的 dec_copy 的当前结论。陷阱：dec_copy 的旧说法，在历史第 1 条；dec_copy 的旧说法，在历史第 2 条。</p><p>标准答案：不搬了。林工曾把 catalog 的 export 抄进 ledger；周工和林工确认后撤回了拷贝，等 dry-run 报告；报告出来后确定月报用不上 export，不再恢复，也不往 ledger 搬。</p></div></details></div>
+</section>
+<section id="tl-repo">
+  <h2><span class="sec-no">06</span>仓库约定，以及不进入项目记忆的对话</h2>
+  <p><span class="tag tag-memmy">ledger</span> 连接串最后只留在本机 .env，作者记林工和周工；「写进 README」在历史里。分支还没定：林工要直接改 main，周工要求先放 feature 分支，两项并存。回复长短、怎么拆段、改了文件算不算冲突、要不要告诉另一个窗口，这些整轮不写。</p>
+  <div class="events"><div class="event"><div class="event-time">10/21 10:00<br><code>t_verbose</code><br>林工 · 代码开发</div><div><p class="event-query">林工：做完把每一步都写在回复里。</p><p>我会在回复正文里按顺序写完每一个步骤，不另开清单。</p><p class="event-effect">不写入（与项目产出无关）：回复正文里按顺序写完每一个步骤，不另开清单</p></div></div><div class="event"><div class="event-time">10/21 10:10<br><code>t_short</code><br>周工 · 代码开发</div><div><p class="event-query">周工：回复短一点，步骤放到清单里就行。</p><p>回复里只留结果。步骤记在清单里，不再按顺序铺在正文里。</p><p class="event-effect">不写入（与项目产出无关）：回复只留结果，步骤记在清单里</p></div></div><div class="event"><div class="event-time">10/21 10:25<br><code>t_write_split</code><br>林工 · 代码开发</div><div><p class="event-query">林工：每句话都拆成一段。</p><p>我按句子把这轮拆开了，每句一段。</p><p class="event-effect">不写入（与项目产出无关）：回复按句子拆开，每句一段</p></div></div><div class="event"><div class="event-time">10/21 10:30<br><code>t_admin_todo</code><br>周工 · 代码开发</div><div><p class="event-query">周工：没有清单就不要把一轮拆成几段。</p><p>这轮没有清单，我就整段做完，没有拆开。</p><p class="event-effect">不写入（与项目产出无关）：没有清单时不把一轮拆成几段</p></div></div><div class="event"><div class="event-time">10/21 14:25<br><code>t_write_secret</code><br>林工 · 工程规范</div><div><p class="event-query">林工：把连接串写进 README，别人好查。</p><p>连接串已经写进 README，这样查库更快。</p><p class="event-effect">写入 dec_env：数据库连接串写进 README，方便别人查。写入 tl_write_secret：数据库连接串已写进 README</p></div></div><div class="event"><div class="event-time">10/21 14:40<br><code>t_admin_env</code><br>周工 · 工程规范</div><div><p class="event-query">周工：.env 不能出现在说明里。</p><p>.env 留在本机。说明和普通记录里都不放连接串。</p><p class="event-effect">不同结论放进未裁决 dec_env：.env 留在本机，说明和普通记录里都不放数据库连接串</p></div></div><div class="event"><div class="event-time">10/21 14:45<br><code>t_write_edit</code><br>林工 · 代码开发</div><div><p class="event-query">林工：只要改了文件就算冲突。</p><p>report.ts 和 README 都改过，我把两次修改都记成冲突。</p><p class="event-effect">不写入（与项目产出无关）：只要改了文件就把修改记成冲突</p></div></div><div class="event"><div class="event-time">10/21 14:50<br><code>t_admin_claim</code><br>周工 · 代码开发</div><div><p class="event-query">周工：只有两边结论相反才算冲突。</p><p>两边对同一件事说法相反，才需要判断谁对。改了不同文件不算。</p><p class="event-effect">不写入（与项目产出无关）：只有两边对同一件事结论相反才算冲突，改了不同文件不算</p></div></div><div class="event"><div class="event-time">10/21 15:00<br><code>t_write_main</code><br>林工 · 工程规范</div><div><p class="event-query">林工：直接在 main 上改吧，省得合并。</p><p>我直接在 main 上改了，没有开分支。</p><p class="event-effect">写入 dec_branch：改动直接在 main 上改，不开分支，省得合并</p></div></div><div class="event"><div class="event-time">10/21 15:10<br><code>t_admin_branch</code><br>周工 · 工程规范</div><div><p class="event-query">周工：改动先放 feature 分支，别直接动 main。</p><p>改动先放在 feature 分支，main 不直接改。</p><p class="event-effect">不同结论放进未裁决 dec_branch：改动先放 feature 分支，不直接改 main</p></div></div><div class="event"><div class="event-time">10/21 17:50<br><code>t_env</code><br>林工 · 工程规范</div><div><p class="event-query">林工：数据库密码别写进仓库。</p><p>README 里的连接串已经删掉了。密码只留在本机的 .env，没有把 .env 的内容抄进来。</p><p class="event-effect">改写当前结论 dec_env：数据库密码只留在本机 .env，不写进仓库，README 里也不放连接串。写入 tl_env：README 里的数据库连接串已删除</p></div></div><div class="event"><div class="event-time">10/21 18:00<br><code>t_silent</code><br>林工 · 代码开发</div><div><p class="event-query">林工：别告诉另一个窗口我改了表。</p><p>这次改动只留在当前窗口，我没有写给别的会话。</p><p class="event-effect">不写入（与项目产出无关）：改表的事只留在当前窗口，不告诉别的会话</p></div></div><div class="event"><div class="event-time">10/21 18:15<br><code>t_tell</code><br>周工 · 代码开发</div><div><p class="event-query">周工：另一个窗口下次开口时得知道列已经加上了。</p><p>等那个窗口下一次开口，再告诉它 entries 已经有 amount 列。现在这条对话里还送不过去。</p><p class="event-effect">不写入（与项目产出无关）：另一个窗口下次开口时要告诉它 entries 已有 amount 列</p></div></div></div>
+  <h3>这条时间线被问什么</h3>
+  <div class="question-list"><details><summary><code>q13</code> <span class="tag">旧结论</span> 数据库连接串能写进说明或普通记录吗？</summary><div class="details-body"><p>10/21 19:39，从 ledger 的只读会话发出。期望看到 tp_ledger_repo 里的 dec_env 的当前结论。陷阱：dec_env 的旧说法，在历史第 1 条。</p><p>标准答案：不能。数据库密码和连接串只留在本机 .env，不写进仓库、说明或普通记录；早先把连接串写进 README 的做法已经改掉。</p></div></details><details><summary><code>q14</code> <span class="tag">旧结论</span> README 里现在还有数据库连接串吗？</summary><div class="details-body"><p>10/21 19:40，从 ledger 的只读会话发出。期望看到 tp_ledger_repo 里的 dec_env 的当前结论。陷阱：dec_env 的旧说法，在历史第 1 条。</p><p>标准答案：没有了，README 里的连接串已经删掉，密码只留在本机 .env。</p></div></details><details><summary><code>q19</code> <span class="tag">未裁决</span> 改动应该放在哪个分支上？</summary><div class="details-body"><p>10/21 19:45，从 ledger 的只读会话发出。期望看到 tp_ledger_repo 里的 dec_branch 的当前结论、未裁决。陷阱：没有陷阱。</p><p>标准答案：还没有定论，有两项不一致结论：林工主张直接在 main 上改，省得合并；周工要求改动先放 feature 分支，不直接改 main。需要成员确认以哪项为准。</p></div></details></div>
+</section>
+      <section id="appendix">
+        <h2><span class="sec-no">A</span>文件</h2>
+        <p>原话在 <a href="dataset/corpus.json">corpus.json</a>，每一轮写入或丢弃的动作在 <a href="dataset/labels.json">labels.json</a>，终态在 <a href="dataset/gold.json">gold.json</a>，题目在 <a href="dataset/questions.json">questions.json</a>。</p>
+      </section>
+      <footer class="site-foot"><span>MEMTENSOR · 评测数据集 v2</span><span>2026-11-05</span></footer>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const links = [...document.querySelectorAll('nav.toc a[href^="#"]')];
+      const sections = links.map((link) => document.getElementById(link.hash.slice(1))).filter(Boolean);
+      if (sections.length === 0) return;
+      let frame = 0;
+      const update = () => {
+        frame = 0;
+        const line = window.innerHeight * 0.3;
+        const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+        let current = sections[0];
+        for (const section of sections) if (section.getBoundingClientRect().top <= line) current = section;
+        if (atBottom) current = sections[sections.length - 1];
+        for (const link of links) {
+          if (link.hash.slice(1) === current.id) link.setAttribute("aria-current", "true");
+          else link.removeAttribute("aria-current");
+        }
+      };
+      const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
+      window.addEventListener("scroll", schedule, { passive: true });
+      window.addEventListener("resize", schedule);
+      update();
+    })();
+
+    (() => {
+      const KEY = "memtensor-doc-theme";
+      const root = document.documentElement;
+      const btn = document.querySelector("[data-theme-toggle]");
+      if (!btn) return;
+      const appearance = () => {
+        const chosen = root.getAttribute("data-theme");
+        if (chosen === "light" || chosen === "dark") return chosen;
+        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      };
+      const paint = () => {
+        const dark = appearance() === "dark";
+        btn.setAttribute("aria-label", dark ? "切换到浅色" : "切换到深色");
+        btn.title = btn.getAttribute("aria-label");
+      };
+      btn.addEventListener("click", () => {
+        const next = appearance() === "dark" ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        try { localStorage.setItem(KEY, next); } catch { /* 当次切换仍然生效 */ }
+        paint();
+      });
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+        if (!root.getAttribute("data-theme")) paint();
+      });
+      paint();
+    })();
+
+    (() => {
+      const open = document.querySelector(".diagram-edit-open");
+      if (!open) return;
+      const SVG_NS = "http://www.w3.org/2000/svg";
+      const FONTS = [
+        ["", "默认"],
+        ["var(--font-sans)", "正文"],
+        ["var(--font-display)", "标题"],
+        ["var(--font-mono)", "等宽"],
+        ["Segoe UI, PingFang SC, Microsoft YaHei, sans-serif", "Sans Serif"],
+        ["Georgia, Times New Roman, serif", "Serif"],
+        ["Arial, Helvetica, sans-serif", "Arial"],
+        ["Microsoft YaHei, PingFang SC, sans-serif", "微软雅黑"],
+        ["KaiTi, STKaiti, serif", "楷体"],
+        ["Cascadia Code, Consolas, monospace", "Cascadia"],
+      ];
+      const bar = document.createElement("div");
+      bar.className = "diagram-edit-bar";
+      bar.hidden = true;
+      bar.setAttribute("role", "toolbar");
+      bar.innerHTML = '<div class="diagram-edit-tools"><label>字体 <select data-act="font"></select></label><label>字号 <input data-act="size" type="number" min="8" max="200" step="1" value="16"></label><button type="button" data-act="code">展开原始代码</button><button type="button" data-act="copy" hidden>复制这段</button><button type="button" data-act="done">完成</button></div><pre class="diagram-edit-code" hidden></pre><span class="diagram-edit-resize" data-resize="w" hidden></span><span class="diagram-edit-resize" data-resize="s" hidden></span><span class="diagram-edit-resize" data-resize="sw" hidden></span>';
+      const fontInput = bar.querySelector('[data-act="font"]');
+      for (const [value, label] of FONTS) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        fontInput.append(option);
+      }
+      document.body.append(bar);
+      const frame = document.createElement("div");
+      frame.className = "edit-frame";
+      frame.hidden = true;
+      for (const edge of ["nw", "n", "ne", "e", "se", "s", "sw", "w"]) {
+        const handle = document.createElement("span");
+        handle.dataset.edge = edge;
+        frame.append(handle);
+      }
+      document.body.append(frame);
+      const sizeInput = bar.querySelector('[data-act="size"]');
+      const codeBtn = bar.querySelector('[data-act="code"]');
+      const copyBtn = bar.querySelector('[data-act="copy"]');
+      const codeBox = bar.querySelector(".diagram-edit-code");
+      const CURSOR = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", nw: "nwse-resize", se: "nwse-resize", ne: "nesw-resize", sw: "nesw-resize" };
+      let selected = null;
+      let drag = null;
+      let editingEl = null;
+      let editSnapshot = "";
+      let svgTextEdit = null;
+      let savedRange = null;
+      let pendingTarget = null;
+      let interactingWithFormatBar = false;
+      const undo = [];
+      let dirty = false;
+      let saveQueue = Promise.resolve();
+      let textUndo = null;
+      const baselines = new Map();
+      const originals = new Map();
+      const spacers = new Map();
+      const placedAtStart = new Set();
+
+      const n = (el, name) => Number(el.getAttribute(name) || 0);
+      const round = (value) => Math.round(value * 10) / 10;
+      const boxOf = (el) => ({ x: n(el, "x"), y: n(el, "y"), w: n(el, "width"), h: n(el, "height") });
+      const holds = (rect, x, y) => x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+      const fullyInside = (outer, inner) =>
+        inner.x >= outer.x - 0.5 && inner.y >= outer.y - 0.5 && inner.x + inner.w <= outer.x + outer.w + 0.5 && inner.y + inner.h <= outer.y + outer.h + 0.5;
+      const isSvg = (el) => el?.namespaceURI === SVG_NS;
+      const htmlTargets = () => {
+        const all = [...document.querySelectorAll("main h1, main h2, main h3, main p, main li, main dt, main dd, main .callout, main pre")];
+        return all.filter((el) => !el.classList.contains("edit-spacer") && !el.closest("figure.diagram") && !all.some((other) => other !== el && !other.classList.contains("edit-spacer") && other.contains(el)));
+      };
+      const mainEl = () => document.querySelector("main");
+
+      function scaleOf(svg) {
+        const vb = svg.viewBox.baseVal;
+        const rect = svg.getBoundingClientRect();
+        return { sx: vb.width / rect.width || 1, sy: vb.height / rect.height || 1 };
+      }
+      function hitResizeEdge(rect, x, y, threshold = 8) {
+        const left = rect.left;
+        const top = rect.top;
+        const right = rect.right;
+        const bottom = rect.bottom;
+        if (x < left - threshold || x > right + threshold || y < top - threshold || y > bottom + threshold) return "";
+        const onLeft = Math.abs(x - left) <= threshold;
+        const onRight = Math.abs(x - right) <= threshold;
+        const onTop = Math.abs(y - top) <= threshold;
+        const onBottom = Math.abs(y - bottom) <= threshold;
+        if (onTop && onLeft) return "nw";
+        if (onTop && onRight) return "ne";
+        if (onBottom && onLeft) return "sw";
+        if (onBottom && onRight) return "se";
+        if (onLeft) return "w";
+        if (onRight) return "e";
+        if (onTop) return "n";
+        if (onBottom) return "s";
+        return "";
+      }
+      function writePoints(item, points) {
+        if (item.el.tagName === "line") {
+          item.el.setAttribute("x1", String(points[0]));
+          item.el.setAttribute("y1", String(points[1]));
+          item.el.setAttribute("x2", String(points[2]));
+          item.el.setAttribute("y2", String(points[3]));
+          return;
+        }
+        let d = `M${points[0]},${points[1]}`;
+        for (let i = 2; i < points.length; i += 2) d += ` L${points[i]},${points[i + 1]}`;
+        item.el.setAttribute("d", d);
+      }
+      function unitFrom(target) {
+        const root = target.closest?.("svg");
+        if (!root || !root.closest("figure.diagram") || target.closest("g.legend")) return null;
+        const texts = [...root.querySelectorAll("text")].filter((el) => !el.closest("g.legend"));
+        const rects = [...root.querySelectorAll("rect")];
+        let rect = target.closest("rect");
+        if (!rect && target.closest("text")) {
+          const text = target.closest("text");
+          const x = n(text, "x");
+          const y = n(text, "y");
+          rect = rects.filter((el) => holds(boxOf(el), x, y)).sort((a, b) => boxOf(a).w * boxOf(a).h - boxOf(b).w * boxOf(b).h)[0] || null;
+          if (!rect) return { svg: root, rect: null, rects: [], texts: [text], edges: [] };
+        }
+        if (!rect) return null;
+        const area = boxOf(rect);
+        const members = rects.filter((el) => el !== rect && fullyInside(area, boxOf(el)));
+        const moving = [rect, ...members];
+        const boxes = moving.map(boxOf);
+        const labels = texts.filter((el) => boxes.some((item) => holds(item, n(el, "x"), n(el, "y"))));
+        const group = rect.classList.contains("group");
+        const edges = [];
+        for (const el of root.querySelectorAll("line, path")) {
+          const points = el.tagName === "line"
+            ? [n(el, "x1"), n(el, "y1"), n(el, "x2"), n(el, "y2")]
+            : (el.getAttribute("d") || "").match(/-?\d*\.?\d+/g)?.map(Number);
+          if (!points || points.length < 4 || points.length % 2) continue;
+          const indexes = [];
+          for (let i = 0; i < points.length; i += 2) {
+            const x = points[i];
+            const y = points[i + 1];
+            const hit = group
+              ? holds({ x: area.x - 2, y: area.y - 2, w: area.w + 4, h: area.h + 4 }, x, y)
+              : boxes.some((item) => {
+                  const nearX = Math.abs(x - item.x) <= 8 || Math.abs(x - (item.x + item.w)) <= 8;
+                  const nearY = Math.abs(y - item.y) <= 8 || Math.abs(y - (item.y + item.h)) <= 8;
+                  const inX = x >= item.x - 8 && x <= item.x + item.w + 8;
+                  const inY = y >= item.y - 8 && y <= item.y + item.h + 8;
+                  return inX && inY && (nearX || nearY);
+                });
+            if (hit) indexes.push(i);
+          }
+          if (indexes.length) edges.push({ el, points, indexes });
+        }
+        return { svg: root, rect, rects: moving, texts: labels, edges };
+      }
+      function guidesFor(root, skip) {
+        const vb = root.viewBox.baseVal;
+        const vertical = [0, vb.width / 2, vb.width];
+        const horizontal = [0, vb.height / 2, vb.height];
+        for (const el of root.querySelectorAll("rect")) {
+          if (skip.has(el) || el.closest("g.legend")) continue;
+          const box = boxOf(el);
+          vertical.push(box.x, box.x + box.w / 2, box.x + box.w);
+          horizontal.push(box.y, box.y + box.h / 2, box.y + box.h);
+        }
+        return { vertical, horizontal };
+      }
+      function htmlGuides(current) {
+        const parent = mainEl().getBoundingClientRect();
+        const vertical = [0, parent.width / 2, parent.width];
+        const horizontal = [0, parent.height / 2, parent.height];
+        const guides = [...htmlTargets(), ...document.querySelectorAll("main figure.diagram")];
+        for (const el of guides) {
+          if (el === current) continue;
+          const rect = el.getBoundingClientRect();
+          vertical.push(rect.left - parent.left, rect.left - parent.left + rect.width / 2, rect.right - parent.left);
+          horizontal.push(rect.top - parent.top, rect.top - parent.top + rect.height / 2, rect.bottom - parent.top);
+        }
+        return { vertical, horizontal };
+      }
+      function snapShift(pos, size, guides) {
+        let best = 0;
+        let bestDist = 6;
+        for (const at of [pos, pos + size / 2, pos + size]) {
+          for (const guide of guides) {
+            const dist = Math.abs(guide - at);
+            if (dist < bestDist) {
+              bestDist = dist;
+              best = guide - at;
+            }
+          }
+        }
+        return best;
+      }
+      function paintMove(dx, dy, snap = true) {
+        const primary = drag.rects[0];
+        if (!primary) {
+          const text = drag.texts[0];
+          if (!text) return;
+          text.el.setAttribute("x", String(round(text.x0 + dx)));
+          text.el.setAttribute("y", String(round(text.y0 + dy)));
+          return;
+        }
+        if (snap) {
+          const guides = guidesFor(drag.svg, new Set(drag.rects.map((item) => item.el)));
+          dx += snapShift(primary.x0 + dx, primary.w0, guides.vertical);
+          dy += snapShift(primary.y0 + dy, primary.h0, guides.horizontal);
+        }
+        for (const item of drag.rects) {
+          item.el.setAttribute("x", String(round(item.x0 + dx)));
+          item.el.setAttribute("y", String(round(item.y0 + dy)));
+        }
+        for (const item of drag.texts) {
+          item.el.setAttribute("x", String(round(item.x0 + dx)));
+          item.el.setAttribute("y", String(round(item.y0 + dy)));
+        }
+        for (const item of drag.edges) {
+          const moved = item.points.map((value, index) => {
+            if (!item.indexes.includes(index - (index % 2))) return value;
+            return round(value + (index % 2 === 0 ? dx : dy));
+          });
+          writePoints(item, moved);
+        }
+      }
+      function paintResize(dx, dy) {
+        const origin = drag.box;
+        let x = origin.x;
+        let y = origin.y;
+        let w = origin.w;
+        let h = origin.h;
+        if (drag.edge.includes("w")) { x += dx; w -= dx; }
+        if (drag.edge.includes("e")) w += dx;
+        if (drag.edge.includes("n")) { y += dy; h -= dy; }
+        if (drag.edge.includes("s")) h += dy;
+        if (drag.edge.includes("w")) { x = Math.min(x, origin.x + origin.w - 40); w = origin.x + origin.w - x; }
+        if (drag.edge.includes("e")) w = Math.max(40, w);
+        if (drag.edge.includes("n")) { y = Math.min(y, origin.y + origin.h - 24); h = origin.y + origin.h - y; }
+        if (drag.edge.includes("s")) h = Math.max(24, h);
+        const guides = guidesFor(drag.svg, new Set(drag.rects.map((item) => item.el)));
+        if (drag.edge.includes("w")) x += snapShift(x, 0, guides.vertical);
+        if (drag.edge.includes("e")) w += snapShift(x + w, 0, guides.vertical);
+        if (drag.edge.includes("n")) y += snapShift(y, 0, guides.horizontal);
+        if (drag.edge.includes("s")) h += snapShift(y + h, 0, guides.horizontal);
+        w = Math.max(40, w);
+        h = Math.max(24, h);
+        const primary = drag.rects[0];
+        primary.el.setAttribute("x", String(round(x)));
+        primary.el.setAttribute("y", String(round(y)));
+        primary.el.setAttribute("width", String(round(w)));
+        primary.el.setAttribute("height", String(round(h)));
+        const shiftX = x - origin.x;
+        const shiftY = y - origin.y;
+        for (const item of drag.rects.slice(1)) {
+          item.el.setAttribute("x", String(round(item.x0 + shiftX)));
+          item.el.setAttribute("y", String(round(item.y0 + shiftY)));
+        }
+        for (const item of drag.texts) {
+          const nextX = item.anchor === "middle" ? x + w / 2 : x + (item.x0 - origin.x);
+          item.el.setAttribute("x", String(round(nextX)));
+          item.el.setAttribute("y", String(round(y + (item.y0 - origin.y))));
+        }
+        for (const item of drag.edges) {
+          const moved = item.points.map((value, index) => {
+            if (!item.indexes.includes(index - (index % 2))) return value;
+            const px = item.points[index - (index % 2)];
+            const py = item.points[index - (index % 2) + 1];
+            if (index % 2 === 0) {
+              if (Math.abs(px - origin.x) <= 8) return round(x + (px - origin.x));
+              if (Math.abs(px - (origin.x + origin.w)) <= 8) return round(x + w - (origin.x + origin.w - px));
+              return value;
+            }
+            if (Math.abs(py - origin.y) <= 8) return round(y + (py - origin.y));
+            if (Math.abs(py - (origin.y + origin.h)) <= 8) return round(y + h - (origin.y + origin.h - py));
+            return value;
+          });
+          writePoints(item, moved);
+        }
+      }
+      function paintHtmlMove(dx, dy, snap = true) {
+        let left = drag.x + dx;
+        let top = drag.y + dy;
+        if (snap) {
+          const guides = htmlGuides(drag.el);
+          left += snapShift(left, drag.w, guides.vertical);
+          top += snapShift(top, drag.h, guides.horizontal);
+        }
+        drag.el.style.left = `${Math.round(left)}px`;
+        drag.el.style.top = `${Math.round(top)}px`;
+      }
+      function paintHtmlResize(dx, dy) {
+        let left = drag.x;
+        let top = drag.y;
+        let width = drag.w;
+        let height = drag.h;
+        if (drag.edge.includes("w")) { left += dx; width -= dx; }
+        if (drag.edge.includes("e")) width += dx;
+        if (drag.edge.includes("n")) { top += dy; height -= dy; }
+        if (drag.edge.includes("s")) height += dy;
+        width = Math.max(40, width);
+        height = Math.max(24, height);
+        const guides = htmlGuides(drag.el);
+        if (drag.edge.includes("w")) left += snapShift(left, 0, guides.vertical);
+        if (drag.edge.includes("e")) width += snapShift(left + width, 0, guides.vertical);
+        if (drag.edge.includes("n")) top += snapShift(top, 0, guides.horizontal);
+        if (drag.edge.includes("s")) height += snapShift(top + height, 0, guides.horizontal);
+        width = Math.max(40, width);
+        height = Math.max(24, height);
+        drag.el.style.left = `${Math.round(left)}px`;
+        drag.el.style.top = `${Math.round(top)}px`;
+        drag.el.style.width = `${Math.round(width)}px`;
+        drag.el.style.height = `${Math.round(height)}px`;
+      }
+      function flowBox(el) {
+        const parent = mainEl().getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
+        return {
+          left: rect.left - parent.left,
+          top: rect.top - parent.top,
+          width: rect.width,
+          height: rect.height,
+        };
+      }
+      function lift(el) {
+        if (spacers.has(el) || !el.isConnected) return;
+        const prev = el.previousElementSibling;
+        if (prev?.classList.contains("edit-spacer")) {
+          spacers.set(el, prev);
+          return;
+        }
+        const box = flowBox(el);
+        const cs = getComputedStyle(el);
+        const spacer = document.createElement("div");
+        spacer.className = "edit-spacer";
+        spacer.setAttribute("aria-hidden", "true");
+        spacer.style.boxSizing = "border-box";
+        spacer.style.display = "block";
+        spacer.style.flex = "0 0 auto";
+        spacer.style.width = `${Math.round(box.width)}px`;
+        spacer.style.height = `${Math.round(box.height)}px`;
+        spacer.style.marginTop = cs.marginTop;
+        spacer.style.marginRight = cs.marginRight;
+        spacer.style.marginBottom = cs.marginBottom;
+        spacer.style.marginLeft = cs.marginLeft;
+        spacer.style.padding = "0";
+        spacer.style.border = "0";
+        el.before(spacer);
+        spacers.set(el, spacer);
+        el.style.position = "absolute";
+        el.style.left = `${Math.round(box.left)}px`;
+        el.style.top = `${Math.round(box.top)}px`;
+        el.style.width = `${Math.round(box.width)}px`;
+        el.style.height = `${Math.round(box.height)}px`;
+        el.style.margin = "0";
+        el.style.right = "auto";
+        el.style.bottom = "auto";
+        el.style.maxWidth = "none";
+        el.style.maxHeight = "none";
+        el.style.zIndex = "2";
+      }
+      function armEditables() {
+        for (const el of htmlTargets()) {
+          if (!spacers.has(el) && el.previousElementSibling?.classList.contains("edit-spacer")) {
+            spacers.set(el, el.previousElementSibling);
+          }
+          if (!originals.has(el)) originals.set(el, el.getAttribute("style"));
+          el.setAttribute("data-editable", "");
+          const box = flowBox(el);
+          baselines.set(el, {
+            left: Math.round(box.left),
+            top: Math.round(box.top),
+            width: Math.round(box.width),
+            height: Math.round(box.height),
+            html: el.innerHTML,
+          });
+          if (spacers.has(el)) placedAtStart.add(el);
+        }
+      }
+      function dropSpacer(el) {
+        const spacer = spacers.get(el);
+        if (!spacer) return;
+        spacer.remove();
+        spacers.delete(el);
+      }
+      function restoreClean() {
+        const main = mainEl();
+        let dirtyBottom = 0;
+        const parent = main.getBoundingClientRect();
+        for (const [el, style] of originals) {
+          if (!el.isConnected) continue;
+          const base = baselines.get(el);
+          const spacer = spacers.get(el);
+          const left = parseFloat(el.style.left);
+          const top = parseFloat(el.style.top);
+          const width = parseFloat(el.style.width);
+          const height = parseFloat(el.style.height);
+          const moved = !!(spacer && base && (Math.abs(left - base.left) >= 1 || Math.abs(top - base.top) >= 1 || Math.abs(width - base.width) >= 1 || Math.abs(height - base.height) >= 1));
+          const fontFamily = el.style.fontFamily;
+          const fontSize = el.style.fontSize;
+          const html = el.innerHTML;
+          const typed = base && (html !== base.html || fontFamily || fontSize);
+          el.classList.remove("is-picked", "is-editing");
+          el.removeAttribute("contenteditable");
+          el.removeAttribute("data-editable");
+          if (!moved && !placedAtStart.has(el)) {
+            if (style == null) el.removeAttribute("style");
+            else el.setAttribute("style", style);
+            if (typed) {
+              el.innerHTML = html;
+              if (fontFamily) el.style.fontFamily = fontFamily;
+              if (fontSize) el.style.fontSize = fontSize;
+            }
+            dropSpacer(el);
+          } else if (moved) {
+            const rect = el.getBoundingClientRect();
+            dirtyBottom = Math.max(dirtyBottom, rect.bottom - parent.top);
+          }
+        }
+        originals.clear();
+        baselines.clear();
+        placedAtStart.clear();
+        if (dirtyBottom + 24 > parent.height) {
+          const current = parseFloat(main.style.minHeight) || 0;
+          main.style.minHeight = `${Math.ceil(Math.max(current, dirtyBottom + 24))}px`;
+        }
+      }
+      function cleanClone(el) {
+        const clone = el.cloneNode(true);
+        clone.querySelectorAll("*").forEach((node) => {
+          node.classList?.remove("is-picked", "is-editing");
+          if (node.classList && node.classList.length === 0) node.removeAttribute("class");
+          node.removeAttribute?.("contenteditable");
+          node.removeAttribute?.("data-editable");
+        });
+        clone.classList?.remove("is-picked", "is-editing");
+        if (clone.classList && clone.classList.length === 0) clone.removeAttribute("class");
+        clone.removeAttribute?.("contenteditable");
+        clone.removeAttribute?.("data-editable");
+        return clone.outerHTML.replace(/></g, ">\n<");
+      }
+      function sourceHost() {
+        if (selected?.kind === "svg") return selected.unit.svg;
+        if (selected?.kind === "html") return selected.el;
+        return null;
+      }
+      function showCode() {
+        if (codeBox.hidden) return;
+        const host = sourceHost();
+        codeBox.textContent = host ? cleanClone(host) : "先点选一个框或一段文字。";
+      }
+      function snapshot() {
+        if (selected?.kind === "svg") {
+          const svg = selected.unit.svg;
+          const html = svg.innerHTML;
+          return () => {
+            svg.innerHTML = html;
+            clearSelection();
+          };
+        }
+        if (selected?.kind === "html") {
+          const el = selected.el;
+          const style = el.getAttribute("style");
+          const html = el.innerHTML;
+          const spacer = spacers.get(el) || null;
+          const spacerParent = spacer ? spacer.parentNode : null;
+          return () => {
+            if (style == null) el.removeAttribute("style");
+            else el.setAttribute("style", style);
+            el.innerHTML = html;
+            const current = spacers.get(el);
+            if (spacer) {
+              if (current && current !== spacer) current.remove();
+              if (!spacer.isConnected && spacerParent) spacerParent.insertBefore(spacer, el);
+              spacers.set(el, spacer);
+            } else if (current) dropSpacer(el);
+            placeFrame();
+            showCode();
+          };
+        }
+        return null;
+      }
+      function pushUndo(entry) {
+        if (!entry) return;
+        undo.push(entry);
+        dirty = true;
+        if (undo.length > 30) undo.shift();
+      }
+      function remember() {
+        pushUndo(snapshot());
+      }
+      function pageHtml() {
+        const root = document.documentElement.cloneNode(true);
+        root.removeAttribute("data-theme");
+        root.querySelector("body")?.classList.remove("is-diagram-edit");
+        root.querySelectorAll(".diagram-edit-bar, .edit-frame, .diagram-edit-text").forEach((el) => el.remove());
+        root.querySelectorAll("[data-editable], [contenteditable]").forEach((el) => {
+          el.removeAttribute("data-editable");
+          el.removeAttribute("contenteditable");
+        });
+        root.querySelectorAll(".is-picked, .is-editing").forEach((el) => {
+          el.classList.remove("is-picked", "is-editing");
+          if (el.classList.length === 0) el.removeAttribute("class");
+        });
+        return "<!DOCTYPE html>\n" + root.outerHTML;
+      }
+      function persistPage() {
+        const html = pageHtml();
+        const headerPath = location.protocol === "file:" ? location.href : location.pathname;
+        const urls = [];
+        if (location.protocol === "http:" || location.protocol === "https:") urls.push(`${location.origin}/__memtensor/save`);
+        const fallback = "http://127.0.0.1:4173/__memtensor/save";
+        if (!urls.includes(fallback)) urls.push(fallback);
+        saveQueue = saveQueue.catch(() => {}).then(async () => {
+          for (const url of urls) {
+            try {
+              const res = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain", "X-Doc-Path": headerPath },
+                body: html,
+              });
+              if (res.ok) {
+                open.title = "已写回文件";
+                return;
+              }
+            } catch { /* 下一个地址 */ }
+          }
+          open.title = "没能写回文件";
+        });
+      }
+      function placeFrame() {
+        const el = selected?.el;
+        if (!el?.isConnected || editingEl) {
+          frame.hidden = true;
+          return;
+        }
+        const rect = el.getBoundingClientRect();
+        frame.hidden = false;
+        frame.style.left = `${rect.left}px`;
+        frame.style.top = `${rect.top}px`;
+        frame.style.width = `${rect.width}px`;
+        frame.style.height = `${rect.height}px`;
+      }
+      function setFormatEnabled(on) {
+        bar.classList.toggle("is-plain", !on);
+        fontInput.disabled = !on;
+        sizeInput.disabled = !on;
+      }
+      function isSimpleText(el) {
+        return ![...el.childNodes].some((node) => node.nodeType === Node.ELEMENT_NODE);
+      }
+      function rangeParent(range) {
+        const node = range.commonAncestorContainer;
+        return node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+      }
+      function saveTextRange() {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount && !sel.isCollapsed && editingEl && !svgTextEdit && editingEl.contains(sel.anchorNode)) {
+          savedRange = sel.getRangeAt(0).cloneRange();
+          return;
+        }
+        if (!interactingWithFormatBar) savedRange = null;
+      }
+      function typographyTarget() {
+        if (svgTextEdit) return { kind: "element", el: svgTextEdit.node };
+        if (savedRange && !savedRange.collapsed) return { kind: "range", range: savedRange };
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount && !sel.isCollapsed && editingEl && editingEl.contains(sel.anchorNode)) {
+          return { kind: "range", range: sel.getRangeAt(0) };
+        }
+        if (editingEl && sel?.anchorNode && editingEl.contains(sel.anchorNode)) {
+          const el = sel.anchorNode.nodeType === Node.TEXT_NODE ? sel.anchorNode.parentElement : sel.anchorNode;
+          if (el && editingEl.contains(el)) return { kind: "element", el };
+        }
+        if (selected?.kind === "svg") return { kind: "texts", texts: selected.unit.texts };
+        if (selected?.kind === "html") return { kind: "element", el: selected.el };
+        return null;
+      }
+      function applyTypography(el, styles) {
+        if (!el?.style) return;
+        if (styles.fontFamily != null) el.style.fontFamily = styles.fontFamily;
+        if (styles.fontSize == null || styles.fontSize === "") return;
+        el.style.fontSize = `${Math.round(Number(styles.fontSize))}px`;
+        if (!isSvg(el) && el.scrollHeight > el.clientHeight + 1) el.style.height = "auto";
+      }
+      function applyTypographyToRange(range, styles) {
+        if (!range || range.collapsed) return null;
+        const existing = rangeParent(range);
+        if (existing && existing.tagName === "SPAN" && existing.textContent === range.toString()) {
+          applyTypography(existing, styles);
+          return existing;
+        }
+        const span = document.createElement("span");
+        applyTypography(span, styles);
+        try { range.surroundContents(span); }
+        catch { span.append(range.extractContents()); range.insertNode(span); }
+        return span;
+      }
+      function applyCurrentTypography(styles) {
+        const target = typographyTarget() || pendingTarget;
+        if (!target) return;
+        remember();
+        if (target.kind === "range") {
+          const span = applyTypographyToRange(target.range, styles);
+          if (span) {
+            const next = document.createRange();
+            next.selectNodeContents(span);
+            savedRange = next;
+          }
+        } else if (target.kind === "texts") {
+          for (const text of target.texts) applyTypography(text, styles);
+        } else applyTypography(target.el, styles);
+        placeFrame();
+        showCode();
+        readTypography();
+      }
+      function readTypography() {
+        const target = typographyTarget();
+        const el = target?.kind === "texts" ? target.texts[0] : target?.kind === "range" ? rangeParent(target.range) : target?.el;
+        if (!el?.isConnected) return;
+        sizeInput.value = String(Math.round(parseFloat(getComputedStyle(el).fontSize) || 16));
+        const family = el.style?.fontFamily || "";
+        fontInput.value = [...fontInput.options].some((opt) => opt.value === family) ? family : "";
+      }
+      function clearSelection() {
+        document.querySelectorAll(".is-picked").forEach((node) => node.classList.remove("is-picked"));
+        selected = null;
+        pendingTarget = null;
+        frame.hidden = true;
+        setFormatEnabled(false);
+        showCode();
+      }
+      function selectUnit(unit) {
+        if (!unit) return;
+        if (editingEl && !svgTextEdit) endInlineEdit(true);
+        document.querySelectorAll(".is-picked").forEach((node) => node.classList.remove("is-picked"));
+        const el = unit.rect || unit.texts[0];
+        selected = { kind: "svg", unit, el };
+        el.classList.add("is-picked");
+        setFormatEnabled(true);
+        readTypography();
+        pendingTarget = typographyTarget();
+        placeFrame();
+        showCode();
+      }
+      function selectHtml(el) {
+        if (editingEl && editingEl !== el) endInlineEdit(true);
+        document.querySelectorAll(".is-picked").forEach((node) => node.classList.remove("is-picked"));
+        selected = { kind: "html", el };
+        el.classList.add("is-picked");
+        setFormatEnabled(true);
+        readTypography();
+        pendingTarget = typographyTarget();
+        placeFrame();
+        showCode();
+      }
+      function beginSvg(unit, edge, clientX, clientY) {
+        const scale = scaleOf(unit.svg);
+        drag = {
+          kind: "svg",
+          mode: edge && unit.rect ? "resize" : "move",
+          edge: edge || "",
+          svg: unit.svg,
+          sx: scale.sx,
+          sy: scale.sy,
+          clientX,
+          clientY,
+          box: unit.rect ? boxOf(unit.rect) : null,
+          rects: unit.rects.map((el) => ({ el, x0: n(el, "x"), y0: n(el, "y"), w0: n(el, "width"), h0: n(el, "height") })),
+          texts: unit.texts.map((el) => ({ el, x0: n(el, "x"), y0: n(el, "y"), anchor: el.getAttribute("text-anchor") || "start" })),
+          edges: unit.edges,
+          snap: true,
+          noted: false,
+        };
+      }
+      function beginHtml(el, edge, clientX, clientY) {
+        drag = {
+          kind: "html",
+          mode: edge ? "resize" : "move",
+          edge: edge || "",
+          el,
+          x: parseFloat(el.style.left) || 0,
+          y: parseFloat(el.style.top) || 0,
+          w: el.getBoundingClientRect().width,
+          h: el.getBoundingClientRect().height,
+          clientX,
+          clientY,
+          snap: true,
+          noted: false,
+        };
+      }
+      function syncHtmlDragBox() {
+        if (drag?.kind !== "html") return;
+        drag.x = parseFloat(drag.el.style.left) || 0;
+        drag.y = parseFloat(drag.el.style.top) || 0;
+        drag.w = parseFloat(drag.el.style.width) || drag.el.getBoundingClientRect().width;
+        drag.h = parseFloat(drag.el.style.height) || drag.el.getBoundingClientRect().height;
+      }
+      function liftForDrag() {
+        if (drag?.kind !== "html" || spacers.has(drag.el)) return;
+        if (!drag.noted) {
+          remember();
+          drag.noted = true;
+        }
+        lift(drag.el);
+        syncHtmlDragBox();
+      }
+      function startInlineEdit(el) {
+        if (!el || editingEl === el) return;
+        endInlineEdit(true);
+        if (el.hasAttribute?.("data-editable")) selectHtml(el);
+        textUndo = snapshot();
+        editingEl = el;
+        editSnapshot = el.innerHTML;
+        el.contentEditable = "true";
+        el.classList.add("is-editing");
+        frame.hidden = true;
+        el.focus();
+        if (isSimpleText(el)) {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      }
+      function openSvgText(text) {
+        endInlineEdit(true);
+        const unit = unitFrom(text);
+        if (unit) selectUnit(unit);
+        textUndo = snapshot();
+        const bounds = text.getBoundingClientRect();
+        const input = document.createElement("div");
+        input.className = "diagram-edit-text";
+        input.contentEditable = "true";
+        input.textContent = text.textContent;
+        const computed = getComputedStyle(text);
+        input.style.left = `${bounds.left}px`;
+        input.style.top = `${bounds.top}px`;
+        input.style.minWidth = `${Math.max(96, bounds.width + 24)}px`;
+        input.style.font = computed.font;
+        input.style.fontFamily = computed.fontFamily;
+        document.body.append(input);
+        svgTextEdit = { node: text, snapshot: text.textContent };
+        editingEl = input;
+        frame.hidden = true;
+        input.focus();
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        const finish = (commit) => {
+          if (!svgTextEdit || svgTextEdit.node !== text) return;
+          endInlineEdit(commit);
+        };
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") { event.preventDefault(); finish(true); }
+          if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); finish(false); }
+        });
+        input.addEventListener("focusout", (event) => {
+          if (interactingWithFormatBar) return;
+          const next = event.relatedTarget;
+          if (next && bar.contains(next)) return;
+          finish(true);
+        });
+      }
+      function endInlineEdit(commit) {
+        if (svgTextEdit) {
+          const changed = commit && editingEl.textContent !== svgTextEdit.snapshot;
+          if (!commit) svgTextEdit.node.textContent = svgTextEdit.snapshot;
+          else svgTextEdit.node.textContent = editingEl.textContent;
+          if (changed) pushUndo(textUndo);
+          textUndo = null;
+          editingEl.remove();
+          svgTextEdit = null;
+          editingEl = null;
+          savedRange = null;
+          placeFrame();
+          showCode();
+          return;
+        }
+        if (!editingEl) return;
+        const el = editingEl;
+        const changed = commit && el.innerHTML !== editSnapshot;
+        if (!commit) el.innerHTML = editSnapshot;
+        if (changed) pushUndo(textUndo);
+        textUndo = null;
+        el.removeAttribute("contenteditable");
+        el.classList.remove("is-editing");
+        editingEl = null;
+        editSnapshot = "";
+        savedRange = null;
+        placeFrame();
+        showCode();
+      }
+      function setSourceOpen(show) {
+        codeBox.hidden = !show;
+        copyBtn.hidden = !show;
+        codeBtn.textContent = show ? "收起原始代码" : "展开原始代码";
+        bar.classList.toggle("is-code", show);
+        for (const handle of bar.querySelectorAll("[data-resize]")) handle.hidden = !show;
+        if (!show) {
+          bar.classList.remove("is-sized");
+          bar.style.height = "";
+          bar.style.width = "";
+          bar.style.maxWidth = "";
+        } else showCode();
+      }
+      function resizeSource(event) {
+        if (drag.edge === "w" || drag.edge === "sw") {
+          const width = Math.round(Math.max(240, Math.min(drag.right - 8, drag.right - event.clientX)));
+          bar.style.width = `${width}px`;
+          bar.style.maxWidth = "none";
+        }
+        if (drag.edge === "s" || drag.edge === "sw") {
+          const height = Math.round(Math.max(120, Math.min(window.innerHeight - drag.top - 8, event.clientY - drag.top)));
+          bar.style.height = `${height}px`;
+          bar.classList.add("is-sized");
+        }
+      }
+      function setEditing(on) {
+        document.body.classList.toggle("is-diagram-edit", on);
+        open.setAttribute("aria-pressed", on ? "true" : "false");
+        bar.hidden = !on;
+        document.body.style.cursor = "";
+        if (on) {
+          armEditables();
+          setFormatEnabled(false);
+        } else {
+          endInlineEdit(true);
+          clearSelection();
+          restoreClean();
+          setSourceOpen(false);
+          if (dirty) persistPage();
+        }
+      }
+      open.addEventListener("click", () => setEditing(bar.hidden));
+      bar.addEventListener("click", async (event) => {
+        const act = event.target?.dataset?.act;
+        if (act === "done") setEditing(false);
+        if (act === "code") setSourceOpen(codeBox.hidden);
+        if (act === "copy") {
+          const host = sourceHost();
+          if (!host) return;
+          try { await navigator.clipboard.writeText(cleanClone(host)); } catch { /* 仍可从展开的代码里选取 */ }
+        }
+      });
+      fontInput.addEventListener("change", () => applyCurrentTypography({ fontFamily: fontInput.value }));
+      sizeInput.addEventListener("input", () => {
+        const value = Number(sizeInput.value);
+        if (value >= 8 && value <= 200) applyCurrentTypography({ fontSize: value });
+      });
+      bar.addEventListener("pointerdown", (event) => {
+        const handle = event.target.closest?.("[data-resize]");
+        if (handle && !handle.hidden && bar.classList.contains("is-code")) {
+          event.preventDefault();
+          event.stopPropagation();
+          const rect = bar.getBoundingClientRect();
+          document.body.style.cursor = CURSOR[handle.dataset.resize] || "";
+          drag = {
+            kind: "bar",
+            edge: handle.dataset.resize,
+            right: rect.right,
+            top: rect.top,
+            noted: true,
+          };
+          return;
+        }
+        event.stopPropagation();
+        interactingWithFormatBar = true;
+        saveTextRange();
+        pendingTarget = typographyTarget();
+      }, true);
+      window.addEventListener("pointerup", () => { interactingWithFormatBar = false; });
+      window.addEventListener("pointercancel", () => { interactingWithFormatBar = false; });
+      document.addEventListener("selectionchange", () => {
+        if (interactingWithFormatBar || !editingEl || svgTextEdit) return;
+        saveTextRange();
+      });
+      frame.addEventListener("pointerdown", (event) => {
+        const edge = event.target?.dataset?.edge;
+        if (!edge || !selected || editingEl || event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (selected.kind === "svg") beginSvg(selected.unit, edge, event.clientX, event.clientY);
+        else beginHtml(selected.el, edge, event.clientX, event.clientY);
+      });
+      document.addEventListener("pointerdown", (event) => {
+        if (!document.body.classList.contains("is-diagram-edit") || event.button !== 0) return;
+        if (bar.contains(event.target) || open.contains(event.target) || frame.contains(event.target) || event.target.closest(".page-tools") || event.target.closest(".diagram-edit-text")) return;
+        if (editingEl && (editingEl === event.target || editingEl.contains(event.target))) return;
+        const svg = event.target.closest?.("figure.diagram svg");
+        if (svg) {
+          const unit = unitFrom(event.target);
+          if (!unit) {
+            endInlineEdit(true);
+            clearSelection();
+            return;
+          }
+          selectUnit(unit);
+          if (editingEl) return;
+          const edge = unit.rect ? hitResizeEdge(unit.rect.getBoundingClientRect(), event.clientX, event.clientY) : "";
+          beginSvg(unit, edge, event.clientX, event.clientY);
+          event.preventDefault();
+          return;
+        }
+        const html = event.target.closest?.("[data-editable]");
+        if (!html) {
+          endInlineEdit(true);
+          clearSelection();
+          return;
+        }
+        selectHtml(html);
+        if (editingEl) return;
+        const edge = hitResizeEdge(html.getBoundingClientRect(), event.clientX, event.clientY);
+        beginHtml(html, edge, event.clientX, event.clientY);
+        event.preventDefault();
+      });
+      document.addEventListener("pointermove", (event) => {
+        if (drag?.kind === "bar") {
+          resizeSource(event);
+          return;
+        }
+        if (document.body.classList.contains("is-diagram-edit") && !drag && !editingEl) {
+          const rect = event.target.closest?.("rect, [data-editable]");
+          const edge = rect && !rect.closest("g.legend") ? hitResizeEdge(rect.getBoundingClientRect(), event.clientX, event.clientY) : "";
+          document.body.style.cursor = edge ? CURSOR[edge] : "";
+        }
+        if (!drag) return;
+        if (drag.kind === "html" && !spacers.has(drag.el)) {
+          const traveled = Math.hypot(event.clientX - drag.clientX, event.clientY - drag.clientY);
+          if (traveled < 3) return;
+          liftForDrag();
+        }
+        if (!drag.noted) {
+          remember();
+          drag.noted = true;
+        }
+        const dx = event.clientX - drag.clientX;
+        const dy = event.clientY - drag.clientY;
+        if (drag.kind === "svg") {
+          const sdx = dx * drag.sx;
+          const sdy = dy * drag.sy;
+          if (drag.mode === "resize") paintResize(sdx, sdy);
+          else paintMove(sdx, sdy, drag.snap);
+        } else if (drag.mode === "resize") paintHtmlResize(dx, dy);
+        else paintHtmlMove(dx, dy, drag.snap);
+        placeFrame();
+        showCode();
+      });
+      const endDrag = () => {
+        if (drag?.kind === "bar") document.body.style.cursor = "";
+        drag = null;
+      };
+      document.addEventListener("pointerup", endDrag);
+      document.addEventListener("pointercancel", endDrag);
+      document.addEventListener("dblclick", (event) => {
+        if (!document.body.classList.contains("is-diagram-edit")) return;
+        if (bar.contains(event.target)) return;
+        const text = event.target.closest?.("text");
+        if (text && text.closest("figure.diagram") && !text.closest("g.legend")) {
+          event.preventDefault();
+          openSvgText(text);
+          return;
+        }
+        const html = event.target.closest?.("[data-editable]");
+        if (!html || isSvg(html)) return;
+        event.preventDefault();
+        startInlineEdit(html);
+      });
+      document.addEventListener("keydown", (event) => {
+        const undoKey = (event.metaKey || event.ctrlKey) && event.key === "z" && !event.shiftKey;
+        const typing = Boolean(editingEl) || Boolean(event.target.closest?.("input, textarea, select"));
+        if (undoKey && undo.length && !typing) {
+          event.preventDefault();
+          undo.pop()();
+          if (!document.body.classList.contains("is-diagram-edit")) persistPage();
+          return;
+        }
+        if (!document.body.classList.contains("is-diagram-edit")) return;
+        if (editingEl && !svgTextEdit) {
+          if (event.key === "Escape") { event.preventDefault(); endInlineEdit(false); return; }
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey || isSimpleText(editingEl))) {
+            event.preventDefault();
+            endInlineEdit(true);
+          }
+          return;
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key === "z" && undo.length) {
+          event.preventDefault();
+          undo.pop()();
+          return;
+        }
+        if (event.key === "Escape") {
+          if (!codeBox.hidden) setSourceOpen(false);
+          else setEditing(false);
+          return;
+        }
+        const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
+        if (!step || !selected || editingEl) return;
+        event.preventDefault();
+        if (selected.kind === "svg") {
+          beginSvg(selected.unit, "", 0, 0);
+          drag.snap = false;
+          drag.noted = true;
+          remember();
+          paintMove(step[0] * drag.sx, step[1] * drag.sy, false);
+        } else {
+          beginHtml(selected.el, "", 0, 0);
+          drag.snap = false;
+          liftForDrag();
+          if (!drag.noted) {
+            remember();
+            drag.noted = true;
+          }
+          paintHtmlMove(step[0], step[1], false);
+        }
+        drag = null;
+        placeFrame();
+        showCode();
+      });
+      document.addEventListener("focusout", (event) => {
+        if (!editingEl || svgTextEdit) return;
+        if (interactingWithFormatBar) return;
+        const next = event.relatedTarget;
+        if (next && (editingEl.contains(next) || bar.contains(next))) return;
+        endInlineEdit(true);
+      });
+      window.addEventListener("scroll", () => placeFrame(), true);
+      window.addEventListener("resize", () => placeFrame());
+    })();
+  </script>
+</body>
+</html>

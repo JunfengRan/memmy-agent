@@ -74,6 +74,7 @@ node run-memmy-live-eval.mjs --api-checks-only ../runs/<stamp>/live-run.json   #
 | `dataset/conflicts.json` | 10 个分歧场景：作者、现有结论作者、认可、已告知，以及据此推出的动作 |
 | `dataset/questions.json` | 24 道题（1 道 excluded）与 4 项接口检查 |
 | `dataset/gold.json` | 由 `build-gold-baseline.mjs` 推出：最终条目（content、time、user_ids、conflicts、history）、不该写入的内容、每轮结果、每题提问时刻的期望条目与陷阱 |
+| `report.html` | 给新同事和负责人读的介绍页：35 轮对话按五条时间线排列，每轮有原话、回复和写入结果 |
 
 ### 标注规则
 
@@ -93,11 +94,13 @@ node run-memmy-live-eval.mjs --api-checks-only ../runs/<stamp>/live-run.json   #
 
 | 变化 | 说明 |
 | --- | --- |
-| 删除 | 顶层 `dataset/`、`workspaces/`、`load-eval-set.mjs`、`build-sessions.mjs`；`gold-add-memory/source/`、`workspaces/`、`build-sessions.mjs`、`generated/`；`decisions/relay/scheme/scoring/todolists.json`；入库的 `report.html` |
+| 删除 | 顶层 `dataset/`、`workspaces/`、`load-eval-set.mjs`、`build-sessions.mjs`；`gold-add-memory/source/`、`workspaces/`、`build-sessions.mjs`、`generated/`；`decisions/relay/scheme/scoring/todolists.json`；当时入库的旧介绍页 `report.html` |
 | 删题 | q08（执行步骤不写入，无记忆可答）、q10–q12、q18、q20、q22 |
 | scope-leak | 改为接口检查：不带 `space_ids` 检索必须被拒；`space_ids=[catalog]` 检索 ledger 的题目，返回的 ledger 主题必须为 0 |
 | 改题 | q17 改为 plain；q21 保持 excluded，不提问也不计分；q01–q04、q13、q15、q19 的标准答案按新金标重写；新增 q31（裁决后的当前状态） |
 | 语料 | 新增 `t_informed`、`t_resolve`；`t_wait` 改为体现认可的说法 |
+
+介绍页已按这一版重写为同目录的 `report.html`。带分数的报告仍由 `build-report.mjs` 写到 `../runs/report.html`，两份不要混用。
 
 ## 校验（`load-eval-set.mjs`）
 
@@ -200,5 +203,7 @@ node run-memmy-live-eval.mjs --api-checks-only ../runs/<stamp>/live-run.json   #
 | `judge.mjs` | 评委提示词，完全一致时按规则判定 |
 | `llm.mjs` | 显式配置、家族检查、温度 0、带提示词哈希的缓存 |
 | `metrics.mjs` | 通用指标函数 |
-| `build-report.mjs` | HTML 报告 |
+| `report.html` | 数据集介绍页（空间、金标故事、题目、调用链） |
+| `build-report.mjs` | 把一次评分结果渲染成 `../runs/report.html` |
 | `pricing.json` | 被测系统、评委与阅读模型的费用估算（USD / 1M token） |
+| `../jev-topic/` | Jev 主题归属的单独评测。不进主回放，产品开关默认关闭 |
