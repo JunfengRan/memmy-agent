@@ -15,6 +15,7 @@ memmy-memory-*.tgz
 App/memmy-agent/package-lock.json
 # Repo-root runtime logs only. Eval fixtures keep their own sessions directories.
 /sessions/
+artifacts/literature-review-*.json
 .*
 !.github/
 !.github/workflows/
@@ -46,6 +47,10 @@ App/memmy-agent/package-lock.json
 !App/memmy-agent/src/tools/computer-history/win/.gitkeep
 App/backend/src/adapters/outbound/skill-writer/workspace-bridge/memmy-workspace-bridge.mjs
 Memory/src/agent-source/integration/workspace-bridge/memmy-workspace-bridge.mjs
+
+# Office rendering executables and libraries are provisioned during packaging.
+App/memmy-agent/extra-dependencies/office-rendering/*/bin/
+App/memmy-agent/extra-dependencies/office-rendering/*/native/
 /Mac软件打包/
 # Local design drafts and review notes; mirrored from DingTalk, not shipped.
 /design-docs/
