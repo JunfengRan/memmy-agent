@@ -1,7 +1,7 @@
 ---
 id: 20261106-review-triage
-status: in-progress
-owner: developer / Cursor
+status: ready-for-review
+owner: reviewer（待接手）
 roadmap: PM-12、PM-13、PM-16、PM-19～PM-22（只登记）；relativity 阈值修复无对应条目
 branch: dev-project-memory-add-search-dev
 updated: 2026-11-06
@@ -51,7 +51,7 @@ updated: 2026-11-06
 - [x] typecheck 通过；`tests/service/project-memory` 全部通过
 - [x] 每条意见有结论和去向
 - [x] 用户确认 Add-3、Search-2、Search-5 的不同意见（11/06：Add-3、Search-5 按 v3 不改；Search-2 挂 Q-19 等 designer）
-- [ ] 提交并写 handoff
+- [x] 提交并写 handoff（dfd9c193，handoff-01.md）
 
 ## 相关工作项
 
@@ -62,3 +62,4 @@ updated: 2026-11-06
 | 日期 | 状态 | 由谁 | 文件 |
 | --- | --- | --- | --- |
 | 2026-11-06 | in-progress | developer / Cursor（Claude Opus） | item.md |
+| 2026-11-06 | ready-for-review | developer / Cursor（Claude Opus） | handoff-01.md |
