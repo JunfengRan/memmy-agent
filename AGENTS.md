@@ -23,7 +23,13 @@
 2. 《MemOS SDK接口规格》。
 3. 《MemOS 项目记忆PRD》。
 
-冲突时按上面的顺序取舍，并在 [docs/project-memory/spec-alignment.md](docs/project-memory/spec-alignment.md) 登记差异，不能私自选择。`design-docs/` 是钉钉文档的本地镜像，不进 git；代码对齐的是哪个版本，以 [spec-snapshots.md](docs/project-memory/spec-snapshots.md) 为准。规格有变化时先跑 `pm-spec-sync` 技能。
+冲突时按上面的顺序取舍，并在 [docs/project-memory/spec-alignment.md](docs/project-memory/spec-alignment.md) 登记差异，不能私自选择。`design-docs/` 不进 git，其中 `standard/` 是钉钉文档的本地镜像；代码对齐的是哪个版本，以 [spec-snapshots.md](docs/project-memory/spec-snapshots.md) 为准。规格有变化时先跑 `pm-spec-sync` 技能。`standard/` 里的《MemOS 3.0 项目记忆研发计划》只定范围和排期，不参加上面的取舍。
+
+**规格只有 `design-docs/standard/` 这一个来源。** `design-docs/` 下的其他目录都不是事实源，目录说明见 `design-docs/README.md`：
+
+- `alpha/`、`claude/`、`codex/` 是 v3 之前的历史方案，已被取代。其中现行规格没有采纳的设计不算缺口，例如项目目录下的 `.memos/`、DB 与文件同步、`search` / `get` / `expand`、`ProjectSnapshot`。
+- `review/` 是对 `standard/` 的评审意见，答复写进 `standard/` 或 ADR 之前不算已定。
+- 判断实现缺口、写对齐表、open-questions 和评审意见时只引用 `standard/` 与 ADR。只有用户明确要求时才读历史方案，引用时写明「历史方案」，不要和 `standard/` 并列成几套事实源。
 
 ### 模块边界
 

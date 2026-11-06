@@ -36,6 +36,7 @@ App/memmy-agent/package-lock.json
 !.cursor/rules/
 .cursor/rules/*
 !.cursor/rules/agent-collaboration.mdc
+!.cursor/rules/project-memory-spec-sources.mdc
 !.codex/
 .codex/*
 !.codex/skills/
