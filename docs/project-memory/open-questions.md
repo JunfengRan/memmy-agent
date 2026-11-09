@@ -2,7 +2,7 @@
 
 规格 TBD、规格之间的矛盾、实现中发现的问题。每条写我们的提议；有回复后改状态并在对齐表落地。周报汇总状态为 `待回复` 的条目。
 
-状态：`待回复` / `按提议实现` / `已关闭`。
+状态：`待回复` / `按提议实现` / `暂缓` / `已关闭`。`暂缓` 表示初始版本（11/27 交付）完成前不处理，不进周报的待回复清单。
 
 | ID | 问题 | 出处 | 提议 | 状态 |
 | --- | --- | --- | --- | --- |
@@ -23,7 +23,7 @@
 | Q-15 | `chat_time` 缺失时算不算重放。v3 §2.2.2 规定缺失时回落为到达时间并按 `(conversation_id, role, chat_time)` 去重，两次到达就是两条消息；v0.1 的任务批次键（`service.ts` `batchKey`）把推断时间去掉了，同一会话里同一成员再次发送同样的文字（如「继续」）会拿回旧 `task_id`，本次内容不整理 | v3 §2.2.2、§2.2.10 `idempotency_key`；20261106-review-triage Add-1 | 按 v3：推断时间进入批次键，缺 `chat_time` 的提交不做任务级去重；网络重试要幂等，由 SDK 补 `chat_time`（SDK 规格本来就要求宿主带时间）。`idempotency_key` 维持 v3 写法（Space + 会话 + 本批 hash），同会话同角色同时间同内容的再次提交按重放处理是有意的 | 待回复（PM-16 实现） |
 | Q-16 | 失败的批次能否重新提交。v0.1 中 `VERSION_CONFLICT_RETRY_EXHAUSTED`、`MODEL_CALL_FAILED` 的批次整批不写；同一批消息再提交时按批次键拿回那个 `failed` 任务，没有恢复途径 | v3 §2.2.11「同一批消息重放返回原 task_id」、§2.3.1；review-triage Add-2 | 失败原因可重试（commit 阶段冲突超限、模型调用失败）的批次再提交时新建任务；Space / 领域类失败仍返回原任务。失败尝试里的 `deferred` 不落盘（v3：失败不写任何内容）。`TOPIC_SET_CHANGED` 与 `VERSION_CONFLICT` 按 v3 共用 3 次预算不变，成本由 PM-12（只重跑 M04）降下来 | 待回复（PM-16 实现） |
 | Q-17 | 检索怎么告诉 Local 是工具检索。v3 §3.3.5 要求工具检索写 `via=tool`、不算本轮开始，但 `search_memory` 的入参里没有表示入口的字段；v0.1 一律写 `turn_start` | v3 §3.2.5、§3.3.5、§6.5 #12；review-triage Search-4/9 | SDK → Local 的请求体加一个本机字段 `recall_via`（`turn_start` / `tool`，缺省 `turn_start`），不进 SDK 公开参数，由 SDK 的工具处理函数填写 | 待回复（PM-21 实现） |
-| Q-18 | 按时间窗口检索。v3 的 `search_memory` 对项目记忆只有 `query` / `space_ids` / `domains` 三个范围参数，没有时间窗口或「某时刻的状态」入口；`filter` 只原样带给 ① 路 | v3 §3.2.2；review-triage Search-1 | v3 未定义，不算缺口。若需要，提议 `filter.time_range` 只作用于条目的 `time`，`history` 仍全量返回；由 designer 决定是否进 v3 | 待回复 |
-| Q-19 | 决策级来源。v3 的 `decisions` 表没有会话字段，`search_memory` 明确不返回 `sources`；Agent 从一条决策只能经 `get_memory_by_id` 拿到主题级 `sources`，再用 `get_message` 读原文，无法定位到具体哪次会话 | v3 §3.2.2、§4.3、§5.3；review-triage Search-2 | 维持 v3。若采纳，需改表结构（`decisions` / `decision_history` / `decision_conflicts` 加 `conversation_id`）和检索契约，走 ADR | 待回复 |
+| Q-18 | 按时间窗口检索。v3 的 `search_memory` 对项目记忆只有 `query` / `space_ids` / `domains` 三个范围参数，没有时间窗口或「某时刻的状态」入口；`filter` 只原样带给 ① 路 | v3 §3.2.2；review-triage Search-1 | v3 未定义，不算缺口。若需要，提议 `filter.time_range` 只作用于条目的 `time`，`history` 仍全量返回；由 designer 决定是否进 v3 | 暂缓（11/09 用户决定：初始版本完成后再议） |
+| Q-19 | 决策级来源。v3 的 `decisions` 表没有会话字段，`search_memory` 明确不返回 `sources`；Agent 从一条决策只能经 `get_memory_by_id` 拿到主题级 `sources`，再用 `get_message` 读原文，无法定位到具体哪次会话 | v3 §3.2.2、§4.3、§5.3；review-triage Search-2 | 维持 v3。若采纳，需改表结构（`decisions` / `decision_history` / `decision_conflicts` 加 `conversation_id`）和检索契约，走 ADR | 暂缓（11/09 用户决定：初始版本完成后再议） |
 | Q-20 | ② agent memory 一路的排序与项目一路不同：现有检索有 LLM 过滤、分层和按墙钟的时效，`contextBudget` 也未生效（`retrieval-service.ts` 中 `void budget`）。M09 要「同一输入结果完全一致」 | v3 §3.2.3、§3.2.5、§3.5.1–3.5.3；review-triage Search-6/7 | M09 只按名次（RRF）融合，不比原始分数；② 路在融合时关掉 LLM 过滤、不用墙钟时效，只取候选与名次。预算按 v3 放在 M10（`budget_tokens`），不复用旧 `contextBudget` | 待回复（PM-19 / PM-20 实现） |
 | Q-21 | 降级对宿主可见。`degraded` 在返回体里（符合 v3 §3.2.3），但模板三没有对应的渲染，宿主技能会把词法结果当作完整召回 | v3 §3.2.3、§3.3.4；review-triage Search-12 | 模板三在 `degraded` 非空时加一行固定提示（如「本次未用向量召回，结果可能不全」）；search 技能写明遇到降级时可换说法再查一次 | 待回复（PM-22 实现） |

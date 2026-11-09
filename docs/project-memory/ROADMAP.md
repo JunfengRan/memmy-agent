@@ -19,7 +19,7 @@
 | PM-07 | add v0.1：raw_turns → Space 串行任务 → 一次 LLM 调用完成 M02+M04 → M05（add/join/rewrite/conflict_append，经验带 history，轨迹追加）→ ChangeSet → 条件写，冲突重合并 ≤3 次 | v3 §2.1–2.3 | PRD 决策维护逐轮表 golden 通过 | done（44dcbb1e；split 未做，见 ADR-0005） |
 | PM-08 | search v0.1：project 一路，FTS5 + 向量，RRF + MMR + 时效/本会话优先，按 topic 截断，附 history/conflicts；get_memory、get_memory_by_id、get_task_status | v3 §3.2.2–3.2.5 | 检索确定性测试；topic_detail_list 形状 | done（44dcbb1e；只做 project 一路） |
 | PM-09 | 删除旧实现（memories 表里的 project 行和 /api/v1 分支） | ADR-0002 | 普通 L1 召回不再出现 project 行 | done（44dcbb1e） |
-| PM-10 | 跑 v2 评测出首批数；问题清单进 open-questions；ADR-0005 列出 v0.1 简化；W45 周报 | — | metrics.md 有第一行 | doing（v0.1 在 v2 上已出两组数（R-20261105-01/02），金标上限已测（R-03）；缺口清单见 gaps-v01.md；旧实现在 v2 上的同口径对照已跑，见 R-20261105-04） |
+| PM-10 | 跑 v2 评测出首批数；问题清单进 open-questions；ADR-0005 列出 v0.1 简化；W45 周报 | — | metrics.md 有第一行 | done（R-20261105-01～04；缺口清单 gaps-v01.md；周报 weekly/2026-W45.md） |
 
 ## W46（11/9–11/13）M1：按问题修订文档，补全 add
 
@@ -27,7 +27,7 @@
 | --- | --- | --- | --- | --- |
 | PM-11 | 根据 v0.1 问题清单修订对齐表，起草给架构文档的修改意见 | — | open-questions 有提议和回复状态 | todo |
 | PM-11a | 关闭 v0.1 评审 MUST：代码 5 项（PM-05-09 review-01 R1-1～R1-5）、评测 3 项（PM-03 review-01 R1-1～R1-3） | .agents/work | 下一轮 review 全部关闭 | doing（8 项已修复并交接：59547700、672919d5；待 review-02） |
-| PM-11b | 登记并跟踪 v0.1 缺口：`gaps-v01.md` 的 G-01～G-12、E-01～E-06；跑旧实现同口径对照；E-02、E-03 的数据集修订走 PM-17 | gaps-v01.md | 每条缺口有证据、归属条目与状态；E-01 有数 | doing（清单已建，E-01 已关闭） |
+| PM-11b | 跟踪 v0.1 缺口：`gaps-v01.md` 的 G-01～G-12、E-02～E-05 逐条确认归属条目与状态（E-01、E-06 已关闭）；E-02、E-03 的数据集修订走 PM-17 | gaps-v01.md | 每条缺口有证据、归属条目与状态 | doing（清单已建，E-01 已关闭） |
 | PM-12 | M02 / M04 拆开：add 技能、topic 技能独立提示词（收回 G-02、G-03、G-04、G-08、G-09）。同时：M03 按草稿各出一条 query（v0.1 整批一条，召回漏掉候选会新建重复主题）；merge 召回的 `degraded` 透传给 M04；`TOPIC_SET_CHANGED` 只重跑 M04，不再重跑抽取（review-triage Add-2、Add-5） | v3 §2.2.5、§2.2.6、§2.2.7 | 归类准确率、重复主题率有数；进展 R 与经验 F1 不再为 0 | todo |
 | PM-13 | 推迟机制：deferred_segments 与后续回填（收回 G-01）。`topic_unavailable`（主题已被删除）的片段不回填，否则等于为已删主题重建（review-triage Add-3） | v3 §2.2.7、§4.5 | 推迟内容回填 ≥90%；已删除的主题被重建 0 | todo |
 | PM-14 | 决策补全 conflict_update / resolve / split；informed 由 recall_log + M02 信号判定（收回 G-06、G-10） | v3 §2.2.9 | 决策 op golden 全过 | todo |
@@ -66,6 +66,8 @@
 
 | 日期 | 变化 | 原因 |
 | --- | --- | --- |
+| 2026-11-09 | Q-18、Q-19（时间窗口检索、决策级来源）改为暂缓；PM-11b 去掉已完成的 E-01 对照 | 用户决定初始版本完成后再议；收窄 W46 范围 |
+| 2026-11-09 | W45 周报补全；PM-10 改 `done`；PM-11a 仍等 review-02，W46 计划不变 | 补写上周周报，规格复核无变化 |
 | 2026-11-06 | 评审意见分诊（`.agents/work/20261106-review-triage`）：relativity 阈值改为按自身相关度过滤，`recallQuery` 改用 `clampText`；其余各条并入 PM-12、PM-13、PM-16、PM-19～PM-22 的范围与验收；需要裁决的写成 Q-15～Q-21 | 用户转来一组 add / search 评审意见 |
 | 2026-11-06 | 主题归属实验改为 `gpt-6-luna` 的 chat completions 选择题（网关无 `/v1/decisions`），配置读 `~/.openai.env`，产品开关默认关闭。单独评测见 metrics R-20261106-01 | 用户要求用内部中转上的 gpt-6-luna 做选题实验，评测后不要挡住主开发 |
 | 2026-11-03 | 初版 | 用户要求 W45 先出基础版本 |
