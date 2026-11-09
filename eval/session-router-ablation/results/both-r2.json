@@ -1,0 +1,232 @@
+{
+  "cell": "both",
+  "run": 2,
+  "protocol": "sa",
+  "model": "gpt-6-luna",
+  "saPromptVersion": "2026-11-06.1",
+  "calls": 23,
+  "wallMs": 100712,
+  "score": {
+    "turns": 23,
+    "bcubedP": 0.9565217391304348,
+    "bcubedR": 0.4782608695652174,
+    "bcubedF1": 0.6376811594202898,
+    "crossProjectMerges": 1,
+    "sessions": 15,
+    "dropped": 0,
+    "lenientAccuracy": 0.9130434782608695,
+    "continuationAttach": 0.4117647058823529,
+    "continuations": 17,
+    "attachPrecision": 0.875,
+    "attaches": 8
+  },
+  "preds": [
+    {
+      "id": "t01",
+      "gold": "memmy-agent:97cf4aac",
+      "project": "memmy-agent",
+      "kind": "accept",
+      "sessionId": "s1",
+      "reason": "Accepted as a new session",
+      "attempts": 1
+    },
+    {
+      "id": "t02",
+      "gold": "MemOS:015583eb",
+      "project": "MemOS",
+      "kind": "accept",
+      "sessionId": "s2",
+      "reason": "Accepted as a new session",
+      "attempts": 1
+    },
+    {
+      "id": "t03",
+      "gold": "hindsight:73fe86ec",
+      "project": "hindsight",
+      "kind": "accept",
+      "sessionId": "s3",
+      "reason": "Accepted as a new session",
+      "attempts": 1
+    },
+    {
+      "id": "t04",
+      "gold": "TencentDB:71c36740",
+      "project": "TencentDB",
+      "kind": "accept",
+      "sessionId": "s4",
+      "reason": "Accepted as a new session",
+      "attempts": 1
+    },
+    {
+      "id": "t05",
+      "gold": "Hy-Memory:209a462f",
+      "project": "Hy-Memory",
+      "kind": "accept",
+      "sessionId": "s5",
+      "reason": "Accepted as a new session",
+      "attempts": 1
+    },
+    {
+      "id": "t06",
+      "gold": "weekly:dc6b879b",
+      "project": "weekly",
+      "kind": "accept",
+      "sessionId": "s6",
+      "reason": "Accepted as a new session",
+      "attempts": 1
+    },
+    {
+      "id": "t07",
+      "gold": "memmy-agent:97cf4aac",
+      "project": "memmy-agent",
+      "kind": "attach",
+      "sessionId": "s1",
+      "reason": "Attached to the session the message points at",
+      "attempts": 1
+    },
+    {
+      "id": "t08",
+      "gold": "MemOS:015583eb",
+      "project": "MemOS",
+      "kind": "accept",
+      "sessionId": "s7",
+      "reason": "Accepted as a new session",
+      "attempts": 1
+    },
+    {
+      "id": "t09",
+      "gold": "hindsight:73fe86ec",
+      "project": "hindsight",
+      "kind": "accept",
+      "sessionId": "s8",
+      "reason": "Accepted as a new session",
+      "attempts": 1
+    },
+    {
+      "id": "t10",
+      "gold": "TencentDB:71c36740",
+      "project": "TencentDB",
+      "kind": "accept",
+      "sessionId": "s9",
+      "reason": "Accepted as a new session",
+      "attempts": 1
+    },
+    {
+      "id": "t11",
+      "gold": "Hy-Memory:209a462f",
+      "project": "Hy-Memory",
+      "kind": "accept",
+      "sessionId": "s10",
+      "reason": "Accepted as a new session",
+      "attempts": 1
+    },
+    {
+      "id": "t12",
+      "gold": "weekly:dc6b879b",
+      "project": "weekly",
+      "kind": "attach",
+      "sessionId": "s6",
+      "reason": "Attached to the session the message points at",
+      "attempts": 1
+    },
+    {
+      "id": "t13",
+      "gold": "memmy-agent:97cf4aac",
+      "project": "memmy-agent",
+      "kind": "accept",
+      "sessionId": "s11",
+      "reason": "Accepted as a new session",
+      "attempts": 1
+    },
+    {
+      "id": "t14",
+      "gold": "MemOS:015583eb",
+      "project": "MemOS",
+      "kind": "accept",
+      "sessionId": "s12",
+      "reason": "Accepted as a new session",
+      "attempts": 1
+    },
+    {
+      "id": "t15",
+      "gold": "hindsight:73fe86ec",
+      "project": "hindsight",
+      "kind": "accept",
+      "sessionId": "s13",
+      "reason": "Accepted as a new session",
+      "attempts": 1
+    },
+    {
+      "id": "t16",
+      "gold": "TencentDB:71c36740",
+      "project": "TencentDB",
+      "kind": "attach",
+      "sessionId": "s9",
+      "reason": "Attached to the session the message points at",
+      "attempts": 1
+    },
+    {
+      "id": "t17",
+      "gold": "Hy-Memory:209a462f",
+      "project": "Hy-Memory",
+      "kind": "attach",
+      "sessionId": "s2",
+      "reason": "Attached to the session the message points at",
+      "attempts": 1
+    },
+    {
+      "id": "t18",
+      "gold": "weekly:dc6b879b",
+      "project": "weekly",
+      "kind": "attach",
+      "sessionId": "s6",
+      "reason": "Attached to the session the message points at",
+      "attempts": 1
+    },
+    {
+      "id": "t19",
+      "gold": "memmy-agent:97cf4aac",
+      "project": "memmy-agent",
+      "kind": "accept",
+      "sessionId": "s14",
+      "reason": "Accepted as a new session",
+      "attempts": 1
+    },
+    {
+      "id": "t20",
+      "gold": "hindsight:73fe86ec",
+      "project": "hindsight",
+      "kind": "attach",
+      "sessionId": "s13",
+      "reason": "Attached to the session the message points at",
+      "attempts": 1
+    },
+    {
+      "id": "t21",
+      "gold": "TencentDB:71c36740",
+      "project": "TencentDB",
+      "kind": "accept",
+      "sessionId": "s15",
+      "reason": "Accepted as a new session",
+      "attempts": 1
+    },
+    {
+      "id": "t22",
+      "gold": "Hy-Memory:209a462f",
+      "project": "Hy-Memory",
+      "kind": "attach",
+      "sessionId": "s10",
+      "reason": "Attached to the session the message points at",
+      "attempts": 1
+    },
+    {
+      "id": "t23",
+      "gold": "weekly:dc6b879b",
+      "project": "weekly",
+      "kind": "attach",
+      "sessionId": "s6",
+      "reason": "Attached to the session the message points at",
+      "attempts": 1
+    }
+  ]
+}
