@@ -12,7 +12,7 @@
 
 `--gate` 另有 `--max-duplicate-rate`（默认 0.02）和 `--max-wrong-merge-rate`（默认 0.01）；`topics.controlMerges` 与 `writes.lateAsCurrent` 必须为 0。对照组写在 `labels.controls` 的 `similar-name`（主题对）和 `same-work`（同一主题里的条目对）。
 
-语料在 ledger、catalog 之外增加门诊、仓储、车队、厨房，共 50 个主题、7 名成员。新题从 q40 起。q17 的标准答案同时说明丢行原因和空客户仍有未决分歧。上面各表里的轮数和题数是 v2 的，v2.1 以 `node load-eval-set.mjs` 的输出为准。
+语料在 ledger、catalog 之外增加门诊、仓储、车队、厨房，共 50 个主题、7 名成员。新题从 q40 起。q17 的标准答案同时说明丢行原因和空客户仍有未决分歧。q24 的标准答案在 v2.1 内改过：事实取自 dec_price，只把原因放到句首。R-20261110-02 和 R-20261110-03 用的是改之前的答案。上面各表里的轮数和题数是 v2 的，v2.1 以 `node load-eval-set.mjs` 的输出为准。
 
 换成大版本时，上一版整份冻在 `history/<版本>/`。v2 在 `history/v2/`。评分只读 `dataset/`。小改动不另存副本。
 
