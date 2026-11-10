@@ -93,7 +93,7 @@ v2.1 已经覆盖建议里的语料形状：七名成员、两种 `agent_id`、�
 下面几项留在 PM-17，或留到评测集构建排期（PRD 排期表，11/2–12/4）。本文不把它们标成已完成，也不改 [open-questions.md](open-questions.md) 和 [gaps-v01.md](gaps-v01.md)。
 
 1. **q17 的标准答案已改**（Q-14，E-03）。现文同时说明丢行原因和空客户仍有未决分歧。阅读模型上限还没有在这一版上复跑。
-2. **阅读模型上限没有在 v2.1 上复跑**（E-04）。上次记录是数据集 v2 的 R-20261105-03，`answers.llm` 0.826。PM-17 验收里的「金标作被测系统时 answers.llm = 1」指的是 `harness/run-reader-ceiling.mjs`：把当时有效的 `topic_detail_list` 交给固定阅读模型再评分。`--oracle` 把标准答案直接写入 run，所以它的 `answers.llm` 为 1，不能当作这条上限。
+2. **阅读模型上限已在 v2.1 上复跑**（E-04，R-20261110-02）。`answers.llm` 是 0.903（28/31），不是 1。阅读和评委是 claude-haiku-4-5-20251001，温度 0；网关没有 claude-haiku-5-5。错题是 q03、q24、q25。这条上限来自 `harness/run-reader-ceiling.mjs`。`--oracle` 把标准答案直接写入 run，它的 `answers.llm` 为 1，不能当作这条上限。
 3. **新题 q40–q47 都是 plain。** 门诊 q40、q41，仓储 q42、q43，车队 q44、q45，厨房 q46、q47。这四个空间没有 stale、conflict、cross-project 题。
 4. **PRD 建议的三套系统对照和开源方式没有做。** 没有「无记忆」「仅事实与事件记忆」「竞品」三套对照，也没有把评测集并入 OmniMemEval。
 
