@@ -9,9 +9,27 @@ import { EXTRACT_PROMPT_VERSION } from "../../../src/service/project-memory/prom
 import { JUDGE_PROMPT_VERSION } from "../../../src/service/project-memory/prompts/merge-judge.js";
 import { byokRuntimeConfig, createMemoryServiceFixture, runWorkerRounds } from "../../fixtures/memory-service-fixture.js";
 
+export type DeferredTurnView = {
+  didx: number;
+  role: string;
+  user_id: string | null;
+  name: string | null;
+  time: string;
+  content: string;
+};
+
+export type DeferredSegmentView = {
+  ref: string;
+  text: string;
+  reason: string;
+  didx: number[];
+};
+
 export type OrganizePayload = {
   messages: Array<{ idx: number; role: string; user_id: string | null; name: string | null; time: string; content: string }>;
   context_turns: Array<{ role: string; user_id: string | null; content: string }>;
+  deferred_turns: DeferredTurnView[];
+  deferred_segments: DeferredSegmentView[];
   candidate_topics: Array<{
     topic_id: string;
     domain: string;
@@ -62,7 +80,9 @@ function acceptedDrafts(combined: Record<string, unknown>): Array<{ index: numbe
     if (!draft) return;
     if (draft.kind !== "decision" && draft.kind !== "experience" && draft.kind !== "timeline") return;
     if (typeof draft.content !== "string" || !draft.content.trim()) return;
-    if (!Number.isInteger(draft.message_idx)) return;
+    const hasMessage = Number.isInteger(draft.message_idx);
+    const hasDeferred = typeof draft.deferred_ref === "string" && draft.deferred_ref.length > 0 && Number.isInteger(draft.deferred_idx);
+    if (!hasMessage && !hasDeferred) return;
     kept.push({ index, draft });
   });
   return kept;
@@ -75,7 +95,8 @@ function mapExtract(combined: Record<string, unknown>): Record<string, unknown> 
       kind: draft.kind,
       category: draft.category ?? null,
       content: draft.content,
-      message_idx: draft.message_idx,
+      ...(Number.isInteger(draft.message_idx) ? { message_idx: draft.message_idx } : {}),
+      ...(typeof draft.deferred_ref === "string" ? { deferred_ref: draft.deferred_ref, deferred_idx: draft.deferred_idx } : {}),
       reason: draft.reason ?? null,
       user_ids: draft.user_ids ?? [],
       signals: []
@@ -103,7 +124,8 @@ function mapAssign(combined: Record<string, unknown>): Record<string, unknown> {
       };
     }),
     new_topics: Array.isArray(combined.new_topics) ? combined.new_topics : [],
-    deferred: Array.isArray(combined.deferred) ? combined.deferred : []
+    // The combined reply's deferred list is M02 output. M04 adds its own when a draft cannot be placed.
+    deferred: []
   };
 }
 
@@ -133,11 +155,15 @@ export function combinedStages(reply: OrganizeReply): { extract: StageReply; ass
   let batchNumber = 0;
   let messages: OrganizePayload["messages"] = [];
   let contextTurns: OrganizePayload["context_turns"] = [];
+  let deferredTurns: OrganizePayload["deferred_turns"] = [];
+  let deferredSegments: OrganizePayload["deferred_segments"] = [];
   let requestDomains: string[] = [];
 
   const view = (candidateTopics: OrganizePayload["candidate_topics"], conflictsShown: string[] = []): OrganizePayload => ({
     messages,
     context_turns: contextTurns,
+    deferred_turns: deferredTurns,
+    deferred_segments: deferredSegments,
     candidate_topics: candidateTopics,
     conflicts_shown: conflictsShown,
     request_domains: requestDomains
@@ -148,6 +174,8 @@ export function combinedStages(reply: OrganizeReply): { extract: StageReply; ass
       batchNumber += 1;
       messages = Array.isArray(payload.messages) ? payload.messages as OrganizePayload["messages"] : [];
       contextTurns = Array.isArray(payload.context_turns) ? payload.context_turns as OrganizePayload["context_turns"] : [];
+      deferredTurns = Array.isArray(payload.deferred_turns) ? payload.deferred_turns as OrganizePayload["deferred_turns"] : [];
+      deferredSegments = Array.isArray(payload.deferred_segments) ? payload.deferred_segments as OrganizePayload["deferred_segments"] : [];
       requestDomains = Array.isArray(payload.request_domains) ? payload.request_domains as string[] : [];
       return mapExtract(reply(view([]), batchNumber));
     },

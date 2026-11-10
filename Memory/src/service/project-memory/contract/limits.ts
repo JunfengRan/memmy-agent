@@ -21,5 +21,7 @@ export const PROJECT_MEMORY_LIMITS = {
   getMemorySizeMax: 50,
   commitAttempts: 3,
   modelAttempts: 2,
-  contextTurns: 6
+  contextTurns: 6,
+  /** Pending deferred rows replayed into the next organize of the same conversation. PM-13. */
+  deferredBackfill: 10
 } as const;

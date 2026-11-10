@@ -2,7 +2,7 @@
  * M02 extraction only. Topic assignment is M04; same-question judgments are M05.
  * The model does not see candidate topics (v3 §2.2.5).
  */
-export const EXTRACT_PROMPT_VERSION = "pm-extract-v0.2.0";
+export const EXTRACT_PROMPT_VERSION = "pm-extract-v0.2.1";
 
 export const EXTRACT_SYSTEM_PROMPT = `提示词版本：${EXTRACT_PROMPT_VERSION}
 
@@ -31,21 +31,28 @@ export const EXTRACT_SYSTEM_PROMPT = `提示词版本：${EXTRACT_PROMPT_VERSION
 - unrelated：寒暄、纯提问、与工作无关的话
 
 ## 字段
-- message_idx：来自 messages 的 idx。不要写时间。
+- message_idx：来自本批 messages 的 idx。不要写时间。认领 deferred_segments 时改用 deferred_ref 和 deferred_idx，不要再写 message_idx。
 - reason：对话里明确说了原因才概括原话；没说就 null。不要推断。
 - user_ids：可以省略。系统按发言人确定作者，用户消息上的 user_ids 不会被采用。内容出自 Agent 时，可填交办或采纳该内容的成员 id，且只能是本批里说过话的成员。
 - signals：附加信号，不判断它们指向哪条已有决策。认可 {"type":"approval","by":"成员 id"}；告知 {"type":"informed","decision":"决策内容的短句"}；裁决 {"type":"resolve","pick":"被选中的结论","by":"成员 id"}。没有就 [].
 - state_hints：不成条目的现状线索。plan 是后续计划，progress 是「开始做某事」，scope 是范围或目标变化。
 - deferred：能看出在谈工作，但看不出是哪项工作时，原文放这里，reason 写 work_unresolved。不要为此硬编一条决策。
 
+## 先前推迟的片段
+输入里可能有 deferred_turns 和 deferred_segments。它们是同一会话里先前没能确定所指工作的原文。ref 形如 df12，didx 指向 deferred_turns。
+- 现在能确定时，为这个 ref 产出一条草稿，用 deferred_ref 和 deferred_idx 代替 message_idx。deferred_idx 必须是该 ref 的 didx 之一。同一个 ref 最多一条草稿。时间和作者由系统按 deferred_idx 那一轮原文确定，不要自己写时间。
+- 仍然无法确定时，把同一个 ref 放回 deferred，不要另写一条没有 ref 的新 deferred。
+- 确定不该记时，不要在草稿或 deferred 里带回这个 ref。
+
 ## 输出格式
 {
   "drafts": [
-    {"kind":"decision","category":"对外约定","content":"...","message_idx":0,"reason":null,"signals":[]}
+    {"kind":"decision","category":"对外约定","content":"...","message_idx":0,"reason":null,"signals":[]},
+    {"kind":"decision","category":"对外约定","content":"...","deferred_ref":"df12","deferred_idx":0,"reason":null,"signals":[]}
   ],
   "state_hints": [{"type":"plan","content":"..."}],
   "dropped": [{"reason":"unrelated","text":"..."}],
-  "deferred": [{"text":"...","reason":"work_unresolved"}]
+  "deferred": [{"text":"...","reason":"work_unresolved"},{"ref":"df12","text":"...","reason":"work_unresolved"}]
 }
 
 ## 示例

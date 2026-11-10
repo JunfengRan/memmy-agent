@@ -8,7 +8,14 @@ import type {
   TopicChange,
   TopicSnapshot
 } from "../contract/types.js";
-import type { DecisionDraft, Draft, ExperienceDraft, OrganizeResult } from "../organize/organizer.js";
+import {
+  deferredSegment,
+  type DecisionDraft,
+  type DeferredSegment,
+  type Draft,
+  type ExperienceDraft,
+  type OrganizeResult
+} from "../organize/organizer.js";
 import { applyDecisionOp, applyExperienceOp, type MutableDecision, type MutableExperience } from "../store/sqlite/apply.js";
 import { normalizeForCompare } from "../text.js";
 import { isBefore } from "../time.js";
@@ -44,7 +51,9 @@ export interface MergeContext {
 
 export interface MergeOutcome {
   changeSet: ChangeSet | null;
-  deferred: Array<{ text: string; reason: string }>;
+  deferred: DeferredSegment[];
+  /** Pending rows whose drafts were written into the ChangeSet. */
+  resolvedBackfill: number[];
   createdTopicIds: string[];
   updatedTopicIds: string[];
   opBases: OpBasis[];
@@ -193,6 +202,7 @@ export function mergeDrafts(
 ): MergeOutcome {
   const newId = context.newId ?? defaultId;
   const deferred = [...organized.deferred];
+  const resolvedBackfill: number[] = [];
   const opBases: OpBasis[] = [];
   const changes = new Map<string, TopicChange>();
   const decisionState = new Map<string, MutableDecision>();
@@ -203,7 +213,7 @@ export function mergeDrafts(
     if ("topicId" in draft.target) {
       const snapshot = snapshots.get(draft.target.topicId);
       if (!snapshot || skipTopics.has(snapshot.topicId)) {
-        deferred.push({ text: draft.content, reason: "topic_unavailable" });
+        deferred.push(deferredSegment(draft.content, "topic_unavailable", draft.backfillOf));
         return null;
       }
       let change = changes.get(snapshot.topicId);
@@ -227,7 +237,11 @@ export function mergeDrafts(
     const ref = draft.target.newTopicRef;
     const topic = organized.newTopics.get(ref);
     if (!topic || !context.newTopicDomain) {
-      deferred.push({ text: draft.content, reason: context.newTopicDomain ? "ambiguous_topic" : "domain_unresolved" });
+      deferred.push(deferredSegment(
+        draft.content,
+        context.newTopicDomain ? "ambiguous_topic" : "domain_unresolved",
+        draft.backfillOf
+      ));
       return null;
     }
     let topicId = newTopicIds.get(ref);
@@ -290,6 +304,7 @@ export function mergeDrafts(
       }
     }
     if (wrote) {
+      if (draft.backfillOf != null) resolvedBackfill.push(draft.backfillOf);
       const snapshot = snapshots.get(change.topicId);
       const checked = !snapshot
         ? []
@@ -338,6 +353,7 @@ export function mergeDrafts(
           topics
         },
     deferred,
+    resolvedBackfill,
     createdTopicIds: topics.filter((topic) => topic.op === "create").map((topic) => topic.topicId),
     updatedTopicIds: topics.filter((topic) => topic.op === "update").map((topic) => topic.topicId),
     opBases

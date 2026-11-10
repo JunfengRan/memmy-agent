@@ -15,7 +15,8 @@ import {
   ModelOutputError,
   asRecord,
   asString,
-  completeStage
+  completeStage,
+  deferredSegment
 } from "./organizer.js";
 
 export interface AssignInput {
@@ -89,7 +90,7 @@ export function parseAssignOutput(raw: Json, input: AssignInput): AssignResult {
   for (const item of Array.isArray(raw.deferred) ? raw.deferred : []) {
     const record = asRecord(item);
     const text = asString(record?.text);
-    if (text) deferred.push({ text, reason: asString(record?.reason) ?? "work_unresolved" });
+    if (text) deferred.push(deferredSegment(text, asString(record?.reason) ?? "work_unresolved"));
   }
 
   const seen = new Set<string>();
@@ -110,7 +111,7 @@ export function parseAssignOutput(raw: Json, input: AssignInput): AssignResult {
       continue;
     }
     if (topicId || defer || !newRef || !newTopics.has(newRef)) {
-      deferred.push({ text: draft.content, reason: topicId ? "unknown_topic" : "ambiguous_topic" });
+      deferred.push(deferredSegment(draft.content, topicId ? "unknown_topic" : "ambiguous_topic", draft.backfillOf));
       assignments.push({ draftId, target: { defer: true }, basis });
       continue;
     }

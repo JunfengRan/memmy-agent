@@ -181,6 +181,7 @@ export class ProjectMemoryService {
   async clearSpace(spaceId: string): Promise<void> {
     await this.requireSpace(spaceId);
     await this.store.clearSpace(spaceId);
+    this.local.forgetDeferred(spaceId);
   }
 
   async deleteTopics(topicIds: string[]): Promise<string[]> {

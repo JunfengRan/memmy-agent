@@ -12,15 +12,16 @@ import { mergeDrafts, type OpBasis } from "../merge/merge.js";
 import { resolveNewTopicDomain } from "../organize/collect.js";
 import { assignBatch } from "../organize/assign.js";
 import { type MergeCandidate, resolveMergeCandidates } from "../organize/candidates.js";
-import { extractBatch } from "../organize/extract.js";
+import { extractBatch, type DeferredSegmentInput } from "../organize/extract.js";
 import {
   type AssignResult,
+  type DeferredSegment,
   type ExtractResult,
   type JudgeResult,
   assembleOrganizeResult,
   isPlacedTarget
 } from "../organize/organizer.js";
-import type { ProjectLocalState, SpaceOutcome, TaskDetails } from "../store/sqlite/local-state.js";
+import type { PendingDeferred, ProjectLocalState, SpaceOutcome, TaskDetails } from "../store/sqlite/local-state.js";
 import type { ProjectMemoryStore } from "../store/store.js";
 
 const log = createMemoryLogger("project-memory.organize");
@@ -56,6 +57,79 @@ function batchHash(turns: RawTurnRecord[]): string {
   const hash = createHash("sha256");
   for (const turn of turns) hash.update(`${turn.role}\u0000${turn.chatTime}\u0000${turn.content}\u0001`);
   return hash.digest("hex").slice(0, 24);
+}
+
+interface BackfillInput {
+  turns: RawTurnRecord[];
+  segments: DeferredSegmentInput[];
+  ids: number[];
+}
+
+const EMPTY_BACKFILL: BackfillInput = { turns: [], segments: [], ids: [] };
+
+/** Original turns of the producing tasks, deduped, with each segment pointing at that task's didx list. */
+function loadBackfill(local: ProjectLocalState, rows: PendingDeferred[]): BackfillInput {
+  const turns: RawTurnRecord[] = [];
+  const turnIndex = new Map<string, number>();
+  const taskDidx = new Map<string, number[]>();
+  const segments: DeferredSegmentInput[] = [];
+  for (const row of rows) {
+    let didx = taskDidx.get(row.taskId);
+    if (!didx) {
+      didx = [];
+      for (const turn of local.taskTurns(row.taskId)) {
+        if (turn.role !== "user" && turn.role !== "assistant") continue;
+        let index = turnIndex.get(turn.turnId);
+        if (index === undefined) {
+          index = turns.length;
+          turns.push(turn);
+          turnIndex.set(turn.turnId, index);
+        }
+        didx.push(index);
+      }
+      taskDidx.set(row.taskId, didx);
+    }
+    segments.push({ id: row.id, ref: `df${row.id}`, text: row.text, reason: row.reason, didx: [...didx] });
+  }
+  return { turns, segments, ids: rows.map((row) => row.id) };
+}
+
+/**
+ * consumed deletes the row. kept leaves the same id. appended inserts only segments
+ * this batch newly produced, including a topic_unavailable replacement.
+ * A pending id the model neither claimed nor echoed is an explicit drop.
+ */
+function planSettlement(
+  pendingIds: readonly number[],
+  deferred: readonly DeferredSegment[],
+  resolvedBackfill: readonly number[]
+): { consumed: number[]; kept: number[]; appended: Array<{ text: string; reason: string }> } {
+  const pending = new Set(pendingIds);
+  const consumed = new Set<number>();
+  const kept = new Set<number>();
+  const appended: Array<{ text: string; reason: string }> = [];
+  for (const id of resolvedBackfill) {
+    if (pending.has(id)) consumed.add(id);
+  }
+  for (const item of deferred) {
+    if (item.backfillOf != null && pending.has(item.backfillOf)) {
+      if (consumed.has(item.backfillOf)) continue;
+      if (item.reason === "topic_unavailable") {
+        consumed.add(item.backfillOf);
+        appended.push({ text: item.text, reason: item.reason });
+      } else {
+        kept.add(item.backfillOf);
+      }
+      continue;
+    }
+    if (item.backfillOf == null) appended.push({ text: item.text, reason: item.reason });
+  }
+  for (const id of pendingIds) {
+    if (!consumed.has(id) && !kept.has(id)) consumed.add(id);
+  }
+  for (const id of consumed) kept.delete(id);
+  const ordered = (ids: Set<number>) => [...ids].sort((left, right) => left - right);
+  return { consumed: ordered(consumed), kept: ordered(kept), appended };
 }
 
 function taskDetails(extracted: ExtractResult, assigned: AssignResult | null, degraded: string[], opBases: OpBasis[]): TaskDetails {
@@ -110,6 +184,12 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
 
   const turns = local.taskTurns(payload.taskId).filter((turn) => turn.role === "user" || turn.role === "assistant");
   if (turns.length === 0) return { status: "completed", memoryIds: [], added: 0, updated: 0, deferredCount: 0 };
+  const backfill = payload.conversationId
+    ? loadBackfill(local, local.pendingDeferred(payload.conversationId, payload.spaceId, {
+        clearedAt: space.clearedAt,
+        limit: PROJECT_MEMORY_LIMITS.deferredBackfill
+      }))
+    : EMPTY_BACKFILL;
   const internalConversation = turns[0]!.conversationId;
   const context = payload.conversationId
     ? local.contextTurns(internalConversation, payload.taskId, turns[0]!.chatTime, PROJECT_MEMORY_LIMITS.contextTurns)
@@ -123,6 +203,31 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
   const recallDomains = payload.domains.length > 0 ? payload.domains : undefined;
   const domainRecords = recallDomains ? domains.filter((item) => recallDomains.includes(item.domain)) : domains;
   const conversationKey = payload.conversationId ?? internalConversation;
+  // Batch only. Pending deferred ids stay out of the key (PM-16). A replay after a crash
+  // between commit and delete still matches, and settleDeferred removes the rows.
+  const finish = (
+    deferred: DeferredSegment[],
+    resolvedBackfill: number[],
+    outcome: Omit<SpaceOutcome, "deferredCount">
+  ): SpaceOutcome => {
+    const plan = planSettlement(backfill.ids, deferred, resolvedBackfill);
+    local.settleDeferred({
+      conversationId: conversationKey,
+      spaceId: payload.spaceId,
+      taskId: payload.taskId,
+      consumed: plan.consumed,
+      kept: plan.kept,
+      appended: plan.appended
+    });
+    if (backfill.ids.length > 0) {
+      log.info("deferred.backfill", {
+        pending: backfill.ids.length,
+        consumed: plan.consumed.length,
+        kept: plan.kept.length
+      });
+    }
+    return { ...outcome, deferredCount: plan.appended.length };
+  };
 
   let extracted: ExtractResult | null = null;
   let assigned: AssignResult | null = null;
@@ -153,18 +258,18 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
         domains: domainRecords,
         requestDomains: payload.domains,
         messages: turns,
-        context
+        context,
+        deferredTurns: backfill.turns,
+        deferredSegments: backfill.segments
       }));
       if (extracted.drafts.length === 0) {
-        local.appendDeferred({ conversationId: conversationKey, spaceId: payload.spaceId, taskId: payload.taskId, segments: extracted.deferred });
-        return {
+        return finish(extracted.deferred, [], {
           status: "completed",
           memoryIds: [],
           added: 0,
           updated: 0,
-          deferredCount: extracted.deferred.length,
           details: taskDetails(extracted, null, [], [])
-        };
+        });
       }
     }
     if (!extracted) fail("organize", "INTERNAL");
@@ -237,23 +342,26 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
     }, unavailable);
     const details = taskDetails(extracted, assigned, degraded, merged.opBases);
     if (!merged.changeSet) {
-      local.appendDeferred({ conversationId: conversationKey, spaceId: payload.spaceId, taskId: payload.taskId, segments: merged.deferred });
-      return { status: "completed", memoryIds: [], added: 0, updated: 0, deferredCount: merged.deferred.length, details };
+      return finish(merged.deferred, merged.resolvedBackfill, {
+        status: "completed",
+        memoryIds: [],
+        added: 0,
+        updated: 0,
+        details
+      });
     }
 
     const result = await store.commitChangeSet(merged.changeSet, { acceptedAt });
     if (result.ok) {
-      local.appendDeferred({ conversationId: conversationKey, spaceId: payload.spaceId, taskId: payload.taskId, segments: merged.deferred });
       const memoryIds = result.topics.map((topic) => topic.topicId);
       await store.indexTopics(memoryIds).catch((error: unknown) => log.warn("index.failed", memoryErrorFields(error)));
-      return {
+      return finish(merged.deferred, merged.resolvedBackfill, {
         status: "completed",
         memoryIds,
         added: result.replayed ? 0 : merged.createdTopicIds.length,
         updated: result.replayed ? 0 : merged.updatedTopicIds.length,
-        deferredCount: merged.deferred.length,
         details
-      };
+      });
     }
     lastConflict = result;
     log.info("commit.retry", { taskId: payload.taskId, attempt, error: result.error });

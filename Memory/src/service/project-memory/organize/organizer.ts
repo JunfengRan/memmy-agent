@@ -11,6 +11,8 @@ interface DraftBase {
   userIds: string[];
   messageIdx: number;
   target: DraftTarget;
+  /** Pending pm_deferred_segments id this draft resolves. Absent for this batch's own turns. */
+  backfillOf?: number;
 }
 
 export interface DecisionDraft extends DraftBase {
@@ -41,13 +43,24 @@ export interface NewTopicDraft {
   topicDescription: string;
 }
 
+/** A segment held back from this batch. `backfillOf` marks an existing row that must not be inserted again. */
+export interface DeferredSegment {
+  text: string;
+  reason: string;
+  backfillOf?: number;
+}
+
+export function deferredSegment(text: string, reason: string, backfillOf?: number): DeferredSegment {
+  return backfillOf == null ? { text, reason } : { text, reason, backfillOf };
+}
+
 export interface OrganizeResult {
   promptVersion: string;
   drafts: Draft[];
   newTopics: Map<string, NewTopicDraft>;
   topicUpdates: Map<string, { topicSummary?: string; topicDescription?: string }>;
   informedDecisionIds: Set<string>;
-  deferred: Array<{ text: string; reason: string }>;
+  deferred: DeferredSegment[];
 }
 
 export type DraftSignal =
@@ -65,6 +78,7 @@ export interface ExtractedDraft {
   userIds: string[];
   reason: string | null;
   signals: DraftSignal[];
+  backfillOf?: number;
 }
 
 export interface ExtractResult {
@@ -72,7 +86,7 @@ export interface ExtractResult {
   drafts: ExtractedDraft[];
   stateHints: Array<{ type: string; content: string }>;
   dropped: Array<{ reason: string; text: string | null }>;
-  deferred: Array<{ text: string; reason: string }>;
+  deferred: DeferredSegment[];
 }
 
 export interface AssignmentBasis {
@@ -90,7 +104,7 @@ export interface AssignResult {
   promptVersion: string;
   assignments: Assignment[];
   newTopics: Map<string, NewTopicDraft>;
-  deferred: Array<{ text: string; reason: string }>;
+  deferred: DeferredSegment[];
 }
 
 export interface JudgeLabel {
@@ -209,7 +223,7 @@ export function assembleOrganizeResult(
   for (const draft of extracted.drafts) {
     const assignment = assignments.get(draft.draftId);
     if (!assignment || !isPlacedTarget(assignment.target)) {
-      if (!assignment) deferred.push({ text: draft.content, reason: "ambiguous_topic" });
+      if (!assignment) deferred.push(deferredSegment(draft.content, "ambiguous_topic", draft.backfillOf));
       continue;
     }
     const label = assignment.target && "topicId" in assignment.target ? judged?.labels.get(draft.draftId) : undefined;
@@ -219,7 +233,8 @@ export function assembleOrganizeResult(
       time: draft.time,
       userIds: draft.userIds,
       messageIdx: draft.messageIdx,
-      target: assignment.target
+      target: assignment.target,
+      ...(draft.backfillOf == null ? {} : { backfillOf: draft.backfillOf })
     };
     if (draft.kind === "decision") {
       drafts.push({

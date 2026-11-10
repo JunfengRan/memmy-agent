@@ -286,6 +286,76 @@ export class ProjectLocalState {
     ).pluck().all(conversationId) as string[]);
   }
 
+  /**
+   * Pending rows for one conversation and Space, oldest id first among the most recent `limit`.
+   * `topic_unavailable` never comes back. When `clearedAt` is set, the producing task must have
+   * been accepted at or after that fence.
+   */
+  pendingDeferred(
+    conversationId: string,
+    spaceId: string,
+    options: { clearedAt: string | null; limit: number }
+  ): PendingDeferred[] {
+    const rows = this.db.prepare(
+      `SELECT id, task_id, segment, reason FROM (
+         SELECT d.id, d.task_id, d.segment, d.reason
+         FROM pm_deferred_segments d
+         JOIN pm_tasks t ON t.task_id = d.task_id
+         WHERE d.conversation_id = ?
+           AND d.space_id = ?
+           AND d.reason != 'topic_unavailable'
+           AND (? IS NULL OR t.accepted_at >= ?)
+         ORDER BY d.id DESC
+         LIMIT ?
+       ) ORDER BY id ASC`
+    ).all(
+      conversationId,
+      spaceId,
+      options.clearedAt,
+      options.clearedAt,
+      options.limit
+    ) as Array<{ id: number; task_id: string; segment: string; reason: string }>;
+    return rows.map((row) => ({
+      id: Number(row.id),
+      taskId: row.task_id,
+      text: row.segment,
+      reason: row.reason
+    }));
+  }
+
+  /**
+   * Deletes consumed rows, leaves kept rows, and inserts new segments in one transaction.
+   * A topic_unavailable replacement is a consumed id plus an appended row.
+   */
+  settleDeferred(input: {
+    conversationId: string;
+    spaceId: string;
+    taskId: string;
+    consumed: number[];
+    kept: number[];
+    appended: Array<{ text: string; reason: string }>;
+  }): void {
+    const kept = new Set(input.kept);
+    const consumed = input.consumed.filter((id) => !kept.has(id));
+    if (consumed.length === 0 && input.appended.length === 0) return;
+    const now = this.now().toISOString();
+    this.db.transaction(() => {
+      if (consumed.length > 0) {
+        this.db.prepare(
+          `DELETE FROM pm_deferred_segments
+           WHERE conversation_id = ? AND space_id = ? AND id IN (SELECT value FROM json_each(?))`
+        ).run(input.conversationId, input.spaceId, JSON.stringify(consumed));
+      }
+      const insert = this.db.prepare(
+        `INSERT INTO pm_deferred_segments (conversation_id, space_id, task_id, segment, reason, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      );
+      for (const segment of input.appended) {
+        insert.run(input.conversationId, input.spaceId, input.taskId, segment.text, segment.reason, now);
+      }
+    })();
+  }
+
   appendDeferred(input: { conversationId: string; spaceId: string; taskId: string; segments: Array<{ text: string; reason: string }> }): void {
     if (input.segments.length === 0) return;
     const insert = this.db.prepare(
@@ -303,7 +373,19 @@ export class ProjectLocalState {
     ).all(conversationId, spaceId) as Array<{ segment: string; reason: string }>).map((row) => ({ text: row.segment, reason: row.reason }));
   }
 
-  forgetSpace(spaceId: string): void {
+  /** Drops every deferred row for one Space. Clear and delete both go through here. */
+  forgetDeferred(spaceId: string): void {
     this.db.prepare(`DELETE FROM pm_deferred_segments WHERE space_id = ?`).run(spaceId);
   }
+
+  forgetSpace(spaceId: string): void {
+    this.forgetDeferred(spaceId);
+  }
+}
+
+export interface PendingDeferred {
+  id: number;
+  taskId: string;
+  text: string;
+  reason: string;
 }

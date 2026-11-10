@@ -8,7 +8,7 @@
 
 | ID | 缺口 | 证据 | 影响 | 收回 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| G-01 | 推迟的内容不回填。模型判 `ambiguous_topic` 的 4 段从未进入主题：「月报测试出问题，样例文件是不是过期了」「改了 month.json」「别告诉另一个窗口我改了表」「月报金额现在从哪里取」 | 已确认：`pm_deferred_segments` 有 4 行，原因都是 `ambiguous_topic`，运行结束时仍在表里 | `exp_fixture`、`tl_bug` 等漏写；q09、q16、q25 答「记忆中没有相关内容」 | PM-13（ADR-0005 #4） | open |
+| G-01 | 推迟的内容不回填。模型判 `ambiguous_topic` 的 4 段从未进入主题：「月报测试出问题，样例文件是不是过期了」「改了 month.json」「别告诉另一个窗口我改了表」「月报金额现在从哪里取」 | 已确认：`pm_deferred_segments` 有 4 行，原因都是 `ambiguous_topic`，运行结束时仍在表里。2026-11-10 PM-13 已实现回填，没有新的评测数字 | `exp_fixture`、`tl_bug` 等漏写；q09、q16、q25 答「记忆中没有相关内容」 | PM-13（ADR-0005 #4） | fixing |
 | G-02 | 进展（timeline）几乎不写 | 已确认：进展 R 0.143（P 1.000）；必写进展里漏 `tl_report`、`tl_bug`、`tl_copy`、`tl_wait`、`tl_price`、`tl_export`（后两项属于未建的导出主题）。部分在最终状态里被写进 decision 或 experience。PM-12 把抽取拆成独立提示词，预定修这一条，2026-11-10 还没有新的评测数字 | 条目 F1 0.667 的主要失分；进展类题答不出 | PM-12 | open（未复测） |
 | G-03 | 经验（experience）写错类 | 已确认：必写经验 1 条（`exp_fixture`），实际写出的经验是别的内容，`exp_fixture` 被写成一条 decision（评委判为 stale）；kind 正确率 0.609。PM-12 是预定修复，2026-11-10 未复测 | experience P/R/F1 全 0 | PM-12 | open（未复测） |
 | G-04 | 主题粒度：导出主题没建，且被错误合并 | 已确认：5 对 4 个主题，`tp_ledger_export` 无对应主题；「export 拷贝先撤掉…」并进了月报主题（错误合并 1）；B-cubed F1 0.473。PM-12 拆开 M02/M04 是预定修复的一部分，2026-11-10 未复测 | wrongMerges 目标 0；q09 | PM-12（M02/M04 拆开）、PM-13 | open（未复测） |

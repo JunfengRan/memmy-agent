@@ -4,6 +4,7 @@ import type { DomainRecord, RawTurnRecord } from "../contract/types.js";
 import { EXTRACT_PROMPT_VERSION, EXTRACT_SYSTEM_PROMPT } from "../prompts/extract.js";
 import { clampText } from "../text.js";
 import {
+  type DeferredSegment,
   type DraftSignal,
   type ExtractedDraft,
   type ExtractResult,
@@ -13,9 +14,19 @@ import {
   asString,
   asStringArray,
   completeStage,
+  deferredSegment,
   draftAuthors,
   participantsOf
 } from "./organizer.js";
+
+/** One pending row fed back into M02. `didx` indexes `ExtractInput.deferredTurns`. */
+export interface DeferredSegmentInput {
+  id: number;
+  ref: string;
+  text: string;
+  reason: string;
+  didx: number[];
+}
 
 export interface ExtractInput {
   instructions: string | null;
@@ -23,6 +34,9 @@ export interface ExtractInput {
   requestDomains: string[];
   messages: RawTurnRecord[];
   context: RawTurnRecord[];
+  /** Original turns of the tasks that produced the pending rows, indexed by didx. */
+  deferredTurns?: RawTurnRecord[];
+  deferredSegments?: DeferredSegmentInput[];
 }
 
 const DECISION_CATEGORIES = new Set(["范围", "对外约定", "共同约定"]);
@@ -43,9 +57,9 @@ const KIND_LIMIT = {
   timeline: PROJECT_MEMORY_LIMITS.timeline
 } as const;
 
-function turnView(turn: RawTurnRecord, idx?: number) {
+function turnView(turn: RawTurnRecord, idx?: number, key: "idx" | "didx" = "idx") {
   return {
-    ...(idx === undefined ? {} : { idx }),
+    ...(idx === undefined ? {} : { [key]: idx }),
     role: turn.role,
     user_id: turn.roleId,
     name: turn.roleName,
@@ -55,12 +69,23 @@ function turnView(turn: RawTurnRecord, idx?: number) {
 }
 
 export function buildExtractMessages(input: ExtractInput): Array<{ role: "system" | "user"; content: string }> {
+  const deferredTurns = input.deferredTurns ?? [];
+  const deferredSegments = input.deferredSegments ?? [];
   const payload = {
     space: { instructions: input.instructions, domains: input.domains },
     request_domains: input.requestDomains,
-    participants: participantsOf([...input.context, ...input.messages]),
+    participants: participantsOf([...input.context, ...input.messages, ...deferredTurns]),
     context_turns: input.context.map((turn) => turnView(turn)),
-    messages: input.messages.map((turn, idx) => turnView(turn, idx))
+    messages: input.messages.map((turn, idx) => turnView(turn, idx)),
+    ...(deferredSegments.length === 0 ? {} : {
+      deferred_turns: deferredTurns.map((turn, didx) => turnView(turn, didx, "didx")),
+      deferred_segments: deferredSegments.map((segment) => ({
+        ref: segment.ref,
+        text: segment.text,
+        reason: segment.reason,
+        didx: segment.didx
+      }))
+    })
   };
   return [
     { role: "system", content: EXTRACT_SYSTEM_PROMPT },
@@ -95,14 +120,43 @@ function parseSignals(value: unknown): DraftSignal[] {
   return signals;
 }
 
-/** Validates extraction output. Authors are taken from the transcript, not the model. */
+function integerIndex(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+/**
+ * Validates extraction output. Authors are taken from the transcript, not the model.
+ * A draft may claim a pending segment with deferred_ref + deferred_idx instead of message_idx.
+ */
 export function parseExtractOutput(raw: Json, input: ExtractInput): ExtractResult {
   if (!Array.isArray(raw.drafts)) throw new ModelOutputError("drafts must be an array");
-  const participants = new Set(participantsOf([...input.context, ...input.messages]).map((item) => item.user_id));
+  const deferredTurns = input.deferredTurns ?? [];
+  const deferredSegments = input.deferredSegments ?? [];
+  const byRef = new Map(deferredSegments.map((segment) => [segment.ref, segment]));
+  const participants = new Set(participantsOf([...input.context, ...input.messages, ...deferredTurns]).map((item) => item.user_id));
   const batchSpeakers = new Set(participantsOf(input.messages).map((item) => item.user_id));
   const fallbackUser = participantsOf(input.messages)[0]?.user_id ?? [...participants][0] ?? null;
+  const deferredSpeakers = new Set(participantsOf(deferredTurns).map((item) => item.user_id));
+  const deferredFallback = participantsOf(deferredTurns)[0]?.user_id ?? fallbackUser;
   const seen = new Set<string>();
+  const occupied = new Set<number>();
+  const echoed = new Set<number>();
+  const rejected = new Set<number>();
   const drafts: ExtractedDraft[] = [];
+  const deferred: DeferredSegment[] = [];
+
+  for (const item of Array.isArray(raw.deferred) ? raw.deferred : []) {
+    const record = asRecord(item);
+    if (!record) continue;
+    const ref = asString(record.ref);
+    if (ref) {
+      const segment = byRef.get(ref);
+      if (segment) echoed.add(segment.id);
+      continue;
+    }
+    const text = asString(record.text);
+    if (text) deferred.push(deferredSegment(text, asString(record.reason) ?? "work_unresolved"));
+  }
 
   raw.drafts.forEach((item, index) => {
     const record = asRecord(item);
@@ -110,11 +164,44 @@ export function parseExtractOutput(raw: Json, input: ExtractInput): ExtractResul
     const kind = record.kind;
     if (kind !== "decision" && kind !== "experience" && kind !== "timeline") return;
     const content = asString(record.content);
-    const messageIdx = Number(record.message_idx);
-    const message = Number.isInteger(messageIdx) ? input.messages[messageIdx] : undefined;
-    if (!content || !message) return;
+    if (!content) return;
     const draftId = asString(record.draft_id) ?? `d${index}`;
     if (seen.has(draftId)) return;
+    const ref = asString(record.deferred_ref);
+    if (ref) {
+      const segment = byRef.get(ref);
+      if (!segment || echoed.has(segment.id) || occupied.has(segment.id)) return;
+      occupied.add(segment.id);
+      seen.add(draftId);
+      const deferredIdx = integerIndex(record.deferred_idx);
+      const turn = deferredIdx === null ? undefined : deferredTurns[deferredIdx];
+      if (deferredIdx === null || !segment.didx.includes(deferredIdx) || !turn) {
+        rejected.add(segment.id);
+        return;
+      }
+      const userIds = draftAuthors(turn, deferredIdx, asStringArray(record.user_ids), deferredTurns, deferredSpeakers, deferredFallback);
+      if (userIds.length === 0) {
+        rejected.add(segment.id);
+        return;
+      }
+      const category = kind === "decision" && DECISION_CATEGORIES.has(String(record.category)) ? String(record.category) : null;
+      drafts.push({
+        draftId,
+        kind,
+        category,
+        content: clampText(content, KIND_LIMIT[kind]),
+        messageIdx: deferredIdx,
+        time: turn.chatTime,
+        userIds,
+        reason: asString(record.reason),
+        signals: parseSignals(record.signals),
+        backfillOf: segment.id
+      });
+      return;
+    }
+    const messageIdx = Number(record.message_idx);
+    const message = Number.isInteger(messageIdx) ? input.messages[messageIdx] : undefined;
+    if (!message) return;
     seen.add(draftId);
     const userIds = draftAuthors(message, messageIdx, asStringArray(record.user_ids), input.messages, batchSpeakers, fallbackUser);
     if (userIds.length === 0) return;
@@ -132,6 +219,12 @@ export function parseExtractOutput(raw: Json, input: ExtractInput): ExtractResul
     });
   });
 
+  for (const segment of deferredSegments) {
+    if (!echoed.has(segment.id) && !rejected.has(segment.id)) continue;
+    if (drafts.some((draft) => draft.backfillOf === segment.id)) continue;
+    deferred.push(deferredSegment(segment.text, segment.reason, segment.id));
+  }
+
   const stateHints: ExtractResult["stateHints"] = [];
   for (const item of Array.isArray(raw.state_hints) ? raw.state_hints : []) {
     const record = asRecord(item);
@@ -146,13 +239,6 @@ export function parseExtractOutput(raw: Json, input: ExtractInput): ExtractResul
     const reason = asString(record?.reason);
     if (!record || !reason || !acceptDropReason(reason)) continue;
     dropped.push({ reason, text: asString(record.text) });
-  }
-
-  const deferred: ExtractResult["deferred"] = [];
-  for (const item of Array.isArray(raw.deferred) ? raw.deferred : []) {
-    const record = asRecord(item);
-    const text = asString(record?.text);
-    if (text) deferred.push({ text, reason: asString(record?.reason) ?? "work_unresolved" });
   }
 
   return { promptVersion: EXTRACT_PROMPT_VERSION, drafts, stateHints, dropped, deferred };
