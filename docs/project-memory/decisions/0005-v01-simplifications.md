@@ -64,3 +64,9 @@ W45 的目标是端到端可跑的基础版本，用来暴露问题。以下简�
 ## 补记（2026-11-10，PM-21）
 
 第 9 条里工具检索的 `via=tool` 由 [ADR-0008](0008-local-recall-via.md) 收回。`session_start` 仍按 Q-03 不实现。上表第 9 行保持原样。
+
+## 补记（2026-11-10，PM-19 评审）
+
+三路共用 `recallPathTimeoutMs`（1200 ms），project 路也包括在内。超时后 `topics` 为空，并记 `degraded` 含 `project`。超时前的 project-only 请求没有这层截止。超时后底层检索仍可能在返回之后写 `recall_log`。
+
+省略 `include_memory_view` 时走 ①②，不含 project。Q-28 没有写这个缺省，仍待 designer 确认。

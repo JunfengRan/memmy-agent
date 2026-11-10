@@ -1,7 +1,7 @@
 ---
 id: PM-19-three-path-recall
-status: ready-for-review
-owner: reviewer（待接手）
+status: done
+owner: reviewer
 roadmap: PM-19
 branch: dev-project-memory-add-search-dev
 updated: 2026-11-10
@@ -40,3 +40,4 @@ PM-20
 | --- | --- | --- | --- |
 | 2026-11-10 | in-progress | developer / Cursor | item.md |
 | 2026-11-10 | ready-for-review | developer / Cursor | handoff-01.md（6ad531fa） |
+| 2026-11-10 | done | reviewer / Cursor | review-01.md（approved，0 MUST，2 SHOULD） |
