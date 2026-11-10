@@ -1,7 +1,7 @@
 ---
 id: PM-20-rank-fusion
-status: ready-for-review
-owner: reviewer（待接手）
+status: done
+owner: reviewer
 roadmap: PM-20
 branch: dev-project-memory-add-search-dev
 updated: 2026-11-10
@@ -28,7 +28,7 @@ M09 把三路候选只按名次做 RRF，用融合分归一 relativity，再做�
 - [x] 同一输入两次结果一致；返回列表的 relativity 单调
 - [x] 不透传原始分数；名次相同按 user_memory、agent_memory、project
 - [x] 只请求 project 时，第一名仍是原来的第一名
-- [x] typecheck 与 `tests/service/project-memory`、`recall-candidates.test.ts` 通过（167 passed，1 todo）
+- [x] typecheck 与 `tests/service/project-memory`、`recall-candidates.test.ts` 通过（135 passed，1 todo；评审复核，不是 167）
 - [ ] 交接（本轮不写 handoff，代码未提交）
 
 ## 相关工作项
@@ -41,3 +41,4 @@ PM-19、PM-21、PM-22
 | --- | --- | --- | --- |
 | 2026-11-10 | in-progress | developer / Cursor | item.md |
 | 2026-11-10 | ready-for-review | developer / Cursor | handoff-01.md（b78996ac） |
+| 2026-11-10 | done | reviewer / Cursor | review-01.md（approved，0 MUST） |
