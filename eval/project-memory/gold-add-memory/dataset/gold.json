@@ -5070,7 +5070,7 @@
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
       "question": "空客户的账为什么会被整行丢掉？",
-      "goldAnswer": "因为 report.ts 读取时客户名为空就把整行丢掉；现在已经修好，只跳过金额列为空的行。",
+      "goldAnswer": "因为 report.ts 读取时客户名为空就把整行丢掉；丢行的问题已经修好，但空客户该怎么处理还有不一致结论。",
       "mustInclude": [
         "客户名为空"
       ],
