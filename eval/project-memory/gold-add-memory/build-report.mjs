@@ -6,6 +6,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { finalPointTexts } from "./build-gold-baseline.mjs";
 import { loadGold } from "./load-eval-set.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -40,7 +41,7 @@ const entryHtml = (e) => {
   for (const h of e.history ?? []) lines.push(`<br><span class="muted">此前：</span>${esc(h.content)} <span class="muted">（${day(h.time)}${h.reason ? `；原因：${esc(h.reason)}` : ""}）</span>`);
   return `${lines.join("")}</li>`;
 };
-const topicHtml = gold.topics.map((t) => `<h3>${esc(t.topic_name)} ${tag(t.domain)} ${code(t.id)}</h3><p>${esc(t.summaryKeyPoints.join("；"))}</p><ul>${t.entries.map((id) => entryHtml(entries.get(id))).join("")}</ul>`).join("");
+const topicHtml = gold.topics.map((t) => `<h3>${esc(t.topic_name)} ${tag(t.domain)} ${code(t.id)}</h3><p>${esc(finalPointTexts(t.summaryKeyPoints).join("；"))}</p><ul>${t.entries.map((id) => entryHtml(entries.get(id))).join("")}</ul>`).join("");
 const questionHtml = table(["题目", "类型", "提问时间", "问题", "标准答案", "期望", "陷阱"], gold.questions.map((q) => [
   code(q.id) + (q.excluded ? ` ${tag("excluded")}` : ""), tag(q.kind), esc(day(q.askedAt)), esc(q.question), esc(q.goldAnswer),
   q.expectedItems.map((i) => `${code(i.entry)} ${esc(i.part)}`).join("<br>"), q.trapItems.map((i) => `${code(i.entry)} ${esc(i.kind)}`).join("<br>")

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Reader ceiling: feed the gold (oracle) topic_detail_list to the fixed reader at every askedAt and
-// write a run that run-pipeline-eval.mjs scores with the same judge. A perfect memory system should
+// write a run that run-pipeline-eval.mjs scores with the same judge. buildOracleRun keeps only the
+// key points active at that askedAt (since visible, until not). A perfect memory system should
 // score here; whatever is missed is reader / judge / question noise, not implementation.
 //
 // Env: MEMMY_EVAL_READER_{PROVIDER,MODEL,BASE_URL,API_KEY}.

@@ -10,7 +10,7 @@
 //      MEMMY_EVAL_READER_{PROVIDER,MODEL,BASE_URL,API_KEY}, MEMMY_EVAL_SUT_MODEL.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadDataset, orderedTraces } from "../build-gold-baseline.mjs";
+import { loadDataset, orderedTraces, traceOrderTime } from "../build-gold-baseline.mjs";
 import { createLlm, resolveModelConfig } from "../llm.mjs";
 import { loadGold } from "../load-eval-set.mjs";
 import { displayNames } from "../oracle.mjs";
@@ -63,7 +63,7 @@ function save(name) {
 const started = performance.now();
 try {
   const events = [
-    ...orderedTraces(ds.corpus).map((trace) => ({ at: trace.chat_time, order: 0, trace })),
+    ...orderedTraces(ds.corpus).map((trace) => ({ at: traceOrderTime(trace), order: 0, trace })),
     ...gold.questions.filter((q) => !q.excluded).map((question) => ({ at: question.askedAt, order: 1, question }))
   ].sort((a, b) => a.at.localeCompare(b.at) || a.order - b.order);
   for (const event of events) {

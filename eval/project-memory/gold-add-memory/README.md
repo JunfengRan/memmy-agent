@@ -4,6 +4,18 @@
 
 被测系统只通过规格接口调用；评测专用信息（轨迹 id、标注）不进任何请求。
 
+### v2.1
+
+要点是 `{text, since, until?}`，`since` / `until` 为轨迹 id。某要点在提问时有效，当且仅当 `since` 的 `submit_time ?? reply_time` 已不晚于 `askedAt`，且 `until` 还没有到。`oracle.mjs` 与阅读上限按这个时刻取要点；主题要点评分只用没有 `until` 的最终要点。
+
+回放顺序用 `submit_time ?? chat_time`，可见性用 `submit_time ?? reply_time`。`resubmitOf` 原样重发原来的 add，且该轨迹没有 op。`deferredUntil` 到后一条轨迹才生效，条目时间仍是原来的 `chat_time`，来源含两条轨迹。`history_backfill` 按时间插入 history，不改当前版本。迟交且非作者的结论只做 `conflict_append`。
+
+`--gate` 另有 `--max-duplicate-rate`（默认 0.02）和 `--max-wrong-merge-rate`（默认 0.01）；`topics.controlMerges` 与 `writes.lateAsCurrent` 必须为 0。对照组写在 `labels.controls` 的 `similar-name`（主题对）和 `same-work`（同一主题里的条目对）。
+
+语料在 ledger、catalog 之外增加门诊、仓储、车队、厨房，共 50 个主题、7 名成员。新题从 q40 起。q17 的标准答案没有改。上面各表里的轮数和题数是 v2 的，v2.1 以 `node load-eval-set.mjs` 的输出为准。
+
+换成大版本时，上一版整份冻在 `history/<版本>/`。v2 在 `history/v2/`。评分只读 `dataset/`。小改动不另存副本。
+
 ## 快速开始
 
 ```bash

@@ -8,11 +8,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { INVALID_PARAMS, DOMAIN_INVALID, runApiChecks } from "./api-checks.mjs";
-import { loadDataset } from "./build-gold-baseline.mjs";
+import { finalPointTexts, loadDataset, projectAddBody, replay, submittedTrace } from "./build-gold-baseline.mjs";
 import { createJudge } from "./judge.mjs";
 import { createLlm } from "./llm.mjs";
 import { loadGold } from "./load-eval-set.mjs";
-import { buildOracleRun } from "./oracle.mjs";
+import { buildOracleRun, oracleTopics } from "./oracle.mjs";
 import { efficiency, scoreRun } from "./run-pipeline-eval.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -36,6 +36,80 @@ test("R1-2: a timeline write carrying dec_tz text, listed first, does not steal 
   const duplicate = detail.writes.filter((w) => w.label === "match" && w.matched === null);
   assert.deepEqual(duplicate.map((w) => w.uid), ["space_ledger#probe_extra#timeline#0"]);
   assert.equal(detail.writes.find((w) => w.kind === "decision" && w.content === tz.content).matched, "dec_tz");
+});
+
+test("E-02: q01 at 14:00 hides the amount-column point and q03 at 12:00 hides the unresolved empty-customer point", () => {
+  const textOf = (askedAt) => {
+    const topic = oracleTopics(ds, askedAt, "space_ledger").find((item) => item.id === "tp_ledger_report");
+    return `${topic?.topic_summary ?? ""}\n${topic?.topic_description ?? ""}`;
+  };
+  const q01 = ds.questions.questions.find((q) => q.id === "q01");
+  const q03 = ds.questions.questions.find((q) => q.id === "q03");
+  assert.equal(q01.askedAt, "2026-10-21T14:00:00+08:00");
+  assert.equal(q03.askedAt, "2026-10-21T12:00:00+08:00");
+  assert.ok(!textOf(q01.askedAt).includes("amount 列"), textOf(q01.askedAt));
+  assert.ok(!textOf(q03.askedAt).includes("尚有不一致结论"), textOf(q03.askedAt));
+  const finalText = textOf("9999");
+  assert.ok(finalText.includes("月报按 entries 的 amount 列汇总"), finalText);
+  assert.ok(finalText.includes("空客户的处理尚有不一致结论"), finalText);
+  const run = buildOracleRun(ds, gold);
+  assert.ok(!run.questions.find((q) => q.id === "q01").rendered.includes("amount 列"));
+  assert.ok(!run.questions.find((q) => q.id === "q03").rendered.includes("尚有不一致结论"));
+  const topic = gold.topics.find((item) => item.id === "tp_ledger_report");
+  assert.ok(finalPointTexts(topic.descriptionKeyPoints).includes("月报按 entries 的 amount 列汇总"));
+  assert.ok(finalPointTexts(topic.summaryKeyPoints).every((point) => !point.includes("amount 列")));
+});
+
+test("splitting one topic makes duplicateRate 1/N", async () => {
+  const run = buildOracleRun(ds, gold);
+  const repo = run.final.space_ledger.find((topic) => topic.id === "tp_ledger_repo");
+  const branch = gold.entries.find((entry) => entry.id === "dec_branch");
+  const index = repo.decisions.findIndex((item) => item.content === branch.content);
+  const [moved] = repo.decisions.splice(index, 1);
+  run.final.space_ledger.push({ id: "probe_split", space_id: "space_ledger", domain: repo.domain, topic_name: "split", topic_summary: "", topic_description: "", decisions: [moved], experiences: [], timeline: [], create_time: moved.time, update_time: moved.time });
+  const { errors, detail } = await scoreRun(run, { ds, gold, judge });
+  const matched = new Set(detail.writes.filter((write) => write.matched && !gold.entries.find((entry) => entry.id === write.matched).optional).map((write) => gold.entries.find((entry) => entry.id === write.matched).topic));
+  assert.equal(errors["topics.duplicateTopics"], 1);
+  assert.equal(errors["topics.duplicateRate"], 1 / matched.size);
+});
+
+test("merging two similar-name topics makes wrongMergeRate > 0 and controlMerges 1", async () => {
+  const run = buildOracleRun(ds, gold);
+  const topics = run.final.space_ledger;
+  const report = topics.find((topic) => topic.id === "tp_ledger_report");
+  const exported = topics.find((topic) => topic.id === "tp_ledger_export");
+  report.decisions.push(...exported.decisions);
+  report.timeline.push(...exported.timeline);
+  report.experiences.push(...(exported.experiences ?? []));
+  run.final.space_ledger = topics.filter((topic) => topic.id !== "tp_ledger_export");
+  const probe = structuredClone(ds);
+  probe.labels.controls = { "similar-name": [["tp_ledger_report", "tp_ledger_export"]], "same-work": [] };
+  const { errors } = await scoreRun(run, { ds: probe, gold, judge });
+  assert.ok(errors["topics.wrongMergeRate"] > 0);
+  assert.equal(errors["topics.controlMerges"], 1);
+});
+
+test("replay: defer, resubmit, history backfill and late conflict", () => {
+  const { state, errors } = replay(ds);
+  assert.deepEqual(errors, []);
+  const entry = state.get("dec_archive");
+  assert.equal(entry.deferred, true);
+  assert.equal(entry.time, "2026-10-21T21:00:00+08:00");
+  assert.equal(entry.content, "月报定稿后归档到 archive/ 目录，只保留十二个月。");
+  assert.ok(entry.sources.includes("t_archive_say") && entry.sources.includes("t_archive_land"));
+  assert.ok(entry.history.some((item) => item.content.includes("inbox")));
+  assert.equal(entry.conflicts.length, 1);
+  assert.equal(entry.conflicts[0].late, true);
+  assert.deepEqual(entry.conflicts[0].user_ids, ["u_zhou"]);
+  const traces = new Map(ds.corpus.traces.map((trace) => [trace.id, trace]));
+  const land = traces.get("t_archive_land");
+  const again = traces.get("t_archive_resubmit");
+  const conversation = ds.corpus.conversations.find((item) => item.id === land.conversation);
+  const body = (trace) => projectAddBody(trace, { traces, conversation, conversationId: "cid", spaceId: "sid", memberName: "林工" });
+  assert.equal(submittedTrace(again, traces).id, land.id);
+  assert.equal(JSON.stringify(body(again)), JSON.stringify(body(land)));
+  const early = replay(ds, "2026-10-21T21:05:00+08:00").state;
+  assert.equal(early.has("dec_archive"), false);
 });
 
 test("R1-4: per-kind LLM and Token F1 scores are in scores", async () => {

@@ -1,0 +1,231 @@
+{
+  "datasetVersion": 2,
+  "rule": "每题在 askedAt 时刻从提问会话调用 search_memory（space_ids 为该题空间，memory_limit_number=9）。expect.topics 是应召回的 gold 主题；expect.entries 是该时刻主题内应出现的条目及部分（content / conflicts / history）。traps：stale 是已进 history 的旧结论，出现在 history 里是预期，作为当前结论出现是错误；cross-project 是另一个空间的相近条目，出现即越界。kind：plain 只看召回；stale 当前结论已改写或裁决；conflict 有未裁决的不一致结论，回答必须列出各项；cross-project 另一空间有相近说法。",
+  "questions": [
+    {
+      "id": "q03", "askedAt": "2026-10-21T12:00:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "plain",
+      "question": "空客户的测试现在是怎么写的？",
+      "goldAnswer": "没有客户名时这笔不进月报。",
+      "mustInclude": ["没有客户名时这笔不进月报"],
+      "expect": { "topics": ["tp_ledger_report"], "entries": [{ "entry": "dec_empty", "parts": ["content"] }] },
+      "traps": []
+    },
+    {
+      "id": "q01", "askedAt": "2026-10-21T14:00:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "cross-project",
+      "question": "ledger 月报的金额现在是从哪里取的？",
+      "goldAnswer": "entries 表结构不变，金额继续写在 journal 正文里，月报读取时再从正文里挑出来。",
+      "mustInclude": ["journal 正文"],
+      "expect": { "topics": ["tp_ledger_report"], "entries": [{ "entry": "dec_amount", "parts": ["content"] }] },
+      "traps": [{ "entry": "dec_price", "kind": "cross-project" }]
+    },
+    {
+      "id": "q02", "askedAt": "2026-10-21T17:00:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "conflict",
+      "question": "ledger 月报的金额现在是从哪里取的？",
+      "goldAnswer": "这一项还没有定论，有两项不一致结论：林工的结论是 entries 表结构不变，金额写在 journal 正文里、读取时挑出来；周工的结论是给 entries 加 amount 列，月报直接按这列汇总，因为扫全文太慢，代码已按这个改了。需要成员确认以哪项为准。",
+      "mustInclude": ["journal 正文", "amount 列"],
+      "expect": { "topics": ["tp_ledger_report"], "entries": [{ "entry": "dec_amount", "parts": ["content", "conflicts"] }] },
+      "traps": [{ "entry": "dec_price", "kind": "cross-project" }]
+    },
+    {
+      "id": "q04", "askedAt": "2026-10-21T19:20:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "conflict",
+      "question": "空客户的测试现在是怎么写的？",
+      "goldAnswer": "空客户的规则还有两项不一致结论：林工最初的测试是没有客户名时这笔不进月报；周工改为只跳过金额列为空的行，空客户但金额还在的会留下，并修好了 report.ts 把空客户整行丢掉的问题。需要成员确认以哪项为准。",
+      "mustInclude": ["没有客户名时这笔不进月报", "空客户但金额还在的会留下"],
+      "expect": { "topics": ["tp_ledger_report"], "entries": [{ "entry": "dec_empty", "parts": ["content", "conflicts"] }] },
+      "traps": []
+    },
+    {
+      "id": "q05", "askedAt": "2026-10-21T19:30:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "cross-project",
+      "question": "ledger 月报里的金额是怎么算的，精度上有什么要求？",
+      "goldAnswer": "金额按整数分累加，不用浮点，最后再换算成元显示。",
+      "mustInclude": ["整数分"],
+      "expect": { "topics": ["tp_ledger_report"], "entries": [{ "entry": "dec_round", "parts": ["content"] }] },
+      "traps": [{ "entry": "dec_cat_round", "kind": "cross-project" }]
+    },
+    {
+      "id": "q06", "askedAt": "2026-10-21T19:31:00+08:00", "conversation": "catalog-ask", "space_id": "space_catalog", "kind": "cross-project",
+      "question": "价格列表里的金额怎么取整？",
+      "goldAnswer": "价格显示保留两位小数，输出前按两位小数取整。",
+      "mustInclude": ["两位小数"],
+      "expect": { "topics": ["tp_cat_price"], "entries": [{ "entry": "dec_cat_round", "parts": ["content"] }] },
+      "traps": [{ "entry": "dec_round", "kind": "cross-project" }]
+    },
+    {
+      "id": "q07", "askedAt": "2026-10-21T19:32:00+08:00", "conversation": "catalog-ask", "space_id": "space_catalog", "kind": "stale",
+      "question": "catalog 导出的价格表现在是什么格式？",
+      "goldAnswer": "导出为 csv，写成 prices.csv，不再写 prices.json。",
+      "mustInclude": ["prices.csv"],
+      "expect": { "topics": ["tp_cat_export"], "entries": [{ "entry": "dec_export_format", "parts": ["content"] }] },
+      "traps": [{ "entry": "dec_export_format", "kind": "stale", "history": 0 }]
+    },
+    {
+      "id": "q09", "askedAt": "2026-10-21T19:34:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "stale",
+      "question": "catalog 的导出做法抄进 ledger 了吗，后面还搬吗？",
+      "goldAnswer": "不搬了。林工曾把 catalog 的 export 抄进 ledger；周工和林工确认后撤回了拷贝，等 dry-run 报告；报告出来后确定月报用不上 export，不再恢复，也不往 ledger 搬。",
+      "mustInclude": ["用不上 export"],
+      "expect": { "topics": ["tp_ledger_export"], "entries": [{ "entry": "dec_copy", "parts": ["content"] }] },
+      "traps": [{ "entry": "dec_copy", "kind": "stale", "history": 0 }, { "entry": "dec_copy", "kind": "stale", "history": 1 }]
+    },
+    {
+      "id": "q13", "askedAt": "2026-10-21T19:39:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "stale",
+      "question": "数据库连接串能写进说明或普通记录吗？",
+      "goldAnswer": "不能。数据库密码和连接串只留在本机 .env，不写进仓库、说明或普通记录；早先把连接串写进 README 的做法已经改掉。",
+      "mustInclude": [".env"],
+      "expect": { "topics": ["tp_ledger_repo"], "entries": [{ "entry": "dec_env", "parts": ["content"] }] },
+      "traps": [{ "entry": "dec_env", "kind": "stale", "history": 0 }]
+    },
+    {
+      "id": "q14", "askedAt": "2026-10-21T19:40:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "stale",
+      "question": "README 里现在还有数据库连接串吗？",
+      "goldAnswer": "没有了，README 里的连接串已经删掉，密码只留在本机 .env。",
+      "mustInclude": [".env"],
+      "expect": { "topics": ["tp_ledger_repo"], "entries": [{ "entry": "dec_env", "parts": ["content"] }] },
+      "traps": [{ "entry": "dec_env", "kind": "stale", "history": 0 }]
+    },
+    {
+      "id": "q15", "askedAt": "2026-10-21T19:41:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "plain",
+      "question": "月报测试失败是因为样例文件旧了吗？",
+      "goldAnswer": "不是，是 report.ts 的读取问题：客户名为空时整行被丢掉；改样例文件修不好，那次改动已经撤回。",
+      "mustInclude": ["report.ts"],
+      "expect": { "topics": ["tp_ledger_report"], "entries": [{ "entry": "exp_fixture", "parts": ["content"] }] },
+      "traps": []
+    },
+    {
+      "id": "q16", "askedAt": "2026-10-21T19:42:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "plain",
+      "question": "tests/fixtures/month.json 现在还留着之前的改动吗？",
+      "goldAnswer": "没有，month.json 的改动已经撤回。",
+      "mustInclude": ["撤回"],
+      "expect": { "topics": ["tp_ledger_report"], "entries": [{ "entry": "tl_bug", "parts": ["content"] }] },
+      "traps": []
+    },
+    {
+      "id": "q17", "askedAt": "2026-10-21T19:43:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "plain",
+      "question": "空客户的账为什么会被整行丢掉？",
+      "goldAnswer": "因为 report.ts 读取时客户名为空就把整行丢掉；现在已经修好，只跳过金额列为空的行。",
+      "mustInclude": ["客户名为空"],
+      "expect": { "topics": ["tp_ledger_report"], "entries": [{ "entry": "tl_bug", "parts": ["content"] }] },
+      "traps": []
+    },
+    {
+      "id": "q19", "askedAt": "2026-10-21T19:45:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "conflict",
+      "question": "改动应该放在哪个分支上？",
+      "goldAnswer": "还没有定论，有两项不一致结论：林工主张直接在 main 上改，省得合并；周工要求改动先放 feature 分支，不直接改 main。需要成员确认以哪项为准。",
+      "mustInclude": ["main", "feature 分支"],
+      "expect": { "topics": ["tp_ledger_repo"], "entries": [{ "entry": "dec_branch", "parts": ["content", "conflicts"] }] },
+      "traps": []
+    },
+    {
+      "id": "q21", "askedAt": "2026-10-21T19:48:00+08:00", "conversation": "catalog-ask", "space_id": "space_catalog", "kind": "cross-project",
+      "excluded": true, "excludedReason": "与 q24 问同一条决策，v1 起就排除在评分外；runner 不提问、scorer 不计分",
+      "question": "catalog 的价格列表现在是怎么读金额的？",
+      "goldAnswer": "列表直接读 amount 列，不再拼装说明文字。",
+      "mustInclude": ["amount 列"],
+      "expect": { "topics": ["tp_cat_price"], "entries": [{ "entry": "dec_price", "parts": ["content"] }] },
+      "traps": [{ "entry": "dec_amount", "kind": "cross-project" }]
+    },
+    {
+      "id": "q23", "askedAt": "2026-10-21T19:51:00+08:00", "conversation": "catalog-ask", "space_id": "space_catalog", "kind": "plain",
+      "question": "比较 sku 之前要先做什么处理？",
+      "goldAnswer": "先统一转成大写。",
+      "mustInclude": ["大写"],
+      "expect": { "topics": ["tp_cat_price"], "entries": [{ "entry": "dec_cat_sku", "parts": ["content"] }] },
+      "traps": []
+    },
+    {
+      "id": "q24", "askedAt": "2026-10-21T19:52:00+08:00", "conversation": "catalog-ask", "space_id": "space_catalog", "kind": "cross-project",
+      "question": "catalog 的价格表为什么要新增一列金额？",
+      "goldAnswer": "因为价格查询太慢；加了 amount 列后，价格列表直接读这一列。",
+      "mustInclude": ["价格查询太慢"],
+      "expect": { "topics": ["tp_cat_price"], "entries": [{ "entry": "dec_price", "parts": ["content"] }] },
+      "traps": [{ "entry": "dec_amount", "kind": "cross-project" }]
+    },
+    {
+      "id": "q25", "askedAt": "2026-10-21T19:53:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "cross-project",
+      "question": "月报为什么后来要改成直接读 entries 的一列？",
+      "goldAnswer": "因为月报扫 journal 全文太慢。这是周工的结论，和林工把金额留在 journal 正文的结论之间还没有裁决。",
+      "mustInclude": ["全文太慢"],
+      "expect": { "topics": ["tp_ledger_report"], "entries": [{ "entry": "dec_amount", "parts": ["conflicts"] }] },
+      "traps": [{ "entry": "dec_price", "kind": "cross-project" }]
+    },
+    {
+      "id": "q26", "askedAt": "2026-10-21T19:54:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "cross-project",
+      "question": "月报的月初月末按哪个时区切？",
+      "goldAnswer": "按 UTC+8（东八区）切月初月末，不用 UTC。",
+      "mustInclude": ["UTC+8"],
+      "expect": { "topics": ["tp_ledger_report"], "entries": [{ "entry": "dec_tz", "parts": ["content"] }] },
+      "traps": [{ "entry": "dec_cat_tz", "kind": "cross-project" }]
+    },
+    {
+      "id": "q27", "askedAt": "2026-10-21T19:55:00+08:00", "conversation": "catalog-ask", "space_id": "space_catalog", "kind": "cross-project",
+      "question": "价格的生效日按哪个时间切换？",
+      "goldAnswer": "按 UTC 零点切换，不看本地时区。",
+      "mustInclude": ["UTC 零点"],
+      "expect": { "topics": ["tp_cat_price"], "entries": [{ "entry": "dec_cat_tz", "parts": ["content"] }] },
+      "traps": [{ "entry": "dec_tz", "kind": "cross-project" }]
+    },
+    {
+      "id": "q28", "askedAt": "2026-10-21T19:56:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "cross-project",
+      "question": "月报结果写到哪里？",
+      "goldAnswer": "写到 reports/ 目录下，文件按月份命名，比如 2026-10.txt。",
+      "mustInclude": ["reports/"],
+      "expect": { "topics": ["tp_ledger_report"], "entries": [{ "entry": "dec_report_path", "parts": ["content"] }] },
+      "traps": [{ "entry": "dec_export_format", "kind": "cross-project" }]
+    },
+    {
+      "id": "q29", "askedAt": "2026-10-21T19:57:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "cross-project",
+      "question": "月报里重复的分录怎么处理？",
+      "goldAnswer": "按 id 去重，只留最早一条。",
+      "mustInclude": ["最早"],
+      "expect": { "topics": ["tp_ledger_report"], "entries": [{ "entry": "dec_dup", "parts": ["content"] }] },
+      "traps": [{ "entry": "dec_cat_dup", "kind": "cross-project" }]
+    },
+    {
+      "id": "q30", "askedAt": "2026-10-21T19:58:00+08:00", "conversation": "catalog-ask", "space_id": "space_catalog", "kind": "cross-project",
+      "question": "同一个 sku 出现多条价格怎么取？",
+      "goldAnswer": "取最后一条，前面的忽略。",
+      "mustInclude": ["最后一条"],
+      "expect": { "topics": ["tp_cat_price"], "entries": [{ "entry": "dec_cat_dup", "parts": ["content"] }] },
+      "traps": [{ "entry": "dec_dup", "kind": "cross-project" }]
+    },
+    {
+      "id": "q31", "askedAt": "2026-10-21T20:40:00+08:00", "conversation": "ledger-ask", "space_id": "space_ledger", "kind": "stale",
+      "question": "ledger 月报的金额现在以什么为准？",
+      "goldAnswer": "以 entries 的 amount 列为准，月报按这列汇总。林工已确定以周工的结论为准，把金额留在 journal 正文里的旧结论已转入历史。",
+      "mustInclude": ["amount 列"],
+      "expect": { "topics": ["tp_ledger_report"], "entries": [{ "entry": "dec_amount", "parts": ["content"] }] },
+      "traps": [{ "entry": "dec_amount", "kind": "stale", "history": 0 }, { "entry": "dec_price", "kind": "cross-project" }]
+    }
+  ],
+  "apiChecks": [
+    {
+      "id": "search_requires_space_ids",
+      "spec": "v3 §3.2.2：include_memory_view 含 project 时 space_ids 必填；§5.1.5 INVALID_PARAMS",
+      "call": "search/memory",
+      "omit": ["space_ids"],
+      "expect": "rejected"
+    },
+    {
+      "id": "add_requires_space_ids",
+      "spec": "v3 §2.2.1：allow_memory_view 含 project 时 user_id、space_ids 必填",
+      "call": "add/message",
+      "omit": ["space_ids"],
+      "expect": "rejected"
+    },
+    {
+      "id": "search_space_isolation",
+      "spec": "v3 §3.2.4：硬过滤在存储侧强制，返回其他 Space 内容 0",
+      "call": "search/memory",
+      "space_id": "space_catalog",
+      "questionTexts": ["q01", "q05", "q19", "q26", "q29"],
+      "expect": "no topic outside space_catalog"
+    },
+    {
+      "id": "add_unregistered_domain",
+      "spec": "v3 §2.2.4：请求的 domains 有未登记名称 → DOMAIN_INVALID，整个任务 failed，任何空间都不写",
+      "call": "add/message",
+      "space_id": "space_ledger",
+      "domain": "未登记领域",
+      "expect": "DOMAIN_INVALID"
+    }
+  ]
+}

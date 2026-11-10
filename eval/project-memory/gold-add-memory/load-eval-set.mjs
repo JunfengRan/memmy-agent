@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Validates dataset v2 against the v3 rules it encodes and checks that dataset/gold.json is the
+// Validates dataset v2.1 against the v3 rules it encodes and checks that dataset/gold.json is the
 // exact output of build-gold-baseline.mjs. Exit 0 only when there are no errors.
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { buildGold, GOLD_PATH, loadDataset, orderedTraces, renderGold, replay } from "./build-gold-baseline.mjs";
+import { activePointTexts, buildGold, GOLD_PATH, loadDataset, orderedTraces, renderGold, replay, traceOrderTime, traceVisibleTime } from "./build-gold-baseline.mjs";
 
 export const LIMITS = { topic_name: 20, topic_summary: 80, topic_description: 400, decision: 100, timeline: 100, experience: 200 };
 export const length = (text) => [...String(text ?? "")].length;
@@ -23,11 +23,11 @@ export function validateDataset(ds) {
   const errors = [];
   const err = (message) => errors.push(message);
   const { corpus, labels, conflicts, questions } = ds;
-  for (const [name, file] of Object.entries(ds)) if (file.datasetVersion !== 2) err(`${name}.json datasetVersion must be 2`);
+  for (const [name, file] of Object.entries(ds)) if (file.datasetVersion !== 2.1) err(`${name}.json datasetVersion must be 2.1`);
 
   // Spaces, members, conversations.
   const spaces = new Map(corpus.spaces.map((space) => [space.space_id, space]));
-  if (spaces.size !== 2 || spaces.size !== corpus.spaces.length) err("need exactly two distinct spaces");
+  if (spaces.size < 2 || spaces.size !== corpus.spaces.length) err("need at least two distinct spaces");
   for (const space of corpus.spaces) {
     const names = space.domains.map((d) => d.domain);
     if (!names.length || names.length > 20) err(`${space.space_id} must register 1–20 domains`);
@@ -42,6 +42,17 @@ export function validateDataset(ds) {
   }
   const ledgerAuthors = new Set(corpus.conversations.filter((c) => c.id === "ledger-build" || c.id === "ledger-follow").map((c) => c.user_id));
   if (ledgerAuthors.size !== 2) err("ledger-build and ledger-follow must be different members");
+  const writers = new Map();
+  for (const trace of corpus.traces) {
+    if (trace.resubmitOf) continue;
+    const conversation = conversations.get(trace.conversation);
+    if (!conversation || conversation.askOnly) continue;
+    const ids = writers.get(conversation.space_id) ?? new Set();
+    ids.add(conversation.user_id);
+    writers.set(conversation.space_id, ids);
+  }
+  const multiWriter = [...spaces.keys()].filter((id) => (writers.get(id)?.size ?? 0) >= 2).length;
+  if (multiWriter * 2 < spaces.size) err("at least half of spaces need two or more writers");
 
   // Traces.
   const traces = new Map();
@@ -55,9 +66,28 @@ export function validateDataset(ds) {
     if (c.askOnly) err(`${trace.id} is in ask-only conversation ${c.id}`);
     if (!spaces.get(c.space_id)?.domains.some((d) => d.domain === trace.domain)) err(`${trace.id} domain ${trace.domain} is not registered in ${c.space_id}`);
     if (!ISO_LOCAL.test(trace.chat_time) || !ISO_LOCAL.test(trace.reply_time)) err(`${trace.id} times must be ISO 8601 with +08:00`);
+    if (trace.submit_time && !ISO_LOCAL.test(trace.submit_time)) err(`${trace.id} submit_time must be ISO 8601 with +08:00`);
     if (trace.reply_time <= trace.chat_time) err(`${trace.id} reply must come after the user message`);
-    if ((lastTime.get(c.id) ?? "") >= trace.chat_time) err(`${trace.id} is out of order in ${c.id}`);
-    lastTime.set(c.id, trace.reply_time);
+    if (trace.resubmitOf) {
+      const original = traces.get(trace.resubmitOf);
+      if (!original) err(`${trace.id} resubmitOf ${trace.resubmitOf} missing`);
+      else {
+        const originalSpace = conversations.get(original.conversation)?.space_id;
+        if (originalSpace !== c.space_id) err(`${trace.id} resubmit must stay in ${originalSpace}`);
+        if (trace.conversation !== original.conversation) err(`${trace.id} resubmit must reuse ${original.conversation}`);
+        for (const field of ["query", "answer", "domain", "chat_time", "reply_time"]) {
+          if (trace[field] !== original[field]) err(`${trace.id} resubmit ${field} must match ${original.id}`);
+        }
+        if (!trace.submit_time || trace.submit_time <= traceVisibleTime(original)) err(`${trace.id} resubmit submit_time must be after ${original.id}`);
+      }
+    } else {
+      const second = `${c.id}\0${trace.chat_time}`;
+      if (lastTime.has(second)) err(`${trace.id} shares a chat_time second with another message in ${c.id}`);
+      lastTime.set(second, trace.id);
+      const previous = lastTime.get(c.id) ?? "";
+      if (previous >= trace.chat_time) err(`${trace.id} is out of order in ${c.id}`);
+      lastTime.set(c.id, trace.reply_time);
+    }
     if (LABELED.test(`${trace.query}${trace.answer}`)) err(`${trace.id} text carries a label word`);
     for (const note of trace.annotations ?? []) {
       if (!["approval", "informed", "resolve"].includes(note.type)) err(`${trace.id} unknown annotation ${note.type}`);
@@ -72,14 +102,52 @@ export function validateDataset(ds) {
 
   // Labels.
   const topics = new Map(labels.topics.map((t) => [t.id, t]));
+  const writersByTopic = new Map();
+  for (const [traceId, label] of Object.entries(labels.traces)) {
+    for (const op of label.ops ?? []) {
+      const topicId = labels.entries[op.entry]?.topic;
+      if (!topicId) continue;
+      const who = op.deferredUntil || traceId;
+      const set = writersByTopic.get(topicId) ?? new Set();
+      set.add(who);
+      writersByTopic.set(topicId, set);
+    }
+  }
+  const firstWrite = (topicId) => [...(writersByTopic.get(topicId) ?? [])]
+    .map((id) => traces.get(id))
+    .filter(Boolean)
+    .sort((a, b) => traceVisibleTime(a).localeCompare(traceVisibleTime(b)) || corpus.traces.indexOf(a) - corpus.traces.indexOf(b))[0];
+  const checkPoints = (topic, field, limit) => {
+    const points = topic[field];
+    if (!Array.isArray(points) || !points.length) { err(`${topic.id} needs ${field}`); return; }
+    const writers = writersByTopic.get(topic.id) ?? new Set();
+    for (const point of points) {
+      if (!point || typeof point.text !== "string" || !point.text.trim()) { err(`${topic.id} ${field} point needs text`); continue; }
+      if (!traces.has(point.since)) err(`${topic.id} ${field} since ${point.since} is not a trace`);
+      else if (!writers.has(point.since)) err(`${topic.id} ${field} since ${point.since} did not write the topic`);
+      if (point.until) {
+        if (!traces.has(point.until)) err(`${topic.id} ${field} until ${point.until} is not a trace`);
+        else if (!writers.has(point.until)) err(`${topic.id} ${field} until ${point.until} did not write the topic`);
+        const since = traces.get(point.since);
+        const until = traces.get(point.until);
+        if (since && until && !(traceVisibleTime(since) < traceVisibleTime(until))) err(`${topic.id} ${field} since must be before until`);
+      }
+    }
+    const moments = [...questions.questions.map((q) => q.askedAt), "9999"];
+    for (const at of moments) {
+      if (length(activePointTexts(points, traces, at).join("；")) > limit) err(`${topic.id} ${field} active at ${at} over ${limit}`);
+    }
+  };
   for (const topic of labels.topics) {
     const space = spaces.get(topic.space_id);
     if (!space) err(`${topic.id} space missing`);
     else if (!space.domains.some((d) => d.domain === topic.domain)) err(`${topic.id} domain ${topic.domain} not registered`);
     if (length(topic.topic_name) > LIMITS.topic_name) err(`${topic.id} topic_name over ${LIMITS.topic_name}`);
-    if (length(topic.summaryKeyPoints.join("；")) > LIMITS.topic_summary) err(`${topic.id} summary key points over ${LIMITS.topic_summary}`);
-    if (length(topic.descriptionKeyPoints.join("；")) > LIMITS.topic_description) err(`${topic.id} description key points over ${LIMITS.topic_description}`);
-    if (!topic.summaryKeyPoints.length || !topic.descriptionKeyPoints.length) err(`${topic.id} needs summary and description key points`);
+    const first = firstWrite(topic.id);
+    checkPoints(topic, "summaryKeyPoints", LIMITS.topic_summary);
+    checkPoints(topic, "descriptionKeyPoints", LIMITS.topic_description);
+    if (!first) err(`${topic.id} has no writing trace`);
+    else if (!(topic.summaryKeyPoints ?? []).some((point) => point?.since === first.id)) err(`${topic.id} needs a summary point from its first write ${first.id}`);
   }
   for (const [id, meta] of Object.entries(labels.entries)) {
     if (!KINDS.has(meta.kind)) err(`${id} kind ${meta.kind} invalid (timeline, not evolution)`);
@@ -88,6 +156,21 @@ export function validateDataset(ds) {
     if (!topics.has(meta.topic)) err(`${id} topic ${meta.topic} missing`);
     if (meta.optional && meta.kind === "decision") err(`${id} decisions cannot be optional`);
   }
+  for (const [name, pairs] of Object.entries(labels.controls ?? {})) {
+    if (!["similar-name", "same-work"].includes(name)) err(`unknown control group ${name}`);
+    if (!Array.isArray(pairs)) { err(`${name} controls must be a list`); continue; }
+    for (const pair of pairs) {
+      if (!Array.isArray(pair) || pair.length !== 2 || pair[0] === pair[1]) { err(`${name} control must be two different ids`); continue; }
+      if (name === "similar-name") {
+        if (!topics.has(pair[0]) || !topics.has(pair[1])) err(`similar-name ${pair.join("/")} missing`);
+      } else {
+        const left = labels.entries[pair[0]];
+        const right = labels.entries[pair[1]];
+        if (!left || !right) err(`same-work ${pair.join("/")} missing`);
+        else if (left.topic !== right.topic) err(`same-work ${pair.join("/")} must stay in one topic`);
+      }
+    }
+  }
   const dropReasons = new Set(Object.keys(labels.dropReasons));
   for (const id of Object.keys(labels.traces)) if (!traces.has(id)) err(`label for unknown trace ${id}`);
   for (const trace of corpus.traces) {
@@ -95,7 +178,9 @@ export function validateDataset(ds) {
     if (!label) { err(`${trace.id} has no label`); continue; }
     const text = `${trace.query}\n${trace.answer}`;
     const space = conversations.get(trace.conversation)?.space_id;
-    if (!label.ops.length && !(label.dropped ?? []).length) err(`${trace.id} writes nothing and gives no reason`);
+    if (trace.resubmitOf) {
+      if ((label.ops ?? []).length) err(`${trace.id} resubmit creates no ops`);
+    } else if (!label.ops.length && !(label.dropped ?? []).length) err(`${trace.id} writes nothing and gives no reason`);
     for (const drop of label.dropped ?? []) if (!dropReasons.has(drop.reason)) err(`${trace.id} drop reason ${drop.reason} invalid`);
     for (const op of label.ops) {
       const meta = labels.entries[op.entry];
@@ -103,6 +188,8 @@ export function validateDataset(ds) {
       const topic = topics.get(meta.topic);
       if (topic && topic.space_id !== space) err(`${trace.id} writes ${op.entry} into another space`);
       if (topic && topic.domain !== trace.domain) err(`${trace.id} writes ${op.entry} into domain ${topic.domain}, but the caller asked for ${trace.domain}`);
+      if (op.deferredUntil && !traces.has(op.deferredUntil)) err(`${trace.id} ${op.entry} deferredUntil ${op.deferredUntil} missing`);
+      if (op.deferredUntil && traceOrderTime(traces.get(op.deferredUntil) ?? {}) <= traceOrderTime(trace)) err(`${trace.id} ${op.entry} deferredUntil must be a later trace`);
       if (op.content !== undefined && length(op.content) > LIMITS[meta.kind]) err(`${trace.id} ${op.entry} content over ${LIMITS[meta.kind]} chars`);
       if (op.reason && !op.reasonQuote) err(`${trace.id} ${op.entry} reason needs a reasonQuote from the conversation`);
       if (op.reasonQuote && !text.includes(op.reasonQuote)) err(`${trace.id} ${op.entry} reasonQuote is not in the conversation`);
@@ -114,7 +201,7 @@ export function validateDataset(ds) {
   for (const item of conflicts.cases) {
     const trace = traces.get(item.incoming);
     if (!trace) { err(`${item.id} incoming ${item.incoming} missing`); continue; }
-    const before = replay(ds, trace.chat_time).state.get(item.decision);
+    const before = (trace.submit_time ? replay(ds, "9999", { stopBeforeId: trace.id }).state : replay(ds, trace.chat_time).state).get(item.decision);
     if (!before) { err(`${item.id} ${item.decision} does not exist before ${item.incoming}`); continue; }
     const author = conversations.get(trace.conversation)?.user_id;
     if (author !== item.author) err(`${item.id} author should be ${author}`);
@@ -139,7 +226,7 @@ export function validateDataset(ds) {
   }
   for (const [traceId, label] of Object.entries(labels.traces)) {
     for (const op of label.ops) {
-      if (labels.entries[op.entry]?.kind === "decision" && op.op !== "add" && !covered.has(`${traceId}:${op.entry}`)) err(`${traceId}:${op.entry} ${op.op} has no conflicts.json case`);
+      if (labels.entries[op.entry]?.kind === "decision" && op.op !== "add" && op.op !== "history_backfill" && !covered.has(`${traceId}:${op.entry}`)) err(`${traceId}:${op.entry} ${op.op} has no conflicts.json case`);
     }
   }
 
@@ -188,8 +275,8 @@ export function validateDataset(ds) {
     const goldQuestion = gold.questions.find((q) => q.id === where);
     for (const item of goldQuestion?.expectedItems ?? []) {
       const sources = gold.entries.find((e) => e.id === item.entry)?.sources ?? [];
-      const first = sources.map((id) => traces.get(id)).sort((a, b) => a.reply_time.localeCompare(b.reply_time))[0];
-      if (!first || first.reply_time >= asked) err(`${where} evidence for ${item.entry} is not before askedAt`);
+      const first = sources.map((id) => traces.get(id)).filter(Boolean).sort((a, b) => traceVisibleTime(a).localeCompare(traceVisibleTime(b)))[0];
+      if (!first || traceVisibleTime(first) >= asked) err(`${where} evidence for ${item.entry} is not before askedAt`);
     }
   }
   for (const check of questions.apiChecks) {
@@ -208,7 +295,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const outcomes = Object.fromEntries(["written", "optional-only", "not-written"].map((o) => [o, gold.traceLabels.filter((t) => t.outcome === o).length]));
   process.stdout.write(`${JSON.stringify({
     errors,
-    datasetVersion: 2,
+    datasetVersion: 2.1,
     traces: orderedTraces(ds.corpus).length,
     traceOutcomes: outcomes,
     topics: gold.topics.length,

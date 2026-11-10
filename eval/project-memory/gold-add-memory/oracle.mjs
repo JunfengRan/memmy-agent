@@ -1,13 +1,16 @@
 // Builds spec-shaped runs from gold: --oracle replays the labelled ops into topic_detail_list at
 // every askedAt (perfect system), --empty writes and returns nothing. The scorer must give the
 // first 1 and the second 0 on every score.
-import { replay } from "./build-gold-baseline.mjs";
+import { activePointTexts, replay } from "./build-gold-baseline.mjs";
 import { renderTemplate3 } from "./reader.mjs";
 
 const item = ({ content, time, user_ids }) => ({ content, time, user_ids });
 
+// `until` is the question's askedAt (or "9999" for the final state). Summary and description use
+// only key points whose since trace is visible and whose until trace is not.
 export function oracleTopics(ds, until, spaceId) {
   const { state } = replay(ds, until);
+  const traces = new Map(ds.corpus.traces.map((trace) => [trace.id, trace]));
   const topics = [];
   for (const topic of ds.labels.topics.filter((t) => t.space_id === spaceId)) {
     const entries = [...state.entries()].filter(([id]) => ds.labels.entries[id].topic === topic.id && !ds.labels.entries[id].optional);
@@ -19,8 +22,8 @@ export function oracleTopics(ds, until, spaceId) {
       space_id: spaceId,
       domain: topic.domain,
       topic_name: topic.topic_name,
-      topic_summary: topic.summaryKeyPoints.join("；"),
-      topic_description: topic.descriptionKeyPoints.join("；"),
+      topic_summary: activePointTexts(topic.summaryKeyPoints, traces, until).join("；"),
+      topic_description: activePointTexts(topic.descriptionKeyPoints, traces, until).join("；"),
       decisions: of("decision").map((e) => ({ ...item(e), conflicts: e.conflicts.map(item), history: e.history.map((h) => ({ ...item(h), reason: h.reason })) })),
       experiences: of("experience").map((e) => ({ ...item(e), history: e.history.map(item) })),
       timeline: of("timeline").map(item),

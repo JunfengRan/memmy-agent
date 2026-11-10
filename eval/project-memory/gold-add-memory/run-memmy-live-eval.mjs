@@ -29,7 +29,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runApiChecks } from "./api-checks.mjs";
-import { loadDataset, orderedTraces } from "./build-gold-baseline.mjs";
+import { loadDataset, orderedTraces, projectAddBody, submittedTrace, traceOrderTime } from "./build-gold-baseline.mjs";
 import { createLlm, resolveModelConfig } from "./llm.mjs";
 import { loadGold } from "./load-eval-set.mjs";
 import { displayNames } from "./oracle.mjs";
@@ -78,6 +78,7 @@ const names = displayNames(ds);
 const spaceMap = { ...(checksOnly?.spaceMap ?? {}) };
 const conversationIds = Object.fromEntries(ds.corpus.conversations.map((c) => [c.id, `${c.conversation_id}:${tag}`]));
 const conversations = new Map(ds.corpus.conversations.map((c) => [c.id, c]));
+const tracesById = new Map(ds.corpus.traces.map((trace) => [trace.id, trace]));
 const memberName = (id) => names.memberNames[id] ?? id;
 const run = {
   runVersion: 2,
@@ -133,8 +134,6 @@ async function call(path, body, { strict = true, method = "POST" } = {}) {
   return { ok, status, code: payload?.code, message: payload?.message, data: payload?.data, ms, endedAt };
 }
 
-const localTime = (iso) => iso.slice(0, 19).replace("T", " ");
-
 // Returns the final status plus when the poll that saw it returned (performance.now()), the number
 // of polls and the sleep before that poll (completion happened at most that long earlier).
 async function waitTask(taskId, label) {
@@ -152,19 +151,10 @@ async function waitTask(taskId, label) {
 }
 
 function addBody(trace, overrides = {}) {
-  const c = conversations.get(trace.conversation);
+  const source = submittedTrace(trace, tracesById);
+  const c = conversations.get(source.conversation);
   return {
-    user_id: c.user_id,
-    agent_id: c.agent_id,
-    conversation_id: conversationIds[c.id],
-    space_ids: [spaceMap[c.space_id]],
-    domains: [trace.domain],
-    allow_memory_view: ["project"],
-    async_mode: true,
-    messages: [
-      { role: "user", role_id: c.user_id, role_name: memberName(c.user_id), chat_time: localTime(trace.chat_time), content: trace.query },
-      { role: "assistant", chat_time: localTime(trace.reply_time), content: trace.answer }
-    ],
+    ...projectAddBody(trace, { traces: tracesById, conversation: c, conversationId: conversationIds[c.id], spaceId: spaceMap[c.space_id], memberName: memberName(c.user_id) }),
     ...overrides
   };
 }
@@ -240,7 +230,7 @@ try {
 
   const questions = gold.questions.filter((q) => !q.excluded);
   const events = [
-    ...orderedTraces(ds.corpus).map((trace) => ({ at: trace.chat_time, order: 0, trace })),
+    ...orderedTraces(ds.corpus).map((trace) => ({ at: traceOrderTime(trace), order: 0, trace })),
     ...questions.map((question) => ({ at: question.askedAt, order: 1, question }))
   ].sort((a, b) => a.at.localeCompare(b.at) || a.order - b.order);
   for (const event of events) {

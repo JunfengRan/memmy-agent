@@ -1,5 +1,5 @@
 {
-  "datasetVersion": 2,
+  "datasetVersion": 2.1,
   "timezone": "+08:00",
   "note": "Trace text is the v1 corpus text; v2 adds identity, conversations, chat_time, caller-chosen domains, and three turns (t_wait approval wording, t_informed, t_resolve) so the dataset covers rewrite-by-approval and resolve. annotations are for gold validation only and are never sent to the system under test.",
   "spaces": [
@@ -7,30 +7,243 @@
       "space_id": "space_ledger",
       "instructions": "ledger 是记账服务，按客户出月度账务报表。",
       "domains": [
-        { "domain": "代码开发", "description": "月报与分录的代码实现与测试" },
-        { "domain": "工程规范", "description": "仓库、分支与密钥的协作约定" }
+        {
+          "domain": "代码开发",
+          "description": "月报与分录的代码实现与测试"
+        },
+        {
+          "domain": "工程规范",
+          "description": "仓库、分支与密钥的协作约定"
+        }
       ]
     },
     {
       "space_id": "space_catalog",
       "instructions": "catalog 是商品价格目录服务，提供价格查询与价格表导出。",
       "domains": [
-        { "domain": "代码开发", "description": "价格数据与导出的代码实现" },
-        { "domain": "产品设计", "description": "价格展示的产品规则" }
+        {
+          "domain": "代码开发",
+          "description": "价格数据与导出的代码实现"
+        },
+        {
+          "domain": "产品设计",
+          "description": "价格展示的产品规则"
+        }
+      ]
+    },
+    {
+      "space_id": "space_clinic",
+      "instructions": "门诊部负责号源、叫号和药房发药。",
+      "domains": [
+        {
+          "domain": "门诊排班",
+          "description": "号源、叫号和诊室时段"
+        },
+        {
+          "domain": "药房管理",
+          "description": "药品存放、效期和发药"
+        }
+      ]
+    },
+    {
+      "space_id": "space_warehouse",
+      "instructions": "仓储负责收货、存储和拣货出库。",
+      "domains": [
+        {
+          "domain": "入库验收",
+          "description": "到货核对、温度和破损"
+        },
+        {
+          "domain": "拣货出库",
+          "description": "拣货、复核和出库顺序"
+        }
+      ]
+    },
+    {
+      "space_id": "space_fleet",
+      "instructions": "车队负责车辆保养和线路发车。",
+      "domains": [
+        {
+          "domain": "车辆维保",
+          "description": "保养、轮胎、加油和保险"
+        },
+        {
+          "domain": "线路调度",
+          "description": "发车时刻、绕行和限速"
+        }
+      ]
+    },
+    {
+      "space_id": "space_kitchen",
+      "instructions": "厨房负责备菜、出餐和留样。",
+      "domains": [
+        {
+          "domain": "菜品备料",
+          "description": "备量、油温和出餐"
+        },
+        {
+          "domain": "食安留样",
+          "description": "留样、手套和熟食卫生"
+        }
       ]
     }
   ],
   "members": [
-    { "user_id": "u_lin", "name": "林工" },
-    { "user_id": "u_zhou", "name": "周工" },
-    { "user_id": "u_chen", "name": "陈工" }
+    {
+      "user_id": "u_lin",
+      "name": "林工"
+    },
+    {
+      "user_id": "u_zhou",
+      "name": "周工"
+    },
+    {
+      "user_id": "u_chen",
+      "name": "陈工"
+    },
+    {
+      "user_id": "u_zhao",
+      "name": "赵工"
+    },
+    {
+      "user_id": "u_wu",
+      "name": "吴工"
+    },
+    {
+      "user_id": "u_sun",
+      "name": "孙工"
+    },
+    {
+      "user_id": "u_zheng",
+      "name": "郑工"
+    }
   ],
   "conversations": [
-    { "id": "ledger-build", "conversation_id": "cursor:ledger-build", "user_id": "u_lin", "agent_id": "cursor", "space_id": "space_ledger" },
-    { "id": "ledger-follow", "conversation_id": "claude-code:ledger-follow", "user_id": "u_zhou", "agent_id": "claude-code", "space_id": "space_ledger" },
-    { "id": "catalog-build", "conversation_id": "cursor:catalog-build", "user_id": "u_chen", "agent_id": "cursor", "space_id": "space_catalog" },
-    { "id": "ledger-ask", "conversation_id": "cursor:ledger-ask", "user_id": "u_lin", "agent_id": "cursor", "space_id": "space_ledger", "askOnly": true },
-    { "id": "catalog-ask", "conversation_id": "cursor:catalog-ask", "user_id": "u_chen", "agent_id": "cursor", "space_id": "space_catalog", "askOnly": true }
+    {
+      "id": "ledger-build",
+      "conversation_id": "cursor:ledger-build",
+      "user_id": "u_lin",
+      "agent_id": "cursor",
+      "space_id": "space_ledger"
+    },
+    {
+      "id": "ledger-follow",
+      "conversation_id": "claude-code:ledger-follow",
+      "user_id": "u_zhou",
+      "agent_id": "claude-code",
+      "space_id": "space_ledger"
+    },
+    {
+      "id": "catalog-build",
+      "conversation_id": "cursor:catalog-build",
+      "user_id": "u_chen",
+      "agent_id": "cursor",
+      "space_id": "space_catalog"
+    },
+    {
+      "id": "ledger-ask",
+      "conversation_id": "cursor:ledger-ask",
+      "user_id": "u_lin",
+      "agent_id": "cursor",
+      "space_id": "space_ledger",
+      "askOnly": true
+    },
+    {
+      "id": "catalog-ask",
+      "conversation_id": "cursor:catalog-ask",
+      "user_id": "u_chen",
+      "agent_id": "cursor",
+      "space_id": "space_catalog",
+      "askOnly": true
+    },
+    {
+      "id": "clinic-build",
+      "conversation_id": "cursor:clinic-build",
+      "user_id": "u_zhao",
+      "agent_id": "cursor",
+      "space_id": "space_clinic"
+    },
+    {
+      "id": "clinic-follow",
+      "conversation_id": "claude-code:clinic-follow",
+      "user_id": "u_wu",
+      "agent_id": "claude-code",
+      "space_id": "space_clinic"
+    },
+    {
+      "id": "clinic-ask",
+      "conversation_id": "cursor:clinic-ask",
+      "user_id": "u_zhao",
+      "agent_id": "cursor",
+      "space_id": "space_clinic",
+      "askOnly": true
+    },
+    {
+      "id": "wh-build",
+      "conversation_id": "cursor:wh-build",
+      "user_id": "u_sun",
+      "agent_id": "cursor",
+      "space_id": "space_warehouse"
+    },
+    {
+      "id": "wh-follow",
+      "conversation_id": "claude-code:wh-follow",
+      "user_id": "u_zheng",
+      "agent_id": "claude-code",
+      "space_id": "space_warehouse"
+    },
+    {
+      "id": "wh-ask",
+      "conversation_id": "cursor:wh-ask",
+      "user_id": "u_sun",
+      "agent_id": "cursor",
+      "space_id": "space_warehouse",
+      "askOnly": true
+    },
+    {
+      "id": "fleet-build",
+      "conversation_id": "cursor:fleet-build",
+      "user_id": "u_zhao",
+      "agent_id": "cursor",
+      "space_id": "space_fleet"
+    },
+    {
+      "id": "fleet-follow",
+      "conversation_id": "claude-code:fleet-follow",
+      "user_id": "u_sun",
+      "agent_id": "claude-code",
+      "space_id": "space_fleet"
+    },
+    {
+      "id": "fleet-ask",
+      "conversation_id": "cursor:fleet-ask",
+      "user_id": "u_zhao",
+      "agent_id": "cursor",
+      "space_id": "space_fleet",
+      "askOnly": true
+    },
+    {
+      "id": "kit-build",
+      "conversation_id": "cursor:kit-build",
+      "user_id": "u_wu",
+      "agent_id": "cursor",
+      "space_id": "space_kitchen"
+    },
+    {
+      "id": "kit-follow",
+      "conversation_id": "claude-code:kit-follow",
+      "user_id": "u_zheng",
+      "agent_id": "claude-code",
+      "space_id": "space_kitchen"
+    },
+    {
+      "id": "kit-ask",
+      "conversation_id": "cursor:kit-ask",
+      "user_id": "u_wu",
+      "agent_id": "cursor",
+      "space_id": "space_kitchen",
+      "askOnly": true
+    }
   ],
   "traces": [
     {
@@ -149,7 +362,13 @@
       "domain": "代码开发",
       "query": "先别抄，我跟林工确认过了。等 dry-run 报告出来再看要不要搬。",
       "answer": "export 那份拷贝我撤掉了。ledger 不建 output 目录，等 dry-run 报告。",
-      "annotations": [{ "type": "approval", "by": "u_lin", "quote": "我跟林工确认过了" }]
+      "annotations": [
+        {
+          "type": "approval",
+          "by": "u_lin",
+          "quote": "我跟林工确认过了"
+        }
+      ]
     },
     {
       "id": "t_cat_round",
@@ -337,10 +556,17 @@
       "chat_time": "2026-10-21T20:20:00+08:00",
       "reply_time": "2026-10-21T20:22:00+08:00",
       "domain": "代码开发",
-      "searchBefore": { "query": "月报的金额现在从哪里取？" },
+      "searchBefore": {
+        "query": "月报的金额现在从哪里取？"
+      },
       "query": "月报的金额现在从哪里取？",
       "answer": "这一项有两项不一致结论，还没有定：林工的结论是 entries 表结构不变，金额继续写在 journal 正文里，读取时再挑出来；周工的结论是给 entries 加 amount 列，月报直接按这列汇总，因为扫全文太慢。请确认以哪项为准。",
-      "annotations": [{ "type": "informed", "quote": "这一项有两项不一致结论" }]
+      "annotations": [
+        {
+          "type": "informed",
+          "quote": "这一项有两项不一致结论"
+        }
+      ]
     },
     {
       "id": "t_resolve",
@@ -350,7 +576,733 @@
       "domain": "代码开发",
       "query": "以周工的为准，金额读 amount 列。",
       "answer": "好的，月报金额以 entries 的 amount 列为准，journal 正文不再作为金额来源。",
-      "annotations": [{ "type": "resolve", "by": "u_lin", "pick": "u_zhou", "quote": "以周工的为准" }]
+      "annotations": [
+        {
+          "type": "resolve",
+          "by": "u_lin",
+          "pick": "u_zhou",
+          "quote": "以周工的为准"
+        }
+      ]
+    },
+    {
+      "id": "t_archive_say",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T21:00:00+08:00",
+      "reply_time": "2026-10-21T21:02:00+08:00",
+      "domain": "代码开发",
+      "query": "月报定稿后放到 archive/ 目录，只保留十二个月。",
+      "answer": "好，月报定稿后归档到 archive/，只保留十二个月。"
+    },
+    {
+      "id": "t_archive_land",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T21:10:00+08:00",
+      "reply_time": "2026-10-21T21:12:00+08:00",
+      "domain": "代码开发",
+      "query": "归档规则现在可以记下来了。",
+      "answer": "已记下。月报归档目录已建好。"
+    },
+    {
+      "id": "t_archive_resubmit",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T21:10:00+08:00",
+      "reply_time": "2026-10-21T21:12:00+08:00",
+      "submit_time": "2026-10-21T21:16:00+08:00",
+      "domain": "代码开发",
+      "resubmitOf": "t_archive_land",
+      "query": "归档规则现在可以记下来了。",
+      "answer": "已记下。月报归档目录已建好。"
+    },
+    {
+      "id": "t_archive_backfill",
+      "conversation": "ledger-follow",
+      "chat_time": "2026-10-21T20:50:00+08:00",
+      "reply_time": "2026-10-21T20:52:00+08:00",
+      "submit_time": "2026-10-21T21:25:00+08:00",
+      "domain": "代码开发",
+      "query": "补充一下更早的做法：月报先放在 inbox/，当天再挪到 archive/。现在的规则不用改。",
+      "answer": "更早是先放 inbox/，当天再挪到 archive/。现行归档规则保持不变。"
+    },
+    {
+      "id": "t_archive_late",
+      "conversation": "ledger-follow",
+      "chat_time": "2026-10-21T20:55:00+08:00",
+      "reply_time": "2026-10-21T20:57:00+08:00",
+      "submit_time": "2026-10-21T21:35:00+08:00",
+      "domain": "代码开发",
+      "query": "月报不用留十二个月，留六个月就够。",
+      "answer": "记下另一种说法：月报只保留六个月。"
+    },
+    {
+      "id": "t_archive_hold",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T21:40:00+08:00",
+      "reply_time": "2026-10-21T21:42:00+08:00",
+      "domain": "代码开发",
+      "query": "要不要改成按周归档？这事先放着，下周一再定。",
+      "answer": "先不定。下周一再看要不要改成按周归档。"
+    },
+    {
+      "id": "t_clinic_quota",
+      "conversation": "clinic-build",
+      "chat_time": "2026-11-03T09:00:00+08:00",
+      "reply_time": "2026-11-03T09:02:00+08:00",
+      "domain": "门诊排班",
+      "query": "号源改到每天早上 7 点放第二天的。",
+      "answer": "好，每天 7 点释放第二天的门诊号源。"
+    },
+    {
+      "id": "t_clinic_quota_again",
+      "conversation": "clinic-build",
+      "chat_time": "2026-11-03T09:00:00+08:00",
+      "reply_time": "2026-11-03T09:02:00+08:00",
+      "submit_time": "2026-11-03T09:08:00+08:00",
+      "domain": "门诊排班",
+      "query": "号源改到每天早上 7 点放第二天的。",
+      "answer": "好，每天 7 点释放第二天的门诊号源。",
+      "resubmitOf": "t_clinic_quota"
+    },
+    {
+      "id": "t_clinic_call",
+      "conversation": "clinic-build",
+      "chat_time": "2026-11-03T09:20:00+08:00",
+      "reply_time": "2026-11-03T09:22:00+08:00",
+      "domain": "门诊排班",
+      "query": "叫号按挂号先后。过号的人排到当前队尾。",
+      "answer": "叫号按挂号先后。过号患者排到当前队尾再叫。"
+    },
+    {
+      "id": "t_clinic_slot",
+      "conversation": "clinic-build",
+      "chat_time": "2026-11-03T09:40:00+08:00",
+      "reply_time": "2026-11-03T09:42:00+08:00",
+      "domain": "门诊排班",
+      "query": "上午看到 11 点半，下午 13 点半再开诊。",
+      "answer": "上午诊看到 11 点半，下午从 13 点半开始。"
+    },
+    {
+      "id": "t_clinic_rx",
+      "conversation": "clinic-build",
+      "chat_time": "2026-11-03T10:00:00+08:00",
+      "reply_time": "2026-11-03T10:02:00+08:00",
+      "domain": "门诊排班",
+      "query": "普通处方只在开出的当天有效。",
+      "answer": "普通处方只在开具当天有效，过了当天就不能取药。"
+    },
+    {
+      "id": "t_clinic_expiry",
+      "conversation": "clinic-build",
+      "chat_time": "2026-11-03T10:20:00+08:00",
+      "reply_time": "2026-11-03T10:22:00+08:00",
+      "domain": "药房管理",
+      "query": "离失效不到 30 天的药先别下架，贴上黄标。",
+      "answer": "距失效不足 30 天的药不下架，只贴黄标。"
+    },
+    {
+      "id": "t_clinic_cold",
+      "conversation": "clinic-build",
+      "chat_time": "2026-11-03T10:40:00+08:00",
+      "reply_time": "2026-11-03T10:42:00+08:00",
+      "domain": "药房管理",
+      "query": "冷藏药放 2 到 8 度的柜子，别放常温架。",
+      "answer": "冷藏药放 2 到 8 度柜，不进常温货架。"
+    },
+    {
+      "id": "t_clinic_return_say",
+      "conversation": "clinic-build",
+      "chat_time": "2026-11-03T11:00:00+08:00",
+      "reply_time": "2026-11-03T11:02:00+08:00",
+      "domain": "药房管理",
+      "query": "退药只在上午那个窗口收。",
+      "answer": "退药只在上午窗口收取，下午不收。"
+    },
+    {
+      "id": "t_clinic_return_land",
+      "conversation": "clinic-build",
+      "chat_time": "2026-11-03T11:20:00+08:00",
+      "reply_time": "2026-11-03T11:22:00+08:00",
+      "domain": "药房管理",
+      "query": "上午退药窗口可以挂牌了。",
+      "answer": "退药窗口已挂牌。"
+    },
+    {
+      "id": "t_clinic_label",
+      "conversation": "clinic-build",
+      "chat_time": "2026-11-03T11:40:00+08:00",
+      "reply_time": "2026-11-03T11:42:00+08:00",
+      "domain": "药房管理",
+      "query": "药袋上写通用名，别写商品名。",
+      "answer": "药袋写通用名，不写商品名。"
+    },
+    {
+      "id": "t_clinic_chat1",
+      "conversation": "clinic-build",
+      "chat_time": "2026-11-03T15:00:00+08:00",
+      "reply_time": "2026-11-03T15:02:00+08:00",
+      "domain": "门诊排班",
+      "query": "中午一起去打球吗？",
+      "answer": "中午我去打球，跟门诊无关。"
+    },
+    {
+      "id": "t_clinic_chat2",
+      "conversation": "clinic-build",
+      "chat_time": "2026-11-03T15:10:00+08:00",
+      "reply_time": "2026-11-03T15:12:00+08:00",
+      "domain": "门诊排班",
+      "query": "今晚的电影还去吗？",
+      "answer": "电影我自己去，不关排班的事。"
+    },
+    {
+      "id": "t_clinic_chat3",
+      "conversation": "clinic-build",
+      "chat_time": "2026-11-03T15:20:00+08:00",
+      "reply_time": "2026-11-03T15:22:00+08:00",
+      "domain": "门诊排班",
+      "query": "这杯咖啡是你的吗？",
+      "answer": "咖啡是我的，放一边就行。"
+    },
+    {
+      "id": "t_clinic_rx_late",
+      "conversation": "clinic-follow",
+      "chat_time": "2026-11-03T09:30:00+08:00",
+      "reply_time": "2026-11-03T09:32:00+08:00",
+      "submit_time": "2026-11-03T10:30:00+08:00",
+      "domain": "门诊排班",
+      "query": "普通处方三天内都该能取药。",
+      "answer": "另一种说法是普通处方三天内仍然有效。"
+    },
+    {
+      "id": "t_clinic_extra",
+      "conversation": "clinic-follow",
+      "chat_time": "2026-11-03T10:10:00+08:00",
+      "reply_time": "2026-11-03T10:12:00+08:00",
+      "domain": "门诊排班",
+      "query": "临时加号每个半天最多加 5 个。",
+      "answer": "临时加号每个半天最多 5 个。"
+    },
+    {
+      "id": "t_clinic_near",
+      "conversation": "clinic-follow",
+      "chat_time": "2026-11-03T10:30:00+08:00",
+      "reply_time": "2026-11-03T10:32:00+08:00",
+      "domain": "药房管理",
+      "query": "快到期的药先调给住院药房。",
+      "answer": "近效期药优先调给住院药房。"
+    },
+    {
+      "id": "t_clinic_give",
+      "conversation": "clinic-follow",
+      "chat_time": "2026-11-03T10:50:00+08:00",
+      "reply_time": "2026-11-03T10:52:00+08:00",
+      "domain": "药房管理",
+      "query": "发药前对一下患者姓名和批号。",
+      "answer": "发药前核对患者姓名和药品批号。"
+    },
+    {
+      "id": "t_fleet_morning",
+      "conversation": "fleet-build",
+      "chat_time": "2026-11-05T09:00:00+08:00",
+      "reply_time": "2026-11-05T09:02:00+08:00",
+      "domain": "线路调度",
+      "query": "早班 6 点发车，晚到 10 分钟这班就取消。",
+      "answer": "早班 6 点发车，迟到 10 分钟就取消。"
+    },
+    {
+      "id": "t_fleet_morning_again",
+      "conversation": "fleet-build",
+      "chat_time": "2026-11-05T09:00:00+08:00",
+      "reply_time": "2026-11-05T09:02:00+08:00",
+      "submit_time": "2026-11-05T09:08:00+08:00",
+      "domain": "线路调度",
+      "query": "早班 6 点发车，晚到 10 分钟这班就取消。",
+      "answer": "早班 6 点发车，迟到 10 分钟就取消。",
+      "resubmitOf": "t_fleet_morning"
+    },
+    {
+      "id": "t_fleet_maint",
+      "conversation": "fleet-build",
+      "chat_time": "2026-11-05T09:20:00+08:00",
+      "reply_time": "2026-11-05T09:22:00+08:00",
+      "domain": "车辆维保",
+      "query": "保养一万公里做一次，满 6 个月也要做，哪个先到听哪个。",
+      "answer": "保养按 1 万公里一次，也按 6 个月一次，先到为准。"
+    },
+    {
+      "id": "t_fleet_tire",
+      "conversation": "fleet-build",
+      "chat_time": "2026-11-05T09:40:00+08:00",
+      "reply_time": "2026-11-05T09:42:00+08:00",
+      "domain": "车辆维保",
+      "query": "胎纹不到 2 毫米就换。",
+      "answer": "花纹低于 2 毫米就换胎。"
+    },
+    {
+      "id": "t_fleet_detour",
+      "conversation": "fleet-build",
+      "chat_time": "2026-11-05T10:00:00+08:00",
+      "reply_time": "2026-11-05T10:02:00+08:00",
+      "domain": "线路调度",
+      "query": "早高峰别走中山路，绕开。",
+      "answer": "早高峰绕开中山路。"
+    },
+    {
+      "id": "t_fleet_fault_say",
+      "conversation": "fleet-build",
+      "chat_time": "2026-11-05T11:00:00+08:00",
+      "reply_time": "2026-11-05T11:02:00+08:00",
+      "domain": "车辆维保",
+      "query": "路上坏了先报调度，再找近的地方修。",
+      "answer": "路上故障先报调度，再就近维修。"
+    },
+    {
+      "id": "t_fleet_fault_land",
+      "conversation": "fleet-build",
+      "chat_time": "2026-11-05T11:20:00+08:00",
+      "reply_time": "2026-11-05T11:22:00+08:00",
+      "domain": "车辆维保",
+      "query": "故障上报的群拉好了吗？",
+      "answer": "故障上报群已建好。"
+    },
+    {
+      "id": "t_fleet_insure",
+      "conversation": "fleet-build",
+      "chat_time": "2026-11-05T12:00:00+08:00",
+      "reply_time": "2026-11-05T12:02:00+08:00",
+      "domain": "车辆维保",
+      "query": "保险到期前 15 天就续上，过期的车不许出场。",
+      "answer": "保险到期前 15 天续保，过期车不出场。"
+    },
+    {
+      "id": "t_fleet_belt",
+      "conversation": "fleet-build",
+      "chat_time": "2026-11-05T12:20:00+08:00",
+      "reply_time": "2026-11-05T12:22:00+08:00",
+      "domain": "车辆维保",
+      "query": "开车前每个人都系上安全带，有人不系就别发车。",
+      "answer": "出车前全员系安全带，不系就不开。"
+    },
+    {
+      "id": "t_fleet_speed",
+      "conversation": "fleet-build",
+      "chat_time": "2026-11-05T14:00:00+08:00",
+      "reply_time": "2026-11-05T14:02:00+08:00",
+      "domain": "线路调度",
+      "query": "市区线路最高 60。",
+      "answer": "市区线路限速 60。"
+    },
+    {
+      "id": "t_fleet_chat1",
+      "conversation": "fleet-build",
+      "chat_time": "2026-11-05T16:00:00+08:00",
+      "reply_time": "2026-11-05T16:02:00+08:00",
+      "domain": "线路调度",
+      "query": "下班顺路带我一程吗？",
+      "answer": "顺路可以，这不是出车任务。"
+    },
+    {
+      "id": "t_fleet_chat2",
+      "conversation": "fleet-build",
+      "chat_time": "2026-11-05T16:10:00+08:00",
+      "reply_time": "2026-11-05T16:12:00+08:00",
+      "domain": "线路调度",
+      "query": "昨天的球赛看到了吗？",
+      "answer": "球赛看了，跟保养无关。"
+    },
+    {
+      "id": "t_fleet_chat3",
+      "conversation": "fleet-build",
+      "chat_time": "2026-11-05T16:20:00+08:00",
+      "reply_time": "2026-11-05T16:22:00+08:00",
+      "domain": "线路调度",
+      "query": "雨伞落在你那儿了吗？",
+      "answer": "雨伞在我这儿，跟发车无关。"
+    },
+    {
+      "id": "t_fleet_night",
+      "conversation": "fleet-follow",
+      "chat_time": "2026-11-05T10:10:00+08:00",
+      "reply_time": "2026-11-05T10:12:00+08:00",
+      "domain": "线路调度",
+      "query": "夜班 22 点发车，晚到 10 分钟这班取消。",
+      "answer": "夜班 22 点发车，迟到 10 分钟就取消。"
+    },
+    {
+      "id": "t_fleet_fuel",
+      "conversation": "fleet-follow",
+      "chat_time": "2026-11-05T10:30:00+08:00",
+      "reply_time": "2026-11-05T10:32:00+08:00",
+      "domain": "车辆维保",
+      "query": "加油刷公司卡，别先垫自己的钱。",
+      "answer": "加油只用公司卡，不垫私人款。"
+    },
+    {
+      "id": "t_fleet_wash_say",
+      "conversation": "fleet-follow",
+      "chat_time": "2026-11-05T13:00:00+08:00",
+      "reply_time": "2026-11-05T13:02:00+08:00",
+      "domain": "车辆维保",
+      "query": "每周五收车之后把车洗了。",
+      "answer": "每周五收车后洗车。"
+    },
+    {
+      "id": "t_fleet_wash_land",
+      "conversation": "fleet-follow",
+      "chat_time": "2026-11-05T13:20:00+08:00",
+      "reply_time": "2026-11-05T13:22:00+08:00",
+      "domain": "车辆维保",
+      "query": "场东的洗车位划出来了吗？",
+      "answer": "洗车位已划在场东。"
+    },
+    {
+      "id": "t_fleet_speed_late",
+      "conversation": "fleet-follow",
+      "chat_time": "2026-11-05T13:40:00+08:00",
+      "reply_time": "2026-11-05T13:42:00+08:00",
+      "submit_time": "2026-11-05T14:30:00+08:00",
+      "domain": "线路调度",
+      "query": "市区线路应该压到 50。",
+      "answer": "另一种说法是市区线路限速 50。"
+    },
+    {
+      "id": "t_kit_soup",
+      "conversation": "kit-build",
+      "chat_time": "2026-11-06T09:00:00+08:00",
+      "reply_time": "2026-11-06T09:02:00+08:00",
+      "domain": "菜品备料",
+      "query": "例汤备 200 份，卖完就停，不补锅。",
+      "answer": "例汤按 200 份备，卖完不补。"
+    },
+    {
+      "id": "t_kit_soup_again",
+      "conversation": "kit-build",
+      "chat_time": "2026-11-06T09:00:00+08:00",
+      "reply_time": "2026-11-06T09:02:00+08:00",
+      "submit_time": "2026-11-06T09:08:00+08:00",
+      "domain": "菜品备料",
+      "query": "例汤备 200 份，卖完就停，不补锅。",
+      "answer": "例汤按 200 份备，卖完不补。",
+      "resubmitOf": "t_kit_soup"
+    },
+    {
+      "id": "t_kit_sample",
+      "conversation": "kit-build",
+      "chat_time": "2026-11-06T09:20:00+08:00",
+      "reply_time": "2026-11-06T09:22:00+08:00",
+      "domain": "食安留样",
+      "query": "每道菜留 125 克，存 48 小时，放 0 到 4 度。",
+      "answer": "每道菜留样 125 克，保存 48 小时。留样放 0 到 4 度冰箱。"
+    },
+    {
+      "id": "t_kit_allergen",
+      "conversation": "kit-build",
+      "chat_time": "2026-11-06T09:40:00+08:00",
+      "reply_time": "2026-11-06T09:42:00+08:00",
+      "domain": "菜品备料",
+      "query": "有花生或者虾的菜，菜单上用红字标出来。",
+      "answer": "含花生和虾的菜在菜单上标红。"
+    },
+    {
+      "id": "t_kit_knife",
+      "conversation": "kit-build",
+      "chat_time": "2026-11-06T10:00:00+08:00",
+      "reply_time": "2026-11-06T10:02:00+08:00",
+      "domain": "菜品备料",
+      "query": "刀每两个小时消一次毒。",
+      "answer": "刀具每 2 小时消毒一次。"
+    },
+    {
+      "id": "t_kit_chill_say",
+      "conversation": "kit-build",
+      "chat_time": "2026-11-06T11:00:00+08:00",
+      "reply_time": "2026-11-06T11:02:00+08:00",
+      "domain": "菜品备料",
+      "query": "切好的菜两小时之内必须进冷藏。",
+      "answer": "切好的菜 2 小时内放进冷藏。"
+    },
+    {
+      "id": "t_kit_chill_land",
+      "conversation": "kit-build",
+      "chat_time": "2026-11-06T11:20:00+08:00",
+      "reply_time": "2026-11-06T11:22:00+08:00",
+      "domain": "菜品备料",
+      "query": "备菜柜上的温度表贴了吗？",
+      "answer": "备菜冷藏柜已贴温度表。"
+    },
+    {
+      "id": "t_kit_waste",
+      "conversation": "kit-build",
+      "chat_time": "2026-11-06T12:00:00+08:00",
+      "reply_time": "2026-11-06T12:02:00+08:00",
+      "domain": "菜品备料",
+      "query": "厨余每天下午 4 点拉走，不许留到第二天。",
+      "answer": "厨余每天 16 点清走，不隔夜。"
+    },
+    {
+      "id": "t_kit_hot",
+      "conversation": "kit-build",
+      "chat_time": "2026-11-06T12:20:00+08:00",
+      "reply_time": "2026-11-06T12:22:00+08:00",
+      "domain": "菜品备料",
+      "query": "热菜出餐不能低于 60 度。",
+      "answer": "热菜出餐温度不低于 60 度。"
+    },
+    {
+      "id": "t_kit_taste",
+      "conversation": "kit-build",
+      "chat_time": "2026-11-06T14:00:00+08:00",
+      "reply_time": "2026-11-06T14:02:00+08:00",
+      "domain": "菜品备料",
+      "query": "试吃只有当班厨师能尝，不许带出去。",
+      "answer": "试吃只限当班厨师，不外带。"
+    },
+    {
+      "id": "t_kit_chat1",
+      "conversation": "kit-build",
+      "chat_time": "2026-11-06T15:00:00+08:00",
+      "reply_time": "2026-11-06T15:02:00+08:00",
+      "domain": "菜品备料",
+      "query": "下午茶谁去买？",
+      "answer": "下午茶我去买，不进备菜计划。"
+    },
+    {
+      "id": "t_kit_chat2",
+      "conversation": "kit-build",
+      "chat_time": "2026-11-06T15:10:00+08:00",
+      "reply_time": "2026-11-06T15:12:00+08:00",
+      "domain": "菜品备料",
+      "query": "这盆绿植多久浇一次？",
+      "answer": "绿植三天浇一次，跟厨房无关。"
+    },
+    {
+      "id": "t_kit_chat3",
+      "conversation": "kit-build",
+      "chat_time": "2026-11-06T15:20:00+08:00",
+      "reply_time": "2026-11-06T15:22:00+08:00",
+      "domain": "菜品备料",
+      "query": "周末的聚餐还在吗？",
+      "answer": "聚餐还在，这不是出餐安排。"
+    },
+    {
+      "id": "t_kit_hold",
+      "conversation": "kit-build",
+      "chat_time": "2026-11-06T15:40:00+08:00",
+      "reply_time": "2026-11-06T15:42:00+08:00",
+      "domain": "食安留样",
+      "query": "留样要不要改成存 72 小时？先放着。",
+      "answer": "先不定。留样要不要改成 72 小时，以后再说。"
+    },
+    {
+      "id": "t_kit_sauce",
+      "conversation": "kit-follow",
+      "chat_time": "2026-11-06T10:10:00+08:00",
+      "reply_time": "2026-11-06T10:12:00+08:00",
+      "domain": "菜品备料",
+      "query": "酱汁备 50 份，当天必须用完。",
+      "answer": "酱汁按 50 份备，当天用完。"
+    },
+    {
+      "id": "t_kit_oil",
+      "conversation": "kit-follow",
+      "chat_time": "2026-11-06T10:30:00+08:00",
+      "reply_time": "2026-11-06T10:32:00+08:00",
+      "domain": "菜品备料",
+      "query": "炸油发黑了，或者连续炸满 8 小时，就换新的。",
+      "answer": "煎炸油发黑或连续用满 8 小时就换。"
+    },
+    {
+      "id": "t_kit_glove",
+      "conversation": "kit-follow",
+      "chat_time": "2026-11-06T10:50:00+08:00",
+      "reply_time": "2026-11-06T10:52:00+08:00",
+      "domain": "食安留样",
+      "query": "碰熟食就换一双新手套，破了也换。",
+      "answer": "接触熟食换新手套，破了就换。"
+    },
+    {
+      "id": "t_kit_taste_late",
+      "conversation": "kit-follow",
+      "chat_time": "2026-11-06T13:40:00+08:00",
+      "reply_time": "2026-11-06T13:42:00+08:00",
+      "submit_time": "2026-11-06T14:30:00+08:00",
+      "domain": "菜品备料",
+      "query": "试吃也该给值班经理留一份。",
+      "answer": "另一种说法是试吃可以给值班经理留一份。"
+    },
+    {
+      "id": "t_wh_buy",
+      "conversation": "wh-build",
+      "chat_time": "2026-11-04T09:00:00+08:00",
+      "reply_time": "2026-11-04T09:02:00+08:00",
+      "domain": "入库验收",
+      "query": "采购到的货先对订单号和数量，再上架。",
+      "answer": "采购到货先核对订单号和数量，再上架。"
+    },
+    {
+      "id": "t_wh_buy_again",
+      "conversation": "wh-build",
+      "chat_time": "2026-11-04T09:00:00+08:00",
+      "reply_time": "2026-11-04T09:02:00+08:00",
+      "submit_time": "2026-11-04T09:08:00+08:00",
+      "domain": "入库验收",
+      "query": "采购到的货先对订单号和数量，再上架。",
+      "answer": "采购到货先核对订单号和数量，再上架。",
+      "resubmitOf": "t_wh_buy"
+    },
+    {
+      "id": "t_wh_cold",
+      "conversation": "wh-build",
+      "chat_time": "2026-11-04T09:20:00+08:00",
+      "reply_time": "2026-11-04T09:22:00+08:00",
+      "domain": "入库验收",
+      "query": "冷链货到了要是高于 8 度，整车退回。",
+      "answer": "冷链货到货温度高于 8 度就拒收。"
+    },
+    {
+      "id": "t_wh_pick",
+      "conversation": "wh-build",
+      "chat_time": "2026-11-04T09:40:00+08:00",
+      "reply_time": "2026-11-04T09:42:00+08:00",
+      "domain": "拣货出库",
+      "query": "拣货别跨区来回。同一个订单合成一批再出。",
+      "answer": "拣货按库区走，不跨区来回。同一订单合成一批再出库。"
+    },
+    {
+      "id": "t_wh_count",
+      "conversation": "wh-build",
+      "chat_time": "2026-11-04T10:00:00+08:00",
+      "reply_time": "2026-11-04T10:02:00+08:00",
+      "domain": "拣货出库",
+      "query": "贵的货每周盘一次，普通货一个月盘一次。",
+      "answer": "高货值每周盘，普通货每月盘。"
+    },
+    {
+      "id": "t_wh_damage_say",
+      "conversation": "wh-build",
+      "chat_time": "2026-11-04T11:00:00+08:00",
+      "reply_time": "2026-11-04T11:02:00+08:00",
+      "domain": "入库验收",
+      "query": "箱子破了的先登记，再看收不收。",
+      "answer": "外箱破损的货先登记，再决定收不收。"
+    },
+    {
+      "id": "t_wh_damage_land",
+      "conversation": "wh-build",
+      "chat_time": "2026-11-04T11:20:00+08:00",
+      "reply_time": "2026-11-04T11:22:00+08:00",
+      "domain": "入库验收",
+      "query": "月台把破损登记本放好。",
+      "answer": "破损登记本已放在月台。"
+    },
+    {
+      "id": "t_wh_mark",
+      "conversation": "wh-build",
+      "chat_time": "2026-11-04T11:40:00+08:00",
+      "reply_time": "2026-11-04T11:42:00+08:00",
+      "domain": "拣货出库",
+      "query": "外箱只印批次和库位，别印价格。",
+      "answer": "外箱只印批次和库位，不印价格。"
+    },
+    {
+      "id": "t_wh_fifo",
+      "conversation": "wh-build",
+      "chat_time": "2026-11-04T12:00:00+08:00",
+      "reply_time": "2026-11-04T12:02:00+08:00",
+      "domain": "拣货出库",
+      "query": "出库按进仓先后，先进来的先出去。",
+      "answer": "出库按入库先后，先到的先出。"
+    },
+    {
+      "id": "t_wh_check",
+      "conversation": "wh-build",
+      "chat_time": "2026-11-04T14:00:00+08:00",
+      "reply_time": "2026-11-04T14:02:00+08:00",
+      "domain": "入库验收",
+      "query": "每批货抽 3 箱看保质期就行。",
+      "answer": "每批到货抽 3 箱看保质期。"
+    },
+    {
+      "id": "t_wh_chat1",
+      "conversation": "wh-build",
+      "chat_time": "2026-11-04T16:00:00+08:00",
+      "reply_time": "2026-11-04T16:02:00+08:00",
+      "domain": "入库验收",
+      "query": "周末爬山还算我一个吗？",
+      "answer": "爬山我去，仓库的事周一再说。"
+    },
+    {
+      "id": "t_wh_chat2",
+      "conversation": "wh-build",
+      "chat_time": "2026-11-04T16:10:00+08:00",
+      "reply_time": "2026-11-04T16:12:00+08:00",
+      "domain": "入库验收",
+      "query": "新买的跑鞋舒服吗？",
+      "answer": "跑鞋挺舒服，这跟入库无关。"
+    },
+    {
+      "id": "t_wh_chat3",
+      "conversation": "wh-build",
+      "chat_time": "2026-11-04T16:20:00+08:00",
+      "reply_time": "2026-11-04T16:22:00+08:00",
+      "domain": "入库验收",
+      "query": "晚饭吃面还是吃饭？",
+      "answer": "晚饭我吃面，别记到仓储里。"
+    },
+    {
+      "id": "t_wh_hold",
+      "conversation": "wh-build",
+      "chat_time": "2026-11-04T16:40:00+08:00",
+      "reply_time": "2026-11-04T16:42:00+08:00",
+      "domain": "拣货出库",
+      "query": "高货值要不要改成每天都盘？先放着。",
+      "answer": "先不定。要不要每天盘高货值，以后再说。"
+    },
+    {
+      "id": "t_wh_return",
+      "conversation": "wh-follow",
+      "chat_time": "2026-11-04T10:10:00+08:00",
+      "reply_time": "2026-11-04T10:12:00+08:00",
+      "domain": "入库验收",
+      "query": "退回来的货单独清点，别和采购货堆一起。",
+      "answer": "退货单独清点，不和采购货混放。"
+    },
+    {
+      "id": "t_wh_freeze",
+      "conversation": "wh-follow",
+      "chat_time": "2026-11-04T10:30:00+08:00",
+      "reply_time": "2026-11-04T10:32:00+08:00",
+      "domain": "入库验收",
+      "query": "冷冻货高于零下 12 度就整车退回。",
+      "answer": "冷冻货到货温度高于零下 12 度就拒收。"
+    },
+    {
+      "id": "t_wh_dock",
+      "conversation": "wh-follow",
+      "chat_time": "2026-11-04T10:50:00+08:00",
+      "reply_time": "2026-11-04T10:52:00+08:00",
+      "domain": "入库验收",
+      "query": "没预约月台的车不许卸货。",
+      "answer": "送货先预约月台，未预约的不卸。"
+    },
+    {
+      "id": "t_wh_fifo_late",
+      "conversation": "wh-follow",
+      "chat_time": "2026-11-04T11:50:00+08:00",
+      "reply_time": "2026-11-04T11:52:00+08:00",
+      "submit_time": "2026-11-04T12:30:00+08:00",
+      "domain": "拣货出库",
+      "query": "出库该按失效日期，快过期的先出。",
+      "answer": "另一种说法是出库按失效日期，快过期的先出。"
+    },
+    {
+      "id": "t_wh_check_late",
+      "conversation": "wh-follow",
+      "chat_time": "2026-11-04T13:40:00+08:00",
+      "reply_time": "2026-11-04T13:42:00+08:00",
+      "submit_time": "2026-11-04T14:30:00+08:00",
+      "domain": "入库验收",
+      "query": "保质期要整批都看，不能只抽几箱。",
+      "answer": "另一种说法是每批到货整批看保质期，不抽样。"
     }
   ]
 }

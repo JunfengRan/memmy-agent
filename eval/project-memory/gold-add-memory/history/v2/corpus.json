@@ -1,0 +1,356 @@
+{
+  "datasetVersion": 2,
+  "timezone": "+08:00",
+  "note": "Trace text is the v1 corpus text; v2 adds identity, conversations, chat_time, caller-chosen domains, and three turns (t_wait approval wording, t_informed, t_resolve) so the dataset covers rewrite-by-approval and resolve. annotations are for gold validation only and are never sent to the system under test.",
+  "spaces": [
+    {
+      "space_id": "space_ledger",
+      "instructions": "ledger 是记账服务，按客户出月度账务报表。",
+      "domains": [
+        { "domain": "代码开发", "description": "月报与分录的代码实现与测试" },
+        { "domain": "工程规范", "description": "仓库、分支与密钥的协作约定" }
+      ]
+    },
+    {
+      "space_id": "space_catalog",
+      "instructions": "catalog 是商品价格目录服务，提供价格查询与价格表导出。",
+      "domains": [
+        { "domain": "代码开发", "description": "价格数据与导出的代码实现" },
+        { "domain": "产品设计", "description": "价格展示的产品规则" }
+      ]
+    }
+  ],
+  "members": [
+    { "user_id": "u_lin", "name": "林工" },
+    { "user_id": "u_zhou", "name": "周工" },
+    { "user_id": "u_chen", "name": "陈工" }
+  ],
+  "conversations": [
+    { "id": "ledger-build", "conversation_id": "cursor:ledger-build", "user_id": "u_lin", "agent_id": "cursor", "space_id": "space_ledger" },
+    { "id": "ledger-follow", "conversation_id": "claude-code:ledger-follow", "user_id": "u_zhou", "agent_id": "claude-code", "space_id": "space_ledger" },
+    { "id": "catalog-build", "conversation_id": "cursor:catalog-build", "user_id": "u_chen", "agent_id": "cursor", "space_id": "space_catalog" },
+    { "id": "ledger-ask", "conversation_id": "cursor:ledger-ask", "user_id": "u_lin", "agent_id": "cursor", "space_id": "space_ledger", "askOnly": true },
+    { "id": "catalog-ask", "conversation_id": "cursor:catalog-ask", "user_id": "u_chen", "agent_id": "cursor", "space_id": "space_catalog", "askOnly": true }
+  ],
+  "traces": [
+    {
+      "id": "t_journal",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T09:15:00+08:00",
+      "reply_time": "2026-10-21T09:17:00+08:00",
+      "domain": "代码开发",
+      "query": "月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。",
+      "answer": "没有改 entries。report.ts 还是把 journal 全文读进来，再按客户把金额从正文里挑出来。表结构保持原样。"
+    },
+    {
+      "id": "t_verbose",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T10:00:00+08:00",
+      "reply_time": "2026-10-21T10:02:00+08:00",
+      "domain": "代码开发",
+      "query": "做完把每一步都写在回复里。",
+      "answer": "我会在回复正文里按顺序写完每一个步骤，不另开清单。"
+    },
+    {
+      "id": "t_short",
+      "conversation": "ledger-follow",
+      "chat_time": "2026-10-21T10:10:00+08:00",
+      "reply_time": "2026-10-21T10:12:00+08:00",
+      "domain": "代码开发",
+      "query": "回复短一点，步骤放到清单里就行。",
+      "answer": "回复里只留结果。步骤记在清单里，不再按顺序铺在正文里。"
+    },
+    {
+      "id": "t_write_split",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T10:25:00+08:00",
+      "reply_time": "2026-10-21T10:27:00+08:00",
+      "domain": "代码开发",
+      "query": "每句话都拆成一段。",
+      "answer": "我按句子把这轮拆开了，每句一段。"
+    },
+    {
+      "id": "t_admin_todo",
+      "conversation": "ledger-follow",
+      "chat_time": "2026-10-21T10:30:00+08:00",
+      "reply_time": "2026-10-21T10:32:00+08:00",
+      "domain": "代码开发",
+      "query": "没有清单就不要把一轮拆成几段。",
+      "answer": "这轮没有清单，我就整段做完，没有拆开。"
+    },
+    {
+      "id": "t_ledger_tz",
+      "conversation": "ledger-follow",
+      "chat_time": "2026-10-21T11:20:00+08:00",
+      "reply_time": "2026-10-21T11:22:00+08:00",
+      "domain": "代码开发",
+      "query": "月报的月初月末按东八区算，别用 UTC。",
+      "answer": "report.ts 切月份时按 UTC+8 算月初月末，不再用 UTC。"
+    },
+    {
+      "id": "t_report",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T11:30:00+08:00",
+      "reply_time": "2026-10-21T11:32:00+08:00",
+      "domain": "代码开发",
+      "query": "月报按客户过滤，空客户补一个测试，README 里写明金额还在 journal 正文。",
+      "answer": "report.ts 现在先按客户过滤再汇总。tests/report.test.ts 加了空客户测试：没有客户名时这笔不进月报。README 写了金额仍在 journal 正文，entries 表结构没动。"
+    },
+    {
+      "id": "t_price",
+      "conversation": "catalog-build",
+      "chat_time": "2026-10-21T11:40:00+08:00",
+      "reply_time": "2026-10-21T11:42:00+08:00",
+      "domain": "代码开发",
+      "query": "价格查询太慢。给 price 表加 amount 列，列表改成直接读这一列。",
+      "answer": "price 表加了 amount 列。列表不再拼装说明文字，直接读 amount 列，查询更快。"
+    },
+    {
+      "id": "t_export",
+      "conversation": "catalog-build",
+      "chat_time": "2026-10-21T12:10:00+08:00",
+      "reply_time": "2026-10-21T12:12:00+08:00",
+      "domain": "代码开发",
+      "query": "导出价格表。目录没有就先建，再写文件。",
+      "answer": "export.ts 会先创建 output 目录，再把价格表写成 prices.json。"
+    },
+    {
+      "id": "t_cat_sku",
+      "conversation": "catalog-build",
+      "chat_time": "2026-10-21T12:40:00+08:00",
+      "reply_time": "2026-10-21T12:42:00+08:00",
+      "domain": "代码开发",
+      "query": "sku 比较前统一转大写。",
+      "answer": "price.ts 在比较 sku 前先统一转成大写。"
+    },
+    {
+      "id": "t_ledger_loc",
+      "conversation": "ledger-follow",
+      "chat_time": "2026-10-21T12:50:00+08:00",
+      "reply_time": "2026-10-21T12:52:00+08:00",
+      "domain": "代码开发",
+      "query": "月报结果写到 reports 目录下，按月份命名。",
+      "answer": "月报结果写到 reports/ 下，文件名按月份，比如 2026-10.txt。"
+    },
+    {
+      "id": "t_copy",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T13:00:00+08:00",
+      "reply_time": "2026-10-21T13:02:00+08:00",
+      "domain": "代码开发",
+      "query": "catalog 那个导出做法能用，我把它抄进 ledger。",
+      "answer": "export 已经抄进 ledger，月报导出前会先建 output 目录。"
+    },
+    {
+      "id": "t_wait",
+      "conversation": "ledger-follow",
+      "chat_time": "2026-10-21T13:20:00+08:00",
+      "reply_time": "2026-10-21T13:22:00+08:00",
+      "domain": "代码开发",
+      "query": "先别抄，我跟林工确认过了。等 dry-run 报告出来再看要不要搬。",
+      "answer": "export 那份拷贝我撤掉了。ledger 不建 output 目录，等 dry-run 报告。",
+      "annotations": [{ "type": "approval", "by": "u_lin", "quote": "我跟林工确认过了" }]
+    },
+    {
+      "id": "t_cat_round",
+      "conversation": "catalog-build",
+      "chat_time": "2026-10-21T13:30:00+08:00",
+      "reply_time": "2026-10-21T13:32:00+08:00",
+      "domain": "代码开发",
+      "query": "价格显示保留两位小数。",
+      "answer": "listAmounts 输出前按两位小数取整。"
+    },
+    {
+      "id": "t_ledger_round",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T13:40:00+08:00",
+      "reply_time": "2026-10-21T13:42:00+08:00",
+      "domain": "代码开发",
+      "query": "月报金额按整数分算，别用浮点。",
+      "answer": "report.ts 里金额按整数分累加，最后再换算成元显示。"
+    },
+    {
+      "id": "t_cat_tz",
+      "conversation": "catalog-build",
+      "chat_time": "2026-10-21T14:00:00+08:00",
+      "reply_time": "2026-10-21T14:02:00+08:00",
+      "domain": "代码开发",
+      "query": "价格生效日按 UTC 零点切。",
+      "answer": "价格生效日按 UTC 零点切换，不看本地时区。"
+    },
+    {
+      "id": "t_write_secret",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T14:25:00+08:00",
+      "reply_time": "2026-10-21T14:27:00+08:00",
+      "domain": "工程规范",
+      "query": "把连接串写进 README，别人好查。",
+      "answer": "连接串已经写进 README，这样查库更快。"
+    },
+    {
+      "id": "t_admin_env",
+      "conversation": "ledger-follow",
+      "chat_time": "2026-10-21T14:40:00+08:00",
+      "reply_time": "2026-10-21T14:42:00+08:00",
+      "domain": "工程规范",
+      "query": ".env 不能出现在说明里。",
+      "answer": ".env 留在本机。说明和普通记录里都不放连接串。"
+    },
+    {
+      "id": "t_write_edit",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T14:45:00+08:00",
+      "reply_time": "2026-10-21T14:47:00+08:00",
+      "domain": "代码开发",
+      "query": "只要改了文件就算冲突。",
+      "answer": "report.ts 和 README 都改过，我把两次修改都记成冲突。"
+    },
+    {
+      "id": "t_admin_claim",
+      "conversation": "ledger-follow",
+      "chat_time": "2026-10-21T14:50:00+08:00",
+      "reply_time": "2026-10-21T14:52:00+08:00",
+      "domain": "代码开发",
+      "query": "只有两边结论相反才算冲突。",
+      "answer": "两边对同一件事说法相反，才需要判断谁对。改了不同文件不算。"
+    },
+    {
+      "id": "t_write_main",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T15:00:00+08:00",
+      "reply_time": "2026-10-21T15:02:00+08:00",
+      "domain": "工程规范",
+      "query": "直接在 main 上改吧，省得合并。",
+      "answer": "我直接在 main 上改了，没有开分支。"
+    },
+    {
+      "id": "t_cat_dup",
+      "conversation": "catalog-build",
+      "chat_time": "2026-10-21T15:00:00+08:00",
+      "reply_time": "2026-10-21T15:02:00+08:00",
+      "domain": "代码开发",
+      "query": "同一个 sku 出现多条，取最后一条。",
+      "answer": "price.ts 遇到重复 sku 取最后一条，前面的忽略。"
+    },
+    {
+      "id": "t_admin_branch",
+      "conversation": "ledger-follow",
+      "chat_time": "2026-10-21T15:10:00+08:00",
+      "reply_time": "2026-10-21T15:12:00+08:00",
+      "domain": "工程规范",
+      "query": "改动先放 feature 分支，别直接动 main。",
+      "answer": "改动先放在 feature 分支，main 不直接改。"
+    },
+    {
+      "id": "t_ledger_dup",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T15:20:00+08:00",
+      "reply_time": "2026-10-21T15:22:00+08:00",
+      "domain": "代码开发",
+      "query": "重复的分录按 id 去重，留最早那条。",
+      "answer": "report.ts 汇总前先按 id 去重，重复的只留最早一条。"
+    },
+    {
+      "id": "t_csv",
+      "conversation": "catalog-build",
+      "chat_time": "2026-10-21T16:20:00+08:00",
+      "reply_time": "2026-10-21T16:22:00+08:00",
+      "domain": "代码开发",
+      "query": "导出别写 json 了，改成 csv。",
+      "answer": "export.ts 现在写 prices.csv，不再用 json。"
+    },
+    {
+      "id": "t_column",
+      "conversation": "ledger-follow",
+      "chat_time": "2026-10-21T16:40:00+08:00",
+      "reply_time": "2026-10-21T16:42:00+08:00",
+      "domain": "代码开发",
+      "query": "月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。",
+      "answer": "entries 上加了 amount 列。report.ts 的月报改为按这列汇总，不再扫描 journal 全文。空客户测试改成：金额列为空时不进月报。改的是 src 里的文件，仓库还是 ledger。"
+    },
+    {
+      "id": "t_sample",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T17:05:00+08:00",
+      "reply_time": "2026-10-21T17:07:00+08:00",
+      "domain": "代码开发",
+      "query": "月报测试出现问题了，我看样例文件是不是过期了。",
+      "answer": "我改了 tests/fixtures/month.json，把样例里的金额填上了。report.ts 没动。"
+    },
+    {
+      "id": "t_admin_bug",
+      "conversation": "ledger-follow",
+      "chat_time": "2026-10-21T17:20:00+08:00",
+      "reply_time": "2026-10-21T17:22:00+08:00",
+      "domain": "代码开发",
+      "query": "这个失败以读取代码为准。",
+      "answer": "空客户被丢掉是 report.ts 的读取问题，不是样例文件旧了。"
+    },
+    {
+      "id": "t_bug",
+      "conversation": "ledger-follow",
+      "chat_time": "2026-10-21T17:40:00+08:00",
+      "reply_time": "2026-10-21T17:42:00+08:00",
+      "domain": "代码开发",
+      "query": "测试失败不是样例文件造成的。空客户进来时 report.ts 把整笔记丢了，把 month.json 的改动撤回，修读取。",
+      "answer": "month.json 已撤回。问题在 report.ts：客户名为空时整行被丢掉。现在只跳过金额列为空的行，空客户但金额还在的会留下。"
+    },
+    {
+      "id": "t_env",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T17:50:00+08:00",
+      "reply_time": "2026-10-21T17:52:00+08:00",
+      "domain": "工程规范",
+      "query": "数据库密码别写进仓库。",
+      "answer": "README 里的连接串已经删掉了。密码只留在本机的 .env，没有把 .env 的内容抄进来。"
+    },
+    {
+      "id": "t_silent",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T18:00:00+08:00",
+      "reply_time": "2026-10-21T18:02:00+08:00",
+      "domain": "代码开发",
+      "query": "别告诉另一个窗口我改了表。",
+      "answer": "这次改动只留在当前窗口，我没有写给别的会话。"
+    },
+    {
+      "id": "t_tell",
+      "conversation": "ledger-follow",
+      "chat_time": "2026-10-21T18:15:00+08:00",
+      "reply_time": "2026-10-21T18:17:00+08:00",
+      "domain": "代码开发",
+      "query": "另一个窗口下次开口时得知道列已经加上了。",
+      "answer": "等那个窗口下一次开口，再告诉它 entries 已经有 amount 列。现在这条对话里还送不过去。"
+    },
+    {
+      "id": "t_dryrun",
+      "conversation": "ledger-follow",
+      "chat_time": "2026-10-21T19:10:00+08:00",
+      "reply_time": "2026-10-21T19:12:00+08:00",
+      "domain": "代码开发",
+      "query": "dry-run 报告出来了，export 在月报里用不上。",
+      "answer": "看了 dry-run 报告：月报用不上 export，那份拷贝不再恢复，也不往 ledger 搬。"
+    },
+    {
+      "id": "t_informed",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T20:20:00+08:00",
+      "reply_time": "2026-10-21T20:22:00+08:00",
+      "domain": "代码开发",
+      "searchBefore": { "query": "月报的金额现在从哪里取？" },
+      "query": "月报的金额现在从哪里取？",
+      "answer": "这一项有两项不一致结论，还没有定：林工的结论是 entries 表结构不变，金额继续写在 journal 正文里，读取时再挑出来；周工的结论是给 entries 加 amount 列，月报直接按这列汇总，因为扫全文太慢。请确认以哪项为准。",
+      "annotations": [{ "type": "informed", "quote": "这一项有两项不一致结论" }]
+    },
+    {
+      "id": "t_resolve",
+      "conversation": "ledger-build",
+      "chat_time": "2026-10-21T20:30:00+08:00",
+      "reply_time": "2026-10-21T20:32:00+08:00",
+      "domain": "代码开发",
+      "query": "以周工的为准，金额读 amount 列。",
+      "answer": "好的，月报金额以 entries 的 amount 列为准，journal 正文不再作为金额来源。",
+      "annotations": [{ "type": "resolve", "by": "u_lin", "pick": "u_zhou", "quote": "以周工的为准" }]
+    }
+  ]
+}

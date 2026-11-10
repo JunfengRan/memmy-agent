@@ -12,6 +12,7 @@
  *   node run-pipeline-eval.mjs runs/<stamp>/live-run.json [--out report.json] [--gate] [--prune-judge-cache]
  *       [--sut-usage <usage.jsonl>]   SUT model usage from harness/usage-proxy.mjs (or MEMMY_EVAL_SUT_USAGE)
  *       [--min-decision-state=0.8] [--min-topic-f1=0.8] [--min-entry-f1=0.8] [--min-recall-at-3=0.85] [--min-answer=0.8]
+ *       [--max-duplicate-rate=0.02] [--max-wrong-merge-rate=0.01]
  *   node run-pipeline-eval.mjs --oracle   every score must be 1 and every error 0
  *   node run-pipeline-eval.mjs --empty    every score must be 0
  * Live runs need MEMMY_EVAL_JUDGE_{PROVIDER,MODEL,BASE_URL,API_KEY} and MEMMY_EVAL_SUT_MODEL (or run.sut.model).
@@ -19,7 +20,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadDataset } from "./build-gold-baseline.mjs";
+import { finalPointTexts, loadDataset } from "./build-gold-baseline.mjs";
 import { JUDGE_PROMPT_VERSION, createJudge } from "./judge.mjs";
 import { assertJudgeFamily, createLlm, resolveModelConfig } from "./llm.mjs";
 import { LIMITS, length, loadGold } from "./load-eval-set.mjs";
@@ -208,11 +209,31 @@ export async function scoreRun(run, { ds, gold, judge }) {
     duplicateTopics += Math.max(0, counts.size - 1);
     const primaryKey = majority(counts, actualTopics.map((t) => t.key));
     const primary = actualTopics.find((t) => t.key === primaryKey)?.topic;
-    const summary = primary ? await judge.keyPoints(goldTopic.summaryKeyPoints, primary.topic_summary ?? "") : goldTopic.summaryKeyPoints.map(() => false);
-    const description = primary ? await judge.keyPoints(goldTopic.descriptionKeyPoints, primary.topic_description ?? "") : goldTopic.descriptionKeyPoints.map(() => false);
+    const summaryPoints = finalPointTexts(goldTopic.summaryKeyPoints);
+    const descriptionPoints = finalPointTexts(goldTopic.descriptionKeyPoints);
+    const summary = primary ? await judge.keyPoints(summaryPoints, primary.topic_summary ?? "") : summaryPoints.map(() => false);
+    const description = primary ? await judge.keyPoints(descriptionPoints, primary.topic_description ?? "") : descriptionPoints.map(() => false);
     topicRows.push({ id: goldTopic.id, actual: primary?.id ?? null, actualTopics: counts.size, domain: primary?.domain === goldTopic.domain, keyPoints: [...summary, ...description] });
   }
   const keyPoints = topicRows.flatMap((r) => r.keyPoints);
+  const coveredGoldTopics = new Set(requiredPairs.map(({ g }) => g.topic));
+  const actualWithMatch = new Set(requiredPairs.map(({ a }) => a.topicKey));
+  let controlMerges = 0;
+  for (const pair of ds.labels.controls?.["similar-name"] ?? []) {
+    const leftKeys = new Set(requiredPairs.filter(({ g }) => g.topic === pair[0]).map(({ a }) => a.topicKey));
+    const rightKeys = new Set(requiredPairs.filter(({ g }) => g.topic === pair[1]).map(({ a }) => a.topicKey));
+    if ([...leftKeys].some((key) => rightKeys.has(key))) controlMerges += 1;
+  }
+  let controlSplits = 0;
+  for (const pair of ds.labels.controls?.["same-work"] ?? []) {
+    const left = pairOfGold.get(pair[0]);
+    const right = pairOfGold.get(pair[1]);
+    if (left && right && left.topicKey !== right.topicKey) controlSplits += 1;
+  }
+  const lateTexts = new Set();
+  for (const entry of gold.entries) for (const item of [...(entry.conflicts ?? []), ...(entry.history ?? [])]) if (item.late) lateTexts.add(norm(item.content));
+  const deferredRequired = required.filter((entry) => entry.deferred);
+  const deferredNegatives = gold.negatives.filter((item) => item.deferred);
 
   // Search.
   const fallbackTopic = (space, topic) => {
@@ -287,6 +308,7 @@ export async function scoreRun(run, { ds, gold, judge }) {
   const scores = {
     "entries.precision": overall.precision,
     "entries.recall": overall.recall,
+    "entries.recall.deferred": ratio(deferredRequired.filter((entry) => pairOfGold.has(entry.id)).length, deferredRequired.length),
     "entries.f1": overall.f1,
     ...Object.fromEntries(Object.entries(byKind).flatMap(([kind, m]) => [[`entries.${kind}.precision`, m.precision], [`entries.${kind}.recall`, m.recall], [`entries.${kind}.f1`, m.f1]])),
     "entries.kindCorrect": ratio(requiredPairs.filter(({ g, a }) => g.kind === a.kind).length, required.length),
@@ -316,7 +338,9 @@ export async function scoreRun(run, { ds, gold, judge }) {
   };
   const errors = {
     "notWritten.falseWriteRate": ratio(negativeHits.size, gold.negatives.length),
+    "notWritten.deferredForced": deferredNegatives.filter((item) => negativeHits.has(item.id)).length,
     "writes.staleAsCurrent": actual.filter((a) => a.attr.label === "stale").length,
+    "writes.lateAsCurrent": actual.filter((item) => lateTexts.has(norm(item.content))).length,
     "writes.conflictAsEntry": actual.filter((a) => a.attr.label === "conflict").length,
     "writes.unattributed": actual.filter((a) => a.attr.label === "none").length,
     "writes.duplicate": actual.filter((a) => a.attr.label === "match" && !owner.has(a.uid)).length,
@@ -324,6 +348,10 @@ export async function scoreRun(run, { ds, gold, judge }) {
     "decisions.reasonFabricated": reasonFabricated,
     "topics.duplicateTopics": duplicateTopics,
     "topics.wrongMerges": wrongMerges,
+    "topics.duplicateRate": ratio(duplicateTopics, coveredGoldTopics.size),
+    "topics.wrongMergeRate": ratio(wrongMerges, actualWithMatch.size),
+    "topics.controlMerges": controlMerges,
+    "topics.controlSplits": controlSplits,
     "search.staleShownAsCurrent": sum("staleCurrent"),
     "search.crossProjectLeak": sum("leaks"),
     "search.foreignTopics": sum("foreign"),
@@ -482,8 +510,9 @@ export function efficiency(run, { judgeUsage, sutUsage, pricing }) {
 }
 
 function parseArgs(argv) {
-  const options = { thresholds: { "decisions.stateExact": 0.8, "topics.bcubed.f1": 0.8, "entries.f1": 0.8, "search.recall@3": 0.85, "answers.llm": 0.8, "api.passRate": 1 } };
+  const options = { thresholds: { "decisions.stateExact": 0.8, "topics.bcubed.f1": 0.8, "entries.f1": 0.8, "search.recall@3": 0.85, "answers.llm": 0.8, "api.passRate": 1 }, maxDuplicateRate: 0.02, maxWrongMergeRate: 0.01 };
   const flags = { "--min-decision-state": "decisions.stateExact", "--min-topic-f1": "topics.bcubed.f1", "--min-entry-f1": "entries.f1", "--min-recall-at-3": "search.recall@3", "--min-answer": "answers.llm" };
+  const caps = { "--max-duplicate-rate": "maxDuplicateRate", "--max-wrong-merge-rate": "maxWrongMergeRate" };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     const [name, value] = arg.split("=");
@@ -494,6 +523,7 @@ function parseArgs(argv) {
     else if (arg === "--sut-usage") options.sutUsage = argv[++i];
     else if (name === "--sut-usage") options.sutUsage = value;
     else if (flags[name]) options.thresholds[flags[name]] = Number(value);
+    else if (caps[name]) options[caps[name]] = Number(value ?? argv[++i]);
     else if (!arg.startsWith("--")) options.input = arg;
     else throw new Error(`unknown option ${arg}`);
   }
@@ -546,7 +576,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     for (const [key, value] of Object.entries(report.scores)) if (value !== 0) failures.push(`${key}=${value}, empty must be 0`);
   } else if (options.gate) {
     for (const [key, min] of Object.entries(options.thresholds)) if (!(report.scores[key] >= min)) failures.push(`${key}=${report.scores[key]} < ${min}`);
-    for (const key of ["search.staleShownAsCurrent", "search.crossProjectLeak", "search.foreignTopics", "decisions.reasonFabricated", "topics.wrongMerges"]) if (report.errors[key] !== 0) failures.push(`${key}=${report.errors[key]} must be 0`);
+    for (const key of ["search.staleShownAsCurrent", "search.crossProjectLeak", "search.foreignTopics", "decisions.reasonFabricated", "topics.controlMerges", "writes.lateAsCurrent"]) if (report.errors[key] !== 0) failures.push(`${key}=${report.errors[key]} must be 0`);
+    if (!(report.errors["topics.duplicateRate"] <= options.maxDuplicateRate)) failures.push(`topics.duplicateRate=${report.errors["topics.duplicateRate"]} > ${options.maxDuplicateRate}`);
+    if (!(report.errors["topics.wrongMergeRate"] <= options.maxWrongMergeRate)) failures.push(`topics.wrongMergeRate=${report.errors["topics.wrongMergeRate"]} > ${options.maxWrongMergeRate}`);
   }
   report.check = { mode: options.mode ?? (options.gate ? "gate" : "report"), failures };
   const out = options.out ?? (options.input ? join(dirname(options.input), "report.json") : join(RUNS_DIR, `${options.mode}-report.json`));
