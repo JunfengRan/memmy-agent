@@ -28,7 +28,7 @@
 | PM-11 | 根据 v0.1 问题清单修订对齐表，起草给架构文档的修改意见 | — | open-questions 有提议和回复状态 | done（[spec-change-requests.md](spec-change-requests.md)；对齐表随 PM-12～PM-23 更新） |
 | PM-11a | 关闭 v0.1 评审 MUST：代码 5 项（PM-05-09 review-01 R1-1～R1-5）、评测 3 项（PM-03 review-01 R1-1～R1-3） | .agents/work | 下一轮 review 全部关闭 | done（review-02 approved，无未关闭 MUST；59547700、672919d5） |
 | PM-11b | 跟踪 v0.1 缺口：`gaps-v01.md` 的 G-01～G-12、E-02～E-05 逐条确认归属条目与状态（E-01、E-06 已关闭）；E-02、E-03 的数据集修订走 PM-17 | gaps-v01.md | 每条缺口有证据、归属条目与状态 | done（每条有证据、归属和状态。G-07 并入 Q-23。E-02、E-03 在 R-20261110-02 关闭。E-04 仍开：上限 0.903） |
-| PM-12 | M02 / M04 拆开：add 技能、topic 技能独立提示词（收回 G-02、G-03、G-04、G-08、G-09）。同时：M03 按草稿各出一条 query（v0.1 整批一条，召回漏掉候选会新建重复主题）；merge 召回的 `degraded` 透传给 M04；`TOPIC_SET_CHANGED` 只重跑 M04，不再重跑抽取（review-triage Add-2、Add-5） | v3 §2.2.5、§2.2.6、§2.2.7 | 归类准确率、重复主题率有数；进展 R 与经验 F1 不再为 0 | done（实现与单测完成；数据集 v2 复测未完成：阅读模型 claude-haiku-5-5 网关 503，缺口未复测） |
+| PM-12 | M02 / M04 拆开：add 技能、topic 技能独立提示词（收回 G-02、G-03、G-04、G-08、G-09）。同时：M03 按草稿各出一条 query（v0.1 整批一条，召回漏掉候选会新建重复主题）；merge 召回的 `degraded` 透传给 M04；`TOPIC_SET_CHANGED` 只重跑 M04，不再重跑抽取（review-triage Add-2、Add-5） | v3 §2.2.5、§2.2.6、§2.2.7 | 归类准确率、重复主题率有数；进展 R 与经验 F1 不再为 0 | 实现完成，待复测（单测通过。归类准确率、重复主题率还没有数：阅读模型 claude-haiku-5-5 网关 503，G-02、G-03、G-04、G-08、G-09 未复测。评审 review-01 approved，无 MUST） |
 | PM-13 | 推迟机制：deferred_segments 与后续回填（收回 G-01）。`topic_unavailable`（主题已被删除）的片段不回填，否则等于为已删主题重建（review-triage Add-3） | v3 §2.2.7、§4.5 | 推迟内容回填 ≥90%；已删除的主题被重建 0 | done（实现与单测完成；评测未跑：阅读模型网关 2026-11-10 返回 503） |
 | PM-14 | 决策补全 conflict_update / resolve / split；informed 由 recall_log + M02 信号判定（收回 G-06、G-10） | v3 §2.2.9 | 决策 op golden 全过 | done（决策 op golden 与条件写单测通过；评测未跑） |
 | PM-15 | 迟交规则、按 conversation_id 去重、复述过滤（收回 G-05） | v3 §2.2.3、§3.4 | 迟交改写更晚决策 = 0；旧版当当前 = 0 | done（实现与单测完成；评测未跑） |
@@ -66,6 +66,7 @@
 
 | 日期 | 变化 | 原因 |
 | --- | --- | --- |
+| 2026-11-10 | PM-12 状态从 done 改为「实现完成，待复测」 | 评审 R1-1：验收要的归类准确率和重复主题率还没有数，状态字面不再写成 done |
 | 2026-11-10 | PM-17 仍是 doing：v2.1 阅读上限 R-20261110-02 为 answers.llm 0.903（28/31） | 网关没有 claude-haiku-5-5，改用 claude-haiku-4-5-20251001，温度 0。错题 q03、q24、q25，不把上限写成 1 |
 | 2026-11-10 | PM-17：q17 标准答案改为同时说明丢行原因和未决分歧。阅读上限仍未复跑 | 阅读模型 claude-haiku-5-5 仍返回 503。这是 v2.1 内的小改，不另冻数据集 |
 | 2026-11-10 | PM-11、PM-11b 改为 done。修改意见在 spec-change-requests.md。缺口表每条有归属和状态 | 对齐表已随各条目更新。G-07 并入 Q-23。E-02 的数据集部分已进 v2.1 |

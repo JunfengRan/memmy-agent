@@ -1,7 +1,7 @@
 ---
 id: PM-12-split-organize
-status: ready-for-review
-owner: reviewer（待接手）
+status: done
+owner: reviewer
 roadmap: PM-12
 branch: dev-project-memory-add-search-dev
 updated: 2026-11-10
@@ -43,3 +43,4 @@ PM-13、PM-14、PM-15
 | --- | --- | --- | --- |
 | 2026-11-10 | in-progress | developer / Cursor | item.md |
 | 2026-11-10 | ready-for-review | developer / Cursor | handoff-01.md（018c169a） |
+| 2026-11-10 | done | reviewer / Cursor | review-01.md |
