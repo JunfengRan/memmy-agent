@@ -1,7 +1,7 @@
 ---
 id: PM-15-restatement-filter
-status: in-progress
-owner: developer / Cursor
+status: ready-for-review
+owner: reviewer（待接手）
 roadmap: PM-15
 branch: dev-project-memory-add-search-dev
 updated: 2026-11-10
@@ -41,3 +41,4 @@ updated: 2026-11-10
 | 日期 | 状态 | 由谁 | 文件 |
 | --- | --- | --- | --- |
 | 2026-11-10 | in-progress | developer / Cursor | item.md |
+| 2026-11-10 | ready-for-review | developer / Cursor | handoff-01.md（c966fc5c） |
