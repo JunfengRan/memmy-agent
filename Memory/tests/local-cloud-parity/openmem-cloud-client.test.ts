@@ -131,7 +131,8 @@ describe("OpenMem cloud REST client contract", () => {
       space_ids: "space_memos_cloud",
       domains: "代码开发",
       include_memory_view: ["project"],
-      memory_limit_number: 3
+      memory_limit_number: 3,
+      recall_via: "tool"
     });
     await client.addFeedback(feedback);
 
@@ -154,6 +155,7 @@ describe("OpenMem cloud REST client contract", () => {
       include_memory_view: ["project"],
       memory_limit_number: 3
     });
+    expect(calls[1]!.body).not.toHaveProperty("recall_via");
     expect(calls[2]!.body).toMatchObject({ feedback_content: "The memory should prefer SQLite locally." });
   });
 

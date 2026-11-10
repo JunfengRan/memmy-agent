@@ -22,7 +22,8 @@ API shape:
 Do not use this command to:
 - store new memory;
 - fetch full item details when an id is already known;
-- treat an empty result as proof that no related fact exists.
+- treat an empty result as proof that no related fact exists;
+- answer a question about this project's decisions, experiences, or progress; use `memmy-memory project search` for that.
 
 Command:
 

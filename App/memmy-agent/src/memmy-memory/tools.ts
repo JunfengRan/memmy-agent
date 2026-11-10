@@ -39,6 +39,26 @@ const searchShape = {
   layers: { type: "array", items: { type: "string", enum: ["L1", "L2", "L3", "Skill"] } }
 };
 
+/** Field names duplicated from Memory `PROJECT_MEMORY_TOOL_FIELDS`. Do not import that package. */
+export const SEARCH_PROJECT_MEMORY_FIELDS = ["query", "domains"] as const;
+
+export const SEARCH_PROJECT_MEMORY_PARAMETERS: JsonRecord = {
+  query: { type: "string", description: "The project question, as a sentence or a few keywords." },
+  domains: {
+    type: "array",
+    items: { type: "string" },
+    description: "Optional registered domains. Omit to search every domain in the bound spaces."
+  }
+};
+
+const searchProjectMemorySpec: ToolSpec = {
+  name: "search_project_memory",
+  description: "Search bound project memory for decisions, experiences, and progress. Use when the question is about this project.",
+  parameters: objectSchema(SEARCH_PROJECT_MEMORY_PARAMETERS, ["query"]),
+  readOnly: true,
+  execute: async (client, params, runtime, sessionKey) => client.searchProjectMemory(projectSearchBody(params, runtime, sessionKey)),
+};
+
 export const MEMOS_MEMORY_TOOL_SPECS: ToolSpec[] = [
   {
     name: "memmy_memory_search",
@@ -194,6 +214,10 @@ export function registerMemmyMemoryTools(registry: any, client: MemmyMemoryClien
     if (typeof registry?.has === "function" && registry.has(spec.name)) continue;
     registry.register(new MemmyMemoryTool(spec, client, runtime));
   }
+  const spaces = runtime.projectSpaceIds?.() ?? [];
+  if (spaces.length === 0) return;
+  if (typeof registry?.has === "function" && registry.has(searchProjectMemorySpec.name)) return;
+  registry.register(new MemmyMemoryTool(searchProjectMemorySpec, client, runtime));
 }
 
 function withRuntimeDefaults(params: JsonRecord, runtime: MemmyMemoryToolRuntime, sessionKey: string | null): JsonRecord {
@@ -205,6 +229,25 @@ function withRuntimeDefaults(params: JsonRecord, runtime: MemmyMemoryToolRuntime
   body.episodeId = runtimeValue(body.episodeId, runtime.currentEpisodeId(sessionKey) ?? undefined);
   body.turnId = runtimeValue(body.turnId, runtime.currentTurnId(sessionKey) ?? undefined);
   return compact(body);
+}
+
+function projectSearchBody(params: JsonRecord, runtime: MemmyMemoryToolRuntime, sessionKey: string | null): JsonRecord {
+  const spaces = runtime.projectSpaceIds?.() ?? [];
+  if (spaces.length === 0) throw new Error("This session has no project space.");
+  const userId = runtime.requestEnvelope(sessionKey).namespace?.userId;
+  if (typeof userId !== "string" || !userId.trim()) throw new Error("user_id is required");
+  const conversationId = runtime.currentSessionId(sessionKey);
+  const body: JsonRecord = {
+    user_id: userId.trim(),
+    space_ids: [...spaces],
+    query: typeof params.query === "string" ? params.query : "",
+    include_memory_view: ["project"],
+    memory_limit_number: 3,
+    recall_via: "tool"
+  };
+  if (conversationId) body.conversation_id = conversationId;
+  if (params.domains !== undefined) body.domains = params.domains;
+  return body;
 }
 
 function withSearchRuntimeDefaults(params: JsonRecord, runtime: MemmyMemoryToolRuntime, sessionKey: string | null): JsonRecord {
@@ -241,6 +284,11 @@ function formatMemmyToolResult(
   const currentUserRequest = runtime.currentUserText(sessionKey)
     ?? (typeof params.query === "string" ? params.query : "")
     ?? "";
+  if (toolName === "search_project_memory") {
+    const data = result && typeof result === "object" && "data" in result ? result.data : result;
+    const body = JSON.stringify(data) ?? "null";
+    return `<memos_context v="1" kind="tool">\n${body}\n</memos_context>`;
+  }
   if (toolName === "memmy_memory_search") {
     return renderMemmyContextPacket(markdownFromSearchResult(result), "tool_search", currentUserRequest);
   }

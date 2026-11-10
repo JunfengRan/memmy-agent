@@ -112,6 +112,7 @@ describe("opencode skill target", () => {
     expect(skillSource).toContain("A Memmy Memory Hook or plugin is installed for this agent.");
     expect(skillSource).toContain("The installed integration automatically recalls relevant context and captures completed turns.");
     expect(skillSource).toContain('memmy-memory search "query text" --source opencode');
+    expect(skillSource).toContain('memmy-memory project search "query text" --source opencode --session-id "$SESSION_ID"');
     expect(skillSource).not.toContain("memmy-memory add");
     expect(skillSource).not.toContain("Call memmy-memory search when context is needed.");
     expect(readTargetFile(rootDirectory)).toContain("manual instructions");

@@ -404,14 +404,22 @@ describe("MemmyMemoryHook", () => {
   });
 
   it("registers only search/get memmy memory tools", () => {
-    const client = fakeClient();
-    const hook = new MemmyMemoryHook(client as any, { workspace: "/tmp/workspace", userId: "user_hook_1" });
-    const registry = new ToolRegistry();
+    const previous = process.env.MEMMY_PROJECT_SPACE_IDS;
+    delete process.env.MEMMY_PROJECT_SPACE_IDS;
+    try {
+      const client = fakeClient();
+      const hook = new MemmyMemoryHook(client as any, { workspace: "/tmp/workspace", userId: "user_hook_1" });
+      const registry = new ToolRegistry();
 
-    hook.onRegisterTools({ registry, workspace: "/tmp/workspace", metadata: {} });
+      hook.onRegisterTools({ registry, workspace: "/tmp/workspace", metadata: {} });
 
-    expect(registry.has("memmy_memory_search")).toBe(true);
-    expect(registry.has("memmy_memory_get")).toBe(true);
+      expect(registry.has("memmy_memory_search")).toBe(true);
+      expect(registry.has("memmy_memory_get")).toBe(true);
+      expect(registry.has("search_project_memory")).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.MEMMY_PROJECT_SPACE_IDS;
+      else process.env.MEMMY_PROJECT_SPACE_IDS = previous;
+    }
   });
 
   it("adds concise memory evidence rules to the system prompt", () => {

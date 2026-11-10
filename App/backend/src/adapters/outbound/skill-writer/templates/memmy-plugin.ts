@@ -27,13 +27,21 @@ function renderMemmyPluginContent(source: string): string {
     "",
     "## On-Demand Lookup",
     "",
-    "Use the CLI only when the current request needs memory beyond the context already injected by the integration:",
+    "Use the CLI only when the current request needs memory beyond the context already injected by the integration.",
+    "",
+    "Personal questions (preferences, earlier conversations, reusable procedures) stay on personal memory:",
     "",
     "```bash",
     `memmy-memory search "query text" --source ${source}`,
     `memmy-memory get "$MEMORY_ID" --source ${source}`,
     "```",
     "",
-    "Search only when prior preferences, project decisions, recurring issues, or reusable procedures are likely relevant. Read a specific memory only when search results or injected context provide its id and more detail is needed."
+    "Project questions (how this project decided something, why it changed, or what progress was recorded) use project memory. This command does not search personal memory:",
+    "",
+    "```bash",
+    `memmy-memory project search "query text" --source ${source} --session-id "$SESSION_ID"`,
+    "```",
+    "",
+    "Read a specific personal memory only when search results or injected context provide its id and more detail is needed."
   ].join("\n");
 }

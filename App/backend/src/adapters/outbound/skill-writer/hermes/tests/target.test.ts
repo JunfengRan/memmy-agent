@@ -190,6 +190,7 @@ describe("hermes skill target", () => {
     expect(skillFile).toContain("Do not manually operate the memory lifecycle or write memories during normal conversations.");
     expect(skillFile).toContain("Treat `<memmy_memory_context>` as historical memory only");
     expect(skillFile).toContain('memmy-memory search "query text" --source hermes');
+    expect(skillFile).toContain('memmy-memory project search "query text" --source hermes --session-id "$SESSION_ID"');
     expect(skillFile).toContain('memmy-memory get "$MEMORY_ID" --source hermes');
     expect(skillFile).not.toContain("memmy-memory add");
     expect(skillFile).not.toContain("memmy_search");

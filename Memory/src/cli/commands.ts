@@ -20,6 +20,7 @@ import {
   type MemoryCliSetupOptions
 } from "./setup.js";
 import { DEFAULT_MEMORY_URL, loadCliMemoryConfig } from "./config.js";
+import { bindProjectToolRequest } from "../service/project-memory/inject/tool.js";
 import { PROJECT_VERSION } from "./project-version.js";
 import {
   currentInstalledRuntime,
@@ -121,6 +122,8 @@ async function mapTopLevelCommand(words: string[], parsed: ParsedArgs): Promise<
       return turnsRequest(words[1], words.slice(2), parsed);
     case "search":
       return buildMemorySearchRequest(words.slice(1), parsed);
+    case "project":
+      return projectSearchRequest(words.slice(1), parsed);
     case "add":
       return addMemoryRequest(words.slice(1), parsed);
     case "get":
@@ -199,6 +202,51 @@ async function turnsRequest(action: string | undefined, args: string[], parsed: 
   }
 }
 
+function projectSearchRequest(args: string[], parsed: ParsedArgs): CliRequest {
+  if (args[0] !== "search") throw new Error(`unknown command: project ${args.join(" ")}`.trim());
+  const spaceIds = projectSpaceIds(parsed);
+  if (spaceIds.length === 0) throw new Error("This session has no project space.");
+  const query = optionString(parsed.options, "query") ?? args[1];
+  const userId = userIdOption(parsed) ?? loadCliMemoryConfig(optionString(parsed.options, "config")).config.userId;
+  if (!userId) throw new Error("user_id is required");
+  const domains = stringArrayOption(parsed, "domains");
+  const limit = positiveIntegerOption(parsed, "limit");
+  const sessionId = optionString(parsed.options, "session-id");
+  return {
+    method: "POST",
+    path: "/api/openmem/v1/search/memory",
+    body: bindProjectToolRequest(
+      {
+        query: requireValue("query", query),
+        ...(domains && domains.length > 0 ? { domains } : {})
+      },
+      {
+        userId,
+        spaceIds,
+        ...(sessionId ? { conversationId: sessionId } : {}),
+        ...(limit !== undefined ? { memoryLimit: limit } : {})
+      }
+    )
+  };
+}
+
+function projectSpaceIds(parsed: ParsedArgs): string[] {
+  const fromFlags = optionValues(parsed.options, "space-id").map((id) => id.trim()).filter(Boolean);
+  if (fromFlags.length > 0) return uniqueStrings(fromFlags);
+  return uniqueStrings(splitList(process.env.MEMMY_PROJECT_SPACE_IDS));
+}
+
+function splitList(value: string | undefined): string[] {
+  if (!value) return [];
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const result: string[] = [];
+  for (const value of values) if (!result.includes(value)) result.push(value);
+  return result;
+}
+
 async function buildMemorySearchRequest(args: string[], parsed: ParsedArgs): Promise<CliRequest> {
   const query = optionString(parsed.options, "query") ?? args[0];
   return {
@@ -272,7 +320,7 @@ async function serveMemory(parsed: ParsedArgs): Promise<unknown> {
     "",
     "Examples:",
     "  memmy-memory health --url <memory-service-url>",
-    "  memmy-memory search \"project decisions\" --url <memory-service-url>"
+    "  memmy-memory search \"earlier preference\" --url <memory-service-url>"
   ].join("\n");
 }
 
@@ -611,7 +659,8 @@ function helpText(): string {
     "  session close <sessionId>    Close a session",
     "  turn start                   Start a memory-aware turn",
     "  turn complete <turnId>       Complete a turn and persist the result",
-    "  search <query>               Search memories",
+    "  search <query>               Search personal memories",
+    "  project search <query>      Search project memory in bound spaces",
     "  add <content>                Add a memory manually",
     "  get <id>                     Read one memory by id",
     "  delete <id>                  Delete one memory by id",
@@ -629,8 +678,9 @@ function helpText(): string {
     "Memory examples:",
     `  ${CLI_NAME} health`,
     `  ${CLI_NAME} session open --workspace-path "$PWD"`,
-    `  ${CLI_NAME} search "project decisions"`,
-    `  ${CLI_NAME} search "project decisions" --verbose`,
+    `  ${CLI_NAME} search "earlier preference"`,
+    `  ${CLI_NAME} search "earlier preference" --verbose`,
+    `  ${CLI_NAME} project search "retry policy" --space-id <space-id> --session-id <session-id>`,
     `  ${CLI_NAME} add "this project stores memory locally in sqlite" --layer L1`,
     `  ${CLI_NAME} get mem_123`,
     `  ${CLI_NAME} get mem_123 --verbose`,

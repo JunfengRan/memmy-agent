@@ -86,11 +86,13 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
       | "getAnalyticsClientId"
       | "getAnalyticsUserId"
       | "getAnalyticsUserMode"
+      | "projectSpaceIds"
     >
   > & {
     workspace: string | null;
     profileLabel: string | null;
     userId: string | null;
+    projectSpaceIds: readonly string[] | null;
     retrievalLayers: NonNullable<MemmyMemoryHookOptions["retrievalLayers"]> | null;
     getAnalyticsClientId: (() => string | null | undefined) | null;
     getAnalyticsUserId: (() => string | null | undefined) | null;
@@ -120,6 +122,7 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
       profileId: options.profileId ?? PROFILE_ID,
       profileLabel: options.profileLabel ?? PROFILE_ID,
       userId: options.userId ?? null,
+      projectSpaceIds: options.projectSpaceIds ?? null,
       retrievalLayers: options.retrievalLayers ?? null,
       getAnalyticsClientId: options.getAnalyticsClientId ?? null,
       getAnalyticsUserId: options.getAnalyticsUserId ?? null,
@@ -591,6 +594,11 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
   currentUserText(sessionKey?: string | null): string | null {
     if (!sessionKey) return null;
     return this.turnBySessionKey.get(sessionKey)?.userText ?? null;
+  }
+
+  projectSpaceIds(): string[] {
+    const bound = this.options.projectSpaceIds ?? projectSpaceIdsFromEnv(process.env.MEMMY_PROJECT_SPACE_IDS);
+    return [...bound];
   }
 
   trackMemoryAnalytics(eventName: string, params: AnalyticsParams = {}): void {
@@ -1252,4 +1260,14 @@ function firstDefined(...values: any[]): any {
 
 function isJsonRecord(value: any): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function projectSpaceIdsFromEnv(value: string | undefined): string[] {
+  if (!value) return [];
+  const ids: string[] = [];
+  for (const part of value.split(",")) {
+    const id = part.trim();
+    if (id && !ids.includes(id)) ids.push(id);
+  }
+  return ids;
 }

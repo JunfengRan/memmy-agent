@@ -278,6 +278,7 @@ describe("claude code skill target", () => {
       expect(skillFile).toContain("# Memmy Memory");
       expect(skillFile).toContain("A Memmy Memory Hook or plugin is installed for this agent.");
       expect(skillFile).toContain('memmy-memory search "query text" --source claude_code');
+      expect(skillFile).toContain('memmy-memory project search "query text" --source claude_code --session-id "$SESSION_ID"');
       expect(skillFile).not.toContain("memmy-memory add");
 
       await target.uninstallPlugin?.("claude_code");

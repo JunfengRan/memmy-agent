@@ -14,7 +14,8 @@ Use this skill when the task needs persistent agent memory through the `memmy-me
 - Close a session: read [session close](./references/session-close.md).
 - Begin a turn and retrieve prompt context: read [turn start](./references/turn-start.md).
 - Finish a turn and write memory: read [turn complete](./references/turn-complete.md).
-- Search memory: read [search](./references/search.md).
+- Search personal memory: read [search](./references/search.md).
+- Search project memory: read [project search](./references/project-search.md).
 - Add a memory manually: read [add](./references/add.md).
 - Read one memory by id: read [get](./references/get.md).
 - Delete one memory by id: read [delete](./references/delete.md).
@@ -35,7 +36,7 @@ Prefer explicit CLI parameters for required fields. Use JSON body options only f
 1. Use `memmy-memory health` before relying on Memory if service state is unknown.
 2. Use `memmy-memory session open --source <agent-source>` when a conversation or task begins.
 3. Use `memmy-memory turn start --source <agent-source>` before answering when prior memory may help.
-4. Use `memmy-memory search --source <agent-source>` for direct memory lookup outside a turn lifecycle.
+4. Use `memmy-memory search --source <agent-source>` for personal memory outside a turn lifecycle. Use `memmy-memory project search --source <agent-source>` when the question is about this project's decisions, experiences, or progress.
 5. Use `memmy-memory turn complete --source <agent-source>` after the final answer to persist the interaction.
 6. Use `memmy-memory add --source <agent-source>` only for explicit facts, preferences, decisions, or durable project notes.
 

@@ -99,7 +99,10 @@ export class OpenMemCloudClient {
   searchMemory(request: OpenMemSearchMemoryRequest): Promise<unknown> {
     validateProjectMemoryRequest(request, "include_memory_view");
     validateMemoryLimit(request.memory_limit_number);
-    return this.post("/search/memory", request);
+    // recall_via is a local field (ADR-0008). The cloud API does not accept it.
+    const forwarded: OpenMemSearchMemoryRequest = { ...request };
+    delete forwarded.recall_via;
+    return this.post("/search/memory", forwarded);
   }
 
   addFeedback(request: OpenMemAddFeedbackRequest): Promise<unknown> {

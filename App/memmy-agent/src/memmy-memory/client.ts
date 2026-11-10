@@ -135,6 +135,10 @@ export class MemmyMemoryClient {
     return this.post("/api/v1/memory/search", body);
   }
 
+  searchProjectMemory(body: JsonRecord): Promise<JsonRecord> {
+    return this.post("/api/openmem/v1/search/memory", body);
+  }
+
   getMemory(id: string): Promise<JsonRecord> {
     return this.get(`/api/v1/memory/${encodeURIComponent(id)}`);
   }

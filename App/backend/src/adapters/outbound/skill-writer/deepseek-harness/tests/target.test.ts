@@ -53,6 +53,7 @@ describe("DeepSeek Harness skill target", () => {
       dsh: { client: { platform: "web", inject: ["@deepseek-ai/dsh-client-ui-conversation"] } }
     });
     expect(readFileSync(skillPath, "utf8")).toContain('memmy-memory search "query text" --source deepseek_harness');
+    expect(readFileSync(skillPath, "utf8")).toContain('memmy-memory project search "query text" --source deepseek_harness --session-id "$SESSION_ID"');
     expect(readFileSync(resumeSkillPath, "utf8")).toContain("--source deepseek_harness");
     expect(patch).toContain("id: user-plugin");
     expect(patch).toContain("# memmy-memory plugin:start");

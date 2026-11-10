@@ -36,7 +36,7 @@ export interface SearchInput {
   memoryLimit: number;
   relativity?: number;
   views: MemoryViewSelection;
-  /** Defaults to turn_start. PM-21 may pass tool; the HTTP body does not accept it yet. */
+  /** Recall-log entry. HTTP `recall_via` maps here; omitted means turn_start (ADR-0008). */
   via?: "turn_start" | "tool";
 }
 

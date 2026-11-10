@@ -38,6 +38,7 @@ unchanged during migration so failures remain searchable with `rg` and Vitest
 | REST contract | Panel and viewer        | `../contract/rest-panel-events.test.ts`   | `REST panel contract`                             | viewer HTML, panel reads, search, detail, deletion                         | contract    |
 | Project memory | Decision topic experiment | `project-memory/jev-topic.test.ts`     | `OpenAI decision topic choice`                    | opt-in add/search topic choice, default off                                | unit        |
 | Project memory | Rank fusion             | `project-memory/fuse.test.ts`          | `project memory rank fusion`                      | cross-path RRF, relativity, MMR cap                                        | unit        |
+| Project memory | Tool disclosure         | `project-memory/inject-tool.test.ts`   | `project memory tool binding`                     | tool fields, host binding, kind=tool wrapper                               | unit        |
 
 ## Find and run tests
 

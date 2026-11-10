@@ -321,6 +321,13 @@ function taskView(task: TaskRecord): Record<string, unknown> {
   };
 }
 
+/** Local-only entry marker. Omitted means turn_start. Not a cloud SDK parameter (ADR-0008). */
+function recallVia(body: Body): "turn_start" | "tool" {
+  if (!Object.prototype.hasOwnProperty.call(body, "recall_via") || body.recall_via === undefined) return "turn_start";
+  if (body.recall_via === "turn_start" || body.recall_via === "tool") return body.recall_via;
+  throw invalidParams("recall_via must be turn_start or tool", { field: "recall_via" });
+}
+
 function searchData(views: MemoryViewSelection, result: ThreePathSearchOutput): Record<string, unknown> {
   const data: Record<string, unknown> = {};
   // A failed project path still returns an empty list so the response stays 200.
@@ -374,7 +381,8 @@ export async function handleOpenMemRequest(service: ProjectMemoryService, reques
         conversationId: optionalString(body, "conversation_id"),
         memoryLimit: integer(body, "memory_limit_number", PROJECT_MEMORY_LIMITS.memoryLimitDefault, 1, PROJECT_MEMORY_LIMITS.memoryLimitMax),
         ...(typeof relativity === "number" ? { relativity } : {}),
-        views
+        views,
+        via: recallVia(body)
       });
       return ok(searchData(views, result));
     }

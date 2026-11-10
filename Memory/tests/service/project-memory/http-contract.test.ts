@@ -1,7 +1,8 @@
 import type { Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { API_ROUTES, createMemoryHttpServer } from "../../../src/server/http.js";
-import type { MemoryService } from "../../../src/index.js";
+import type { MemoryDb, MemoryService } from "../../../src/index.js";
+import type { ProjectLocalState } from "../../../src/service/project-memory/store/sqlite/local-state.js";
 import { combinedStages, createProjectMemoryHarness, emptyReply, stubStages } from "./helpers.js";
 
 const realFetch = globalThis.fetch;
@@ -17,7 +18,7 @@ afterEach(async () => {
 });
 
 async function startServer(options: { token?: string; scopes?: string[] } = {}) {
-  const { service } = harness.createService();
+  const { service, db } = harness.createService();
   const server = createMemoryHttpServer({
     service,
     ...(options.token ? {
@@ -32,19 +33,21 @@ async function startServer(options: { token?: string; scopes?: string[] } = {}) 
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("expected TCP address");
   const base = `http://127.0.0.1:${address.port}/api/openmem/v1`;
-  const post = async (route: string, body: Record<string, unknown>) => {
+  const send = async (method: "GET" | "POST", route: string, body?: Record<string, unknown>) => {
     const response = await realFetch(`${base}/${route}`, {
-      method: "POST",
+      method,
       headers: {
-        "content-type": "application/json",
+        ...(method === "POST" ? { "content-type": "application/json" } : {}),
         "x-memos-tz": "Asia/Shanghai",
         ...(options.token ? { authorization: `Bearer ${options.token}` } : {})
       },
-      body: JSON.stringify(body)
+      ...(method === "POST" ? { body: JSON.stringify(body ?? {}) } : {})
     });
     return { status: response.status, body: await response.json() as { code: number; message: string; data: any } };
   };
-  return { post, service };
+  const post = (route: string, body: Record<string, unknown>) => send("POST", route, body);
+  const get = (route: string) => send("GET", route);
+  return { post, get, service, db };
 }
 
 async function waitForTask(post: Awaited<ReturnType<typeof startServer>>["post"], taskId: string) {
@@ -242,7 +245,152 @@ describe("openmem HTTP contract", () => {
     expect(degraded.body.data.degraded).not.toContain("detail_factual");
     expect(degraded.body.data.degraded).not.toContain("skill");
   });
+
+  it("writes via=tool for recall_via tool and does not start a turn", async () => {
+    const { post, service, db, spaceId } = await seedTopic();
+    const turnStarts = watchTurnStarts(service);
+    const searched = await post("search/memory", {
+      user_id: "user_a",
+      query: "推送失败怎么重试",
+      space_ids: spaceId,
+      include_memory_view: ["project"],
+      conversation_id: "conv_tool",
+      recall_via: "tool"
+    });
+    expect(searched.status).toBe(200);
+    expect(searched.body.data.topic_detail_list.length).toBeGreaterThan(0);
+    const rows = recallRows(db);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((row) => row.via === "tool")).toBe(true);
+    const local = projectLocal(service);
+    const recalled = local.recalledIds("conv_tool");
+    expect(recalled.topicIds.length).toBeGreaterThan(0);
+    expect(recalled.decisionIds.length).toBeGreaterThan(0);
+    expect(turnStarts()).toBe(0);
+    local.appendRecallLog([{
+      conversationId: "conv_tool",
+      via: "tool",
+      topicId: recalled.topicIds[0]!,
+      decisionId: "dec_informed_tool",
+      hadConflicts: true
+    }]);
+    expect([...local.conflictedDecisionsShown("conv_tool")]).toContain("dec_informed_tool");
+  });
+
+  it("defaults recall_via to turn_start", async () => {
+    const { post, db, spaceId } = await seedTopic();
+    const searched = await post("search/memory", {
+      user_id: "user_a",
+      query: "推送失败怎么重试",
+      space_ids: spaceId,
+      include_memory_view: ["project"],
+      conversation_id: "conv_default"
+    });
+    expect(searched.status).toBe(200);
+    const rows = recallRows(db);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((row) => row.via === "turn_start")).toBe(true);
+  });
+
+  it("rejects a bad recall_via and writes no recall rows", async () => {
+    const { post, db, spaceId } = await seedTopic();
+    const searched = await post("search/memory", {
+      user_id: "user_a",
+      query: "推送失败怎么重试",
+      space_ids: spaceId,
+      include_memory_view: ["project"],
+      conversation_id: "conv_bad",
+      recall_via: "session_start"
+    });
+    expect(searched.status).toBe(400);
+    expect(searched.body).toMatchObject({ code: 40001, message: "INVALID_PARAMS" });
+    expect(recallRows(db)).toEqual([]);
+  });
+
+  it("writes no recall rows when conversation_id is missing", async () => {
+    const { post, db, spaceId } = await seedTopic();
+    const searched = await post("search/memory", {
+      user_id: "user_a",
+      query: "推送失败怎么重试",
+      space_ids: spaceId,
+      include_memory_view: ["project"]
+    });
+    expect(searched.status).toBe(200);
+    expect(searched.body.data.topic_detail_list.length).toBeGreaterThan(0);
+    expect(recallRows(db)).toEqual([]);
+  });
+
+  it("returns get/memory/:id as a one-topic list for GET and POST", async () => {
+    const { post, get, spaceId } = await seedTopic();
+    const listed = await post("get/memory", { space_id: spaceId });
+    const topic = listed.body.data.topic_detail_list[0];
+    const byGet = await get(`get/memory/${encodeURIComponent(topic.id)}`);
+    const byPost = await post(`get/memory/${encodeURIComponent(topic.id)}`, {});
+    expect(byGet.status).toBe(200);
+    expect(byGet.body).toMatchObject({ code: 0, message: "ok" });
+    expect(byGet.body.data.id).toBeUndefined();
+    expect(byGet.body.data.topic_detail_list).toEqual([topic]);
+    expect(byPost.status).toBe(200);
+    expect(byPost.body).toEqual(byGet.body);
+
+    const missing = await get("get/memory/topic_missing");
+    expect(missing.status).toBe(404);
+    expect(missing.body).toMatchObject({ code: 40402, message: "TOPIC_NOT_FOUND" });
+    const missingPost = await post("get/memory/topic_missing", {});
+    expect(missingPost.status).toBe(404);
+    expect(missingPost.body.message).toBe("TOPIC_NOT_FOUND");
+  });
 });
+
+async function seedTopic() {
+  stubStages(combinedStages((payload) => ({
+    ...emptyReply(),
+    drafts: [{
+      kind: "decision",
+      content: "推送失败后指数退避重试三次。",
+      message_idx: 0,
+      user_ids: [payload.messages[0]!.user_id],
+      topic: { new_topic: "n1" }
+    }],
+    new_topics: [{ ref: "n1", topic_name: "推送服务重试", topic_summary: "推送失败后的重试策略", topic_description: "" }]
+  })));
+  const started = await startServer();
+  const space = await started.post("create/space", { space_name: "推送服务" });
+  const spaceId = space.body.data.space_id as string;
+  await started.post("create/domains", { space_id: spaceId, domains: [{ domain: "代码开发", description: "" }] });
+  const accepted = await started.post("add/message", {
+    user_id: "user_a",
+    agent_id: "codex",
+    conversation_id: "conv_1",
+    space_ids: [spaceId],
+    allow_memory_view: ["project"],
+    messages: [{ role: "user", chat_time: "2026-10-29 10:00:00", content: "推送失败就指数退避重试三次。" }]
+  });
+  await waitForTask(started.post, accepted.body.data.task_id);
+  return { ...started, spaceId };
+}
+
+function recallRows(db: MemoryDb): Array<{ via: string; topic_id: string; decision_id: string | null }> {
+  return db.db.prepare("SELECT via, topic_id, decision_id FROM pm_recall_log").all() as Array<{
+    via: string;
+    topic_id: string;
+    decision_id: string | null;
+  }>;
+}
+
+function projectLocal(service: MemoryService): ProjectLocalState {
+  return (service as unknown as { projectMemory: { local: ProjectLocalState } }).projectMemory.local;
+}
+
+function watchTurnStarts(service: MemoryService): () => number {
+  let count = 0;
+  const original = service.startTurn.bind(service);
+  service.startTurn = ((request: Parameters<MemoryService["startTurn"]>[0]) => {
+    count += 1;
+    return original(request);
+  }) as MemoryService["startTurn"];
+  return () => count;
+}
 
 function disablePersonalSearch(service: MemoryService): void {
   (service as unknown as { config: { algorithm: { enableMemorySearch: boolean } } }).config.algorithm.enableMemorySearch = false;
