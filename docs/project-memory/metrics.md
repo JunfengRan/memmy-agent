@@ -123,7 +123,7 @@
 
 | 项 | 值 |
 | --- | --- |
-| 被测实现 | HEAD `127cca7eba90`，工作区含未提交的 PM-23 脚本。进程内调用，不起 HTTP。脚本 `eval/project-memory/latency/run-search-latency.ts` |
+| 被测实现 | 数字测于 `127cca7e` 之上的工作区，脚本在 `b5cb5822` 入库。进程内调用，不起 HTTP。脚本 `eval/project-memory/latency/run-search-latency.ts` |
 | 调用 | 临时 sqlite。金标主题经 `ProjectMemoryStore.commitChangeSet` 写入，金标 id 映射到 `bench_<金标 id>`。不读 `~/.memmy`。无聊天模型。`MEMMY_DECISION_TOPIC=0`。embedder 是 stub 哈希向量 `local:pm23-hash-v1`。服务日志仍打印配置里的 `Xenova/all-MiniLM-L6-v2`，那是默认配置名，这次检索没有用它 |
 | 数据集 | v2.1：50 个主题，31 道计分题（每题 1 个期望主题）。门槛用 fixture S。L 把被问到的空间补到 500 个主题，只作参照 |
 | 提示词版本 | 不适用（本次只测检索延迟） |
@@ -167,8 +167,8 @@ S + stub 的延迟（门槛只用这一列）：
 | 段 | P50 | P95 | max | n | 超时 | degraded |
 | --- | --- | --- | --- | --- | --- | --- |
 | 第 3 路 `rankProjectCandidates` | 0.579 ms | 0.741 ms | 3.117 ms | 620 | 0 | 0 |
-| 第 1 路 `recallCandidates` | 0.025 ms | 0.032 ms | 2.577 ms | 620 | 0 | 0 |
-| 第 2 路 `recallCandidates` | 0.526 ms | 0.666 ms | 3.271 ms | 620 | 0 | 0 |
+| 第 1 路 `recallCandidates`（空库，仅链路开销） | 0.025 ms | 0.032 ms | 2.577 ms | 620 | 0 | 0 |
+| 第 2 路 `recallCandidates`（空库，仅链路开销） | 0.526 ms | 0.666 ms | 3.271 ms | 620 | 0 | 0 |
 | 总 `search/memory` | 1.194 ms | 1.462 ms | 5.796 ms | 620 | 0 | 0 |
 | 渲染 `renderTurnMemories` | 0.005 ms | 0.008 ms | 0.018 ms | 620 | 0 | 0 |
 

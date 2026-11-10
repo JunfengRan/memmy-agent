@@ -1,7 +1,7 @@
 ---
 id: PM-23-search-latency
-status: ready-for-review
-owner: reviewer（待接手）
+status: done
+owner: reviewer
 roadmap: PM-23
 branch: dev-project-memory-add-search-dev
 updated: 2026-11-10
@@ -41,3 +41,4 @@ PM-24（两种存储的 Recall 差）
 | 2026-11-10 | in-progress | developer / Cursor | item.md |
 | 2026-11-10 | in-progress | developer / Cursor | S+stub 门槛通过，记录 R-20261110-01。不交接，不提交 |
 | 2026-11-10 | ready-for-review | developer / Cursor | handoff-01.md（b5cb5822） |
+| 2026-11-10 | done | reviewer / Cursor | review-01.md（approved，无 MUST） |
