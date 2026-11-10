@@ -1,7 +1,7 @@
 ---
 id: PM-21-progressive-disclosure
-status: ready-for-review
-owner: reviewer（待接手）
+status: done
+owner: reviewer
 roadmap: PM-21
 branch: dev-project-memory-add-search-dev
 updated: 2026-11-10
@@ -44,3 +44,4 @@ PM-20、PM-22
 | --- | --- | --- | --- |
 | 2026-11-10 | in-progress | developer / Cursor | item.md |
 | 2026-11-10 | ready-for-review | developer / Cursor | handoff-01.md（eaefb0cc） |
+| 2026-11-10 | done | reviewer / Cursor | review-01.md |
