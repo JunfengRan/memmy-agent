@@ -39,7 +39,21 @@ interface TurnRow {
   tool_calls_json: string;
 }
 
-type SpaceProgress = TaskRecord["spaces"][string] & { error?: TaskError | null; details?: TaskDetails };
+type SpaceProgress = TaskRecord["spaces"][string] & {
+  error?: TaskError | null;
+  details?: TaskDetails;
+  /** Set on spaces copied from a completed attempt. Omitted from get/status. */
+  resubmitOf?: string;
+};
+
+/**
+ * Failures a caller may submit again as a new task (Q-16).
+ * If any failed space has another reason, the original task is returned (Q-25).
+ */
+export const RESUBMITTABLE_REASONS: ReadonlySet<string> = new Set([
+  "VERSION_CONFLICT_RETRY_EXHAUSTED",
+  "MODEL_CALL_FAILED"
+]);
 
 /** Audit fields kept in pm_tasks.progress_json. get/status does not return them. */
 export interface TaskDetails {
@@ -94,6 +108,16 @@ function taskFromRow(row: TaskRow): TaskRecord {
   };
 }
 
+function retryableFailure(row: TaskRow): { failed: Set<string> } | null {
+  if (row.status !== "failed") return null;
+  const progress = JSON.parse(row.progress_json) as Record<string, SpaceProgress>;
+  const failed = Object.entries(progress).filter(([, item]) => item.status === "failed");
+  if (failed.length === 0) return null;
+  const retryable = failed.every(([, item]) => item.error != null && RESUBMITTABLE_REASONS.has(item.error.reason));
+  if (!retryable) return null;
+  return { failed: new Set(failed.map(([spaceId]) => spaceId)) };
+}
+
 function turnFromRow(row: TurnRow): RawTurnRecord {
   return {
     turnId: row.turn_id,
@@ -119,13 +143,24 @@ export class ProjectLocalState {
   createTask(
     input: { taskId: string; spaceIds: string[]; conversationId: string; batchKey: string; sourceBatchId: string; acceptedAt: string },
     turns: RawTurnInput[]
-  ): { task: TaskRecord; created: boolean } {
+  ): { task: TaskRecord; created: boolean; pendingSpaceIds: string[] } {
     return this.db.transaction(() => {
       const existing = this.db.prepare(`SELECT * FROM pm_tasks WHERE batch_key = ?`).get(input.batchKey) as TaskRow | undefined;
-      if (existing) return { task: taskFromRow(existing), created: false };
+      let pendingSpaceIds = [...input.spaceIds];
+      let resubmitOf: string | null = null;
+      if (existing) {
+        const retry = retryableFailure(existing);
+        if (!retry) return { task: taskFromRow(existing), created: false, pendingSpaceIds: [] };
+        this.db.prepare(`UPDATE pm_tasks SET batch_key = batch_key || '#' || task_id WHERE task_id = ?`).run(existing.task_id);
+        pendingSpaceIds = input.spaceIds.filter((spaceId) => retry.failed.has(spaceId));
+        resubmitOf = existing.task_id;
+      }
+      const retrying = new Set(pendingSpaceIds);
       const progress: Record<string, SpaceProgress> = {};
       for (const spaceId of input.spaceIds) {
-        progress[spaceId] = { status: "running", memoryIds: [], added: 0, updated: 0, deferredCount: 0 };
+        progress[spaceId] = resubmitOf && !retrying.has(spaceId)
+          ? { status: "completed", memoryIds: [], added: 0, updated: 0, deferredCount: 0, resubmitOf }
+          : { status: "running", memoryIds: [], added: 0, updated: 0, deferredCount: 0 };
       }
       const now = this.now().toISOString();
       this.db.prepare(
@@ -173,7 +208,7 @@ export class ProjectLocalState {
         const stored = storedTurn.get(turn.conversationId, turn.role, turn.chatTime, contentHash) as { turn_id: string };
         link.run(input.taskId, stored.turn_id);
       }
-      return { task: this.getTask(input.taskId)!, created: true };
+      return { task: this.getTask(input.taskId)!, created: true, pendingSpaceIds };
     })();
   }
 

@@ -3,7 +3,7 @@ import type { LlmClient } from "../../../model/types.js";
 import { createMemoryLogger, memoryErrorFields } from "../../../logging/logger.js";
 import { ProjectMemoryError } from "../contract/errors.js";
 import { PROJECT_MEMORY_LIMITS } from "../contract/limits.js";
-import type { CommitResult, RawTurnRecord, TaskError } from "../contract/types.js";
+import type { RawTurnRecord, TaskError } from "../contract/types.js";
 import type { DecisionTopicRouter } from "../decisions/client.js";
 import { briefFromTopic, narrowAddCandidates } from "../decisions/topic-choice.js";
 import type { JudgeDraft } from "../merge/judge.js";
@@ -239,7 +239,8 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
   // Topics another writer created since our last recall (v3 §2.3.1). They must reach
   // M04 on the next attempt even when the union cap or lexical rank would drop them.
   const mustConsider = new Set<string>();
-  let lastConflict: CommitResult | null = null;
+  const conflictKinds: string[] = [];
+  const conflictTopicIds: string[] = [];
 
   const model = async <T>(run: () => Promise<T>): Promise<T> => {
     try {
@@ -363,7 +364,14 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
         details
       });
     }
-    lastConflict = result;
+    conflictKinds.push(result.error);
+    if (result.error === "VERSION_CONFLICT") {
+      for (const topic of result.topics) conflictTopicIds.push(topic.topicId);
+    } else if (result.error === "TOPIC_SET_CHANGED") {
+      for (const topicId of result.newTopicIds) conflictTopicIds.push(topicId);
+    } else if (result.error === "TOPIC_NOT_FOUND") {
+      for (const topicId of result.topicIds) conflictTopicIds.push(topicId);
+    }
     log.info("commit.retry", { taskId: payload.taskId, attempt, error: result.error });
     switch (result.error) {
       case "VERSION_CONFLICT":
@@ -386,7 +394,9 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
         fail("commit", "SPACE_CLEARED");
     }
   }
-  fail("commit", "VERSION_CONFLICT_RETRY_EXHAUSTED", lastConflict && !lastConflict.ok ? lastConflict.error : undefined);
+  const kinds = conflictKinds.join(",");
+  const detail = conflictTopicIds.length > 0 ? `${kinds}; topics=${conflictTopicIds.join(",")}` : kinds;
+  fail("commit", "VERSION_CONFLICT_RETRY_EXHAUSTED", detail || undefined);
 }
 
 function keepMustConsider(

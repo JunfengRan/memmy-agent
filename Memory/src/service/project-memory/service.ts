@@ -125,12 +125,12 @@ export class ProjectMemoryService {
     const batchKey = input.conversationId ? this.batchKey(input, turns) : `anon:${taskId}`;
     const acceptedAt = now.toISOString();
     return this.deps.repos.transaction(() => {
-      const { task, created } = this.local.createTask(
+      const { task, created, pendingSpaceIds } = this.local.createTask(
         { taskId, spaceIds: input.spaceIds, conversationId: conversationKey, batchKey, sourceBatchId: taskId, acceptedAt },
         turns
       );
       if (!created) return task;
-      for (const spaceId of input.spaceIds) {
+      for (const spaceId of pendingSpaceIds) {
         const payload: OrganizeJobPayload = {
           taskId,
           spaceId,
@@ -228,7 +228,9 @@ export class ProjectMemoryService {
       input.conversationId,
       input.userId,
       input.agentId,
-      turns.map((turn) => [turn.role, turn.roleId, turn.chatTimeInferred ? null : turn.chatTime, turn.content])
+      // Inferred arrival time stays in the key (Q-15). It is second precision, so a
+      // same-second duplicate still matches (Q-24). idempotencyKey is unchanged.
+      turns.map((turn) => [turn.role, turn.roleId, turn.chatTime, turn.content])
     ]));
     return hash.digest("hex");
   }

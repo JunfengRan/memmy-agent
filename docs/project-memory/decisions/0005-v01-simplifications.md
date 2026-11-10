@@ -40,3 +40,7 @@ W45 的目标是端到端可跑的基础版本，用来暴露问题。以下简�
 ## 补记（2026-11-10，PM-14）
 
 第 1 条（决策 op 不实现 `split`，store 无 `split_into`）由 PM-14 收回。`DecisionOp` 增加 `split`：`splitInto` 里原 `decisionId` 恰好出现一次，这一行改写成对应的那一项，其余 id 新建。保留原 id 的是 `from` 含 `content` 的那一项；没有这样的项时用第一项。原内容与每一条 conflict 写入每一片的 history，reason 相同，conflicts 清空。上表第 1 行保持原样。ADR-0007 仍写第 1 条有效，自本补记起以 PM-14 收回为准。
+
+## 补记（2026-11-10，PM-16）
+
+第 10 条（Store 侧不做 C01 不变式校验）不在 PM-16 收回，改到 PM-24。上表第 10 行保持原样。

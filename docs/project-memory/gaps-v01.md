@@ -18,7 +18,7 @@
 | G-08 | 决策原因提取不足 | 已确认：decisions.reasons 0.500，原因臆造 1；q25「为什么改成读一列」答「没有改动原因」。PM-12 是预定修复的一部分，2026-11-10 未复测 | 原因类题 | PM-12、PM-14 | open（未复测） |
 | G-09 | 不该写入的内容被写成决策 | 已确认：误写 0.100（10 条负例写入 1 条：`nw_t_write_edit`「只要改了文件就算冲突」，还带了 1 个 conflict）。PM-12 抽取时会输出 dropped，2026-11-10 未复测 | falseWriteRate | PM-12 | open（未复测） |
 | G-10 | 对话里已体现认可的改写没有改写 | 待查：`dec_copy` 未匹配，写成了「先撤掉，等 dry-run 再决定」的旧版。PM-14 已实现，未复测 | `dec_copy` stateExact | PM-14 | open（PM-14 已实现，未复测） |
-| G-11 | ADR-0005 中尚未实现的项 | `split` 已由 PM-14 实现，未复测。复述过滤仍未做。`dropped` 与 `basis` 已由 PM-12 / ADR-0007 记下（2026-11-10），未复测。三路召回与 `memory_detail_list`、云端 Store、C01 校验、过期向量退化整次召回仍未做 | 相关指标系统性偏低，见 ADR-0005 | 见 ADR-0005 的「收回」列 | open（split：PM-14 已实现，未复测） |
+| G-11 | ADR-0005 中尚未实现的项 | `split` 已由 PM-14 实现，未复测。复述过滤仍未做。`dropped` 与 `basis` 已由 PM-12 / ADR-0007 记下（2026-11-10），未复测。三路召回与 `memory_detail_list`、云端 Store、C01 校验（PM-24）、过期向量退化整次召回仍未做 | 相关指标系统性偏低，见 ADR-0005 | 见 ADR-0005 的「收回」列 | open（split：PM-14 已实现，未复测） |
 | G-12 | 评审的 SHOULD 未处理 | PM-05-09 review-01 R1-6～R1-15 与 R1-16；Q-09、Q-10、Q-12 待 designer 回复 | — | PM-11a 之后 | open |
 
 ## B. 评测与数据集缺口
