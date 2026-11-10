@@ -14,11 +14,18 @@ import { normalizeForCompare } from "../text.js";
 import { isBefore } from "../time.js";
 
 /**
- * M05: deterministic merge of validated drafts into a ChangeSet against the
- * freshest L02 snapshot (v3 §2.2.9). The model already answered "same question?"
- * and "same conclusion?"; everything here is rule-based, so re-running it after a
+ * Deterministic merge of validated drafts into a ChangeSet against the freshest
+ * L02 snapshot (v3 §2.2.9). The judge call already answered "same question?" and
+ * "same conclusion?"; everything here is rule-based, so re-running it after a
  * VERSION_CONFLICT re-merges against new data instead of replaying old ops.
+ * Written-op basis is returned beside the ChangeSet and is not stored on the ops.
  */
+
+export interface OpBasis {
+  draftId: string;
+  hit: string | null;
+  checked: string[];
+}
 export interface MergeContext {
   spaceId: string;
   taskId: string;
@@ -40,6 +47,7 @@ export interface MergeOutcome {
   deferred: Array<{ text: string; reason: string }>;
   createdTopicIds: string[];
   updatedTopicIds: string[];
+  opBases: OpBasis[];
 }
 
 function defaultId(prefix: string): string {
@@ -185,6 +193,7 @@ export function mergeDrafts(
 ): MergeOutcome {
   const newId = context.newId ?? defaultId;
   const deferred = [...organized.deferred];
+  const opBases: OpBasis[] = [];
   const changes = new Map<string, TopicChange>();
   const decisionState = new Map<string, MutableDecision>();
   const experienceState = new Map<string, MutableExperience & { pastContents: string[] }>();
@@ -281,6 +290,19 @@ export function mergeDrafts(
       }
     }
     if (wrote) {
+      const snapshot = snapshots.get(change.topicId);
+      const checked = !snapshot
+        ? []
+        : draft.kind === "decision"
+          ? snapshot.decisions.map((item) => item.id)
+          : draft.kind === "experience"
+            ? snapshot.experiences.map((item) => item.id)
+            : [];
+      opBases.push({
+        draftId: draft.draftId,
+        hit: draft.kind === "decision" ? draft.sameQuestionAs : draft.kind === "experience" ? draft.sameExperienceAs : null,
+        checked
+      });
       touched.add(change.topicId);
       const authors = authorsByTopic.get(change.topicId) ?? new Set<string>();
       for (const id of draft.userIds) authors.add(id);
@@ -317,6 +339,7 @@ export function mergeDrafts(
         },
     deferred,
     createdTopicIds: topics.filter((topic) => topic.op === "create").map((topic) => topic.topicId),
-    updatedTopicIds: topics.filter((topic) => topic.op === "update").map((topic) => topic.topicId)
+    updatedTopicIds: topics.filter((topic) => topic.op === "update").map((topic) => topic.topicId),
+    opBases
   };
 }

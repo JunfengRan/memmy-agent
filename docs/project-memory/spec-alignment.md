@@ -14,11 +14,11 @@
 | §2.2.1–2.2.2 M01 | 采集、raw_turns、剥离注入块、返回 task_id | organize/collect.ts、pipeline/ | 部分对齐 | | 未剥离 `<memos_context>`；跨 Space 复用同一批消息会丢（review R1-2） |
 | §2.2.3 | 会话上云 | — | 未开始 | | 本期只做 cloud store 适配 |
 | §2.2.4 | Space / domain 校验 | contract/ | 未开始 | | |
-| §2.2.5 M02 | 抽取：是否写入、回复拆分、字段判定 | organize/organizer.ts + prompts/organize.ts | 部分对齐（与 M04 合成一次调用，ADR-0005 #2） | 数据集 v2 add 指标 | 不输出 dropped 原因 |
-| §2.2.6 M03 | 归类用候选召回 | sqlite-store.ts | 已对齐（topic_k=10，纯词法兜底） | | |
-| §2.2.7 M04 | 归入 / 新建 / 推迟，摘要描述改写 | organize/organizer.ts | 部分对齐（推迟只存不回填） | 数据集 v2 topics 指标 | ADR-0005 #4；Decisions 主题实验默认关闭（ADR-0006） |
-| §2.2.8 | 全量读 | sqlite-store.ts | 已对齐 | decision golden | |
-| §2.2.9 M05 | 决策 7 种 op、经验 4 种 op、轨迹 | merge/merge.ts | 部分对齐：缺 `split`。作者由会话推出；认可人要和现行结论相交才改写 | decision-golden.test.ts | ADR-0005 #1；R1-4 已在 review-02 关闭 |
+| §2.2.5 M02 | 抽取：是否写入、回复拆分、字段判定 | organize/extract.ts、prompts/extract.ts（pm-extract-v0.2.0） | 部分对齐（独立调用；dropped 收 7 类原因；复述与 recall_log 比对仍是 PM-15） | 数据集 v2 add 指标；organize-stages.test.ts | ADR-0005 #2 由 ADR-0007 收回 |
+| §2.2.6 M03 | 归类用候选召回 | organize/candidates.ts、sqlite-store.ts | 部分对齐（每条草稿一条 query，topic_k=10，degraded 透传 M04；并集再截到 20） | organize-stages.test.ts | 并集上限见 ADR-0007 |
+| §2.2.7 M04 | 归入 / 新建 / 推迟，摘要描述改写 | organize/assign.ts、prompts/assign.ts（pm-assign-v0.2.0） | 部分对齐（只看摘要和描述，basis 写入任务详情；摘要改写在 M05 判断调用里；推迟仍不回填） | organize-stages.test.ts | ADR-0007；ADR-0005 #4；选题实验默认关闭（ADR-0006） |
+| §2.2.8 | 全量读 | sqlite-store.ts；organize-job.ts 只读已归入的主题 | 已对齐 | decision golden | §2.3.2 两段读取 |
+| §2.2.9 M05 | 决策 7 种 op、经验 4 种 op、轨迹 | merge/judge.ts（pm-judge-v0.2.0）、merge/merge.ts | 部分对齐：判断独立调用，规则合并仍确定性；缺 `split`；op basis 在 ChangeSet 旁返回，不写入 op。作者由会话推出；认可人要和现行结论相交才改写 | decision-golden.test.ts | ADR-0005 #1；R1-4 已在 review-02 关闭；摘要改写在判断调用内，ADR-0007 |
 | §2.2.10 | ChangeSet、条件写、结果码 | apply.ts、organize-job.ts | 部分对齐：deferred 事务。`TOPIC_SET_CHANGED` 会把 `newTopicIds` 放进下一次候选。缺 `chat_time` 时任务批次键与 v3 去重口径不一致（Q-15）；失败批次无法重交（Q-16） | store-commit.test.ts | R1-3 已在 review-02 关闭；R1-6、PM-16 |
 | §2.2.11 | get_task_status | api.ts | 已对齐 | http 契约测试 | |
 | §2.3 | OCC、Space 内串行、删除围栏 | pipeline/、repositories.ts | 部分对齐 | 并发单测 | 失败任务阻塞队头（R1-7）；只有 local_queue 围栏 |

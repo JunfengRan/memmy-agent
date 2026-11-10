@@ -1,8 +1,6 @@
 import type { LlmClient } from "../../../model/types.js";
 import { PROJECT_MEMORY_LIMITS } from "../contract/limits.js";
-import type { DecisionTarget, DomainRecord, RawTurnRecord, TopicSnapshot } from "../contract/types.js";
-import { ORGANIZE_PROMPT_VERSION, ORGANIZE_SYSTEM_PROMPT } from "../prompts/organize.js";
-import { clampText } from "../text.js";
+import type { DecisionTarget, RawTurnRecord } from "../contract/types.js";
 
 export type DraftTarget = { topicId: string } | { newTopicRef: string };
 
@@ -52,14 +50,64 @@ export interface OrganizeResult {
   deferred: Array<{ text: string; reason: string }>;
 }
 
-export interface OrganizeInput {
-  instructions: string | null;
-  domains: DomainRecord[];
-  requestDomains: string[];
-  messages: RawTurnRecord[];
-  context: RawTurnRecord[];
-  candidates: TopicSnapshot[];
-  conflictsShown: Set<string>;
+export type DraftSignal =
+  | { type: "approval"; by: string }
+  | { type: "informed"; decision: string }
+  | { type: "resolve"; pick: string; by: string };
+
+export interface ExtractedDraft {
+  draftId: string;
+  kind: "decision" | "experience" | "timeline";
+  category: string | null;
+  content: string;
+  messageIdx: number;
+  time: string;
+  userIds: string[];
+  reason: string | null;
+  signals: DraftSignal[];
+}
+
+export interface ExtractResult {
+  promptVersion: string;
+  drafts: ExtractedDraft[];
+  stateHints: Array<{ type: string; content: string }>;
+  dropped: Array<{ reason: string; text: string | null }>;
+  deferred: Array<{ text: string; reason: string }>;
+}
+
+export interface AssignmentBasis {
+  independentDelivery: boolean;
+  affectsExistingDecisions: boolean;
+}
+
+export interface Assignment {
+  draftId: string;
+  target: DraftTarget | { defer: true };
+  basis: AssignmentBasis;
+}
+
+export interface AssignResult {
+  promptVersion: string;
+  assignments: Assignment[];
+  newTopics: Map<string, NewTopicDraft>;
+  deferred: Array<{ text: string; reason: string }>;
+}
+
+export interface JudgeLabel {
+  draftId: string;
+  sameQuestionAs: string | null;
+  sameAs: DecisionTarget | null;
+  approvedBy: string[];
+  resolve: { pick: DecisionTarget | "new" } | null;
+  sameExperienceAs: string | null;
+  change: "same" | "new_version" | null;
+}
+
+export interface JudgeResult {
+  promptVersion: string;
+  labels: Map<string, JudgeLabel>;
+  topicUpdates: OrganizeResult["topicUpdates"];
+  informedDecisionIds: Set<string>;
 }
 
 export class ModelOutputError extends Error {
@@ -69,27 +117,23 @@ export class ModelOutputError extends Error {
   }
 }
 
-type Json = Record<string, unknown>;
+export type Json = Record<string, unknown>;
 
-function asRecord(value: unknown): Json | null {
+export function asRecord(value: unknown): Json | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Json) : null;
 }
 
-function asString(value: unknown): string | null {
+export function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function asStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim() !== "").map((item) => item.trim()) : [];
+export function asStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim() !== "").map((item) => item.trim())
+    : [];
 }
 
-const KIND_LIMIT = {
-  decision: PROJECT_MEMORY_LIMITS.decision,
-  experience: PROJECT_MEMORY_LIMITS.experience,
-  timeline: PROJECT_MEMORY_LIMITS.timeline
-} as const;
-
-function participantsOf(turns: RawTurnRecord[]): Array<{ user_id: string; name: string | null }> {
+export function participantsOf(turns: RawTurnRecord[]): Array<{ user_id: string; name: string | null }> {
   const seen = new Map<string, string | null>();
   for (const turn of turns) {
     if (turn.role !== "user" || !turn.roleId) continue;
@@ -98,181 +142,12 @@ function participantsOf(turns: RawTurnRecord[]): Array<{ user_id: string; name: 
   return [...seen].map(([user_id, name]) => ({ user_id, name }));
 }
 
-export function buildOrganizeMessages(input: OrganizeInput): Array<{ role: "system" | "user"; content: string }> {
-  const turnView = (turn: RawTurnRecord, idx?: number) => ({
-    ...(idx === undefined ? {} : { idx }),
-    role: turn.role,
-    user_id: turn.roleId,
-    name: turn.roleName,
-    time: turn.chatTime,
-    content: turn.content
-  });
-  const payload = {
-    space: { instructions: input.instructions, domains: input.domains },
-    request_domains: input.requestDomains,
-    participants: participantsOf([...input.context, ...input.messages]),
-    context_turns: input.context.map((turn) => turnView(turn)),
-    messages: input.messages.map((turn, idx) => turnView(turn, idx)),
-    candidate_topics: input.candidates.map((topic) => ({
-      topic_id: topic.topicId,
-      domain: topic.domain,
-      topic_summary: topic.topicSummary,
-      topic_description: topic.topicDescription,
-      decisions: topic.decisions.map((decision) => ({
-        id: decision.id,
-        content: decision.content,
-        time: decision.time,
-        user_ids: decision.userIds,
-        conflicts: decision.conflicts.map((item) => ({ ref: `conflict:${item.seq}`, content: item.content, user_ids: item.userIds }))
-      })),
-      experiences: topic.experiences.map((experience) => ({ id: experience.id, content: experience.content }))
-    })),
-    conflicts_shown: [...input.conflictsShown].filter((id) =>
-      input.candidates.some((topic) => topic.decisions.some((decision) => decision.id === id && decision.conflicts.length > 0))
-    )
-  };
-  return [
-    { role: "system", content: ORGANIZE_SYSTEM_PROMPT },
-    { role: "user", content: JSON.stringify(payload) }
-  ];
-}
-
-function parseDecisionTarget(value: unknown, conflicts: number[]): DecisionTarget | null {
-  if (value === "content") return "content";
-  if (typeof value !== "string" || !value.startsWith("conflict:")) return null;
-  const seq = Number(value.slice("conflict:".length));
-  return conflicts.includes(seq) ? (`conflict:${seq}` as DecisionTarget) : null;
-}
-
 /**
- * Validates model output against the batch and the candidate set. Anything that
- * points at an unknown topic is deferred, never turned into a new topic (v3 §2.2.7).
+ * Authors come from the transcript, never from an unchecked model claim: a user
+ * message is authored by its speaker, and Agent output by the members who
+ * delegated it in this batch.
  */
-export function parseOrganizeOutput(raw: Json, input: OrganizeInput): OrganizeResult {
-  if (!Array.isArray(raw.drafts)) throw new ModelOutputError("drafts must be an array");
-  const candidates = new Map(input.candidates.map((topic) => [topic.topicId, topic]));
-  // Authors are members who spoke in this conversation (v3 §2.2.9).
-  const participants = new Set(participantsOf([...input.context, ...input.messages]).map((item) => item.user_id));
-  const batchSpeakers = new Set(participantsOf(input.messages).map((item) => item.user_id));
-  const fallbackUser = participantsOf(input.messages)[0]?.user_id ?? [...participants][0] ?? null;
-
-  const newTopics = new Map<string, NewTopicDraft>();
-  for (const item of Array.isArray(raw.new_topics) ? raw.new_topics : []) {
-    const record = asRecord(item);
-    const ref = asString(record?.ref);
-    const summary = asString(record?.topic_summary) ?? "";
-    const name = asString(record?.topic_name) ?? summary;
-    if (!record || !ref || !name) continue;
-    newTopics.set(ref, {
-      topicName: clampText(name, PROJECT_MEMORY_LIMITS.topicName),
-      topicSummary: clampText(summary, PROJECT_MEMORY_LIMITS.topicSummary),
-      topicDescription: clampText(asString(record.topic_description) ?? "", PROJECT_MEMORY_LIMITS.topicDescription)
-    });
-  }
-
-  const deferred: OrganizeResult["deferred"] = [];
-  for (const item of Array.isArray(raw.deferred) ? raw.deferred : []) {
-    const record = asRecord(item);
-    const text = asString(record?.text);
-    if (text) deferred.push({ text, reason: asString(record?.reason) ?? "ambiguous_topic" });
-  }
-
-  const drafts: Draft[] = [];
-  raw.drafts.forEach((item, index) => {
-    const record = asRecord(item);
-    if (!record) return;
-    const kind = record.kind;
-    if (kind !== "decision" && kind !== "experience" && kind !== "timeline") return;
-    const content = asString(record.content);
-    const messageIdx = Number(record.message_idx);
-    const message = Number.isInteger(messageIdx) ? input.messages[messageIdx] : undefined;
-    if (!content || !message) return;
-
-    const topic = asRecord(record.topic);
-    const topicId = asString(topic?.topic_id);
-    const newRef = asString(topic?.new_topic);
-    let target: DraftTarget;
-    if (topicId && candidates.has(topicId)) target = { topicId };
-    else if (!topicId && newRef && newTopics.has(newRef)) target = { newTopicRef: newRef };
-    else {
-      deferred.push({ text: content, reason: topicId ? "unknown_topic" : "ambiguous_topic" });
-      return;
-    }
-
-    const userIds = draftAuthors(message, messageIdx, asStringArray(record.user_ids), input.messages, batchSpeakers, fallbackUser);
-    if (userIds.length === 0) return;
-    const base = {
-      draftId: `d${index}`,
-      content: clampText(content, KIND_LIMIT[kind]),
-      time: message.chatTime,
-      userIds,
-      messageIdx,
-      target
-    };
-    const snapshot = "topicId" in target ? candidates.get(target.topicId) : undefined;
-
-    if (kind === "decision") {
-      const sameQuestion = asString(record.same_question_as);
-      const decision = snapshot?.decisions.find((entry) => entry.id === sameQuestion);
-      const seqs = decision?.conflicts.map((item) => item.seq) ?? [];
-      const resolveRecord = asRecord(record.resolve);
-      const pick = resolveRecord?.pick === "new" ? "new" : parseDecisionTarget(resolveRecord?.pick, seqs);
-      drafts.push({
-        ...base,
-        kind,
-        reason: asString(record.reason),
-        sameQuestionAs: decision?.id ?? null,
-        sameAs: decision ? parseDecisionTarget(record.same_as, seqs) : null,
-        // Merge only honours an approver who holds the current conclusion. Whether a
-        // second-hand approval ("已和用户B 确认") counts is open-questions Q-12.
-        approvedBy: asStringArray(record.approved_by).filter((id) => !userIds.includes(id)),
-        resolve: decision && pick ? { pick } : null
-      });
-    } else if (kind === "experience") {
-      const sameExperience = asString(record.same_experience_as);
-      const experience = snapshot?.experiences.find((entry) => entry.id === sameExperience);
-      const change = record.experience_change === "same" || record.experience_change === "new_version" ? record.experience_change : null;
-      drafts.push({
-        ...base,
-        kind,
-        reason: asString(record.reason),
-        sameExperienceAs: experience?.id ?? null,
-        change: experience ? change ?? "new_version" : null
-      });
-    } else {
-      drafts.push({ ...base, kind });
-    }
-  });
-
-  const topicUpdates: OrganizeResult["topicUpdates"] = new Map();
-  for (const item of Array.isArray(raw.topic_updates) ? raw.topic_updates : []) {
-    const record = asRecord(item);
-    const topicId = asString(record?.topic_id);
-    if (!record || !topicId || !candidates.has(topicId)) continue;
-    const summary = asString(record.topic_summary);
-    const description = asString(record.topic_description);
-    topicUpdates.set(topicId, {
-      ...(summary ? { topicSummary: clampText(summary, PROJECT_MEMORY_LIMITS.topicSummary) } : {}),
-      ...(description ? { topicDescription: clampText(description, PROJECT_MEMORY_LIMITS.topicDescription) } : {})
-    });
-  }
-
-  return {
-    promptVersion: ORGANIZE_PROMPT_VERSION,
-    drafts,
-    newTopics,
-    topicUpdates,
-    informedDecisionIds: new Set(asStringArray(raw.informed_decision_ids)),
-    deferred
-  };
-}
-
-/**
- * Authors are derived from the transcript, not trusted from the model: a user message is
- * authored by its speaker, and Agent output by the members who delegated it in this batch.
- * A model that names someone else would otherwise let a non-author rewrite a decision.
- */
-function draftAuthors(
+export function draftAuthors(
   message: RawTurnRecord,
   messageIdx: number,
   claimed: string[],
@@ -290,23 +165,92 @@ function draftAuthors(
   return fallbackUser ? [fallbackUser] : [];
 }
 
+export function isPlacedTarget(target: Assignment["target"]): target is DraftTarget {
+  return "topicId" in target || "newTopicRef" in target;
+}
+
 /** One model call per attempt; malformed output is retried, then the task fails. */
-export async function organizeBatch(llm: LlmClient, input: OrganizeInput): Promise<OrganizeResult> {
-  const messages = buildOrganizeMessages(input);
+export async function completeStage<T>(
+  llm: LlmClient,
+  messages: Array<{ role: "system" | "user"; content: string }>,
+  operation: string,
+  parse: (raw: Json) => T
+): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= PROJECT_MEMORY_LIMITS.modelAttempts; attempt += 1) {
     try {
       const raw = await llm.completeJson<Json>(messages, {
-        operation: "project_memory.organize",
+        operation,
         jsonMode: true,
         temperature: 0,
         thinkingMode: "disabled",
         maxTokens: 4000
       });
-      return parseOrganizeOutput(raw, input);
+      return parse(raw);
     } catch (error) {
       lastError = error;
     }
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+/**
+ * Folds extraction, assignment and the optional judge labels into the draft
+ * list deterministic merge already understands.
+ */
+export function assembleOrganizeResult(
+  extracted: ExtractResult,
+  assigned: AssignResult,
+  judged: JudgeResult | null
+): OrganizeResult {
+  const assignments = new Map(assigned.assignments.map((item) => [item.draftId, item]));
+  const deferred = [...extracted.deferred, ...assigned.deferred];
+  const drafts: Draft[] = [];
+  for (const draft of extracted.drafts) {
+    const assignment = assignments.get(draft.draftId);
+    if (!assignment || !isPlacedTarget(assignment.target)) {
+      if (!assignment) deferred.push({ text: draft.content, reason: "ambiguous_topic" });
+      continue;
+    }
+    const label = assignment.target && "topicId" in assignment.target ? judged?.labels.get(draft.draftId) : undefined;
+    const base = {
+      draftId: draft.draftId,
+      content: draft.content,
+      time: draft.time,
+      userIds: draft.userIds,
+      messageIdx: draft.messageIdx,
+      target: assignment.target
+    };
+    if (draft.kind === "decision") {
+      drafts.push({
+        ...base,
+        kind: "decision",
+        reason: draft.reason,
+        sameQuestionAs: label?.sameQuestionAs ?? null,
+        sameAs: label?.sameAs ?? null,
+        approvedBy: label?.approvedBy ?? [],
+        resolve: label?.resolve ?? null
+      });
+    } else if (draft.kind === "experience") {
+      drafts.push({
+        ...base,
+        kind: "experience",
+        reason: draft.reason,
+        sameExperienceAs: label?.sameExperienceAs ?? null,
+        change: label?.change ?? null
+      });
+    } else {
+      drafts.push({ ...base, kind: "timeline" });
+    }
+  }
+  const versions = [extracted.promptVersion, assigned.promptVersion];
+  if (judged) versions.push(judged.promptVersion);
+  return {
+    promptVersion: versions.join("+"),
+    drafts,
+    newTopics: assigned.newTopics,
+    topicUpdates: judged?.topicUpdates ?? new Map(),
+    informedDecisionIds: judged?.informedDecisionIds ?? new Set(),
+    deferred
+  };
 }

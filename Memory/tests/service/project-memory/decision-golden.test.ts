@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { call, createProjectMemoryHarness, drain, setupSpace, stubModel, type OrganizePayload } from "./helpers.js";
+import { call, combinedStages, createProjectMemoryHarness, drain, setupSpace, stubStages, type OrganizePayload } from "./helpers.js";
 
 const harness = createProjectMemoryHarness();
 afterEach(() => harness.cleanup());
@@ -13,7 +13,7 @@ type Turn = { user: string; name: string; conversation: string; time: string; co
 
 function decisionDraft(payload: OrganizePayload, content: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
   const topic = payload.candidate_topics[0];
-  const decision = topic?.decisions[0];
+  const decision = topic?.decisions?.[0];
   return {
     kind: "decision",
     content,
@@ -62,7 +62,7 @@ async function onlyDecision(service: Parameters<typeof call>[0]) {
 /** PRD「决策的维护」/ v3 §2.2.9 四轮分歧示例. */
 describe("project memory decision golden", () => {
   async function seedBase(rounds: Array<(payload: OrganizePayload) => Record<string, unknown>>) {
-    const stub = stubModel((payload, callIndex) => rounds[callIndex - 1]!(payload));
+    const stub = stubStages(combinedStages((payload, callIndex) => rounds[callIndex - 1]!(payload)));
     const { service } = harness.createService();
     await setupSpace(service, SPACE);
     await add(service, { user: "user_b", name: "用户B", conversation: "codex:b", time: "2026-10-29 10:20:00", content: "本机整理结果就存 SQLite，每个 Space 一个库文件。" });
@@ -80,8 +80,10 @@ describe("project memory decision golden", () => {
       (payload) => reply([decisionDraft(payload, "同意单库按 space_id 分表", { same_as: "conflict:1" })]),
       (payload) => reply([decisionDraft(payload, LANCEDB)]),
       (payload) => {
-        const decisionId = payload.candidate_topics[0]!.decisions[0]!.id;
-        return reply([decisionDraft(payload, SINGLE_DB, { resolve: { pick: "conflict:1" } })], { informed_decision_ids: [decisionId] });
+        const decisionId = payload.candidate_topics[0]?.decisions?.[0]?.id;
+        return reply([decisionDraft(payload, SINGLE_DB, { resolve: { pick: "conflict:1" } })], {
+          informed_decision_ids: decisionId ? [decisionId] : []
+        });
       }
     ]);
 
@@ -113,7 +115,7 @@ describe("project memory decision golden", () => {
     expect(searched.data.topic_detail_list[0].decisions[0].conflicts).toHaveLength(2);
 
     await add(service, { user: "user_b", name: "用户B", conversation: "codex:b2", time: "2026-10-31 10:00:00", content: "以用户C 的为准。" });
-    expect(stub.organizeCalls[4]!.conflicts_shown).toHaveLength(1);
+    expect(stub.judge.at(-1)!.conflicts_shown).toHaveLength(1);
     decision = await onlyDecision(service);
     expect(decision).toEqual({
       content: SINGLE_DB,
@@ -131,8 +133,10 @@ describe("project memory decision golden", () => {
       baseRound,
       (payload) => reply([decisionDraft(payload, SINGLE_DB)]),
       (payload) => {
-        const decisionId = payload.candidate_topics[0]!.decisions[0]!.id;
-        return reply([decisionDraft(payload, SINGLE_DB, { resolve: { pick: "conflict:1" } })], { informed_decision_ids: [decisionId] });
+        const decisionId = payload.candidate_topics[0]?.decisions?.[0]?.id;
+        return reply([decisionDraft(payload, SINGLE_DB, { resolve: { pick: "conflict:1" } })], {
+          informed_decision_ids: decisionId ? [decisionId] : []
+        });
       }
     ]);
     await add(service, { user: "user_c", name: "用户C", conversation: "codex:c", time: "2026-10-30 14:05:00", content: SINGLE_DB });

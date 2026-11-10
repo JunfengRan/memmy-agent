@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { SqliteProjectMemoryStore } from "../../../src/service/project-memory/store/sqlite/sqlite-store.js";
-import { call, createProjectMemoryHarness, drain, emptyReply, setupSpace, stubModel, type OrganizePayload } from "./helpers.js";
+import { call, combinedStages, createProjectMemoryHarness, drain, emptyReply, setupSpace, stubStages, type OrganizePayload } from "./helpers.js";
 
 const harness = createProjectMemoryHarness();
 afterEach(() => harness.cleanup());
@@ -21,7 +21,12 @@ function newTopicReply(payload: OrganizePayload, content: string): Record<string
 }
 
 function existingTopicReply(payload: OrganizePayload, content: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
-  const topic = payload.candidate_topics[0]!;
+  const topic = payload.candidate_topics[0];
+  if (!topic) {
+    const created = newTopicReply(payload, content);
+    const drafts = created.drafts as Array<Record<string, unknown>>;
+    return { ...created, drafts: [{ ...drafts[0], ...extra }] };
+  }
   return {
     ...emptyReply(),
     drafts: [{
@@ -36,6 +41,11 @@ function existingTopicReply(payload: OrganizePayload, content: string, extra: Re
   };
 }
 
+function topicIds(payload: Record<string, unknown> | undefined): string[] {
+  const candidates = payload?.candidates;
+  return Array.isArray(candidates) ? candidates.map((topic) => String((topic as { topic_id?: string }).topic_id ?? "")) : [];
+}
+
 function message(user: string, time: string, content: string) {
   return { role: "user", role_id: user, role_name: user, chat_time: time, content };
 }
@@ -48,9 +58,9 @@ async function add(service: Parameters<typeof call>[0], body: Record<string, unk
 
 describe("project memory organize pipeline", () => {
   it("processes one space serially so a later batch sees the topic an earlier batch created", async () => {
-    const stub = stubModel((payload, index) => index === 1
+    const stub = stubStages(combinedStages((payload, batch) => batch === 1
       ? newTopicReply(payload, "推送失败后指数退避重试三次。")
-      : existingTopicReply(payload, "推送失败后改为重试五次。"));
+      : existingTopicReply(payload, "推送失败后改为重试五次。")));
     const { service, db } = harness.createService();
     await setupSpace(service, "space_a");
 
@@ -66,9 +76,11 @@ describe("project memory organize pipeline", () => {
     ]);
 
     await drain(service);
-    expect(stub.organizeCalls).toHaveLength(2);
-    expect(stub.organizeCalls[0]!.candidate_topics).toEqual([]);
-    expect(stub.organizeCalls[1]!.candidate_topics.map((topic) => topic.topic_summary)).toEqual(["推送失败后的重试策略"]);
+    expect(stub.extract).toHaveLength(2);
+    expect(stub.assign).toHaveLength(2);
+    expect(stub.judge).toHaveLength(1);
+    expect(stub.assign[0]!.candidates).toEqual([]);
+    expect((stub.assign[1]!.candidates as Array<{ topic_summary: string }>).map((topic) => topic.topic_summary)).toEqual(["推送失败后的重试策略"]);
 
     for (const taskId of [first, second]) {
       expect((await call(service, "get/status", { task_id: taskId })).data.status).toBe("completed");
@@ -82,7 +94,7 @@ describe("project memory organize pipeline", () => {
   });
 
   it("fans one request out to each space and reports progress per space", async () => {
-    stubModel((payload) => newTopicReply(payload, "推送失败后指数退避重试三次。"));
+    stubStages(combinedStages((payload) => newTopicReply(payload, "推送失败后指数退避重试三次。")));
     const { service } = harness.createService();
     await setupSpace(service, "space_a");
     await setupSpace(service, "space_b");
@@ -98,11 +110,18 @@ describe("project memory organize pipeline", () => {
 
   it("re-merges against fresh data after a concurrent write instead of replaying", async () => {
     let concurrentStore: SqliteProjectMemoryStore | null = null;
-    const stub = stubModel((payload, index) => {
-      if (index === 1) return newTopicReply(payload, "推送失败后指数退避重试三次。");
-      // Another writer lands between this batch's recall and its commit.
-      const topic = payload.candidate_topics[0]!;
-      void concurrentStore!.getTopicsFull("space_a", [topic.topic_id]).then(([snapshot]) => concurrentStore!.commitChangeSet({
+    let conflicted = false;
+    const stub = stubStages(combinedStages((payload, batch) => {
+      if (batch === 1) return newTopicReply(payload, "推送失败后指数退避重试三次。");
+      const topic = payload.candidate_topics[0];
+      const decisions = topic?.decisions ?? [];
+      // Fire only on the first judge of batch 2: after recall and the full read,
+      // before our commit. Extract would make recall see the new revision;
+      // the retry judge would conflict again.
+      if (topic && decisions.length > 0 && !conflicted) {
+        conflicted = true;
+        const decisionId = topic.decisions[0]!.id;
+        void concurrentStore!.getTopicsFull("space_a", [topic.topic_id]).then(([snapshot]) => concurrentStore!.commitChangeSet({
         spaceId: "space_a",
         taskId: "other",
         sourceBatchId: "other",
@@ -112,34 +131,40 @@ describe("project memory organize pipeline", () => {
           topicId: topic.topic_id,
           domain: topic.domain,
           expectedRevision: snapshot!.revision,
-          decisions: [{ op: "conflict_append", decisionId: topic.decisions[0]!.id, content: "推送失败后直接丢弃。", time: "2026-10-29T10:30:00+08:00", userIds: ["user_x"] }],
+          decisions: [{ op: "conflict_append", decisionId, content: "推送失败后直接丢弃。", time: "2026-10-29T10:30:00+08:00", userIds: ["user_x"] }],
           experiences: [],
           timelineAppend: [],
           sourcesAppend: []
         }]
       }, { acceptedAt: new Date().toISOString() }));
+      }
       return existingTopicReply(payload, "推送失败后改为重试五次。");
-    });
+    }));
     const { service, db } = harness.createService();
     concurrentStore = new SqliteProjectMemoryStore({ db: db.db });
     await setupSpace(service, "space_a");
 
     await add(service, { user_id: "user_a", conversation_id: "c1", space_ids: ["space_a"], messages: [message("user_a", "2026-10-29 10:00:00", "推送失败就指数退避重试三次。")] });
     await drain(service);
+    expect(stub.extract).toHaveLength(1);
+    expect(stub.assign).toHaveLength(1);
+    expect(stub.judge).toHaveLength(0);
     const taskId = await add(service, { user_id: "user_b", conversation_id: "c2", space_ids: ["space_a"], messages: [message("user_b", "2026-10-29 11:00:00", "推送失败改成重试五次吧。")] });
     await drain(service);
 
     expect((await call(service, "get/status", { task_id: taskId })).data.status).toBe("completed");
-    expect(stub.organizeCalls).toHaveLength(2);
+    expect(stub.extract).toHaveLength(2);
+    expect(stub.assign).toHaveLength(2);
+    expect(stub.judge).toHaveLength(2);
     const listed = await call(service, "get/memory", { space_id: "space_a" });
     const decision = listed.data.topic_detail_list[0].decisions[0];
     expect(decision.conflicts.map((item: { user_ids: string[] }) => item.user_ids)).toEqual([["user_x"], ["user_b"]]);  });
 
   it("defers drafts it cannot place instead of creating a conservative new topic", async () => {
-    stubModel(() => ({
+    stubStages(combinedStages(() => ({
       ...emptyReply(),
       drafts: [{ kind: "decision", content: "推送失败后指数退避重试三次。", message_idx: 0, user_ids: ["user_a"], topic: { topic_id: "topic_does_not_exist" } }]
-    }));
+    })));
     const { service } = harness.createService();
     await setupSpace(service, "space_a");
     const taskId = await add(service, { user_id: "user_a", conversation_id: "c1", space_ids: ["space_a"], messages: [message("user_a", "2026-10-29 10:00:00", "推送失败就指数退避重试三次。")] });
@@ -151,7 +176,7 @@ describe("project memory organize pipeline", () => {
   });
 
   it("fails the task without writing anything when the model call fails", async () => {
-    stubModel(() => { throw new Error("model down"); });
+    stubStages(combinedStages(() => { throw new Error("model down"); }));
     const { service } = harness.createService();
     await setupSpace(service, "space_a");
     const taskId = await add(service, { user_id: "user_a", conversation_id: "c1", space_ids: ["space_a"], messages: [message("user_a", "2026-10-29 10:00:00", "推送失败就指数退避重试三次。")] });
@@ -164,7 +189,7 @@ describe("project memory organize pipeline", () => {
   });
 
   it("organizes messages again for another space after they were stored for the first", async () => {
-    stubModel((payload) => newTopicReply(payload, "推送失败后指数退避重试三次。"));
+    stubStages(combinedStages((payload) => newTopicReply(payload, "推送失败后指数退避重试三次。")));
     const { service } = harness.createService();
     await setupSpace(service, "space_a");
     await setupSpace(service, "space_b");
@@ -182,12 +207,16 @@ describe("project memory organize pipeline", () => {
   it("shows topics another writer created to the model on the retry after TOPIC_SET_CHANGED", async () => {
     let concurrentStore: SqliteProjectMemoryStore | null = null;
     let concurrentTopicId: string | null = null;
+    let concurrentCreated = false;
     // Eleven topics that match the batch lexically, so a topic created concurrently with
     // unrelated wording would rank outside topic_k=10 on recall alone.
     const seedTexts = Array.from({ length: 11 }, (_, index) => `推送通道 ${index} 失败后重试。`);
-    const stub = stubModel((payload, index) => {
-      if (index <= seedTexts.length) return newTopicReply(payload, seedTexts[index - 1]!);
-      if (index === seedTexts.length + 1) {
+    const stub = stubStages(combinedStages((payload, batch) => {
+      if (batch <= seedTexts.length) return newTopicReply(payload, seedTexts[batch - 1]!);
+      const topic = payload.candidate_topics[0];
+      const assigning = payload.candidate_topics.length > 0 && (topic?.decisions.length ?? 0) === 0;
+      if (assigning && !concurrentCreated) {
+        concurrentCreated = true;
         void concurrentStore!.commitChangeSet({
           spaceId: "space_a",
           taskId: "other",
@@ -209,7 +238,7 @@ describe("project memory organize pipeline", () => {
         }, { acceptedAt: new Date().toISOString() }).then(() => { concurrentTopicId = "topic_concurrent"; });
       }
       return newTopicReply(payload, "推送失败后改为重试五次。");
-    });
+    }));
     const { service, db } = harness.createService();
     concurrentStore = new SqliteProjectMemoryStore({ db: db.db });
     await setupSpace(service, "space_a");
@@ -222,16 +251,17 @@ describe("project memory organize pipeline", () => {
 
     expect(concurrentTopicId).toBe("topic_concurrent");
     expect((await call(service, "get/status", { task_id: taskId })).data.status).toBe("completed");
-    const retry = stub.organizeCalls.at(-1)!;
-    expect(stub.organizeCalls).toHaveLength(seedTexts.length + 2);
-    expect(retry.candidate_topics.map((topic) => topic.topic_id)).toContain("topic_concurrent");
+    expect(stub.extract).toHaveLength(seedTexts.length + 1);
+    expect(stub.assign).toHaveLength(seedTexts.length + 2);
+    expect(stub.judge).toHaveLength(0);
+    expect(topicIds(stub.assign.at(-1))).toContain("topic_concurrent");
   });
 
   it("keeps a non-author's different conclusion in conflicts even when the model names the author", async () => {
-    stubModel((payload, index) => index === 1
+    stubStages(combinedStages((payload, batch) => batch === 1
       ? newTopicReply(payload, "推送失败后指数退避重试三次。")
       // The model wrongly credits user_b's message to user_a, the content author.
-      : existingTopicReply(payload, "推送失败后改为重试五次。", { user_ids: ["user_a"] }));
+      : existingTopicReply(payload, "推送失败后改为重试五次。", { user_ids: ["user_a"] })));
     const { service } = harness.createService();
     await setupSpace(service, "space_a");
     await add(service, { user_id: "user_a", conversation_id: "c1", space_ids: ["space_a"], messages: [message("user_a", "2026-10-29 10:00:00", "推送失败就指数退避重试三次。")] });

@@ -3,15 +3,25 @@ import type { LlmClient } from "../../../model/types.js";
 import { createMemoryLogger, memoryErrorFields } from "../../../logging/logger.js";
 import { ProjectMemoryError } from "../contract/errors.js";
 import { PROJECT_MEMORY_LIMITS } from "../contract/limits.js";
-import type { CommitResult, RawTurnRecord, TaskError, TopicSnapshot } from "../contract/types.js";
+import type { CommitResult, RawTurnRecord, TaskError } from "../contract/types.js";
 import type { DecisionTopicRouter } from "../decisions/client.js";
 import { briefFromTopic, narrowAddCandidates } from "../decisions/topic-choice.js";
-import { mergeDrafts } from "../merge/merge.js";
+import type { JudgeDraft } from "../merge/judge.js";
+import { judgeBatch } from "../merge/judge.js";
+import { mergeDrafts, type OpBasis } from "../merge/merge.js";
 import { resolveNewTopicDomain } from "../organize/collect.js";
-import { organizeBatch, type OrganizeResult } from "../organize/organizer.js";
-import type { ProjectLocalState, SpaceOutcome } from "../store/sqlite/local-state.js";
+import { assignBatch } from "../organize/assign.js";
+import { type MergeCandidate, resolveMergeCandidates } from "../organize/candidates.js";
+import { extractBatch } from "../organize/extract.js";
+import {
+  type AssignResult,
+  type ExtractResult,
+  type JudgeResult,
+  assembleOrganizeResult,
+  isPlacedTarget
+} from "../organize/organizer.js";
+import type { ProjectLocalState, SpaceOutcome, TaskDetails } from "../store/sqlite/local-state.js";
 import type { ProjectMemoryStore } from "../store/store.js";
-import { clampText } from "../text.js";
 
 const log = createMemoryLogger("project-memory.organize");
 
@@ -48,15 +58,21 @@ function batchHash(turns: RawTurnRecord[]): string {
   return hash.digest("hex").slice(0, 24);
 }
 
-function recallQuery(turns: RawTurnRecord[]): string {
-  return clampText(turns.map((turn) => turn.content).join("\n"), 4000);
+function taskDetails(extracted: ExtractResult, assigned: AssignResult | null, degraded: string[], opBases: OpBasis[]): TaskDetails {
+  return {
+    assignments: (assigned?.assignments ?? []).map((item) => ({ draftId: item.draftId, basis: item.basis })),
+    dropped: extracted.dropped,
+    degraded,
+    ops: opBases.map((basis) => ({ basis }))
+  };
 }
 
 /**
- * One Space of one add/message task (v3 §2.3.1): recall candidates, organize
- * with the model, merge deterministically, commit with optimistic concurrency.
- * Errors settle the task instead of bubbling to the worker, so a failed batch
- * never blocks later batches of the same Space.
+ * One Space of one add/message task (v3 §2.3.1).
+ * Extract once, recall one query per draft, assign from summary and description,
+ * full-read only the topics M04 kept, judge, then merge deterministically.
+ * TOPIC_SET_CHANGED repeats recall and M04. VERSION_CONFLICT repeats the judge.
+ * Neither re-runs extraction. commitAttempts stays 3.
  */
 export async function runOrganizeJob(payload: OrganizeJobPayload, deps: OrganizeJobDeps): Promise<SpaceOutcome> {
   const { store, local } = deps;
@@ -105,52 +121,109 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
   const newTopicDomain = resolveNewTopicDomain(payload.domains, domains.map((item) => item.domain));
   const idempotencyKey = `${payload.spaceId}:${payload.conversationId ?? internalConversation}:${batchHash(turns)}`;
   const recallDomains = payload.domains.length > 0 ? payload.domains : undefined;
+  const domainRecords = recallDomains ? domains.filter((item) => recallDomains.includes(item.domain)) : domains;
+  const conversationKey = payload.conversationId ?? internalConversation;
 
-  let organized: OrganizeResult | null = null;
-  let candidates: TopicSnapshot[] = [];
+  let extracted: ExtractResult | null = null;
+  let assigned: AssignResult | null = null;
+  let judged: JudgeResult | null = null;
+  let judgeReady = false;
+  let degraded: string[] = [];
   let topicSeq: Record<string, number> = {};
   const unavailable = new Set<string>();
-  // Topics another writer created since our last recall (v3 §2.3.1). They must reach the
-  // model on the next attempt even when lexical recall would rank them outside topic_k.
+  // Topics another writer created since our last recall (v3 §2.3.1). They must reach
+  // M04 on the next attempt even when the union cap or lexical rank would drop them.
   const mustConsider = new Set<string>();
   let lastConflict: CommitResult | null = null;
 
+  const model = async <T>(run: () => Promise<T>): Promise<T> => {
+    try {
+      return await run();
+    } catch (error) {
+      log.warn("model.failed", { taskId: payload.taskId, ...memoryErrorFields(error) });
+      fail("organize", "MODEL_CALL_FAILED", error instanceof Error ? error.message : String(error));
+    }
+  };
+
   for (let attempt = 1; attempt <= PROJECT_MEMORY_LIMITS.commitAttempts; attempt += 1) {
-    if (!organized) {
+    if (!extracted) {
+      if (!llm.isConfigured()) fail("organize", "MODEL_NOT_CONFIGURED");
+      extracted = await model(() => extractBatch(llm, {
+        instructions: space.instructions,
+        domains: domainRecords,
+        requestDomains: payload.domains,
+        messages: turns,
+        context
+      }));
+      if (extracted.drafts.length === 0) {
+        local.appendDeferred({ conversationId: conversationKey, spaceId: payload.spaceId, taskId: payload.taskId, segments: extracted.deferred });
+        return {
+          status: "completed",
+          memoryIds: [],
+          added: 0,
+          updated: 0,
+          deferredCount: extracted.deferred.length,
+          details: taskDetails(extracted, null, [], [])
+        };
+      }
+    }
+    if (!extracted) fail("organize", "INTERNAL");
+    const extraction = extracted;
+
+    if (!assigned) {
       const recall = await store.recall({
         spaceIds: [payload.spaceId],
         domains: recallDomains,
-        queries: [{ qid: "batch", text: recallQuery(turns) }],
+        queries: extracted.drafts.map((draft) => ({ qid: draft.draftId, text: draft.content })),
         purpose: "merge",
         preferConversationId: payload.conversationId ?? undefined,
         topicK: PROJECT_MEMORY_LIMITS.topicK,
         entryK: 0
       });
+      degraded = recall.degraded;
       topicSeq = recall.topicSeq;
-      const recalled = recall.results[0]?.topics.map((topic) => topic.topicId) ?? [];
-      candidates = await store.getTopicsFull(payload.spaceId, [...new Set([...mustConsider, ...recalled])]);
-      candidates = await narrowCandidatesWithJev(deps.decision, payload.taskId, turns, candidates);
-      if (!llm.isConfigured()) fail("organize", "MODEL_NOT_CONFIGURED");
-      try {
-        organized = await organizeBatch(llm, {
-          instructions: space.instructions,
-          domains: recallDomains ? domains.filter((item) => recallDomains.includes(item.domain)) : domains,
-          requestDomains: payload.domains,
-          messages: turns,
-          context,
-          candidates,
-          conflictsShown
-        });
-      } catch (error) {
-        log.warn("model.failed", { taskId: payload.taskId, ...memoryErrorFields(error) });
-        fail("organize", "MODEL_CALL_FAILED", error instanceof Error ? error.message : String(error));
+      const recalled = await resolveMergeCandidates(store, payload.spaceId, recall, mustConsider);
+      const pool = new Map(recalled.map((topic) => [topic.topicId, topic]));
+      const narrowed = await narrowCandidatesWithJev(deps.decision, payload.taskId, turns, recalled);
+      const candidates = keepMustConsider(narrowed, pool, mustConsider);
+      assigned = await model(() => assignBatch(llm, {
+        instructions: space.instructions,
+        domains: domainRecords,
+        requestDomains: payload.domains,
+        drafts: extraction.drafts,
+        stateHints: extraction.stateHints,
+        candidates,
+        degraded
+      }));
+      judged = null;
+      judgeReady = false;
+    }
+    if (!assigned) fail("organize", "INTERNAL");
+
+    const byDraft = new Map(assigned.assignments.map((item) => [item.draftId, item]));
+    const topicIds = [...new Set(assigned.assignments.flatMap((item) => "topicId" in item.target ? [item.target.topicId] : []))];
+    const snapshots = new Map((topicIds.length > 0 ? await store.getTopicsFull(payload.spaceId, topicIds) : []).map((topic) => [topic.topicId, topic]));
+
+    if (!judgeReady) {
+      const judgeDrafts: JudgeDraft[] = [];
+      for (const draft of extracted.drafts) {
+        const assignment = byDraft.get(draft.draftId);
+        if (!assignment || !isPlacedTarget(assignment.target) || !("topicId" in assignment.target)) continue;
+        if (!snapshots.has(assignment.target.topicId)) continue;
+        judgeDrafts.push({ ...draft, topicId: assignment.target.topicId });
       }
-    } else {
-      // Re-read and re-merge against fresh data; never replay the old ChangeSet.
-      candidates = await store.getTopicsFull(payload.spaceId, candidates.map((topic) => topic.topicId));
+      const judgeTopics = [...new Set(judgeDrafts.map((draft) => draft.topicId))].flatMap((id) => {
+        const topic = snapshots.get(id);
+        return topic ? [topic] : [];
+      });
+      judged = judgeDrafts.length === 0
+        ? null
+        : await model(() => judgeBatch(llm, { drafts: judgeDrafts, topics: judgeTopics, conflictsShown, stateHints: extraction.stateHints }));
+      judgeReady = true;
     }
 
-    const merged = mergeDrafts(organized, new Map(candidates.map((topic) => [topic.topicId, topic])), {
+    const organized = assembleOrganizeResult(extracted, assigned, judged);
+    const merged = mergeDrafts(organized, snapshots, {
       spaceId: payload.spaceId,
       taskId: payload.taskId,
       sourceBatchId: payload.taskId,
@@ -162,10 +235,10 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
       conflictsShown,
       displayName: (userId) => names.get(userId) ?? local.roleName(userId) ?? userId
     }, unavailable);
-    const conversationKey = payload.conversationId ?? internalConversation;
+    const details = taskDetails(extracted, assigned, degraded, merged.opBases);
     if (!merged.changeSet) {
       local.appendDeferred({ conversationId: conversationKey, spaceId: payload.spaceId, taskId: payload.taskId, segments: merged.deferred });
-      return { status: "completed", memoryIds: [], added: 0, updated: 0, deferredCount: merged.deferred.length };
+      return { status: "completed", memoryIds: [], added: 0, updated: 0, deferredCount: merged.deferred.length, details };
     }
 
     const result = await store.commitChangeSet(merged.changeSet, { acceptedAt });
@@ -178,17 +251,21 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
         memoryIds,
         added: result.replayed ? 0 : merged.createdTopicIds.length,
         updated: result.replayed ? 0 : merged.updatedTopicIds.length,
-        deferredCount: merged.deferred.length
+        deferredCount: merged.deferred.length,
+        details
       };
     }
     lastConflict = result;
     log.info("commit.retry", { taskId: payload.taskId, attempt, error: result.error });
     switch (result.error) {
       case "VERSION_CONFLICT":
+        // Re-read and re-judge. Do not extract or assign again.
+        judgeReady = false;
         break;
       case "TOPIC_SET_CHANGED":
         for (const topicId of result.newTopicIds) mustConsider.add(topicId);
-        organized = null;
+        assigned = null;
+        judgeReady = false;
         break;
       case "TOPIC_NOT_FOUND":
         for (const topicId of result.topicIds) unavailable.add(topicId);
@@ -204,17 +281,34 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
   fail("commit", "VERSION_CONFLICT_RETRY_EXHAUSTED", lastConflict && !lastConflict.ok ? lastConflict.error : undefined);
 }
 
+function keepMustConsider(
+  candidates: MergeCandidate[],
+  pool: ReadonlyMap<string, MergeCandidate>,
+  mustConsider: ReadonlySet<string>
+): MergeCandidate[] {
+  const seen = new Set(candidates.map((topic) => topic.topicId));
+  const extra: MergeCandidate[] = [];
+  for (const topicId of mustConsider) {
+    if (seen.has(topicId)) continue;
+    const topic = pool.get(topicId);
+    if (!topic) continue;
+    extra.push(topic);
+    seen.add(topicId);
+  }
+  return [...candidates, ...extra];
+}
+
 /**
  * When the experiment is on, the decision model may keep a single candidate or
  * clear the list (`new`). `none` and any call failure leave the recalled candidates in place,
- * so a bad call cannot drop the batch.
+ * so a bad call cannot drop the batch. This runs on the merge candidate list, before M04.
  */
 async function narrowCandidatesWithJev(
   decision: DecisionTopicRouter | null | undefined,
   taskId: string,
   turns: RawTurnRecord[],
-  candidates: TopicSnapshot[]
-): Promise<TopicSnapshot[]> {
+  candidates: MergeCandidate[]
+): Promise<MergeCandidate[]> {
   if (!decision) return candidates;
   try {
     const query = turns.filter((turn) => turn.role === "user").map((turn) => turn.content).join("\n");

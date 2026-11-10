@@ -4,6 +4,9 @@ import { vi } from "vitest";
 import { DEFAULT_MEMMY_CONFIG, MemoryDb, MemoryService } from "../../../src/index.js";
 import { errorEnvelope, type OpenMemEnvelope } from "../../../src/service/project-memory/api.js";
 import { ProjectMemoryError } from "../../../src/service/project-memory/contract/errors.js";
+import { ASSIGN_PROMPT_VERSION } from "../../../src/service/project-memory/prompts/assign.js";
+import { EXTRACT_PROMPT_VERSION } from "../../../src/service/project-memory/prompts/extract.js";
+import { JUDGE_PROMPT_VERSION } from "../../../src/service/project-memory/prompts/merge-judge.js";
 import { byokRuntimeConfig, createMemoryServiceFixture, runWorkerRounds } from "../../fixtures/memory-service-fixture.js";
 
 export type OrganizePayload = {
@@ -12,7 +15,8 @@ export type OrganizePayload = {
   candidate_topics: Array<{
     topic_id: string;
     domain: string;
-    topic_summary: string;
+    topic_summary?: string;
+    topic_name?: string;
     decisions: Array<{ id: string; content: string; user_ids: string[]; conflicts: Array<{ ref: string; content: string; user_ids: string[] }> }>;
     experiences: Array<{ id: string; content: string }>;
   }>;
@@ -20,10 +24,14 @@ export type OrganizePayload = {
   request_domains: string[];
 };
 
-export type OrganizeReply = (payload: OrganizePayload, call: number) => Record<string, unknown>;
+export type OrganizeReply = (payload: OrganizePayload, batchNumber: number) => Record<string, unknown>;
 
-export interface ModelStub {
-  organizeCalls: OrganizePayload[];
+export type StageReply = (payload: Record<string, unknown>, call: number) => Record<string, unknown>;
+
+export interface StageStub {
+  extract: Array<Record<string, unknown>>;
+  assign: Array<Record<string, unknown>>;
+  judge: Array<Record<string, unknown>>;
   embeddingCalls: number;
 }
 
@@ -42,9 +50,138 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-/** Stubs the chat and embedding endpoints the summary model and embedder call (see memory-service-fixture). */
-export function stubModel(reply: OrganizeReply, options: { embeddings?: "ok" | "fail" } = {}): ModelStub {
-  const stub: ModelStub = { organizeCalls: [], embeddingCalls: 0 };
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function acceptedDrafts(combined: Record<string, unknown>): Array<{ index: number; draft: Record<string, unknown> }> {
+  const drafts = Array.isArray(combined.drafts) ? combined.drafts : [];
+  const kept: Array<{ index: number; draft: Record<string, unknown> }> = [];
+  drafts.forEach((item, index) => {
+    const draft = asRecord(item);
+    if (!draft) return;
+    if (draft.kind !== "decision" && draft.kind !== "experience" && draft.kind !== "timeline") return;
+    if (typeof draft.content !== "string" || !draft.content.trim()) return;
+    if (!Number.isInteger(draft.message_idx)) return;
+    kept.push({ index, draft });
+  });
+  return kept;
+}
+
+function mapExtract(combined: Record<string, unknown>): Record<string, unknown> {
+  return {
+    drafts: acceptedDrafts(combined).map(({ index, draft }) => ({
+      draft_id: `d${index}`,
+      kind: draft.kind,
+      category: draft.category ?? null,
+      content: draft.content,
+      message_idx: draft.message_idx,
+      reason: draft.reason ?? null,
+      user_ids: draft.user_ids ?? [],
+      signals: []
+    })),
+    state_hints: Array.isArray(combined.state_hints) ? combined.state_hints : [],
+    dropped: Array.isArray(combined.dropped) ? combined.dropped : [],
+    deferred: Array.isArray(combined.deferred) ? combined.deferred : []
+  };
+}
+
+function mapAssign(combined: Record<string, unknown>): Record<string, unknown> {
+  return {
+    assignments: acceptedDrafts(combined).map(({ index, draft }) => {
+      const topic = asRecord(draft.topic);
+      const topicId = typeof topic?.topic_id === "string" ? topic.topic_id : "";
+      const newTopic = typeof topic?.new_topic === "string" ? topic.new_topic : "";
+      const target = topicId ? { topic_id: topicId } : newTopic ? { new_topic: newTopic } : { defer: true };
+      return {
+        draft_id: `d${index}`,
+        target,
+        basis: {
+          independent_delivery: !topicId && newTopic.length > 0,
+          affects_existing_decisions: topicId.length > 0
+        }
+      };
+    }),
+    new_topics: Array.isArray(combined.new_topics) ? combined.new_topics : [],
+    deferred: Array.isArray(combined.deferred) ? combined.deferred : []
+  };
+}
+
+function mapJudge(combined: Record<string, unknown>): Record<string, unknown> {
+  return {
+    drafts: acceptedDrafts(combined).map(({ index, draft }) => ({
+      draft_id: `d${index}`,
+      same_question_as: draft.same_question_as ?? null,
+      same_as: draft.same_as ?? null,
+      approved_by: draft.approved_by ?? [],
+      resolve: draft.resolve ?? null,
+      same_experience_as: draft.same_experience_as ?? null,
+      experience_change: draft.experience_change ?? null
+    })),
+    informed_decision_ids: Array.isArray(combined.informed_decision_ids) ? combined.informed_decision_ids : [],
+    topic_updates: Array.isArray(combined.topic_updates) ? combined.topic_updates : []
+  };
+}
+
+/**
+ * Routes one combined reply across the three stage calls. batchNumber increments
+ * once per extract, so assign and judge of the same batch see the same number.
+ * Extract is shown no candidates; assign is shown candidates without entries;
+ * judge is shown the full decisions.
+ */
+export function combinedStages(reply: OrganizeReply): { extract: StageReply; assign: StageReply; judge: StageReply } {
+  let batchNumber = 0;
+  let messages: OrganizePayload["messages"] = [];
+  let contextTurns: OrganizePayload["context_turns"] = [];
+  let requestDomains: string[] = [];
+
+  const view = (candidateTopics: OrganizePayload["candidate_topics"], conflictsShown: string[] = []): OrganizePayload => ({
+    messages,
+    context_turns: contextTurns,
+    candidate_topics: candidateTopics,
+    conflicts_shown: conflictsShown,
+    request_domains: requestDomains
+  });
+
+  return {
+    extract(payload) {
+      batchNumber += 1;
+      messages = Array.isArray(payload.messages) ? payload.messages as OrganizePayload["messages"] : [];
+      contextTurns = Array.isArray(payload.context_turns) ? payload.context_turns as OrganizePayload["context_turns"] : [];
+      requestDomains = Array.isArray(payload.request_domains) ? payload.request_domains as string[] : [];
+      return mapExtract(reply(view([]), batchNumber));
+    },
+    assign(payload) {
+      const candidates = Array.isArray(payload.candidates) ? payload.candidates as Array<Record<string, unknown>> : [];
+      const topics = candidates.map((topic) => ({
+        topic_id: String(topic.topic_id ?? ""),
+        domain: String(topic.domain ?? ""),
+        topic_summary: typeof topic.topic_summary === "string" ? topic.topic_summary : "",
+        decisions: [],
+        experiences: []
+      }));
+      return mapAssign(reply(view(topics), batchNumber));
+    },
+    judge(payload) {
+      const topics = Array.isArray(payload.topics) ? payload.topics as Array<Record<string, unknown>> : [];
+      const conflictsShown = Array.isArray(payload.conflicts_shown) ? payload.conflicts_shown as string[] : [];
+      const candidateTopics = topics.map((topic) => ({
+        topic_id: String(topic.topic_id ?? ""),
+        domain: String(topic.domain ?? ""),
+        decisions: Array.isArray(topic.decisions) ? topic.decisions as OrganizePayload["candidate_topics"][number]["decisions"] : [],
+        experiences: Array.isArray(topic.experiences) ? topic.experiences as OrganizePayload["candidate_topics"][number]["experiences"] : []
+      }));
+      return mapJudge(reply(view(candidateTopics, conflictsShown), batchNumber));
+    }
+  };
+}
+
+/** Stubs chat completions by the version string in the system prompt, and embeddings. */
+export function stubStages(
+  handlers: { extract: StageReply; assign: StageReply; judge: StageReply },
+  options: { embeddings?: "ok" | "fail" } = {}
+): StageStub {
+  const stub: StageStub = { extract: [], assign: [], judge: [], embeddingCalls: 0 };
   vi.stubGlobal("fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/api/app/byok-token-usage/events")) return json({ ok: true });
@@ -56,9 +193,16 @@ export function stubModel(reply: OrganizeReply, options: { embeddings?: "ok" | "
       return json({ data: inputs.map((item, index) => ({ index, embedding: fakeVector(item) })), usage: { prompt_tokens: 1, total_tokens: 1 } });
     }
     const messages = body.messages as Array<{ role: string; content: string }>;
-    const payload = JSON.parse(messages.find((message) => message.role === "user")!.content) as OrganizePayload;
-    stub.organizeCalls.push(payload);
-    const output = reply(payload, stub.organizeCalls.length);
+    const system = messages.find((message) => message.role === "system")?.content ?? "";
+    const user = messages.find((message) => message.role === "user");
+    const payload = JSON.parse(user?.content ?? "{}") as Record<string, unknown>;
+    const stage = system.includes(EXTRACT_PROMPT_VERSION) ? "extract"
+      : system.includes(ASSIGN_PROMPT_VERSION) ? "assign"
+        : system.includes(JUDGE_PROMPT_VERSION) ? "judge"
+          : null;
+    if (!stage) throw new Error(`unexpected model call: ${system.slice(0, 120)}`);
+    stub[stage].push(payload);
+    const output = handlers[stage](payload, stub[stage].length);
     return json({
       choices: [{ message: { content: JSON.stringify(output) }, finish_reason: "stop" }],
       usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 }

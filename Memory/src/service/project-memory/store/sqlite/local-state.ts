@@ -39,7 +39,18 @@ interface TurnRow {
   tool_calls_json: string;
 }
 
-type SpaceProgress = TaskRecord["spaces"][string] & { error?: TaskError | null };
+type SpaceProgress = TaskRecord["spaces"][string] & { error?: TaskError | null; details?: TaskDetails };
+
+/** Audit fields kept in pm_tasks.progress_json. get/status does not return them. */
+export interface TaskDetails {
+  assignments: Array<{
+    draftId: string;
+    basis: { independentDelivery: boolean; affectsExistingDecisions: boolean };
+  }>;
+  dropped: Array<{ reason: string; text: string | null }>;
+  degraded: string[];
+  ops: Array<{ basis: { draftId: string; hit: string | null; checked: string[] } }>;
+}
 
 export interface SpaceOutcome {
   status: Exclude<TaskStatus, "running">;
@@ -48,6 +59,7 @@ export interface SpaceOutcome {
   updated: number;
   deferredCount: number;
   error?: TaskError | null;
+  details?: TaskDetails;
 }
 
 function taskFromRow(row: TaskRow): TaskRecord {
@@ -183,7 +195,8 @@ export class ProjectLocalState {
         added: outcome.added,
         updated: outcome.updated,
         deferredCount: outcome.deferredCount,
-        error: outcome.error ?? null
+        error: outcome.error ?? null,
+        ...(outcome.details ? { details: outcome.details } : {})
       };
       const items = Object.values(progress);
       const settled = items.every((item) => item.status !== "running");

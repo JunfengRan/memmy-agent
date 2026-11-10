@@ -9,16 +9,16 @@
 | ID | 缺口 | 证据 | 影响 | 收回 | 状态 |
 | --- | --- | --- | --- | --- | --- |
 | G-01 | 推迟的内容不回填。模型判 `ambiguous_topic` 的 4 段从未进入主题：「月报测试出问题，样例文件是不是过期了」「改了 month.json」「别告诉另一个窗口我改了表」「月报金额现在从哪里取」 | 已确认：`pm_deferred_segments` 有 4 行，原因都是 `ambiguous_topic`，运行结束时仍在表里 | `exp_fixture`、`tl_bug` 等漏写；q09、q16、q25 答「记忆中没有相关内容」 | PM-13（ADR-0005 #4） | open |
-| G-02 | 进展（timeline）几乎不写 | 已确认：进展 R 0.143（P 1.000）；必写进展里漏 `tl_report`、`tl_bug`、`tl_copy`、`tl_wait`、`tl_price`、`tl_export`（后两项属于未建的导出主题）。部分在最终状态里被写进 decision 或 experience | 条目 F1 0.667 的主要失分；进展类题答不出 | PM-12 | open |
-| G-03 | 经验（experience）写错类 | 已确认：必写经验 1 条（`exp_fixture`），实际写出的经验是别的内容，`exp_fixture` 被写成一条 decision（评委判为 stale）；kind 正确率 0.609 | experience P/R/F1 全 0 | PM-12 | open |
-| G-04 | 主题粒度：导出主题没建，且被错误合并 | 已确认：5 对 4 个主题，`tp_ledger_export` 无对应主题；「export 拷贝先撤掉…」并进了月报主题（错误合并 1）；B-cubed F1 0.473 | wrongMerges 目标 0；q09 | PM-12（M02/M04 拆开）、PM-13 | open |
+| G-02 | 进展（timeline）几乎不写 | 已确认：进展 R 0.143（P 1.000）；必写进展里漏 `tl_report`、`tl_bug`、`tl_copy`、`tl_wait`、`tl_price`、`tl_export`（后两项属于未建的导出主题）。部分在最终状态里被写进 decision 或 experience。PM-12 把抽取拆成独立提示词，预定修这一条，2026-11-10 还没有新的评测数字 | 条目 F1 0.667 的主要失分；进展类题答不出 | PM-12 | open（未复测） |
+| G-03 | 经验（experience）写错类 | 已确认：必写经验 1 条（`exp_fixture`），实际写出的经验是别的内容，`exp_fixture` 被写成一条 decision（评委判为 stale）；kind 正确率 0.609。PM-12 是预定修复，2026-11-10 未复测 | experience P/R/F1 全 0 | PM-12 | open（未复测） |
+| G-04 | 主题粒度：导出主题没建，且被错误合并 | 已确认：5 对 4 个主题，`tp_ledger_export` 无对应主题；「export 拷贝先撤掉…」并进了月报主题（错误合并 1）；B-cubed F1 0.473。PM-12 拆开 M02/M04 是预定修复的一部分，2026-11-10 未复测 | wrongMerges 目标 0；q09 | PM-12（M02/M04 拆开）、PM-13 | open（未复测） |
 | G-05 | 同一主题里决策被「复述」成多条旧版 | 已确认：旧版当当前 3 条，检索中旧版作为当前内容出现 2 次；月报主题里出现「空客户被丢掉是 report.ts 的读取问题，不是样例文件旧了」这类过程性复述（`exp_fixture` 的旧版）被写成决策 | q13、q14 之外的 stale 题；`staleAsCurrent` 目标 0 | PM-15（复述过滤） | open |
 | G-06 | 连接串决策（`dec_env`）停在旧结论 | 已确认：最终状态里「连接串写进 README」仍是当前内容，`user_ids` 为空；林工改成与周工一致后的结论只作为 conflict 挂着，没有改写、没有合并 | `dec_env` 漏写，q13、q14 答错；`tp_ledger_repo` keyPoints 0 | PM-14（resolve / conflict_update）；`user_ids` 为空待查，见下 | open |
 | G-07 | 决策里出现 `user_ids` 为空 | 已确认：同上，当前内容的成员为空，渲染成「（10/21，）」。待查：是否与 `59547700` 把用户消息作者固定为发言人的修复有关（R-01 的 userIds 0.800，R-02 同为 0.800，但 `dec_empty` 的 userIds 为 false） | decisions.userIds | PM-11b | open |
-| G-08 | 决策原因提取不足 | 已确认：decisions.reasons 0.500，原因臆造 1；q25「为什么改成读一列」答「没有改动原因」 | 原因类题 | PM-12、PM-14 | open |
-| G-09 | 不该写入的内容被写成决策 | 已确认：误写 0.100（10 条负例写入 1 条：`nw_t_write_edit`「只要改了文件就算冲突」，还带了 1 个 conflict） | falseWriteRate | PM-12 | open |
+| G-08 | 决策原因提取不足 | 已确认：decisions.reasons 0.500，原因臆造 1；q25「为什么改成读一列」答「没有改动原因」。PM-12 是预定修复的一部分，2026-11-10 未复测 | 原因类题 | PM-12、PM-14 | open（未复测） |
+| G-09 | 不该写入的内容被写成决策 | 已确认：误写 0.100（10 条负例写入 1 条：`nw_t_write_edit`「只要改了文件就算冲突」，还带了 1 个 conflict）。PM-12 抽取时会输出 dropped，2026-11-10 未复测 | falseWriteRate | PM-12 | open（未复测） |
 | G-10 | 对话里已体现认可的改写没有改写 | 待查：`dec_copy` 未匹配，写成了「先撤掉，等 dry-run 再决定」的旧版 | `dec_copy` stateExact | PM-14 | open |
-| G-11 | ADR-0005 中尚未实现的项 | `split`、复述过滤与 `dropped`、`basis`、三路召回与 `memory_detail_list`、云端 Store、C01 校验、过期向量退化整次召回 | 相关指标系统性偏低，见 ADR-0005 | 见 ADR-0005 的「收回」列 | open |
+| G-11 | ADR-0005 中尚未实现的项 | `split`、复述过滤仍未做。`dropped` 与 `basis` 已由 PM-12 / ADR-0007 记下（2026-11-10），未复测。三路召回与 `memory_detail_list`、云端 Store、C01 校验、过期向量退化整次召回仍未做 | 相关指标系统性偏低，见 ADR-0005 | 见 ADR-0005 的「收回」列 | open |
 | G-12 | 评审的 SHOULD 未处理 | PM-05-09 review-01 R1-6～R1-15 与 R1-16；Q-09、Q-10、Q-12 待 designer 回复 | — | PM-11a 之后 | open |
 
 ## B. 评测与数据集缺口

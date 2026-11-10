@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { assignRelativity } from "../../../src/service/project-memory/retrieve/search.js";
-import { call, createProjectMemoryHarness, drain, emptyReply, setupSpace, stubModel, type OrganizePayload } from "./helpers.js";
+import { call, combinedStages, createProjectMemoryHarness, drain, emptyReply, setupSpace, stubStages, type OrganizePayload } from "./helpers.js";
 
 const harness = createProjectMemoryHarness();
 afterEach(() => harness.cleanup());
@@ -22,7 +22,7 @@ function topicPerBatch(payload: OrganizePayload): Record<string, unknown> {
 }
 
 async function seed(embeddings: "ok" | "fail") {
-  const stub = stubModel(topicPerBatch, { embeddings });
+  const stub = stubStages(combinedStages(topicPerBatch), { embeddings });
   const { service, db } = harness.createService();
   await setupSpace(service, "space_a");
   for (const [index, topic] of TOPICS.entries()) {

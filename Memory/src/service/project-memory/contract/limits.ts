@@ -14,6 +14,8 @@ export const PROJECT_MEMORY_LIMITS = {
   memoryLimitDefault: 9,
   memoryLimitMax: 25,
   topicK: 10,
+  /** Union of per-draft merge recalls. Each query is still topicK; must-consider ids are extra. ADR-0007. */
+  mergeCandidateCap: 20,
   entryK: 5,
   getMemorySizeDefault: 10,
   getMemorySizeMax: 50,

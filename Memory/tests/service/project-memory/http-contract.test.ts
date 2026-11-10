@@ -1,7 +1,7 @@
 import type { Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { API_ROUTES, createMemoryHttpServer } from "../../../src/server/http.js";
-import { createProjectMemoryHarness, emptyReply, stubModel } from "./helpers.js";
+import { combinedStages, createProjectMemoryHarness, emptyReply, stubStages } from "./helpers.js";
 
 const realFetch = globalThis.fetch;
 const harness = createProjectMemoryHarness();
@@ -67,11 +67,11 @@ describe("openmem HTTP contract", () => {
   });
 
   it("runs create_space → create_domains → add_message → get/status → search/memory", async () => {
-    stubModel((payload) => ({
+    stubStages(combinedStages((payload) => ({
       ...emptyReply(),
       drafts: [{ kind: "decision", content: "推送失败后指数退避重试三次。", message_idx: 0, user_ids: [payload.messages[0]!.user_id], topic: { new_topic: "n1" } }],
       new_topics: [{ ref: "n1", topic_name: "推送服务重试", topic_summary: "推送失败后的重试策略", topic_description: "" }]
-    }));
+    })));
     const post = await startServer();
 
     const space = await post("create/space", { space_name: "推送服务", instructions: "只记录工程决策" });
@@ -118,7 +118,7 @@ describe("openmem HTTP contract", () => {
   });
 
   it("maps errors to the v3 envelope and HTTP status", async () => {
-    stubModel(() => emptyReply());
+    stubStages(combinedStages(() => emptyReply()));
     const post = await startServer();
 
     const missing = await post("get/space", { space_id: "space_missing" });
@@ -160,7 +160,7 @@ describe("openmem HTTP contract", () => {
   });
 
   it("requires write scope for write routes even with a trailing slash", async () => {
-    stubModel(() => emptyReply());
+    stubStages(combinedStages(() => emptyReply()));
     const post = await startServer({ token: "read-only", scopes: ["memory:read"] });
     for (const route of ["delete/space/", "add/message/", "create/space//"]) {
       const response = await post(route, { space_id: "space_missing", space_name: "x" });
