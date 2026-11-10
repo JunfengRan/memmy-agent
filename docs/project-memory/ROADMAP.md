@@ -30,7 +30,7 @@
 | PM-11b | 跟踪 v0.1 缺口：`gaps-v01.md` 的 G-01～G-12、E-02～E-05 逐条确认归属条目与状态（E-01、E-06 已关闭）；E-02、E-03 的数据集修订走 PM-17 | gaps-v01.md | 每条缺口有证据、归属条目与状态 | doing（清单已建，E-01 已关闭） |
 | PM-12 | M02 / M04 拆开：add 技能、topic 技能独立提示词（收回 G-02、G-03、G-04、G-08、G-09）。同时：M03 按草稿各出一条 query（v0.1 整批一条，召回漏掉候选会新建重复主题）；merge 召回的 `degraded` 透传给 M04；`TOPIC_SET_CHANGED` 只重跑 M04，不再重跑抽取（review-triage Add-2、Add-5） | v3 §2.2.5、§2.2.6、§2.2.7 | 归类准确率、重复主题率有数；进展 R 与经验 F1 不再为 0 | done（实现与单测完成；数据集 v2 复测未完成：阅读模型 claude-haiku-5-5 网关 503，缺口未复测） |
 | PM-13 | 推迟机制：deferred_segments 与后续回填（收回 G-01）。`topic_unavailable`（主题已被删除）的片段不回填，否则等于为已删主题重建（review-triage Add-3） | v3 §2.2.7、§4.5 | 推迟内容回填 ≥90%；已删除的主题被重建 0 | done（实现与单测完成；评测未跑：阅读模型网关 2026-11-10 返回 503） |
-| PM-14 | 决策补全 conflict_update / resolve / split；informed 由 recall_log + M02 信号判定（收回 G-06、G-10） | v3 §2.2.9 | 决策 op golden 全过 | todo |
+| PM-14 | 决策补全 conflict_update / resolve / split；informed 由 recall_log + M02 信号判定（收回 G-06、G-10） | v3 §2.2.9 | 决策 op golden 全过 | done（决策 op golden 与条件写单测通过；评测未跑） |
 | PM-15 | 迟交规则、按 conversation_id 去重、复述过滤（收回 G-05） | v3 §2.2.3、§3.4 | 迟交改写更晚决策 = 0；旧版当当前 = 0 | todo |
 | PM-16 | TOPIC_SET_CHANGED 重做、幂等键、任务失败原因。含：`chat_time` 缺失时的批次键（Q-15）；失败批次可重新提交（Q-16）；热点 Space 并发新建耗尽 3 次预算的情形写进并发用例（review-triage Add-1、Add-2） | v3 §2.2.2、§2.2.10、§2.2.11 | 并发验收表；缺 `chat_time` 的两次同文提交各自整理；冲突超限的批次重交后能写入 | todo |
 | PM-17 | 数据集 v2.1：多成员、多空间、多 domain、迟交、推迟、重复提交、闲聊负样本、相似名称对照组，约 50 个 topic；同时修 E-02（oracle 摘要随时间变化）、E-03（q17 答案与金标状态）、E-04（阅读模型样本） | v3 §2.2.7 验收 | 能测重复率与错误合并率；金标作被测系统时 answers.llm = 1 | todo |
@@ -66,6 +66,7 @@
 
 | 日期 | 变化 | 原因 |
 | --- | --- | --- |
+| 2026-11-10 | PM-14 改为 done：补上 `split`，并为 conflict_update、resolve、informed 补了 golden。评测未跑 | 单测通过，没有新指标。G-06 的 join 路径未改，见 Q-23 |
 | 2026-11-10 | PM-13 改为 done：同一会话的下一次整理回填推迟片段；`topic_unavailable` 与清空前的行不回填 | 单测通过。评测未跑：阅读模型网关 2026-11-10 返回 503，没有新指标 |
 | 2026-11-10 | PM-12 改为 done：M02 / M04 / M05 拆成三次调用。归类准确率等待复测 | 单测通过。评测回放到阅读模型时，claude-haiku-5-5 网关返回 503，没有新指标 |
 | 2026-11-10 | PM-11a 改为 done。review-02 确认 8 项 MUST 已关闭，没有新的 MUST | 评审在 3fe76c95 上复核通过 |

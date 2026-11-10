@@ -1,6 +1,7 @@
 import { ProjectMemoryError } from "../../contract/errors.js";
+import { PROJECT_MEMORY_LIMITS } from "../../contract/limits.js";
 import type { DecisionOp, DecisionTarget, ExperienceOp } from "../../contract/types.js";
-import { normalizeForCompare } from "../../text.js";
+import { charLength, normalizeForCompare } from "../../text.js";
 import { isBefore } from "../../time.js";
 
 /**
@@ -76,7 +77,79 @@ function mergeIdenticalConflicts(decision: MutableDecision): void {
   decision.conflicts = kept;
 }
 
-export function applyDecisionOp(decision: MutableDecision | undefined, op: DecisionOp): MutableDecision {
+export interface ApplyDecisionOptions {
+  /** True when this id is already stored or staged in the same ChangeSet. */
+  idExists?: (decisionId: string) => boolean;
+}
+
+function archivedConclusions(decision: MutableDecision, reason: string): MutableDecision["newHistory"] {
+  return [decision, ...decision.conflicts].map((item) => ({
+    content: item.content,
+    time: item.time,
+    userIds: [...item.userIds],
+    reason
+  }));
+}
+
+function applySplit(
+  decision: MutableDecision | undefined,
+  op: Extract<DecisionOp, { op: "split" }>,
+  idExists?: (decisionId: string) => boolean
+): MutableDecision[] {
+  if (!decision) throw violation(`decision ${op.decisionId} does not exist`);
+  if (decision.conflicts.length === 0) throw violation(`decision ${decision.id} has no conflicts to split`);
+  if (op.splitInto.length < 2) throw violation(`split of ${decision.id} needs at least two pieces`);
+  const keptCount = op.splitInto.filter((piece) => piece.decisionId === op.decisionId).length;
+  if (keptCount !== 1) throw violation(`split of ${decision.id} must keep its id exactly once`);
+  const seen = new Set<string>();
+  for (const piece of op.splitInto) {
+    if (seen.has(piece.decisionId)) throw violation(`split piece ${piece.decisionId} is duplicated`);
+    seen.add(piece.decisionId);
+    const length = charLength(piece.content);
+    if (length === 0 || length > PROJECT_MEMORY_LIMITS.decision) {
+      throw violation(`split piece content must be 1..${PROJECT_MEMORY_LIMITS.decision} characters`);
+    }
+    if (piece.decisionId !== op.decisionId && idExists?.(piece.decisionId)) {
+      throw violation(`decision ${piece.decisionId} already exists`);
+    }
+  }
+  const archived = archivedConclusions(decision, op.reason);
+  const copyHistory = (): MutableDecision["newHistory"] => archived.map((item) => ({ ...item, userIds: [...item.userIds] }));
+  return op.splitInto.map((piece) => {
+    if (piece.decisionId === decision.id) {
+      decision.content = piece.content;
+      decision.time = piece.time;
+      decision.userIds = [...piece.userIds];
+      decision.conflicts = [];
+      decision.newHistory.push(...copyHistory());
+      return decision;
+    }
+    return {
+      id: piece.decisionId,
+      content: piece.content,
+      time: piece.time,
+      userIds: [...piece.userIds],
+      conflicts: [],
+      newHistory: copyHistory(),
+      isNew: true
+    };
+  });
+}
+
+/** Applies one op. `split` returns the kept row plus every new decision. */
+export function applyDecisionEntries(
+  decision: MutableDecision | undefined,
+  op: DecisionOp,
+  options: ApplyDecisionOptions = {}
+): MutableDecision[] {
+  if (op.op === "split") return applySplit(decision, op, options.idExists);
+  return [applyDecisionOp(decision, op)];
+}
+
+export function applyDecisionOp(
+  decision: MutableDecision | undefined,
+  op: Exclude<DecisionOp, { op: "split" }>
+): MutableDecision {
   if (op.op === "add") {
     if (decision) throw violation(`decision ${op.decisionId} already exists`);
     return {

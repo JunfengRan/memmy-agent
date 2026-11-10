@@ -36,3 +36,7 @@ W45 的目标是端到端可跑的基础版本，用来暴露问题。以下简�
 ## 补记（2026-11-10）
 
 第 4 条（`deferred_segments` 只存不回填）由 PM-13 收回。同一会话的下一次整理会带上产生该行的原始轮次，模型用 `deferred_ref` 认领；写入后删除原行。`topic_unavailable` 与清空前受理的行不回填。上表第 4 行保持原样。细则见 open-questions Q-22。ADR-0007 收尾时仍写第 4 条有效，自本补记起以 PM-13 收回为准。
+
+## 补记（2026-11-10，PM-14）
+
+第 1 条（决策 op 不实现 `split`，store 无 `split_into`）由 PM-14 收回。`DecisionOp` 增加 `split`：`splitInto` 里原 `decisionId` 恰好出现一次，这一行改写成对应的那一项，其余 id 新建。保留原 id 的是 `from` 含 `content` 的那一项；没有这样的项时用第一项。原内容与每一条 conflict 写入每一片的 history，reason 相同，conflicts 清空。上表第 1 行保持原样。ADR-0007 仍写第 1 条有效，自本补记起以 PM-14 收回为准。

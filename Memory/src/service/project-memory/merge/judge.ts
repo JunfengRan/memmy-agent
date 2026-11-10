@@ -4,6 +4,7 @@ import type { DecisionTarget, TopicSnapshot } from "../contract/types.js";
 import { JUDGE_PROMPT_VERSION, JUDGE_SYSTEM_PROMPT } from "../prompts/merge-judge.js";
 import { clampText } from "../text.js";
 import {
+  type DecisionSplitLabel,
   type ExtractedDraft,
   type ExtractResult,
   type Json,
@@ -32,6 +33,24 @@ function parseDecisionTarget(value: unknown, conflicts: number[]): DecisionTarge
   if (typeof value !== "string" || !value.startsWith("conflict:")) return null;
   const seq = Number(value.slice("conflict:".length));
   return conflicts.includes(seq) ? (`conflict:${seq}` as DecisionTarget) : null;
+}
+
+function parseSplit(value: unknown, conflicts: number[]): DecisionSplitLabel | null {
+  const record = asRecord(value);
+  if (!record || !Array.isArray(record.parts)) return null;
+  const parts: DecisionSplitLabel["parts"] = [];
+  for (const item of record.parts) {
+    const part = asRecord(item);
+    const content = asString(part?.content);
+    if (!part || !content) continue;
+    const from: DecisionTarget[] = [];
+    for (const ref of asStringArray(part.from)) {
+      const target = parseDecisionTarget(ref, conflicts);
+      if (target && !from.includes(target)) from.push(target);
+    }
+    parts.push({ content: clampText(content, PROJECT_MEMORY_LIMITS.decision), from });
+  }
+  return parts.length >= 2 ? { parts } : null;
 }
 
 export function buildJudgeMessages(input: JudgeInput): Array<{ role: "system" | "user"; content: string }> {
@@ -112,6 +131,7 @@ export function parseJudgeOutput(raw: Json, input: JudgeInput): JudgeResult {
     const seqs = decision?.conflicts.map((entry) => entry.seq) ?? [];
     const resolveRecord = asRecord(record.resolve);
     const pick = resolveRecord?.pick === "new" ? "new" : parseDecisionTarget(resolveRecord?.pick, seqs);
+    const resolve: JudgeLabel["resolve"] = decision && pick ? { pick } : null;
     const sameExperience = asString(record.same_experience_as);
     const experience = snapshot?.experiences.find((entry) => entry.id === sameExperience);
     const change = record.experience_change === "same" || record.experience_change === "new_version" ? record.experience_change : null;
@@ -120,7 +140,9 @@ export function parseJudgeOutput(raw: Json, input: JudgeInput): JudgeResult {
       sameQuestionAs: decision?.id ?? null,
       sameAs: decision ? parseDecisionTarget(record.same_as, seqs) : null,
       approvedBy: asStringArray(record.approved_by).filter((id) => !draft.userIds.includes(id)),
-      resolve: decision && pick ? { pick } : null,
+      resolve,
+      // A parsed resolve wins when the model sets both.
+      split: decision && !resolve ? parseSplit(record.split, seqs) : null,
       sameExperienceAs: experience?.id ?? null,
       change: experience ? change ?? "new_version" : null
     });

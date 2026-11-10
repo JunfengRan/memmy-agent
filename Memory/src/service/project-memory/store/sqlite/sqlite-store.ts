@@ -26,7 +26,7 @@ import type {
 } from "../../contract/types.js";
 import { charLength, ftsMatchExpression, normalizeForCompare, textTokens, tokenOverlap, uniqueTokens } from "../../text.js";
 import type { CommitContext, DomainUpdate, ListTopicsFilter, ProjectMemoryStore } from "../store.js";
-import { applyDecisionOp, applyExperienceOp, type MutableDecision, type MutableExperience } from "./apply.js";
+import { applyDecisionEntries, applyExperienceOp, type MutableDecision, type MutableExperience } from "./apply.js";
 
 const log = createMemoryLogger("project-memory.store");
 
@@ -792,7 +792,10 @@ export class SqliteProjectMemoryStore implements ProjectMemoryStore {
     for (const op of change.decisions) {
       if ("content" in op && op.content !== undefined) checkLength("decision", op.content, ENTRY_LIMITS.decision);
       const current = decisions.get(op.decisionId) ?? this.loadDecision(topicId, op.decisionId);
-      decisions.set(op.decisionId, applyDecisionOp(current, op));
+      const applied = applyDecisionEntries(current, op, {
+        idExists: (id) => decisions.has(id) || this.decisionIdExists(id)
+      });
+      for (const decision of applied) decisions.set(decision.id, decision);
     }
     for (const decision of decisions.values()) this.writeDecision(topicId, decision, now);
 
@@ -823,6 +826,10 @@ export class SqliteProjectMemoryStore implements ProjectMemoryStore {
       }
       if (item.agentId) member.run(topicId, item.agentId, "agent");
     }
+  }
+
+  private decisionIdExists(id: string): boolean {
+    return this.db.prepare(`SELECT 1 FROM pm_decisions WHERE id = ?`).get(id) !== undefined;
   }
 
   private loadDecision(topicId: string, decisionId: string): MutableDecision | undefined {

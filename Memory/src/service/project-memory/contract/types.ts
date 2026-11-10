@@ -83,6 +83,13 @@ export type DecisionOp =
       time?: string;
       userIds?: string[];
       reason: string;
+    }
+  /** PM-14 proposal: one piece keeps `decisionId`; each piece archives the current content and every conflict. */
+  | {
+      op: "split";
+      decisionId: string;
+      reason: string;
+      splitInto: Array<{ decisionId: string; content: string; time: string; userIds: string[] }>;
     };
 
 export type ExperienceOp =

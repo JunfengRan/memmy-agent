@@ -15,6 +15,15 @@ interface DraftBase {
   backfillOf?: number;
 }
 
+export interface DecisionSplitPart {
+  content: string;
+  from: DecisionTarget[];
+}
+
+export interface DecisionSplitLabel {
+  parts: DecisionSplitPart[];
+}
+
 export interface DecisionDraft extends DraftBase {
   kind: "decision";
   reason: string | null;
@@ -22,6 +31,7 @@ export interface DecisionDraft extends DraftBase {
   sameAs: DecisionTarget | null;
   approvedBy: string[];
   resolve: { pick: DecisionTarget | "new" } | null;
+  split: DecisionSplitLabel | null;
 }
 
 export interface ExperienceDraft extends DraftBase {
@@ -113,6 +123,7 @@ export interface JudgeLabel {
   sameAs: DecisionTarget | null;
   approvedBy: string[];
   resolve: { pick: DecisionTarget | "new" } | null;
+  split: DecisionSplitLabel | null;
   sameExperienceAs: string | null;
   change: "same" | "new_version" | null;
 }
@@ -244,7 +255,8 @@ export function assembleOrganizeResult(
         sameQuestionAs: label?.sameQuestionAs ?? null,
         sameAs: label?.sameAs ?? null,
         approvedBy: label?.approvedBy ?? [],
-        resolve: label?.resolve ?? null
+        resolve: label?.resolve ?? null,
+        split: label?.split ?? null
       });
     } else if (draft.kind === "experience") {
       drafts.push({

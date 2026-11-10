@@ -16,7 +16,7 @@ import {
   type ExperienceDraft,
   type OrganizeResult
 } from "../organize/organizer.js";
-import { applyDecisionOp, applyExperienceOp, type MutableDecision, type MutableExperience } from "../store/sqlite/apply.js";
+import { applyDecisionEntries, applyExperienceOp, type MutableDecision, type MutableExperience } from "../store/sqlite/apply.js";
 import { normalizeForCompare } from "../text.js";
 import { isBefore } from "../time.js";
 
@@ -109,6 +109,45 @@ function ownedConflict(decision: MutableDecision, userIds: readonly string[]): `
   return item ? `conflict:${item.seq}` : null;
 }
 
+function membersOf(decision: MutableDecision, from: readonly DecisionTarget[]): string[] {
+  const ids: string[] = [];
+  for (const target of from) {
+    const item = itemFor(decision, target);
+    if (!item) continue;
+    for (const id of item.userIds) if (!ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
+/**
+ * The piece that cites `content` keeps the row. History is insert-only, so the
+ * original id is rewritten instead of deleted. Other pieces are new ids.
+ */
+function splitDecision(
+  draft: DecisionDraft,
+  decision: MutableDecision,
+  context: MergeContext,
+  newId: (prefix: "dec") => string
+): DecisionOp | null {
+  const parts = draft.split?.parts;
+  if (!parts || parts.length < 2) return null;
+  const authors = draft.userIds;
+  const resolver = authors[0] ? [authors[0]] : [];
+  const citingContent = parts.findIndex((part) => part.from.includes("content"));
+  const keptIndex = citingContent >= 0 ? citingContent : 0;
+  return {
+    op: "split",
+    decisionId: decision.id,
+    reason: `${context.displayName(authors[0]!)} 确定各项适用于不同情况`,
+    splitInto: parts.map((part, index) => ({
+      decisionId: index === keptIndex ? decision.id : newId("dec"),
+      content: part.content,
+      time: draft.time,
+      userIds: part.from.length === 0 ? [...resolver] : membersOf(decision, part.from)
+    }))
+  };
+}
+
 function decideDecision(
   draft: DecisionDraft,
   decision: MutableDecision | undefined,
@@ -149,6 +188,12 @@ function decideDecision(
         reason: owner ? `${resolver} 确定以${context.displayName(owner)} 的结论为准` : `${resolver} 确定了结论`
       };
     }
+  }
+
+  // Same slot as resolve (Q-10): an informed split wins over "same conclusion".
+  if (draft.split && informed && !late && decision.conflicts.length > 0) {
+    const split = splitDecision(draft, decision, context, newId);
+    if (split) return split;
   }
 
   if (sameAs) {
@@ -277,7 +322,12 @@ export function mergeDrafts(
       const op = decideDecision(draft, current, informed, context, newId);
       if (op) {
         change.decisions.push(op);
-        decisionState.set(op.decisionId, applyDecisionOp(op.op === "add" ? undefined : decisionState.get(op.decisionId), op));
+        const applied = applyDecisionEntries(
+          op.op === "add" ? undefined : decisionState.get(op.decisionId),
+          op,
+          { idExists: (id) => decisionState.has(id) }
+        );
+        for (const item of applied) decisionState.set(item.id, item);
         wrote = true;
       }
     } else if (draft.kind === "experience") {

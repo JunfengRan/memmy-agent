@@ -142,4 +142,93 @@ describe("SqliteProjectMemoryStore conditional write", () => {
     expect(() => database.db.prepare("UPDATE pm_decision_history SET content = 'tampered'").run()).toThrow();
     expect(() => database.db.prepare("DELETE FROM pm_decision_history").run()).toThrow();
   });
+
+  function updateTopic(revision: number, decisions: TopicChange["decisions"]): TopicChange {
+    return {
+      op: "update",
+      topicId: "t1",
+      domain: "代码开发",
+      expectedRevision: revision,
+      decisions,
+      experiences: [],
+      timelineAppend: [],
+      sourcesAppend: []
+    };
+  }
+
+  function splitOp(
+    decisionId: string,
+    pieces: Array<{ decisionId: string; content: string }>
+  ): TopicChange["decisions"][number] {
+    return {
+      op: "split",
+      decisionId,
+      reason: "用户A 确定各项适用于不同情况",
+      splitInto: pieces.map((piece) => ({
+        decisionId: piece.decisionId,
+        content: piece.content,
+        time: "2026-10-31T10:00:00+08:00",
+        userIds: ["user_a"]
+      }))
+    };
+  }
+
+  it("rolls back a split whose piece is too long or reuses an existing id", async () => {
+    const { store, snapshot } = await createStore();
+    await store.commitChangeSet(changeSet("k1", [createTopic("t1", {
+      decisions: [
+        { op: "add", decisionId: "t1_d1", content: "失败后指数退避重试三次。", time: "2026-10-29T10:00:00+08:00", userIds: ["user_a"] },
+        { op: "add", decisionId: "t1_d2", content: "失败后按通道分别处理。", time: "2026-10-29T11:00:00+08:00", userIds: ["user_b"] }
+      ]
+    })]), accepted);
+    await store.commitChangeSet(changeSet("k2", [updateTopic(1, [
+      { op: "conflict_append", decisionId: "t1_d1", content: "失败后立即放弃。", time: "2026-10-30T10:00:00+08:00", userIds: ["user_b"] }
+    ])]), accepted);
+    const before = snapshot();
+
+    await expect(store.commitChangeSet(changeSet("too-long", [updateTopic(2, [splitOp("t1_d1", [
+      { decisionId: "t1_d1", content: "失败后指数退避重试三次。" },
+      { decisionId: "t1_d3", content: "推".repeat(101) }
+    ])])]), accepted)).rejects.toMatchObject({ errorName: "STRUCTURE_VIOLATION" });
+    expect(snapshot()).toEqual(before);
+
+    await expect(store.commitChangeSet(changeSet("existing-id", [updateTopic(2, [splitOp("t1_d1", [
+      { decisionId: "t1_d1", content: "失败后指数退避重试三次。" },
+      { decisionId: "t1_d2", content: "失败后按通道立即放弃。" }
+    ])])]), accepted)).rejects.toMatchObject({ errorName: "STRUCTURE_VIOLATION" });
+    expect(snapshot()).toEqual(before);
+
+    const [topic] = await store.getTopicsFull("space_a", ["t1"]);
+    const decision = topic!.decisions.find((item) => item.id === "t1_d1");
+    expect(decision?.conflicts.map((item) => item.content)).toEqual(["失败后立即放弃。"]);
+    expect(decision?.history).toEqual([]);
+    expect(topic!.decisions.map((item) => item.id).sort()).toEqual(["t1_d1", "t1_d2"]);
+  });
+
+  it("rejects a split that omits the kept id, has one piece, or has no conflicts", async () => {
+    const { store, snapshot } = await createStore();
+    await store.commitChangeSet(changeSet("k1", [createTopic("t1")]), accepted);
+    const bare = snapshot();
+    await expect(store.commitChangeSet(changeSet("no-conflicts", [updateTopic(1, [splitOp("t1_d1", [
+      { decisionId: "t1_d1", content: "失败后指数退避重试三次。" },
+      { decisionId: "t1_d9", content: "失败后按通道立即放弃。" }
+    ])])]), accepted)).rejects.toMatchObject({ errorName: "STRUCTURE_VIOLATION" });
+    expect(snapshot()).toEqual(bare);
+
+    await store.commitChangeSet(changeSet("k2", [updateTopic(1, [
+      { op: "conflict_append", decisionId: "t1_d1", content: "失败后立即放弃。", time: "2026-10-30T10:00:00+08:00", userIds: ["user_b"] }
+    ])]), accepted);
+    const withConflict = snapshot();
+
+    await expect(store.commitChangeSet(changeSet("one-piece", [updateTopic(2, [splitOp("t1_d1", [
+      { decisionId: "t1_d1", content: "失败后指数退避重试三次。" }
+    ])])]), accepted)).rejects.toMatchObject({ errorName: "STRUCTURE_VIOLATION" });
+    expect(snapshot()).toEqual(withConflict);
+
+    await expect(store.commitChangeSet(changeSet("missing-kept", [updateTopic(2, [splitOp("t1_d1", [
+      { decisionId: "t1_d8", content: "失败后指数退避重试三次。" },
+      { decisionId: "t1_d9", content: "失败后立即放弃。" }
+    ])])]), accepted)).rejects.toMatchObject({ errorName: "STRUCTURE_VIOLATION" });
+    expect(snapshot()).toEqual(withConflict);
+  });
 });

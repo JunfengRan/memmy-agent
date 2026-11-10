@@ -18,7 +18,7 @@
 | §2.2.6 M03 | 归类用候选召回 | organize/candidates.ts、sqlite-store.ts | 部分对齐（每条草稿一条 query，topic_k=10，degraded 透传 M04；并集再截到 20） | organize-stages.test.ts | 并集上限见 ADR-0007 |
 | §2.2.7 M04 | 归入 / 新建 / 推迟，摘要描述改写 | organize/assign.ts、prompts/assign.ts（pm-assign-v0.2.0）；pipeline/organize-job.ts；store/sqlite/local-state.ts | 部分对齐（只看摘要和描述，basis 写入任务详情；摘要改写在 M05 判断调用里；同一会话下一次整理回填推迟片段，`topic_unavailable` 与清空前受理的行不回填，见 Q-22） | organize-stages.test.ts；deferred-backfill.test.ts | ADR-0007；ADR-0005 #4 由 PM-13 收回；Q-22；选题实验默认关闭（ADR-0006） |
 | §2.2.8 | 全量读 | sqlite-store.ts；organize-job.ts 只读已归入的主题 | 已对齐 | decision golden | §2.3.2 两段读取 |
-| §2.2.9 M05 | 决策 7 种 op、经验 4 种 op、轨迹 | merge/judge.ts（pm-judge-v0.2.0）、merge/merge.ts | 部分对齐：判断独立调用，规则合并仍确定性；缺 `split`；op basis 在 ChangeSet 旁返回，不写入 op。作者由会话推出；认可人要和现行结论相交才改写 | decision-golden.test.ts | ADR-0005 #1；R1-4 已在 review-02 关闭；摘要改写在判断调用内，ADR-0007 |
+| §2.2.9 M05 | 决策 7 种 op、经验 4 种 op、轨迹 | merge/judge.ts（pm-judge-v0.3.0）、merge/merge.ts、store/sqlite/apply.ts | 部分对齐：判断独立调用，规则合并仍确定性；`split` 已实现。保留原 id 的一项（`from` 含 `content`，否则第一项）以及每一片 history 都写入原内容和全部 conflict，是实现提议。op basis 在 ChangeSet 旁返回，不写入 op。作者由会话推出；认可人要和现行结论相交才改写 | decision-golden.test.ts；store-commit.test.ts | ADR-0005 #1 由 PM-14 收回；保留 id 与分片 history 待确认；R1-4 已在 review-02 关闭；摘要改写在判断调用内，ADR-0007 |
 | §2.2.10 | ChangeSet、条件写、结果码 | apply.ts、organize-job.ts | 部分对齐：deferred 事务。`TOPIC_SET_CHANGED` 会把 `newTopicIds` 放进下一次候选。缺 `chat_time` 时任务批次键与 v3 去重口径不一致（Q-15）；失败批次无法重交（Q-16） | store-commit.test.ts | R1-3 已在 review-02 关闭；R1-6、PM-16 |
 | §2.2.11 | get_task_status | api.ts | 已对齐 | http 契约测试 | |
 | §2.3 | OCC、Space 内串行、删除围栏 | pipeline/、repositories.ts | 部分对齐 | 并发单测 | 失败任务阻塞队头（R1-7）；只有 local_queue 围栏 |

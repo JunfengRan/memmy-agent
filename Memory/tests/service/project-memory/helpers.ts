@@ -137,6 +137,7 @@ function mapJudge(combined: Record<string, unknown>): Record<string, unknown> {
       same_as: draft.same_as ?? null,
       approved_by: draft.approved_by ?? [],
       resolve: draft.resolve ?? null,
+      split: draft.split ?? null,
       same_experience_as: draft.same_experience_as ?? null,
       experience_change: draft.experience_change ?? null
     })),
