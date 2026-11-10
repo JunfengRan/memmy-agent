@@ -358,7 +358,8 @@ export class ProjectLocalState {
   /**
    * Turns a completed task already organized for this Space and domain set (Q-27).
    * A failed task, another Space, or a different domain set does not qualify.
-   * `exceptTaskId` is the batch currently running.
+   * A row written before `domains` was stored does not qualify: a missing set is not
+   * the empty set. `exceptTaskId` is the batch currently running.
    */
   organizedTurnIds(spaceId: string, domains: readonly string[], turnIds: readonly string[], exceptTaskId: string): Set<string> {
     if (turnIds.length === 0) return new Set();
@@ -374,8 +375,8 @@ export class ProjectLocalState {
     for (const row of rows) {
       const progress = JSON.parse(row.progress_json) as Record<string, SpaceProgress>;
       const space = progress[spaceId];
-      if (!space || space.status !== "completed") continue;
-      if (domainSetKey(space.domains ?? []) !== wanted) continue;
+      if (!space || space.status !== "completed" || !Array.isArray(space.domains)) continue;
+      if (domainSetKey(space.domains) !== wanted) continue;
       organized.add(row.turn_id);
     }
     return organized;

@@ -616,6 +616,35 @@ describe("conversation dedup", () => {
     expect((await call(service, "get/status", { task_id: retried })).data.status).toBe("completed");
   });
 
+  it("still extracts when an older completed task has no stored domain set", async () => {
+    const stub = stubStages(combinedStages((payload) => decisionReply(payload, payload.messages[0]!.content)));
+    const { service, db } = harness.createService();
+    await setupSpace(service, "space_a", ["代码开发"]);
+    const turn = user("user_a", "用户A", "2026-10-29 11:00:00", "推送失败后的告警要单独计数。");
+    const first = await add(service, {
+      user_id: "user_a",
+      conversation_id: "c-old",
+      space_ids: ["space_a"],
+      domains: ["代码开发"],
+      messages: [turn]
+    });
+    await drain(service);
+    const afterFirst = stub.extract.length;
+    const row = db.db.prepare(`SELECT progress_json FROM pm_tasks WHERE task_id = ?`).get(first) as { progress_json: string };
+    const progress = JSON.parse(row.progress_json) as { space_a: { domains?: string[] } };
+    delete progress.space_a.domains;
+    db.db.prepare(`UPDATE pm_tasks SET progress_json = ? WHERE task_id = ?`).run(JSON.stringify(progress), first);
+
+    await add(service, {
+      user_id: "user_a",
+      conversation_id: "c-old",
+      space_ids: ["space_a"],
+      messages: [turn]
+    });
+    await drain(service);
+    expect(stub.extract.length).toBe(afterFirst + 1);
+  });
+
   it("still loads a deferred segment's original turns after those turns are only context", async () => {
     const stub = stubStages(combinedStages((payload, batch) => {
       if (batch === 1) return { ...emptyReply(), deferred: [{ text: HELD, reason: "work_unresolved" }] };
