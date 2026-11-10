@@ -40,7 +40,7 @@
 
 | ID | 条目 | 出处 | 验收 | 状态 |
 | --- | --- | --- | --- | --- |
-| PM-19 | M08 三路召回：①用户记忆 ②agent L1/Skill ③project，降级标记 degraded。② 路的 LLM 过滤、分层、墙钟时效和失效的 `contextBudget` 按 Q-20 处理（review-triage Search-6、Search-7） | v3 §3.2.3 | 三路齐全或标记降级 100% | todo |
+| PM-19 | M08 三路召回：①用户记忆 ②agent L1/Skill ③project，降级标记 degraded。② 路的 LLM 过滤、分层、墙钟时效和失效的 `contextBudget` 按 Q-20 处理（review-triage Search-6、Search-7） | v3 §3.2.3 | 三路齐全或标记降级 100% | done（三路召回单测通过；跨路融合和 memory_detail_list 仍是 PM-20；未跑评测） |
 | PM-20 | M09 跨路 RRF、relativity 归一化、条目裁剪。三路只按名次融合，不拼接各路分数；relativity 改为 Q-01 的融合分归一（v0.1 用词法 / 向量相关度，阈值已改为按每个主题自身的相关度过滤，review-triage Search-3） | v3 §3.2.5、§3.5 | 确定性 100%；relativity 单调 | todo |
 | PM-21 | 渐进式披露：会话开始 get_memory 索引、每轮 memories、工具 search_project_memory、get_memory_by_id。工具检索写 `via=tool`、不算本轮开始（Q-17）；宿主技能改查 `/api/openmem/v1/search/memory`，不再落到个人记忆（review-triage Search-4、Search-8、Search-9） | v3 §3.1–3.3 | 每轮注入 ≤ 全量的 30%；工具检索的召回记录 `via=tool` 100% | todo |
 | PM-22 | 注入模板 1–4、strip_injected、search 技能。`degraded` 非空时模板与技能里可见（Q-21，review-triage Search-12） | v3 §3.3、§3.4 | 注入块回写 M02 = 0；降级结果渲染出提示 100% | todo |
@@ -66,6 +66,7 @@
 
 | 日期 | 变化 | 原因 |
 | --- | --- | --- |
+| 2026-11-10 | PM-19 改为 done：M08 并行召回用户记忆、L1/Skill 和 project，失败写入 degraded。不融合、不返回 memory_detail_list | 单测通过，没有新指标。融合留在 PM-20 |
 | 2026-11-10 | PM-18 改为 done：评测集方案写在 docs/project-memory/eval-set-scheme.md | PRD 待办 3。可跑数据仍是 dataset/ 一份，v2 冻在 history/v2。q17、阅读上限和 q40–q47 的题型留在 PM-17 |
 | 2026-11-10 | PM-15 改为 done：复述过滤接到整理任务；history 不再写回当前；同 Space 同 domain 已完成的消息不再抽取。评测未跑 | 单测通过，没有新指标 |
 | 2026-11-10 | PM-17 改为 doing：数据集 v2.1 入库，v2 冻在 history/v2。阅读上限和 q17 答案还没做 | 用户要求大版本替换时留下上一版数据集 |

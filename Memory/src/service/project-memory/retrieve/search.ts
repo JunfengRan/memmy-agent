@@ -16,13 +16,23 @@ import { timeMs } from "../time.js";
  * input, equal output. An opt-in OpenAI Decisions selector may move one topic
  * to the front and is absent unless MEMMY_DECISION_TOPIC=1 (ADR-0006).
  */
+/** Which local recall paths M08 should run. Omitted HTTP views become user memory plus L1 and Skill. */
+export interface MemoryViewSelection {
+  userMemory: boolean;
+  /** `detail_factual` is L1, `skill` is Skill. Empty means path ② was not requested. */
+  agentLayers: Array<"L1" | "Skill">;
+  project: boolean;
+}
+
 export interface SearchInput {
+  userId: string;
   spaceIds: string[];
   domains?: string[];
   query: string;
   conversationId?: string;
   memoryLimit: number;
   relativity?: number;
+  views: MemoryViewSelection;
 }
 
 export interface SearchEntryView {

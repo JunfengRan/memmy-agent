@@ -2248,6 +2248,100 @@ export class RetrievalService {
     };
   }
 
+  /**
+   * Candidate recall for project-memory paths ① and ②.
+   * Reuses the existing retrieval lanes and skips query rewrite, LLM filtering,
+   * MMR, token budgeting, and recall-event writes. Recency inside the agent lane
+   * is anchored to the newest candidate time.
+   */
+  async recallCandidates(input: {
+    userId: string;
+    query: string;
+    limit: number;
+    includeUserMemory?: boolean;
+    layers?: Array<"L1" | "Skill">;
+    contextBudget?: number;
+  }): Promise<{
+    candidates: Array<{
+      id: string;
+      layer: "UserMemory" | "L1" | "Skill";
+      content: string;
+      score: number;
+      updatedAt: string;
+    }>;
+    vectorDegraded: boolean;
+  }> {
+    // M10 owns the token budget. Accepting the field here keeps callers from
+    // routing this entry through the old injected-context trim.
+    void input.contextBudget;
+    if (!this.deps.memorySearchEnabled()) {
+      throw new Error("memory search is disabled");
+    }
+    const limit = Math.max(0, input.limit);
+    const layers = input.layers ?? [];
+    const candidates: Array<{
+      id: string;
+      layer: "UserMemory" | "L1" | "Skill";
+      content: string;
+      score: number;
+      updatedAt: string;
+    }> = [];
+    let vectorDegraded = false;
+
+    if (input.includeUserMemory) {
+      const user = await this.retrieveUserMemories({
+        userId: input.userId,
+        query: input.query,
+        queryVectorText: input.query,
+        queryExtract: null,
+        limit
+      });
+      if (user.vectorDegraded) vectorDegraded = true;
+      for (const hit of user.hits) {
+        if (hit.memoryLayer !== "UserMemory") continue;
+        candidates.push({
+          id: hit.id,
+          layer: "UserMemory",
+          content: hit.snippet,
+          score: hit.score,
+          updatedAt: hit.updatedAt ?? hit.createdAt ?? ""
+        });
+      }
+    }
+
+    if (layers.length > 0) {
+      const agent = await this.retrieveSearchMemories({
+        userId: input.userId,
+        projectId: null,
+        query: input.query,
+        queryVectorText: input.query,
+        queryExtract: null,
+        layers,
+        limit,
+        mode: "search",
+        rewrite: false,
+        mmr: false,
+        recencyAnchor: "newest"
+      });
+      if (agent.vectorDegraded) vectorDegraded = true;
+      const updatedAtById = new Map(agent.memories.map((memory) => [memory.id, memory.updatedAt]));
+      const allowed = new Set(layers);
+      for (const hit of agent.retrieval.hits) {
+        if (hit.memoryLayer !== "L1" && hit.memoryLayer !== "Skill") continue;
+        if (!allowed.has(hit.memoryLayer)) continue;
+        candidates.push({
+          id: hit.id,
+          layer: hit.memoryLayer,
+          content: hit.snippet,
+          score: hit.score,
+          updatedAt: updatedAtById.get(hit.id) ?? hit.updatedAt ?? ""
+        });
+      }
+    }
+
+    return { candidates, vectorDegraded };
+  }
+
   private async retrieveUserMemories(input: {
     userId: string;
     query: string;
@@ -2255,20 +2349,20 @@ export class RetrievalService {
     queryExtract: RetrievalQueryExtract | null;
     limit: number;
     excludeSourceTurnIds?: ReadonlySet<string>;
-  }): Promise<{ hits: RecallHit[]; memories: UserMemoryRecord[] }> {
-    if (input.limit <= 0) return { hits: [], memories: [] };
+  }): Promise<{ hits: RecallHit[]; memories: UserMemoryRecord[]; vectorDegraded: boolean }> {
+    if (input.limit <= 0) return { hits: [], memories: [], vectorDegraded: false };
     const compiled = compileRetrievalQuery(input.query, input.queryExtract, {
       domain: this.retrievalTuningConfig().domain
     });
     const active = this.deps.repos.userMemories.listActive(input.userId);
-    if (active.length === 0) return { hits: [], memories: [] };
+    if (active.length === 0) return { hits: [], memories: [], vectorDegraded: false };
     const excludedCount = active.filter((memory) =>
       input.excludeSourceTurnIds?.has(memory.sourceTurnId)
     ).length;
     const routeLimit = input.limit + excludedCount;
-    const queryVector = active.some((memory) => memory.embedding?.length)
-      ? await this.queryVector(input.queryVectorText)
-      : undefined;
+    const needsVector = active.some((memory) => memory.embedding?.length);
+    const queryVector = needsVector ? await this.queryVector(input.queryVectorText) : undefined;
+    const vectorDegraded = Boolean(needsVector && (!queryVector || queryVector.length === 0));
     const routeHits = [
       ...this.deps.repos.userMemories.searchFtsIds(
         input.userId,
@@ -2299,6 +2393,7 @@ export class RetrievalService {
       .slice(0, input.limit);
     return {
       memories,
+      vectorDegraded,
       hits: injectableMemories.map((memory) =>
         userMemoryRecallHit(memory, bestScoreById.get(memory.id) ?? 0)
       )
@@ -2318,15 +2413,19 @@ export class RetrievalService {
     excludeTraceRawTurnIds?: ReadonlySet<string>;
     targetSkillId?: string;
     currentAgentId?: string;
-  }): Promise<{ retrieval: RetrievalResult; memories: MemoryRow[] }> {
+    /** Project-memory M08 passes false so a rewrite call cannot leave this entry. */
+    rewrite?: boolean;
+    mmr?: boolean;
+    recencyAnchor?: "newest";
+  }): Promise<{ retrieval: RetrievalResult; memories: MemoryRow[]; vectorDegraded: boolean }> {
     if (input.limit <= 0 || input.layers.length === 0) {
-      return { retrieval: emptyRetrievalResult(), memories: [] };
+      return { retrieval: emptyRetrievalResult(), memories: [], vectorDegraded: false };
     }
     const runQuery = async (
       query: string,
       queryVectorText: string,
       queryExtract: RetrievalQueryExtract | null
-    ): Promise<{ retrieval: RetrievalResult; memories: MemoryRow[] }> => {
+    ): Promise<{ retrieval: RetrievalResult; memories: MemoryRow[]; vectorDegraded: boolean }> => {
       const config = this.retrievalTuningConfig();
       const compiledQuery = compileRetrievalQuery(query, queryExtract, {
         domain: config.domain
@@ -2338,6 +2437,7 @@ export class RetrievalService {
         projectId: input.projectId
       });
       const queryVector = hasVectorCandidates ? await this.queryVector(queryVectorText) : undefined;
+      const vectorDegraded = Boolean(hasVectorCandidates && (!queryVector || queryVector.length === 0));
       const candidatePool = await this.candidatePool.indexedRetrievalCandidatePool({
         userId: input.userId,
         compiledQuery,
@@ -2351,10 +2451,12 @@ export class RetrievalService {
       });
       const memories = candidatePool.memories;
       if (memories.length === 0) {
-        return { retrieval: emptyRetrievalResult(), memories };
+        return { retrieval: emptyRetrievalResult(), memories, vectorDegraded };
       }
+      const now = input.recencyAnchor === "newest" ? this.newestCandidateMs(memories) : undefined;
       return {
         memories,
+        vectorDegraded,
         retrieval: retrievePluginMemories({
           query,
           queryVector,
@@ -2366,12 +2468,14 @@ export class RetrievalService {
           excludeTraceRawTurnIds: input.excludeTraceRawTurnIds,
           targetSkillId: input.targetSkillId,
           channelScoresByMemory: candidatePool.channelScoresByMemory,
-          config
+          config,
+          ...(now === undefined ? {} : { now }),
+          ...(input.mmr === false ? { mmr: false } : {})
         })
       };
     };
 
-    if (!this.deps.queryRewriteEnabled()) {
+    if (input.rewrite === false || !this.deps.queryRewriteEnabled()) {
       return runQuery(input.query, input.queryVectorText, input.queryExtract);
     }
 
@@ -2394,8 +2498,24 @@ export class RetrievalService {
     ));
     return {
       retrieval: mergeRetrievalResults(outputs.map((output) => output.retrieval), input.limit, QUERY_REWRITE_RRF_CONSTANT, QUERY_REWRITE_PER_QUERY_MIN_KEEP),
-      memories: uniqMemories(outputs.flatMap((output) => output.memories))
+      memories: uniqMemories(outputs.flatMap((output) => output.memories)),
+      vectorDegraded: outputs.some((output) => output.vectorDegraded)
     };
+  }
+
+  /** Newest stored candidate time. Ranking uses this instead of the wall clock. */
+  private newestCandidateMs(memories: readonly MemoryRow[]): number {
+    let newest = Number.NEGATIVE_INFINITY;
+    for (const memory of memories) {
+      const trace = memory.properties?.internal_info?.trace;
+      const traceTs = trace && typeof trace === "object" ? (trace as { ts?: unknown }).ts : undefined;
+      if (typeof traceTs === "number" && Number.isFinite(traceTs)) newest = Math.max(newest, traceTs);
+      for (const value of [memory.updatedAt, memory.createdAt, memory.timeline]) {
+        const parsed = Date.parse(value);
+        if (Number.isFinite(parsed)) newest = Math.max(newest, parsed);
+      }
+    }
+    return Number.isFinite(newest) ? newest : 0;
   }
 
   private async filterRecallHits(query: string, hits: RecallHit[]): Promise<{

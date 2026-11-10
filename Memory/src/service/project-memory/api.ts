@@ -1,6 +1,8 @@
 import { ProjectMemoryError, invalidParams } from "./contract/errors.js";
 import { PROJECT_MEMORY_LIMITS } from "./contract/limits.js";
 import type { DomainRecord, SpaceRecord, TaskRecord, TopicSnapshot } from "./contract/types.js";
+import type { ThreePathSearchOutput } from "./retrieve/recall-paths.js";
+import type { MemoryViewSelection } from "./retrieve/search.js";
 import type { ProjectMemoryService } from "./service.js";
 import type { DomainUpdate } from "./store/store.js";
 import { charLength } from "./text.js";
@@ -114,6 +116,44 @@ function stringList(body: Body, field: string, options: { required: boolean; max
   }
   if (result.length > options.max) throw invalidParams(`${field} accepts at most ${options.max} values`, { field, limit: options.max });
   return result;
+}
+
+const LOCAL_MEMORY_VIEWS = new Set(["project", "detail_factual", "skill", "user_memory"]);
+const UNSUPPORTED_LOCAL_VIEWS = new Set(["preference", "profile", "event", "tool_memory"]);
+
+/**
+ * Local search views. Omitted means paths ① and ② (user memory, L1, Skill), not project.
+ * `preference` / `profile` / `event` / `tool_memory` are known cloud views and reject the
+ * request. Any other string is an invalid parameter. Q-28 names the user-memory view.
+ */
+function includeMemoryViews(body: Body): MemoryViewSelection {
+  const value = body.include_memory_view;
+  if (value === undefined || value === null) {
+    return { userMemory: true, agentLayers: ["L1", "Skill"], project: false };
+  }
+  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || !item.trim())) {
+    throw invalidParams("include_memory_view must be a non-empty string array", { field: "include_memory_view" });
+  }
+  const views = [...new Set(value.map((item) => (item as string).trim()))];
+  const unknown = views.filter((view) => !LOCAL_MEMORY_VIEWS.has(view) && !UNSUPPORTED_LOCAL_VIEWS.has(view));
+  if (unknown.length > 0) {
+    throw invalidParams("include_memory_view has an unknown value", { field: "include_memory_view", values: unknown });
+  }
+  const unsupported = views.filter((view) => UNSUPPORTED_LOCAL_VIEWS.has(view));
+  if (unsupported.length > 0) {
+    throw new ProjectMemoryError("MODE_UNSUPPORTED", "this mode does not serve the requested memory views", {
+      field: "include_memory_view",
+      values: unsupported
+    });
+  }
+  const agentLayers: Array<"L1" | "Skill"> = [];
+  if (views.includes("detail_factual")) agentLayers.push("L1");
+  if (views.includes("skill")) agentLayers.push("Skill");
+  return {
+    userMemory: views.includes("user_memory"),
+    agentLayers,
+    project: views.includes("project")
+  };
 }
 
 function requireProjectView(body: Body, field: "allow_memory_view" | "include_memory_view"): void {
@@ -281,6 +321,16 @@ function taskView(task: TaskRecord): Record<string, unknown> {
   };
 }
 
+function searchData(views: MemoryViewSelection, result: ThreePathSearchOutput): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  // A failed project path still returns an empty list so the response stays 200.
+  if (views.project) data.topic_detail_list = result.topics ?? [];
+  if (result.userMemory !== undefined) data.user_memory = result.userMemory;
+  if (result.agentMemory !== undefined) data.agent_memory = result.agentMemory;
+  if (result.degraded.length > 0) data.degraded = result.degraded;
+  return data;
+}
+
 /** Returns null when the path is not a project-memory route. */
 export async function handleOpenMemRequest(service: ProjectMemoryService, request: OpenMemRequest): Promise<OpenMemResult | null> {
   const route = openMemRoute(request.path);
@@ -309,25 +359,24 @@ export async function handleOpenMemRequest(service: ProjectMemoryService, reques
       return ok({ success: true, task_id: task.taskId, status: task.status }, task.status === "running");
     }
     case "search/memory": {
-      requireProjectView(body, "include_memory_view");
-      singleIdentity(body, "user_id", true);
+      const views = includeMemoryViews(body);
+      const userId = singleIdentity(body, "user_id", true)!;
       const relativity = body.relativity;
       if (relativity !== undefined && relativity !== null && (typeof relativity !== "number" || relativity < 0 || relativity > 1)) {
         throw invalidParams("relativity must be a number between 0 and 1", { field: "relativity" });
       }
       const domains = stringList(body, "domains", { required: false, max: PROJECT_MEMORY_LIMITS.domainsPerSpace });
       const result = await service.search({
-        spaceIds: stringList(body, "space_ids", { required: true, max: PROJECT_MEMORY_LIMITS.spacesPerRequest }),
+        userId,
+        spaceIds: stringList(body, "space_ids", { required: views.project, max: PROJECT_MEMORY_LIMITS.spacesPerRequest }),
         ...(domains.length > 0 ? { domains } : {}),
         query: requireString(body, "query"),
         conversationId: optionalString(body, "conversation_id"),
         memoryLimit: integer(body, "memory_limit_number", PROJECT_MEMORY_LIMITS.memoryLimitDefault, 1, PROJECT_MEMORY_LIMITS.memoryLimitMax),
-        ...(typeof relativity === "number" ? { relativity } : {})
+        ...(typeof relativity === "number" ? { relativity } : {}),
+        views
       });
-      return ok({
-        topic_detail_list: result.topics,
-        ...(result.degraded.length > 0 ? { degraded: result.degraded } : {})
-      });
+      return ok(searchData(views, result));
     }
     case "get/status": {
       return ok(taskView(service.getTask(requireString(body, "task_id"))));

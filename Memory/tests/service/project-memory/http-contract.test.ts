@@ -1,6 +1,7 @@
 import type { Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { API_ROUTES, createMemoryHttpServer } from "../../../src/server/http.js";
+import type { MemoryService } from "../../../src/index.js";
 import { combinedStages, createProjectMemoryHarness, emptyReply, stubStages } from "./helpers.js";
 
 const realFetch = globalThis.fetch;
@@ -31,7 +32,7 @@ async function startServer(options: { token?: string; scopes?: string[] } = {}) 
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("expected TCP address");
   const base = `http://127.0.0.1:${address.port}/api/openmem/v1`;
-  return async (route: string, body: Record<string, unknown>) => {
+  const post = async (route: string, body: Record<string, unknown>) => {
     const response = await realFetch(`${base}/${route}`, {
       method: "POST",
       headers: {
@@ -43,9 +44,10 @@ async function startServer(options: { token?: string; scopes?: string[] } = {}) 
     });
     return { status: response.status, body: await response.json() as { code: number; message: string; data: any } };
   };
+  return { post, service };
 }
 
-async function waitForTask(post: Awaited<ReturnType<typeof startServer>>, taskId: string) {
+async function waitForTask(post: Awaited<ReturnType<typeof startServer>>["post"], taskId: string) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const status = await post("get/status", { task_id: taskId });
     if (status.body.data.status === "completed" || status.body.data.status === "failed") return status.body.data;
@@ -72,7 +74,7 @@ describe("openmem HTTP contract", () => {
       drafts: [{ kind: "decision", content: "推送失败后指数退避重试三次。", message_idx: 0, user_ids: [payload.messages[0]!.user_id], topic: { new_topic: "n1" } }],
       new_topics: [{ ref: "n1", topic_name: "推送服务重试", topic_summary: "推送失败后的重试策略", topic_description: "" }]
     })));
-    const post = await startServer();
+    const { post } = await startServer();
 
     const space = await post("create/space", { space_name: "推送服务", instructions: "只记录工程决策" });
     expect(space.status).toBe(200);
@@ -119,7 +121,7 @@ describe("openmem HTTP contract", () => {
 
   it("maps errors to the v3 envelope and HTTP status", async () => {
     stubStages(combinedStages(() => emptyReply()));
-    const post = await startServer();
+    const { post } = await startServer();
 
     const missing = await post("get/space", { space_id: "space_missing" });
     expect(missing.status).toBe(404);
@@ -161,11 +163,86 @@ describe("openmem HTTP contract", () => {
 
   it("requires write scope for write routes even with a trailing slash", async () => {
     stubStages(combinedStages(() => emptyReply()));
-    const post = await startServer({ token: "read-only", scopes: ["memory:read"] });
+    const { post } = await startServer({ token: "read-only", scopes: ["memory:read"] });
     for (const route of ["delete/space/", "add/message/", "create/space//"]) {
       const response = await post(route, { space_id: "space_missing", space_name: "x" });
       expect(response.status, route).toBe(403);
     }
     expect((await post("get/space/", { space_id: "space_missing" })).status).toBe(404);
   });
+
+  it("accepts the four local views and rejects the others", async () => {
+    stubStages(combinedStages(() => emptyReply()));
+    const { post, service } = await startServer();
+    const space = await post("create/space", { space_name: "队列" });
+    const spaceId = space.body.data.space_id as string;
+
+    const allViews = await post("search/memory", {
+      user_id: "user_a",
+      query: "retrybackoff",
+      space_ids: [spaceId],
+      include_memory_view: ["project", "detail_factual", "skill", "user_memory"]
+    });
+    expect(allViews.status).toBe(200);
+    expect(allViews.body.code).toBe(0);
+    expect(allViews.body.data.topic_detail_list).toEqual([]);
+    expect(allViews.body.data.user_memory).toEqual([]);
+    expect(allViews.body.data.agent_memory).toEqual([]);
+    expect(allViews.body.data.memory_detail_list).toBeUndefined();
+
+    const omitted = await post("search/memory", { user_id: "user_a", query: "retrybackoff" });
+    expect(omitted.status).toBe(200);
+    expect(omitted.body.code).toBe(0);
+    expect(omitted.body.data.topic_detail_list).toBeUndefined();
+    expect(omitted.body.data).toHaveProperty("user_memory");
+    expect(omitted.body.data).toHaveProperty("agent_memory");
+
+    const noSpace = await post("search/memory", {
+      user_id: "user_a",
+      query: "retrybackoff",
+      include_memory_view: ["project"]
+    });
+    expect(noSpace.status).toBe(400);
+    expect(noSpace.body).toMatchObject({ code: 40001, message: "INVALID_PARAMS" });
+
+    const unsupported = await post("search/memory", {
+      user_id: "user_a",
+      query: "retrybackoff",
+      space_ids: [spaceId],
+      include_memory_view: ["preference", "project"]
+    });
+    expect(unsupported.status).toBe(400);
+    expect(unsupported.body).toMatchObject({ code: 40004, message: "MODE_UNSUPPORTED" });
+
+    const unknown = await post("search/memory", {
+      user_id: "user_a",
+      query: "retrybackoff",
+      include_memory_view: ["not_a_view"]
+    });
+    expect(unknown.status).toBe(400);
+    expect(unknown.body).toMatchObject({ code: 40001, message: "INVALID_PARAMS" });
+
+    disablePersonalSearch(service);
+    const degraded = await post("search/memory", {
+      user_id: "user_a",
+      query: "retrybackoff",
+      space_ids: [spaceId],
+      include_memory_view: ["project", "detail_factual", "skill", "user_memory"]
+    });
+    expect(degraded.status).toBe(200);
+    expect(degraded.body.code).toBe(0);
+    expect(degraded.body.message).toBe("ok");
+    expect(degraded.body.data.topic_detail_list).toEqual([]);
+    expect(degraded.body.data.user_memory).toBeUndefined();
+    expect(degraded.body.data.agent_memory).toBeUndefined();
+    expect(degraded.body.data.degraded).toContain("user_memory");
+    expect(degraded.body.data.degraded).toContain("agent_memory");
+    expect(degraded.body.data.degraded).not.toContain("project");
+    expect(degraded.body.data.degraded).not.toContain("detail_factual");
+    expect(degraded.body.data.degraded).not.toContain("skill");
+  });
 });
+
+function disablePersonalSearch(service: MemoryService): void {
+  (service as unknown as { config: { algorithm: { enableMemorySearch: boolean } } }).config.algorithm.enableMemorySearch = false;
+}

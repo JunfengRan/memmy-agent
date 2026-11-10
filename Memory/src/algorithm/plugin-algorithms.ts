@@ -4333,6 +4333,8 @@ export function retrievePluginMemories(input: {
   targetSkillId?: string;
   channelScoresByMemory?: ReadonlyMap<string, SeededChannelScores>;
   now?: number;
+  /** When false, keep relevance order. The default still applies MMR. */
+  mmr?: boolean;
   config?: RetrievalTuningConfig;
 }): RetrievalResult {
   const now = input.now ?? Date.now();
@@ -4426,7 +4428,9 @@ export function retrievePluginMemories(input: {
       )
     : thresholdSurvivors;
 
-  const ranked = mmrSelect(survivors, input.limit, config);
+  const ranked = input.mmr === false
+    ? selectByRelevance(survivors, input.limit)
+    : mmrSelect(survivors, input.limit, config);
   const minRecallScore = mode === "skill_invoke" ? 0 : config.minRecallScore;
   const scoreSurvivors = minRecallScore > 0
     ? ranked.filter((candidate) => candidate.score >= minRecallScore)
@@ -5668,6 +5672,17 @@ function priorityBlendFor(config: Required<RetrievalTuningConfig>): number {
 
 function finiteOr(value: number | undefined, fallback: number): number {
   return Number.isFinite(value) ? value! : fallback;
+}
+
+function selectByRelevance(candidates: RankedMemoryCandidate[], limit: number): RankedMemoryCandidate[] {
+  const ranked = [...candidates].sort((left, right) =>
+    right.relevance - left.relevance ||
+    right.rrf - left.rrf ||
+    left.memory.id.localeCompare(right.memory.id)
+  );
+  const selected = ranked.slice(0, Math.max(0, limit));
+  for (const candidate of selected) candidate.score = candidate.relevance;
+  return selected;
 }
 
 function mmrSelect(

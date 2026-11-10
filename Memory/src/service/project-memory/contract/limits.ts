@@ -23,5 +23,7 @@ export const PROJECT_MEMORY_LIMITS = {
   modelAttempts: 2,
   contextTurns: 6,
   /** Pending deferred rows replayed into the next organize of the same conversation. PM-13. */
-  deferredBackfill: 10
+  deferredBackfill: 10,
+  /** Per-path budget for M08. Paths run together, so a slow path does not cancel the others. */
+  recallPathTimeoutMs: 1_200
 } as const;

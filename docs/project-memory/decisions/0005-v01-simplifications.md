@@ -50,3 +50,7 @@ W45 的目标是端到端可跑的基础版本，用来暴露问题。以下简�
 第 3 条（不按 recall_log 丢弃复述）由 PM-15 收回。抽取之后用本会话 `recall_log` 里的决策（当前内容、每条 conflict、每条 history）以及这些主题上经验、轨迹的当前内容做比对；命中的草稿记入 `dropped`，原因 `restatement`。上表第 3 行保持原样。
 
 经验与轨迹没有单独的召回 id。`recall_log` 只记 `topic_id` 和 `decision_id`，所以这两类用主题行上的当前内容参与比对，不读它们的 history。
+
+## 补记（2026-11-10，PM-19）
+
+第 6 条里的三路召回由 PM-19 收回。M08 在本机并行召回 ① 用户记忆（`user_memory`）、② agent memory（`detail_factual` → L1，`skill` → Skill）和 ③ project。任一路失败写入 `degraded`，通道名见 open-questions Q-28。② 路按 Q-20 只取候选：不走 LLM 过滤、查询改写和墙钟时效。跨路融合、relativity 和 `memory_detail_list` 仍由 PM-20 收回。上表第 6 行保持原样。

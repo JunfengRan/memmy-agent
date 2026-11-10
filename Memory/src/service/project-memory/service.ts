@@ -7,7 +7,9 @@ import type { DomainRecord, RawTurnInput, SpaceRecord, TaskRecord, TopicSnapshot
 import { createDecisionTopicRouter, type DecisionTopicRouter } from "./decisions/client.js";
 import { collectTurns } from "./organize/collect.js";
 import { runOrganizeJob, type OrganizeJobPayload } from "./pipeline/organize-job.js";
-import { searchProjectMemory, type SearchInput, type SearchOutput } from "./retrieve/search.js";
+import { PROJECT_MEMORY_LIMITS } from "./contract/limits.js";
+import { recallSearchPaths, type NonProjectRecallPort, type ThreePathSearchOutput } from "./retrieve/recall-paths.js";
+import type { SearchInput } from "./retrieve/search.js";
 import { ProjectLocalState } from "./store/sqlite/local-state.js";
 import { SqliteProjectMemoryStore } from "./store/sqlite/sqlite-store.js";
 import type { DomainUpdate, ProjectMemoryStore } from "./store/store.js";
@@ -22,6 +24,11 @@ export interface ProjectMemoryServiceDeps {
   store?: ProjectMemoryStore;
   /** Pass null to force the experiment off. Omit to read MEMMY_DECISION_TOPIC, which defaults off. */
   decision?: DecisionTopicRouter | null;
+  /**
+   * Personal and agent recall. Read lazily: MemoryService builds retrieval after
+   * this service. Missing port degrades paths ① and ②.
+   */
+  nonProjectRecall?: () => NonProjectRecallPort | null;
 }
 
 export interface AddMessageInput {
@@ -162,9 +169,15 @@ export class ProjectMemoryService {
 
   // ---------------------------------------------------------------- read / search / delete
 
-  async search(input: SearchInput): Promise<SearchOutput> {
-    await this.validateScope(input.spaceIds, input.domains ?? [], false);
-    return searchProjectMemory(input, { store: this.store, local: this.local, decision: this.decision });
+  async search(input: SearchInput): Promise<ThreePathSearchOutput> {
+    if (input.views.project) await this.validateScope(input.spaceIds, input.domains ?? [], false);
+    return recallSearchPaths(input, {
+      store: this.store,
+      local: this.local,
+      decision: this.decision,
+      nonProjectRecall: this.deps.nonProjectRecall?.() ?? null,
+      timeoutMs: PROJECT_MEMORY_LIMITS.recallPathTimeoutMs
+    });
   }
 
   async listTopics(spaceId: string, page: number, size: number, relatedId?: string): Promise<{ topics: TopicSnapshot[]; total: number }> {

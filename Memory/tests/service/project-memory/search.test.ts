@@ -110,4 +110,21 @@ describe("project memory search", () => {
     expect(result.data.topic_detail_list[0].topic_name).toBe("推送服务重试");
     expect((await search(service)).data).toEqual(result.data);
   });
+
+  it("returns an empty topic list and degraded project when recall throws", async () => {
+    const { service } = await seed("ok");
+    const store = (service as unknown as { projectMemory: { store: { recall: (...args: unknown[]) => Promise<unknown> } } }).projectMemory.store;
+    store.recall = async () => {
+      throw new Error("recall failed");
+    };
+    const result = await search(service);
+    expect(result.code).toBe(0);
+    expect(result.message).toBe("ok");
+    expect(result.data.topic_detail_list).toEqual([]);
+    expect(result.data.degraded).toEqual(["project"]);
+    expect(result.data.user_memory).toBeUndefined();
+    expect(result.data.agent_memory).toBeUndefined();
+    expect(result.data.memory_detail_list).toBeUndefined();
+    expect(JSON.stringify(result)).not.toMatch(/no memory|没有记忆/i);
+  });
 });

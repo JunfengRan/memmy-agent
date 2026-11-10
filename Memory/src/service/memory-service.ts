@@ -362,7 +362,9 @@ export class MemoryService {
     this.projectMemory = new ProjectMemoryService({
       repos: this.repos,
       get llm() { return projectMemoryOwner.llm; },
-      get embedder() { return projectMemoryOwner.embedder; }
+      get embedder() { return projectMemoryOwner.embedder; },
+      // Retrieval is constructed later in this constructor. Read it on each search.
+      nonProjectRecall: () => projectMemoryOwner.retrieval
     });
     const projectEnvironmentOwner = this;
     this.projectEnvironment = new ProjectEnvironmentService({
@@ -1496,7 +1498,8 @@ export class MemoryService {
   /** `/api/openmem/v1/*` project-memory routes; null when the path is not one of them. */
   async handleProjectMemoryRequest(request: OpenMemRequest): Promise<OpenMemResult | null> {
     if (request.method === "POST" && request.path.endsWith("/add/message")) this.assertMemoryAddEnabled();
-    if (request.method === "POST" && request.path.endsWith("/search/memory")) this.assertMemorySearchEnabled();
+    // Project search stays available when personal search is off. Paths ① and ②
+    // degrade inside M08 if the retrieval port refuses the call.
     return this.withModelTaskContext(() => handleOpenMemRequest(this.projectMemory, request));
   }
 

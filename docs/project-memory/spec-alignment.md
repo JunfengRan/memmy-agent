@@ -23,7 +23,7 @@
 | §2.2.11 | get_task_status | api.ts、store/sqlite/local-state.ts | 已对齐。可重试失败再提交会新建任务（Q-16），不再总是返回原 task_id | http 契约测试；task-resubmit.test.ts | 任一 Space 不可重试则仍返回原任务（Q-25） |
 | §2.3 | OCC、Space 内串行、删除围栏 | pipeline/、repositories.ts | 部分对齐 | concurrency.test.ts | 失败任务阻塞队头（R1-7）；只有 local_queue 围栏 |
 | §3.2.1 | 会话开始索引（get_memory） | api.ts | 已对齐（按 space_id 读） | | 无 start_conversation（Q-03） |
-| §3.2.2–3.2.3 M08 | search_memory 三路召回 | retrieve/search.ts | 部分对齐：只有 project 一路 | 数据集 v2 search 指标 | ADR-0005 #6 |
+| §3.2.2–3.2.3 M08 | search_memory 三路召回 | retrieve/recall-paths.ts；retrieval-service.ts `recallCandidates`；retrieve/search.ts 仍负责 project 一路的现有组装 | 部分对齐：① 用户记忆、② L1/Skill、③ project 都返回候选。任一路失败写入 `degraded`（Q-28）。跨路融合和 `memory_detail_list` 仍是 PM-20 | recall-paths.test.ts；recall-candidates.test.ts；http-contract.test.ts；search.test.ts | ADR-0005 #6 的三路部分由 PM-19 收回；Q-28。项目向量降级名仍是 `vector` |
 | §3.2.4 | L01 召回（FTS5 + 向量） | sqlite-store.ts | 已对齐 | search.test.ts | 有任一过期向量即整体退词法 |
 | §3.2.5、§3.5 M09 | RRF、MMR、条目裁剪、截断、recall_log | retrieve/search.ts | 部分对齐：条目裁剪只用词法；relativity 取词法 / 向量相关度的累计最小值，不是 Q-01 的融合分归一（PM-20）；recall_log 一律写 `turn_start`，工具检索不能区分（Q-17，PM-21） | 确定性测试；`assignRelativity` 单测 | RRF k=60（Q-01）；Decisions 选题默认关闭（ADR-0006）；阈值按每个主题自身相关度过滤（2026-11-06） |
 | §3.3 M10 | 注入模板 1–4、检索工具 | — | 未开始 | 渲染 golden | v3 放在 SDK；W47 |
