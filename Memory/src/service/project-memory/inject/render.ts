@@ -59,7 +59,7 @@ export function estimateInjectTokens(text: string): number {
 }
 
 function escapeInjectedMarkers(value: string): string {
-  return value.replace(/<\/?memos_context/gi, (match) => `＜${match.slice(1)}`);
+  return value.replace(/<\/?(?:memos_context|project_index)/gi, (match) => `＜${match.slice(1)}`);
 }
 
 function textOf(value: unknown): string {
