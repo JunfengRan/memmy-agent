@@ -5180,7 +5180,7 @@
       "conversation": "catalog-ask",
       "space_id": "space_catalog",
       "question": "catalog 的价格表为什么要新增一列金额？",
-      "goldAnswer": "因为价格查询太慢；加了 amount 列后，价格列表直接读这一列。",
+      "goldAnswer": "因为价格查询太慢。price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字。",
       "mustInclude": [
         "价格查询太慢"
       ],

@@ -1,9 +1,10 @@
 // Renders search_memory's topic_detail_list with v3 §3.3.4 template three and asks a fixed reader
 // model to answer from it. The system under test never writes the answer itself.
-export const READER_PROMPT_VERSION = 1;
+export const READER_PROMPT_VERSION = 2;
 
 const READER_SYSTEM = `你是一个编码 Agent，正在回答项目成员的问题。只能使用本轮提供的 <memories> 内容，不能使用常识补充项目细节。
 - 用一到三句中文直接回答当前状态。
+- 问题问某项测试、规则或做法现在怎么写，而决策里已经写出这条规则时，用决策回答。不要因为记忆里没有贴出代码就说没有相关内容。
 - 记忆里某项决策带有不一致结论且与问题相关时，列出各项结论及其成员，说明尚未确定。
 - 记忆里没有能回答问题的内容时，只回答「记忆中没有相关内容」。`;
 
