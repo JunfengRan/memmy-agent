@@ -1,10 +1,10 @@
 ---
 id: PM-05-09-v01-core
-status: ready-for-review
-owner: reviewer（待接手）
+status: done
+owner: —
 roadmap: PM-05, PM-06, PM-07, PM-08, PM-09
 branch: dev-project-memory-add-search-dev
-updated: 2026-11-05
+updated: 2026-11-10
 ---
 
 # 项目记忆 v0.1：独立存储、异步整理、检索
@@ -30,8 +30,8 @@ updated: 2026-11-05
 - [x] PRD「决策的维护」逐轮表 golden 通过（split 除外）
 - [x] 同一 Space 串行；检索确定性
 - [x] project 行不再进入普通 L1 召回（迁移层面）
-- [ ] 评审 MUST 全部关闭（handoff-02 声称已修复，待 review-02 确认）
-- [ ] 数据集 v2 上跑出首批数（见 metrics.md）
+- [x] 评审 MUST 全部关闭（review-02 approved，R1-1～R1-5）
+- [x] 数据集 v2 上跑出首批数（见 metrics.md R-20261105-01、R-20261105-02）
 
 ## 相关工作项
 
@@ -44,3 +44,5 @@ updated: 2026-11-05
 | 2026-11-05 | ready-for-review | developer / Claude Code（独立会话，交接由收尾会话补写） | handoff-01.md |
 | 2026-11-05 | changes-requested | reviewer / Claude Code 子代理 | review-01.md |
 | 2026-11-05 | ready-for-review | developer / Claude Code（收尾会话） | handoff-02.md |
+| 2026-11-10 | approved | reviewer / Cursor | review-02.md |
+| 2026-11-10 | done | developer / Cursor | review-02.md 已通过；代码在 59547700，合入分支 HEAD 3fe76c95 |

@@ -18,8 +18,8 @@
 | §2.2.6 M03 | 归类用候选召回 | sqlite-store.ts | 已对齐（topic_k=10，纯词法兜底） | | |
 | §2.2.7 M04 | 归入 / 新建 / 推迟，摘要描述改写 | organize/organizer.ts | 部分对齐（推迟只存不回填） | 数据集 v2 topics 指标 | ADR-0005 #4；Decisions 主题实验默认关闭（ADR-0006） |
 | §2.2.8 | 全量读 | sqlite-store.ts | 已对齐 | decision golden | |
-| §2.2.9 M05 | 决策 7 种 op、经验 4 种 op、轨迹 | merge/merge.ts | 部分对齐：缺 `split`；作者与 approved_by 未校验 | decision-golden.test.ts | review R1-4、ADR-0005 #1 |
-| §2.2.10 | ChangeSet、条件写、结果码 | apply.ts、organize-job.ts | 部分对齐：deferred 事务、TOPIC_SET_CHANGED 未带 newTopicIds；缺 `chat_time` 时任务批次键与 v3 去重口径不一致（Q-15）；失败批次无法重交（Q-16） | store-commit.test.ts | review R1-3、R1-6；PM-16 |
+| §2.2.9 M05 | 决策 7 种 op、经验 4 种 op、轨迹 | merge/merge.ts | 部分对齐：缺 `split`。作者由会话推出；认可人要和现行结论相交才改写 | decision-golden.test.ts | ADR-0005 #1；R1-4 已在 review-02 关闭 |
+| §2.2.10 | ChangeSet、条件写、结果码 | apply.ts、organize-job.ts | 部分对齐：deferred 事务。`TOPIC_SET_CHANGED` 会把 `newTopicIds` 放进下一次候选。缺 `chat_time` 时任务批次键与 v3 去重口径不一致（Q-15）；失败批次无法重交（Q-16） | store-commit.test.ts | R1-3 已在 review-02 关闭；R1-6、PM-16 |
 | §2.2.11 | get_task_status | api.ts | 已对齐 | http 契约测试 | |
 | §2.3 | OCC、Space 内串行、删除围栏 | pipeline/、repositories.ts | 部分对齐 | 并发单测 | 失败任务阻塞队头（R1-7）；只有 local_queue 围栏 |
 | §3.2.1 | 会话开始索引（get_memory） | api.ts | 已对齐（按 space_id 读） | | 无 start_conversation（Q-03） |

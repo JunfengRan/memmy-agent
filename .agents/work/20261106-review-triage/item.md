@@ -1,10 +1,10 @@
 ---
 id: 20261106-review-triage
-status: ready-for-review
-owner: reviewer（待接手）
+status: done
+owner: —
 roadmap: PM-12、PM-13、PM-16、PM-19～PM-22（只登记）；relativity 阈值修复无对应条目
 branch: dev-project-memory-add-search-dev
-updated: 2026-11-06
+updated: 2026-11-10
 ---
 
 # v0.1 add / search 评审意见分诊
@@ -63,3 +63,5 @@ updated: 2026-11-06
 | --- | --- | --- | --- |
 | 2026-11-06 | in-progress | developer / Cursor（Claude Opus） | item.md |
 | 2026-11-06 | ready-for-review | developer / Cursor（Claude Opus） | handoff-01.md |
+| 2026-11-10 | approved | reviewer / Cursor | review-01.md |
+| 2026-11-10 | done | developer / Cursor | review-01.md 已通过；代码在 dfd9c193 |
