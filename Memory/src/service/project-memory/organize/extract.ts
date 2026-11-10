@@ -3,6 +3,7 @@ import { PROJECT_MEMORY_LIMITS } from "../contract/limits.js";
 import type { DomainRecord, RawTurnRecord } from "../contract/types.js";
 import { EXTRACT_PROMPT_VERSION, EXTRACT_SYSTEM_PROMPT } from "../prompts/extract.js";
 import { clampText } from "../text.js";
+import type { RecalledEntry } from "./restatement.js";
 import {
   type DeferredSegment,
   type DraftSignal,
@@ -37,6 +38,8 @@ export interface ExtractInput {
   /** Original turns of the tasks that produced the pending rows, indexed by didx. */
   deferredTurns?: RawTurnRecord[];
   deferredSegments?: DeferredSegmentInput[];
+  /** Clamped recall rows for this conversation. The job filters against the full texts. */
+  recalled?: RecalledEntry[];
 }
 
 const DECISION_CATEGORIES = new Set(["范围", "对外约定", "共同约定"]);
@@ -85,7 +88,8 @@ export function buildExtractMessages(input: ExtractInput): Array<{ role: "system
         reason: segment.reason,
         didx: segment.didx
       }))
-    })
+    }),
+    ...(input.recalled && input.recalled.length > 0 ? { recalled: input.recalled } : {})
   };
   return [
     { role: "system", content: EXTRACT_SYSTEM_PROMPT },
@@ -122,6 +126,11 @@ function parseSignals(value: unknown): DraftSignal[] {
 
 function integerIndex(value: unknown): number | null {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+/** User and assistant keep their role. Anything else, including a missing turn, is unknown. */
+function sourceRole(turn: RawTurnRecord | undefined): "user" | "assistant" | "unknown" {
+  return turn?.role === "user" || turn?.role === "assistant" ? turn.role : "unknown";
 }
 
 /**
@@ -193,7 +202,9 @@ export function parseExtractOutput(raw: Json, input: ExtractInput): ExtractResul
         messageIdx: deferredIdx,
         time: turn.chatTime,
         userIds,
+        role: sourceRole(turn),
         reason: asString(record.reason),
+        restates: asString(record.restates),
         signals: parseSignals(record.signals),
         backfillOf: segment.id
       });
@@ -214,7 +225,9 @@ export function parseExtractOutput(raw: Json, input: ExtractInput): ExtractResul
       messageIdx,
       time: message.chatTime,
       userIds,
+      role: sourceRole(message),
       reason: asString(record.reason),
+      restates: asString(record.restates),
       signals: parseSignals(record.signals)
     });
   });

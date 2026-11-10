@@ -44,6 +44,8 @@ type SpaceProgress = TaskRecord["spaces"][string] & {
   details?: TaskDetails;
   /** Set on spaces copied from a completed attempt. Omitted from get/status. */
   resubmitOf?: string;
+  /** Domain set this Space was organized with. Omitted from get/status. */
+  domains?: string[];
 };
 
 /**
@@ -116,6 +118,10 @@ function retryableFailure(row: TaskRow): { failed: Set<string> } | null {
   const retryable = failed.every(([, item]) => item.error != null && RESUBMITTABLE_REASONS.has(item.error.reason));
   if (!retryable) return null;
   return { failed: new Set(failed.map(([spaceId]) => spaceId)) };
+}
+
+function domainSetKey(domains: readonly string[]): string {
+  return JSON.stringify([...domains].sort());
 }
 
 function turnFromRow(row: TurnRow): RawTurnRecord {
@@ -218,12 +224,13 @@ export class ProjectLocalState {
   }
 
   /** Records the result of one Space; the task settles once every Space has one. */
-  recordSpaceOutcome(taskId: string, spaceId: string, outcome: SpaceOutcome): TaskRecord | undefined {
+  recordSpaceOutcome(taskId: string, spaceId: string, outcome: SpaceOutcome, domains?: readonly string[]): TaskRecord | undefined {
     return this.db.transaction(() => {
       const row = this.db.prepare(`SELECT * FROM pm_tasks WHERE task_id = ?`).get(taskId) as TaskRow | undefined;
       if (!row) return undefined;
       const progress = JSON.parse(row.progress_json) as Record<string, SpaceProgress>;
       if (progress[spaceId] && progress[spaceId]!.status !== "running") return taskFromRow(row);
+      const storedDomains = domains !== undefined ? [...domains].sort() : progress[spaceId]?.domains;
       progress[spaceId] = {
         status: outcome.status,
         memoryIds: outcome.memoryIds,
@@ -231,7 +238,8 @@ export class ProjectLocalState {
         updated: outcome.updated,
         deferredCount: outcome.deferredCount,
         error: outcome.error ?? null,
-        ...(outcome.details ? { details: outcome.details } : {})
+        ...(outcome.details ? { details: outcome.details } : {}),
+        ...(storedDomains !== undefined ? { domains: storedDomains } : {})
       };
       const items = Object.values(progress);
       const settled = items.every((item) => item.status !== "running");
@@ -319,6 +327,54 @@ export class ProjectLocalState {
       `SELECT DISTINCT decision_id FROM pm_recall_log
        WHERE conversation_id = ? AND had_conflicts = 1 AND decision_id IS NOT NULL`
     ).pluck().all(conversationId) as string[]);
+  }
+
+  /** Decision ids and topic ids this conversation has been shown, in first-seen order. */
+  recalledIds(conversationId: string): { decisionIds: string[]; topicIds: string[] } {
+    const rows = this.db.prepare(
+      `SELECT topic_id, decision_id FROM pm_recall_log WHERE conversation_id = ? ORDER BY seq`
+    ).all(conversationId) as Array<{ topic_id: string; decision_id: string | null }>;
+    const topicIds: string[] = [];
+    const decisionIds: string[] = [];
+    const seenTopics = new Set<string>();
+    const seenDecisions = new Set<string>();
+    for (const row of rows) {
+      if (row.topic_id && !seenTopics.has(row.topic_id)) {
+        seenTopics.add(row.topic_id);
+        topicIds.push(row.topic_id);
+      }
+      if (row.decision_id && !seenDecisions.has(row.decision_id)) {
+        seenDecisions.add(row.decision_id);
+        decisionIds.push(row.decision_id);
+      }
+    }
+    return { decisionIds, topicIds };
+  }
+
+  /**
+   * Turns a completed task already organized for this Space and domain set (Q-27).
+   * A failed task, another Space, or a different domain set does not qualify.
+   * `exceptTaskId` is the batch currently running.
+   */
+  organizedTurnIds(spaceId: string, domains: readonly string[], turnIds: readonly string[], exceptTaskId: string): Set<string> {
+    if (turnIds.length === 0) return new Set();
+    const wanted = domainSetKey(domains);
+    const rows = this.db.prepare(
+      `SELECT l.turn_id AS turn_id, t.progress_json AS progress_json
+       FROM pm_task_turns l
+       JOIN pm_tasks t ON t.task_id = l.task_id
+       WHERE l.turn_id IN (SELECT value FROM json_each(?))
+         AND t.task_id != ?`
+    ).all(JSON.stringify(turnIds), exceptTaskId) as Array<{ turn_id: string; progress_json: string }>;
+    const organized = new Set<string>();
+    for (const row of rows) {
+      const progress = JSON.parse(row.progress_json) as Record<string, SpaceProgress>;
+      const space = progress[spaceId];
+      if (!space || space.status !== "completed") continue;
+      if (domainSetKey(space.domains ?? []) !== wanted) continue;
+      organized.add(row.turn_id);
+    }
+    return organized;
   }
 
   /**

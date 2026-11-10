@@ -11,14 +11,14 @@
 | §5.1.2 | ProjectMemoryStore 接口 | store/store.ts | 已对齐 | | 云端实现未做（ADR-0005 #8） |
 | §5.1.5 | 错误码 | contract/errors.ts | 已对齐 | http 契约测试 | |
 | §5.3 | SQLite 表 | storage/schema.ts v10 | 已对齐（分表前缀 `pm_`） | 迁移测试 | |
-| §2.2.1–2.2.2 M01 | 采集、raw_turns、剥离注入块、返回 task_id | organize/collect.ts、service.ts、pipeline/ | 部分对齐 | task-resubmit.test.ts | 未剥离 `<memos_context>`；跨 Space 复用同一批消息会丢（review R1-2）。`chat_time` 缺失回落到秒精度到达时间，同一秒的同文提交仍是一条任务（Q-24） |
+| §2.2.1–2.2.2 M01 | 采集、raw_turns、剥离注入块、返回 task_id | organize/collect.ts、service.ts、pipeline/ | 部分对齐 | task-resubmit.test.ts；restatement-pipeline.test.ts | 已剥离带属性的 `<memos_context>`。同一 Space、同一 domain 集合里已完成任务整理过的消息只作上下文（Q-27）。跨 Space 复用同一批消息会丢（review R1-2）。`chat_time` 缺失回落到秒精度到达时间，同一秒的同文提交仍是一条任务（Q-24） |
 | §2.2.3 | 会话上云 | — | 未开始 | | 本期只做 cloud store 适配 |
 | §2.2.4 | Space / domain 校验 | contract/ | 未开始 | | |
-| §2.2.5 M02 | 抽取：是否写入、回复拆分、字段判定 | organize/extract.ts、prompts/extract.ts（pm-extract-v0.2.1） | 部分对齐（独立调用；同一会话的推迟片段可随本批进入抽取；dropped 收 7 类原因；复述与 recall_log 比对仍是 PM-15） | 数据集 v2 add 指标；organize-stages.test.ts；deferred-backfill.test.ts | ADR-0005 #2 由 ADR-0007 收回 |
+| §2.2.5 M02 | 抽取：是否写入、回复拆分、字段判定 | organize/extract.ts、prompts/extract.ts（pm-extract-v0.2.2）；organize/restatement.ts；pipeline/organize-job.ts | 部分对齐（独立调用；同一会话的推迟片段可随本批进入抽取；dropped 收 7 类原因；复述与 recall_log 比对已接入） | 数据集 v2 add 指标；organize-stages.test.ts；deferred-backfill.test.ts；restatement-pipeline.test.ts | ADR-0005 #2 由 ADR-0007 收回；ADR-0005 #3 由 PM-15 收回 |
 | §2.2.6 M03 | 归类用候选召回 | organize/candidates.ts、sqlite-store.ts | 部分对齐（每条草稿一条 query，topic_k=10，degraded 透传 M04；并集再截到 20） | organize-stages.test.ts | 并集上限见 ADR-0007 |
 | §2.2.7 M04 | 归入 / 新建 / 推迟，摘要描述改写 | organize/assign.ts、prompts/assign.ts（pm-assign-v0.2.0）；pipeline/organize-job.ts；store/sqlite/local-state.ts | 部分对齐（只看摘要和描述，basis 写入任务详情；摘要改写在 M05 判断调用里；同一会话下一次整理回填推迟片段，`topic_unavailable` 与清空前受理的行不回填，见 Q-22） | organize-stages.test.ts；deferred-backfill.test.ts | ADR-0007；ADR-0005 #4 由 PM-13 收回；Q-22；选题实验默认关闭（ADR-0006） |
 | §2.2.8 | 全量读 | sqlite-store.ts；organize-job.ts 只读已归入的主题 | 已对齐 | decision golden | §2.3.2 两段读取 |
-| §2.2.9 M05 | 决策 7 种 op、经验 4 种 op、轨迹 | merge/judge.ts（pm-judge-v0.3.0）、merge/merge.ts、store/sqlite/apply.ts | 部分对齐：判断独立调用，规则合并仍确定性；`split` 已实现。保留原 id 的一项（`from` 含 `content`，否则第一项）以及每一片 history 都写入原内容和全部 conflict，是实现提议。op basis 在 ChangeSet 旁返回，不写入 op。作者由会话推出；认可人要和现行结论相交才改写 | decision-golden.test.ts；store-commit.test.ts | ADR-0005 #1 由 PM-14 收回；保留 id 与分片 history 待确认；R1-4 已在 review-02 关闭；摘要改写在判断调用内，ADR-0007 |
+| §2.2.9 M05 | 决策 7 种 op、经验 4 种 op、轨迹 | merge/judge.ts（pm-judge-v0.3.0）、merge/merge.ts、store/sqlite/apply.ts | 部分对齐：判断独立调用，规则合并仍确定性；`split` 已实现。保留原 id 的一项（`from` 含 `content`，否则第一项）以及每一片 history 都写入原内容和全部 conflict，是实现提议。op basis 在 ChangeSet 旁返回，不写入 op。作者由会话推出；认可人要和现行结论相交才改写。等于 history、又不等于当前内容或任一 conflict 的草稿不会回到当前：迟交不写；非迟交且无原因、无裁决信号则丢为 restatement（Q-26） | decision-golden.test.ts；store-commit.test.ts；restatement-pipeline.test.ts | ADR-0005 #1 由 PM-14 收回；保留 id 与分片 history 待确认；R1-4 已在 review-02 关闭；摘要改写在判断调用内，ADR-0007；Q-26 |
 | §2.2.10 | ChangeSet、条件写、结果码 | apply.ts、organize-job.ts、service.ts | 部分对齐：deferred 事务。`TOPIC_SET_CHANGED` 会把 `newTopicIds` 放进下一次候选。推断的 `chat_time` 进入批次键（Q-15）；可重试失败新建任务（Q-16） | store-commit.test.ts；task-resubmit.test.ts | R1-3 已在 review-02 关闭；R1-6 |
 | §2.2.11 | get_task_status | api.ts、store/sqlite/local-state.ts | 已对齐。可重试失败再提交会新建任务（Q-16），不再总是返回原 task_id | http 契约测试；task-resubmit.test.ts | 任一 Space 不可重试则仍返回原任务（Q-25） |
 | §2.3 | OCC、Space 内串行、删除围栏 | pipeline/、repositories.ts | 部分对齐 | concurrency.test.ts | 失败任务阻塞队头（R1-7）；只有 local_queue 围栏 |
@@ -27,7 +27,7 @@
 | §3.2.4 | L01 召回（FTS5 + 向量） | sqlite-store.ts | 已对齐 | search.test.ts | 有任一过期向量即整体退词法 |
 | §3.2.5、§3.5 M09 | RRF、MMR、条目裁剪、截断、recall_log | retrieve/search.ts | 部分对齐：条目裁剪只用词法；relativity 取词法 / 向量相关度的累计最小值，不是 Q-01 的融合分归一（PM-20）；recall_log 一律写 `turn_start`，工具检索不能区分（Q-17，PM-21） | 确定性测试；`assignRelativity` 单测 | RRF k=60（Q-01）；Decisions 选题默认关闭（ADR-0006）；阈值按每个主题自身相关度过滤（2026-11-06） |
 | §3.3 M10 | 注入模板 1–4、检索工具 | — | 未开始 | 渲染 golden | v3 放在 SDK；W47 |
-| §3.4 | 三层剥离 | — | 未开始 | | W46（PM-15） |
+| §3.4 | 三层剥离 | organize/collect.ts；organize/restatement.ts；pipeline/organize-job.ts | 部分对齐：第 2 道 M01 剥离带属性的 `<memos_context>`；第 3 道 M02 按本会话 recall_log 丢弃复述。第 1 道 SDK `strip_injected` 未做 | restatement.test.ts；restatement-pipeline.test.ts | 经验与轨迹没有单独的召回 id，比对用主题行上的当前内容（ADR-0005 补记） |
 | §5.2 | 云端存储服务接口 | — | 未开始 | mock 契约测试 | W48（PM-24） |
 
 ## 二、与 PRD / SDK 规格的差异（按架构文档执行）

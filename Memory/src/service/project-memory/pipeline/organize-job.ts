@@ -3,7 +3,7 @@ import type { LlmClient } from "../../../model/types.js";
 import { createMemoryLogger, memoryErrorFields } from "../../../logging/logger.js";
 import { ProjectMemoryError } from "../contract/errors.js";
 import { PROJECT_MEMORY_LIMITS } from "../contract/limits.js";
-import type { RawTurnRecord, TaskError } from "../contract/types.js";
+import type { RawTurnRecord, TaskError, TopicSnapshot } from "../contract/types.js";
 import type { DecisionTopicRouter } from "../decisions/client.js";
 import { briefFromTopic, narrowAddCandidates } from "../decisions/topic-choice.js";
 import type { JudgeDraft } from "../merge/judge.js";
@@ -13,6 +13,7 @@ import { resolveNewTopicDomain } from "../organize/collect.js";
 import { assignBatch } from "../organize/assign.js";
 import { type MergeCandidate, resolveMergeCandidates } from "../organize/candidates.js";
 import { extractBatch, type DeferredSegmentInput } from "../organize/extract.js";
+import { clampRecalled, filterRestatements, type RecalledEntry } from "../organize/restatement.js";
 import {
   type AssignResult,
   type DeferredSegment,
@@ -132,21 +133,72 @@ function planSettlement(
   return { consumed: ordered(consumed), kept: ordered(kept), appended };
 }
 
-function taskDetails(extracted: ExtractResult, assigned: AssignResult | null, degraded: string[], opBases: OpBasis[]): TaskDetails {
+function taskDetails(
+  extracted: ExtractResult,
+  assigned: AssignResult | null,
+  degraded: string[],
+  opBases: OpBasis[],
+  mergeDropped: Array<{ reason: string; text: string | null }> = []
+): TaskDetails {
   return {
     assignments: (assigned?.assignments ?? []).map((item) => ({ draftId: item.draftId, basis: item.basis })),
-    dropped: extracted.dropped,
+    dropped: [...extracted.dropped, ...mergeDropped],
     degraded,
     ops: opBases.map((basis) => ({ basis }))
   };
 }
 
+function chronological(turns: RawTurnRecord[]): RawTurnRecord[] {
+  return [...turns].sort((left, right) => left.chatTime < right.chatTime ? -1 : left.chatTime > right.chatTime ? 1 : left.turnId < right.turnId ? -1 : 1);
+}
+
+/**
+ * Decisions contribute current content, every conflict and every history row.
+ * Experiences and timeline contribute current content only: recall_log has no
+ * ids for those rows, so the topic snapshot is the source (ADR-0005).
+ */
+function recalledEntries(topics: readonly TopicSnapshot[], decisionIds: ReadonlySet<string>): RecalledEntry[] {
+  const entries: RecalledEntry[] = [];
+  for (const topic of [...topics].sort((left, right) => left.topicId.localeCompare(right.topicId))) {
+    for (const decision of [...topic.decisions].sort((left, right) => left.id.localeCompare(right.id))) {
+      if (!decisionIds.has(decision.id)) continue;
+      entries.push({ ref: `dec:${decision.id}`, text: decision.content });
+      for (const item of [...decision.history].sort((left, right) => left.seq - right.seq)) {
+        entries.push({ ref: `dec:${decision.id}:h:${item.seq}`, text: item.content });
+      }
+      for (const item of [...decision.conflicts].sort((left, right) => left.seq - right.seq)) {
+        entries.push({ ref: `conflict:${decision.id}:${item.seq}`, text: item.content });
+      }
+    }
+    for (const experience of [...topic.experiences].sort((left, right) => left.id.localeCompare(right.id))) {
+      entries.push({ ref: `exp:${experience.id}`, text: experience.content });
+    }
+    for (const item of [...topic.timeline].sort((left, right) => left.id.localeCompare(right.id))) {
+      entries.push({ ref: `tl:${item.id}`, text: item.content });
+    }
+  }
+  return entries;
+}
+
+async function loadRecalledEntries(
+  store: ProjectMemoryStore,
+  local: ProjectLocalState,
+  conversationId: string | null
+): Promise<RecalledEntry[]> {
+  if (!conversationId) return [];
+  const { decisionIds, topicIds } = local.recalledIds(conversationId);
+  if (topicIds.length === 0) return [];
+  const topics = await store.getTopicsFull(null, topicIds);
+  return recalledEntries(topics, new Set(decisionIds));
+}
+
 /**
  * One Space of one add/message task (v3 §2.3.1).
- * Extract once, recall one query per draft, assign from summary and description,
+ * Extract once, drop restatements against this conversation's recall, then
+ * recall one query per kept draft, assign from summary and description,
  * full-read only the topics M04 kept, judge, then merge deterministically.
  * TOPIC_SET_CHANGED repeats recall and M04. VERSION_CONFLICT repeats the judge.
- * Neither re-runs extraction. commitAttempts stays 3.
+ * Neither re-runs extraction or the restatement filter. commitAttempts stays 3.
  */
 export async function runOrganizeJob(payload: OrganizeJobPayload, deps: OrganizeJobDeps): Promise<SpaceOutcome> {
   const { store, local } = deps;
@@ -167,7 +219,7 @@ export async function runOrganizeJob(payload: OrganizeJobPayload, deps: Organize
     log.warn("task.failed", { taskId: payload.taskId, spaceId: payload.spaceId, reason: taskError.reason, stage: taskError.stage });
     outcome = { status: "failed", memoryIds: [], added: 0, updated: 0, deferredCount: 0, error: taskError };
   }
-  local.recordSpaceOutcome(payload.taskId, payload.spaceId, outcome);
+  local.recordSpaceOutcome(payload.taskId, payload.spaceId, outcome, payload.domains);
   return outcome;
 }
 
@@ -182,24 +234,33 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
   const unknown = payload.domains.filter((domain) => !registered.has(domain));
   if (unknown.length > 0) fail("validate", "DOMAIN_INVALID", unknown.join(","));
 
-  const turns = local.taskTurns(payload.taskId).filter((turn) => turn.role === "user" || turn.role === "assistant");
-  if (turns.length === 0) return { status: "completed", memoryIds: [], added: 0, updated: 0, deferredCount: 0 };
+  const batchTurns = local.taskTurns(payload.taskId).filter((turn) => turn.role === "user" || turn.role === "assistant");
+  if (batchTurns.length === 0) return { status: "completed", memoryIds: [], added: 0, updated: 0, deferredCount: 0 };
+  // Q-27: a completed task for this Space and domain set already organized these
+  // turns. They stay in the idempotency hash and become context, not a new extract.
+  const organized = local.organizedTurnIds(payload.spaceId, payload.domains, batchTurns.map((turn) => turn.turnId), payload.taskId);
+  const turns = batchTurns.filter((turn) => !organized.has(turn.turnId));
+  const repeated = batchTurns.filter((turn) => organized.has(turn.turnId));
   const backfill = payload.conversationId
     ? loadBackfill(local, local.pendingDeferred(payload.conversationId, payload.spaceId, {
         clearedAt: space.clearedAt,
         limit: PROJECT_MEMORY_LIMITS.deferredBackfill
       }))
     : EMPTY_BACKFILL;
-  const internalConversation = turns[0]!.conversationId;
-  const context = payload.conversationId
-    ? local.contextTurns(internalConversation, payload.taskId, turns[0]!.chatTime, PROJECT_MEMORY_LIMITS.contextTurns)
+  if (turns.length === 0 && backfill.segments.length === 0) {
+    return { status: "completed", memoryIds: [], added: 0, updated: 0, deferredCount: 0 };
+  }
+  const internalConversation = batchTurns[0]!.conversationId;
+  const earlier = payload.conversationId
+    ? local.contextTurns(internalConversation, payload.taskId, batchTurns[0]!.chatTime, PROJECT_MEMORY_LIMITS.contextTurns)
         .filter((turn) => turn.role === "user" || turn.role === "assistant")
     : [];
+  const context = repeated.length === 0 ? earlier : chronological([...earlier, ...repeated]);
   const conflictsShown = payload.conversationId ? local.conflictedDecisionsShown(payload.conversationId) : new Set<string>();
   const names = new Map<string, string>();
   for (const turn of [...context, ...turns]) if (turn.roleId && turn.roleName) names.set(turn.roleId, turn.roleName);
   const newTopicDomain = resolveNewTopicDomain(payload.domains, domains.map((item) => item.domain));
-  const idempotencyKey = `${payload.spaceId}:${payload.conversationId ?? internalConversation}:${batchHash(turns)}`;
+  const idempotencyKey = `${payload.spaceId}:${payload.conversationId ?? internalConversation}:${batchHash(batchTurns)}`;
   const recallDomains = payload.domains.length > 0 ? payload.domains : undefined;
   const domainRecords = recallDomains ? domains.filter((item) => recallDomains.includes(item.domain)) : domains;
   const conversationKey = payload.conversationId ?? internalConversation;
@@ -254,15 +315,28 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
   for (let attempt = 1; attempt <= PROJECT_MEMORY_LIMITS.commitAttempts; attempt += 1) {
     if (!extracted) {
       if (!llm.isConfigured()) fail("organize", "MODEL_NOT_CONFIGURED");
-      extracted = await model(() => extractBatch(llm, {
+      const recalled = await loadRecalledEntries(store, local, payload.conversationId);
+      const raw = await model(() => extractBatch(llm, {
         instructions: space.instructions,
         domains: domainRecords,
         requestDomains: payload.domains,
         messages: turns,
         context,
         deferredTurns: backfill.turns,
-        deferredSegments: backfill.segments
+        deferredSegments: backfill.segments,
+        recalled: clampRecalled(recalled)
       }));
+      // Once, on the cached extract. TOPIC_SET_CHANGED and VERSION_CONFLICT must not
+      // bring a dropped restatement back or call the extractor again.
+      const filtered = filterRestatements(raw.drafts, turns.map((turn) => ({ role: turn.role })), recalled);
+      extracted = {
+        ...raw,
+        drafts: filtered.kept,
+        dropped: [
+          ...raw.dropped,
+          ...filtered.dropped.map((item) => ({ reason: item.reason, text: item.content }))
+        ]
+      };
       if (extracted.drafts.length === 0) {
         return finish(extracted.deferred, [], {
           status: "completed",
@@ -341,7 +415,7 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
       conflictsShown,
       displayName: (userId) => names.get(userId) ?? local.roleName(userId) ?? userId
     }, unavailable);
-    const details = taskDetails(extracted, assigned, degraded, merged.opBases);
+    const details = taskDetails(extracted, assigned, degraded, merged.opBases, merged.dropped);
     if (!merged.changeSet) {
       return finish(merged.deferred, merged.resolvedBackfill, {
         status: "completed",

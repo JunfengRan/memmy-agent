@@ -99,7 +99,8 @@ function mapExtract(combined: Record<string, unknown>): Record<string, unknown> 
       ...(typeof draft.deferred_ref === "string" ? { deferred_ref: draft.deferred_ref, deferred_idx: draft.deferred_idx } : {}),
       reason: draft.reason ?? null,
       user_ids: draft.user_ids ?? [],
-      signals: []
+      signals: Array.isArray(draft.signals) ? draft.signals : [],
+      ...(draft.restates === null || typeof draft.restates === "string" ? { restates: draft.restates } : {})
     })),
     state_hints: Array.isArray(combined.state_hints) ? combined.state_hints : [],
     dropped: Array.isArray(combined.dropped) ? combined.dropped : [],

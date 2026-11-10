@@ -2,11 +2,13 @@ import { clampText, normalizeForCompare, textTokens, tokenOverlap } from "../tex
 
 /**
  * Pure restatement check for M02 (v3 §2.2.5, §3.4). No model calls.
- * Not wired into the organize job: the job still does not call this module.
+ * The organize job calls this once, after extract, with the full recalled
+ * texts. The model sees only the clamped copy.
  *
  * Source role is `draft.role`. `unknown` is a backfill placeholder with no
  * source message, so only an exact normalized match can drop it. `turns` is
- * part of the call shape the job will pass; this slice does not read it.
+ * part of the call shape the job passes; this function does not read it.
+ * A `restates` ref that is not in the recalled list does not drop the draft.
  */
 const OVERLAP_THRESHOLD = 0.5;
 

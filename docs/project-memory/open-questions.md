@@ -31,3 +31,5 @@
 | Q-23 | 内容作者加入一条已有 conflict，且这次会把 content 的成员全部移走时，content 的 user_ids 被挪空，相同结论也不会合并 | v3 §2.2.9 不变式 1；gaps-v01 G-06 | 草稿不是迟交时改为发出 rewrite，让相同结论合并，user_ids 取并集。当前 join 行为不改 | 待回复 |
 | Q-24 | 同一秒内、没有 `chat_time` 的两条相同消息算不算两条。到达时间按秒取值，`pm_raw_turns` 对 `(conversation_id, role, chat_time, content_hash)` 唯一，同一秒的同文提交仍是一条任务 | v3 §2.2.2；PM-16 | 不改成毫秒。缺 `chat_time` 时用到达时间的秒精度；同一秒的同文提交保持一个任务 | 按提议实现 |
 | Q-25 | 一个任务里多个 Space，只有部分失败时怎么重交。可重试的 Space 要不要单独重排队 | v3 §2.2.11；PM-16 | 只重新排队失败原因可重试的 Space。只要有任一 Space 的失败原因不可重试，就返回原任务 | 按提议实现 |
+| Q-26 | 非迟交的草稿与某条 history 相同，又与当前 content 和任一 conflict 都不同。没有原因、也没有裁决信号时，是改回旧结论，还是当作复述丢掉？ | v3 §2.2.9；PM-15 | 没有原因且没有裁决信号就丢为 restatement，不写入。有原因或有裁决信号则视为改回旧结论，沿用现有规则（作者属于 content 或已认可则 rewrite）。迟交且只等于 history 时不写，不 `conflict_append` | 按提议实现 |
+| Q-27 | 同一条消息已经由同一 Space、同一 domain 集合上的已完成任务整理过，后续批次再带上它时要不要再抽取？ | v3 §2.2.2、§4.8；PM-15 | 只作上下文，不再抽取。换一个 Space、domain 集合不同、或上次任务失败，仍然整理。不改变 `idempotency_key`。推迟回填仍按产生该行的 task id 读取原始轮次 | 按提议实现 |

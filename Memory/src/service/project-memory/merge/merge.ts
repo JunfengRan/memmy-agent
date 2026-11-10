@@ -57,13 +57,17 @@ export interface MergeOutcome {
   createdTopicIds: string[];
   updatedTopicIds: string[];
   opBases: OpBasis[];
+  /** Drafts equal to a history version and not written (Q-26). */
+  dropped: Array<{ reason: "restatement"; text: string }>;
 }
 
 function defaultId(prefix: string): string {
   return `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
 }
 
-function cloneDecision(decision: TopicSnapshot["decisions"][number]): MutableDecision {
+type DecisionState = MutableDecision & { pastContents: string[] };
+
+function cloneDecision(decision: TopicSnapshot["decisions"][number]): DecisionState {
   return {
     id: decision.id,
     content: decision.content,
@@ -71,8 +75,14 @@ function cloneDecision(decision: TopicSnapshot["decisions"][number]): MutableDec
     userIds: [...decision.userIds],
     conflicts: decision.conflicts.map((item) => ({ ...item, userIds: [...item.userIds] })),
     newHistory: [],
-    isNew: false
+    isNew: false,
+    pastContents: decision.history.map((item) => normalizeForCompare(item.content))
   };
+}
+
+function withPast(item: MutableDecision, prior: readonly string[] | undefined): DecisionState {
+  const archived = item.newHistory.map((entry) => normalizeForCompare(entry.content));
+  return { ...item, pastContents: [...new Set([...(prior ?? []), ...archived])] };
 }
 
 function cloneExperience(experience: TopicSnapshot["experiences"][number]): MutableExperience & { pastContents: string[] } {
@@ -150,11 +160,11 @@ function splitDecision(
 
 function decideDecision(
   draft: DecisionDraft,
-  decision: MutableDecision | undefined,
+  decision: DecisionState | undefined,
   informed: boolean,
   context: MergeContext,
   newId: (prefix: "dec") => string
-): DecisionOp | null {
+): DecisionOp | "restatement" | null {
   if (!decision) {
     return { op: "add", decisionId: newId("dec"), content: draft.content, time: draft.time, userIds: draft.userIds, reason: draft.reason };
   }
@@ -194,6 +204,17 @@ function decideDecision(
   if (draft.split && informed && !late && decision.conflicts.length > 0) {
     const split = splitDecision(draft, decision, context, newId);
     if (split) return split;
+  }
+
+  // Equal to a replaced version, and not to the live content or any conflict (Q-26).
+  // Late submissions do not come back as a new conflict. A not-late draft with no
+  // reason and no resolve signal is a restatement. A reason or a resolve signal
+  // falls through and is treated as changing back.
+  const normalized = normalizeForCompare(draft.content);
+  const onlyHistory = sameConclusion(decision, draft.content) === null && decision.pastContents.includes(normalized);
+  if (onlyHistory) {
+    if (late) return null;
+    if (!draft.reason && !draft.resolve && !draft.signaledResolve) return "restatement";
   }
 
   if (sameAs) {
@@ -250,7 +271,8 @@ export function mergeDrafts(
   const resolvedBackfill: number[] = [];
   const opBases: OpBasis[] = [];
   const changes = new Map<string, TopicChange>();
-  const decisionState = new Map<string, MutableDecision>();
+  const decisionState = new Map<string, DecisionState>();
+  const dropped: MergeOutcome["dropped"] = [];
   const experienceState = new Map<string, MutableExperience & { pastContents: string[] }>();
   const newTopicIds = new Map<string, string>();
 
@@ -320,14 +342,16 @@ export function mergeDrafts(
       const current = change.op === "update" && draft.sameQuestionAs ? decisionState.get(draft.sameQuestionAs) : undefined;
       const informed = Boolean(current && context.conflictsShown.has(current.id) && organized.informedDecisionIds.has(current.id));
       const op = decideDecision(draft, current, informed, context, newId);
-      if (op) {
+      if (op === "restatement") {
+        dropped.push({ reason: "restatement", text: draft.content });
+      } else if (op) {
         change.decisions.push(op);
         const applied = applyDecisionEntries(
           op.op === "add" ? undefined : decisionState.get(op.decisionId),
           op,
           { idExists: (id) => decisionState.has(id) }
         );
-        for (const item of applied) decisionState.set(item.id, item);
+        for (const item of applied) decisionState.set(item.id, withPast(item, decisionState.get(item.id)?.pastContents));
         wrote = true;
       }
     } else if (draft.kind === "experience") {
@@ -406,6 +430,7 @@ export function mergeDrafts(
     resolvedBackfill,
     createdTopicIds: topics.filter((topic) => topic.op === "create").map((topic) => topic.topicId),
     updatedTopicIds: topics.filter((topic) => topic.op === "update").map((topic) => topic.topicId),
-    opBases
+    opBases,
+    dropped
   };
 }

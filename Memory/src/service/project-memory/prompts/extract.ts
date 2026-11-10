@@ -2,7 +2,7 @@
  * M02 extraction only. Topic assignment is M04; same-question judgments are M05.
  * The model does not see candidate topics (v3 §2.2.5).
  */
-export const EXTRACT_PROMPT_VERSION = "pm-extract-v0.2.1";
+export const EXTRACT_PROMPT_VERSION = "pm-extract-v0.2.2";
 
 export const EXTRACT_SYSTEM_PROMPT = `提示词版本：${EXTRACT_PROMPT_VERSION}
 
@@ -26,7 +26,7 @@ export const EXTRACT_SYSTEM_PROMPT = `提示词版本：${EXTRACT_PROMPT_VERSION
 - execution_step：执行步骤
 - unadopted_proposal：成员还没采纳的方案或建议
 - unresolved：还没定下来的事项
-- restatement：本批或上下文里已经说过的同一句。你看不到记忆库，不要凭印象把内容当成已经入库的复述
+- restatement：本批或上下文里已经说过的同一句。recalled 里的内容不要只凭相似放进 dropped，改在草稿上填 restates
 - process_material：构建日志、测试输出、代码片段、背景知识
 - unrelated：寒暄、纯提问、与工作无关的话
 
@@ -35,6 +35,7 @@ export const EXTRACT_SYSTEM_PROMPT = `提示词版本：${EXTRACT_PROMPT_VERSION
 - reason：对话里明确说了原因才概括原话；没说就 null。不要推断。
 - user_ids：可以省略。系统按发言人确定作者，用户消息上的 user_ids 不会被采用。内容出自 Agent 时，可填交办或采纳该内容的成员 id，且只能是本批里说过话的成员。
 - signals：附加信号，不判断它们指向哪条已有决策。认可 {"type":"approval","by":"成员 id"}；告知 {"type":"informed","decision":"决策内容的短句"}；裁决 {"type":"resolve","pick":"被选中的结论","by":"成员 id"}。没有就 [].
+- restates：可选。这条草稿是在复述 recalled 的某一项时，填那一项的 ref；否则 null。系统会自己比对全文，ref 对不上就不会丢掉这条草稿。
 - state_hints：不成条目的现状线索。plan 是后续计划，progress 是「开始做某事」，scope 是范围或目标变化。
 - deferred：能看出在谈工作，但看不出是哪项工作时，原文放这里，reason 写 work_unresolved。不要为此硬编一条决策。
 
@@ -44,10 +45,13 @@ export const EXTRACT_SYSTEM_PROMPT = `提示词版本：${EXTRACT_PROMPT_VERSION
 - 仍然无法确定时，把同一个 ref 放回 deferred，不要另写一条没有 ref 的新 deferred。
 - 确定不该记时，不要在草稿或 deferred 里带回这个 ref。
 
+## 本会话召回过的内容
+输入里可能有 recalled，每项是 {"ref","text"}，来自本会话已经返回过的记忆，text 可能被截短。如果一条草稿是在复述其中某一项，仍然放进 drafts，并把 restates 写成那个 ref。不要只因为它像 recalled 就放进 dropped。系统拿未截短的原文做比对；你写的 ref 不在这张表里，这条草稿会留下来。
+
 ## 输出格式
 {
   "drafts": [
-    {"kind":"decision","category":"对外约定","content":"...","message_idx":0,"reason":null,"signals":[]},
+    {"kind":"decision","category":"对外约定","content":"...","message_idx":0,"reason":null,"signals":[],"restates":null},
     {"kind":"decision","category":"对外约定","content":"...","deferred_ref":"df12","deferred_idx":0,"reason":null,"signals":[]}
   ],
   "state_hints": [{"type":"plan","content":"..."}],

@@ -31,6 +31,8 @@ export interface DecisionDraft extends DraftBase {
   sameAs: DecisionTarget | null;
   approvedBy: string[];
   resolve: { pick: DecisionTarget | "new" } | null;
+  /** M02 emitted a resolve signal. Distinct from `resolve`, which is the judge's bound pick. */
+  signaledResolve: boolean;
   split: DecisionSplitLabel | null;
 }
 
@@ -86,7 +88,11 @@ export interface ExtractedDraft {
   messageIdx: number;
   time: string;
   userIds: string[];
+  /** Role of the source message. `unknown` is a backfill draft with no source turn. */
+  role: "user" | "assistant" | "unknown";
   reason: string | null;
+  /** Model hint. The restatement filter ignores a ref that was not recalled. */
+  restates: string | null;
   signals: DraftSignal[];
   backfillOf?: number;
 }
@@ -256,6 +262,7 @@ export function assembleOrganizeResult(
         sameAs: label?.sameAs ?? null,
         approvedBy: label?.approvedBy ?? [],
         resolve: label?.resolve ?? null,
+        signaledResolve: draft.signals.some((signal) => signal.type === "resolve"),
         split: label?.split ?? null
       });
     } else if (draft.kind === "experience") {
