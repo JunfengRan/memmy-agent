@@ -1,7 +1,7 @@
 ---
 id: PM-18-eval-scheme
-status: in-progress
-owner: developer / Cursor
+status: ready-for-review
+owner: reviewer（待接手）
 roadmap: PM-18
 branch: dev-project-memory-add-search-dev
 updated: 2026-11-10
@@ -42,3 +42,4 @@ updated: 2026-11-10
 | 日期 | 状态 | 由谁 | 文件 |
 | --- | --- | --- | --- |
 | 2026-11-10 | in-progress | developer / Cursor | 方案已写入 docs/project-memory/eval-set-scheme.md；Roadmap 的 PM-18 已标 done。按本次要求不写 handoff，工作项保持 in-progress |
+| 2026-11-10 | ready-for-review | developer / Cursor | handoff-01.md（cb3cd2eb） |
