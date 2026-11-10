@@ -1,6 +1,7 @@
 import type { LlmClient } from "../../../model/types.js";
 import { PROJECT_MEMORY_LIMITS } from "../contract/limits.js";
 import type { DomainRecord, RawTurnRecord } from "../contract/types.js";
+import { stripInjectedText } from "../inject/strip.js";
 import { EXTRACT_PROMPT_VERSION, EXTRACT_SYSTEM_PROMPT } from "../prompts/extract.js";
 import { clampText } from "../text.js";
 import type { RecalledEntry } from "./restatement.js";
@@ -67,7 +68,8 @@ function turnView(turn: RawTurnRecord, idx?: number, key: "idx" | "didx" = "idx"
     user_id: turn.roleId,
     name: turn.roleName,
     time: turn.chatTime,
-    content: turn.content
+    // Tool-call arguments are stripped at collect and are not copied here.
+    content: stripInjectedText(turn.content).text
   };
 }
 

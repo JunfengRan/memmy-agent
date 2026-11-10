@@ -73,7 +73,7 @@ export function renderMemmyDefaultContent(source: string): string {
     `memmy-memory search "query text" --source ${source} --session-id "$SESSION_ID"`,
     "```",
     "",
-    "Project questions (how this project decided something, why it changed, or what progress was recorded) use project memory. This command does not search personal memory:",
+    "Project questions (how this project decided something, why it changed, or what progress was recorded) use project memory. This command does not search personal memory. If the result includes a degraded hint, the search is incomplete and should be retried with different wording; do not tell the user that there is no record.",
     "",
     "```bash",
     `memmy-memory project search "query text" --source ${source} --session-id "$SESSION_ID"`,

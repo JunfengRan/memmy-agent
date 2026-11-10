@@ -37,6 +37,7 @@ import {
   workspaceHostIdFromInstallationId,
   workspaceUriFromRoot,
 } from "./workspace-identity.js";
+import { projectPayloadView, renderSessionInjection, renderTurnMemories } from "./project-inject.js";
 import { registerMemmyMemoryTools } from "./tools.js";
 import type {
   JsonRecord,
@@ -111,6 +112,7 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
   private readonly entrypointBySessionKey = new Map<string, MemoryAnalyticsEntrypoint>();
   private readonly unavailableWarnedSessionKeys = new Set<string>();
   private readonly sessionStateBySessionKey = new Map<string, MemmyMemorySessionState>();
+  private readonly projectSessionText = new Map<string, string>();
 
   constructor(client: MemmyMemoryClient, options: MemmyMemoryHookOptions = {}) {
     super(false);
@@ -155,17 +157,27 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
     const cached = sessionKey ? this.sessionStateBySessionKey.get(sessionKey)?.l3Cache : null;
     if (!cached?.renderedContext.trim()) {
       ctx.removeSection("memmy-l3-world-model");
-      return;
+    } else {
+      ctx.upsertSection({
+        id: "memmy-l3-world-model",
+        content: renderL3WorldModelContext(cached.renderedContext),
+        source: "memmy-memory",
+        metadata: {
+          memoryId: cached.memoryId,
+          memoryVersion: cached.memoryVersion,
+        },
+      }, { after: "memmy-memory-context-protocol" });
     }
-    ctx.upsertSection({
-      id: "memmy-l3-world-model",
-      content: renderL3WorldModelContext(cached.renderedContext),
-      source: "memmy-memory",
-      metadata: {
-        memoryId: cached.memoryId,
-        memoryVersion: cached.memoryVersion,
-      },
-    }, { after: "memmy-memory-context-protocol" });
+    const project = sessionKey ? this.projectSessionText.get(sessionKey) : "";
+    if (project) {
+      ctx.upsertSection({
+        id: "memmy-project-memory",
+        content: project,
+        source: "memmy-memory",
+      }, { after: cached?.renderedContext.trim() ? "memmy-l3-world-model" : "memmy-memory-context-protocol" });
+    } else {
+      ctx.removeSection("memmy-project-memory");
+    }
   }
 
   override async beforeBuildSystemPrompt(ctx: AgentHookContext): Promise<void> {
@@ -186,6 +198,7 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
       this.rememberUnavailableL3(sessionKey);
       this.warnMemoryUnavailable(sessionKey, "recall", error);
     }
+    await this.loadProjectSession(sessionKey);
   }
 
   override async sessionStart(ctx: AgentHookContext): Promise<void> {
@@ -347,6 +360,11 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
         this.warnMemoryUnavailable(sessionKey, "recall", error);
         this.injectMemoryUnavailableNotice(messages);
       }
+    }
+    try {
+      await this.injectBoundProjectTurn(ctx, turn, messages);
+    } catch {
+      // A project-memory lookup must not block the turn.
     } finally {
       turn.finished = true;
     }
@@ -879,6 +897,75 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
 
   private sessionKeyFromContext(ctx?: AgentHookContext | null): string | null {
     return stringOrUndefined(ctx?.spec?.sessionKey) ?? stringOrUndefined(ctx?.sessionKey) ?? stringOrUndefined(ctx?.session?.key) ?? null;
+  }
+
+  private async loadProjectSession(sessionKey: string): Promise<void> {
+    const spaces = this.projectSpaceIds();
+    if (spaces.length === 0) {
+      this.projectSessionText.delete(sessionKey);
+      return;
+    }
+    if (typeof this.client.post !== "function") return;
+    try {
+      const groups = [];
+      for (const spaceId of spaces) {
+        const payload = await this.client.post("/api/openmem/v1/get/memory", {
+          space_id: spaceId,
+          page: 1,
+          size: 8,
+        }, { timeoutMs: 2000 });
+        groups.push({ spaceName: spaceId, topics: projectPayloadView(payload).topics });
+      }
+      this.projectSessionText.set(sessionKey, renderSessionInjection({
+        spaceName: groups.map((group) => group.spaceName).join("、"),
+        sourceHint: "需要原始对话时，用 memmy-project 读取来源任务。",
+        groups,
+      }));
+    } catch {
+      // Keep the previous guide. A failed lookup must not block the prompt.
+    }
+  }
+
+  private async injectBoundProjectTurn(ctx: AgentHookContext, turn: InteractiveTurn, messages: JsonRecord[]): Promise<void> {
+    const spaces = this.projectSpaceIds();
+    const userId = this.options.userId?.trim();
+    if (spaces.length === 0 || !userId || !turn.userText.trim()) return;
+    if (typeof this.client.post !== "function") return;
+    if (performance.now() >= turn.deadline || turn.finished || !this.isCurrentTurn(turn)) return;
+    let conversationId = turn.sessionId || this.sessionIdBySessionKey.get(turn.sessionKey) || "";
+    if (!conversationId) {
+      try {
+        conversationId = await this.ensureSession(ctx, turn.sessionKey, turn.generation);
+      } catch {
+        return;
+      }
+    }
+    if (!conversationId || !this.isCurrentTurn(turn)) return;
+    try {
+      const payload = await this.client.post("/api/openmem/v1/search/memory", {
+        user_id: userId,
+        space_ids: [...spaces],
+        query: turn.userText,
+        include_memory_view: ["project"],
+        conversation_id: conversationId,
+      }, { timeoutMs: 2000, signal: turn.controller.signal });
+      const view = projectPayloadView(payload);
+      const rendered = renderTurnMemories({ kind: "turn", topics: view.topics, degraded: view.degraded });
+      if (rendered) this.prependProjectTurn(messages, rendered);
+    } catch {
+      // Do not block the turn.
+    }
+  }
+
+  private prependProjectTurn(messages: JsonRecord[], rendered: string): void {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message?.role !== "user") continue;
+      if (typeof message.content === "string") message.content = `${rendered}\n\n${message.content}`;
+      else if (Array.isArray(message.content)) message.content.unshift({ type: "text", text: rendered });
+      else message.content = rendered;
+      return;
+    }
   }
 
   private injectMemoryContext(messages: JsonRecord[], injectedContext: any): boolean {

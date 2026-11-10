@@ -15,6 +15,13 @@ export interface CliRequest {
   body?: unknown;
 }
 
+export class CliResponseError extends Error {
+  constructor(message: string, readonly status: number, readonly payload: unknown) {
+    super(message);
+    this.name = "CliResponseError";
+  }
+}
+
 export async function sendRequest(request: CliRequest, options: CliRequestOptions = {}): Promise<unknown> {
   const fetchImpl = options.fetch ?? fetch;
   const baseUrl = resolveBaseUrl(options);
@@ -50,7 +57,7 @@ export async function sendRequest(request: CliRequest, options: CliRequestOption
 
   if (!response.ok) {
     const message = errorMessage(payload) ?? `HTTP ${response.status}`;
-    throw new Error(message);
+    throw new CliResponseError(message, response.status, payload);
   }
 
   return payload;

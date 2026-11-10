@@ -159,6 +159,41 @@ describe("OpenMem cloud REST client contract", () => {
     expect(calls[2]!.body).toMatchObject({ feedback_content: "The memory should prefer SQLite locally." });
   });
 
+  it("strips injected blocks from addMessage before POST", async () => {
+    const calls: Array<{ body: Record<string, unknown> }> = [];
+    const fetchImpl: OpenMemFetch = async (_input, init) => {
+      calls.push({ body: JSON.parse(String(init?.body)) as Record<string, unknown> });
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    const client = new OpenMemCloudClient({
+      endpoint: "https://memos.memtensor.cn/api/openmem/v1",
+      fetchImpl
+    });
+    await client.addMessage({
+      user_id: "user-1",
+      messages: [{
+        role: "user",
+        content: "前文<memos_context v=\"1\" kind=\"turn\">旧结论</memos_context>后文",
+        tool_calls: [{
+          id: "call-1",
+          type: "function",
+          function: {
+            name: "search_project_memory",
+            arguments: "<project_index>索引</project_index>"
+          }
+        }]
+      }],
+      allow_memory_view: ["project"],
+      space_ids: ["space-1"]
+    });
+    const posted = JSON.stringify(calls[0]!.body);
+    expect(posted).toContain("前文后文");
+    expect(posted).not.toContain("</memos_context>");
+    expect(posted).not.toContain("</project_index>");
+    expect(posted).not.toContain("旧结论");
+    expect(posted).not.toContain("索引");
+  });
+
   it("requires an explicit non-empty project space for project memory", async () => {
     const client = new OpenMemCloudClient({
       endpoint: "https://memos.memtensor.cn/api/openmem/v1",

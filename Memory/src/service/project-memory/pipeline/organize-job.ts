@@ -34,6 +34,9 @@ export interface OrganizeJobPayload {
   agentId: string | null;
   /** Conversation as given by the caller; null when the batch was anonymous. */
   conversationId: string | null;
+  /** Closed injection blocks removed at collect time. Stored on task details, not a column. */
+  strippedBlocks?: number;
+  unclosedBlocks?: number;
 }
 
 export interface OrganizeJobDeps {
@@ -138,13 +141,16 @@ function taskDetails(
   assigned: AssignResult | null,
   degraded: string[],
   opBases: OpBasis[],
-  mergeDropped: Array<{ reason: string; text: string | null }> = []
+  mergeDropped: Array<{ reason: string; text: string | null }> = [],
+  injection: { strippedBlocks?: number; unclosedBlocks?: number } = {}
 ): TaskDetails {
   return {
     assignments: (assigned?.assignments ?? []).map((item) => ({ draftId: item.draftId, basis: item.basis })),
     dropped: [...extracted.dropped, ...mergeDropped],
     degraded,
-    ops: opBases.map((basis) => ({ basis }))
+    ops: opBases.map((basis) => ({ basis })),
+    strippedBlocks: injection.strippedBlocks ?? 0,
+    unclosedBlocks: injection.unclosedBlocks ?? 0
   };
 }
 
@@ -343,7 +349,7 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
           memoryIds: [],
           added: 0,
           updated: 0,
-          details: taskDetails(extracted, null, [], [])
+          details: taskDetails(extracted, null, [], [], [], payload)
         });
       }
     }
@@ -415,7 +421,7 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
       conflictsShown,
       displayName: (userId) => names.get(userId) ?? local.roleName(userId) ?? userId
     }, unavailable);
-    const details = taskDetails(extracted, assigned, degraded, merged.opBases, merged.dropped);
+    const details = taskDetails(extracted, assigned, degraded, merged.opBases, merged.dropped, payload);
     if (!merged.changeSet) {
       return finish(merged.deferred, merged.resolvedBackfill, {
         status: "completed",

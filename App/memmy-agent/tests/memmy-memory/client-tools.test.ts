@@ -643,7 +643,9 @@ describe("memmy memory tools", () => {
       domains: ["代码开发"],
     });
     expect(result.startsWith('<memos_context v="1" kind="tool">')).toBe(true);
-    expect(result).toContain('"id":"topic_1"');
+    expect(result).toContain("topic_1");
+    expect(result).toContain("<memories>");
+    expect(result).not.toContain("topic_detail_list");
     expect(result).not.toContain("model-user");
     expect(result).not.toContain("model-space");
   });

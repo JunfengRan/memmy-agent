@@ -1,3 +1,4 @@
+import { stripInjectedMessage } from "../service/project-memory/inject/strip.js";
 import type {
   FeedbackRequest,
   TurnCompleteRequest
@@ -93,7 +94,8 @@ export class OpenMemCloudClient {
 
   addMessage(request: OpenMemAddMessageRequest): Promise<unknown> {
     validateProjectMemoryRequest(request, "allow_memory_view");
-    return this.post("/add/message", request);
+    const messages = request.messages.map((message) => stripInjectedMessage(message).message);
+    return this.post("/add/message", { ...request, messages });
   }
 
   searchMemory(request: OpenMemSearchMemoryRequest): Promise<unknown> {

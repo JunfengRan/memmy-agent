@@ -604,9 +604,46 @@ describe("memmy CLI command map", () => {
     }
   });
 
-  it("lists domains when project search returns DOMAIN_INVALID", async () => {
+  it("prints rendered project search text and keeps JSON behind --raw", async () => {
+    const payload = {
+      code: 0,
+      message: "ok",
+      data: {
+        topic_detail_list: [{ id: "topic_1", topic_name: "重试", topic_summary: "三次" }],
+        degraded: ["vector"],
+        user_memory: [{ content: "user-secret-fact" }]
+      }
+    };
+    const rendered = await runCommand({
+      argv: ["project", "search", "retry policy", "--space-id", "space_a", "--user-id", "user_cli", "--url", baseUrl],
+      fetch: mockFetchResponse(payload)
+    });
+    expect(typeof rendered).toBe("string");
+    expect(rendered).toContain('kind="tool"');
+    expect(rendered).toContain("重试");
+    expect(rendered).toContain("本次检索有部分召回降级，结果可能不全；需要时换个说法再查一次。");
+    expect(rendered).not.toContain("user-secret-fact");
+    expect(rendered).not.toContain("topic_detail_list");
+
+    const raw = await runCommand({
+      argv: ["project", "search", "retry policy", "--space-id", "space_a", "--user-id", "user_cli", "--raw", "--url", baseUrl],
+      fetch: mockFetchResponse(payload)
+    });
+    expect(raw).toEqual(payload);
+  });
+
+  it("lists unregistered and available domains inside the tool tag when project search returns DOMAIN_INVALID", async () => {
     const requests: CapturedRequest[] = [];
-    await expect(runCommand({
+    const payload = {
+      code: 40002,
+      message: "DOMAIN_INVALID",
+      data: {
+        detail: "domains are not registered in every space",
+        domains: ["运维"],
+        available_domains: ["代码开发"]
+      }
+    };
+    const rendered = await runCommand({
       argv: [
         "project", "search", "retry policy",
         "--space-id", "space_a",
@@ -623,18 +660,33 @@ describe("memmy CLI command map", () => {
           headers: Object.fromEntries(new Headers(init?.headers).entries()),
           body
         });
-        return new Response(JSON.stringify({
-          code: 40002,
-          message: "DOMAIN_INVALID",
-          data: { detail: "domains are not registered in every space", domains: ["运维"] }
-        }), {
+        return new Response(JSON.stringify(payload), {
           status: 400,
           headers: { "content-type": "application/json" }
         });
       }) as typeof fetch
-    })).rejects.toThrow("domains are not registered in every space\ndomains: 运维");
+    });
     expect(requests).toHaveLength(1);
     expect(new URL(requests[0]!.url).pathname).toBe("/api/openmem/v1/search/memory");
+    expect(rendered).toContain('kind="tool"');
+    expect(rendered).toContain("未登记的领域：运维");
+    expect(rendered).toContain("可用领域：代码开发");
+
+    const raw = await runCommand({
+      argv: [
+        "project", "search", "retry policy",
+        "--space-id", "space_a",
+        "--user-id", "user_cli",
+        "--domains", "运维",
+        "--raw",
+        "--url", baseUrl
+      ],
+      fetch: (async () => new Response(JSON.stringify(payload), {
+        status: 400,
+        headers: { "content-type": "application/json" }
+      })) as typeof fetch
+    });
+    expect(raw).toEqual(payload);
   });
 
   it("does not register auth helper commands", async () => {

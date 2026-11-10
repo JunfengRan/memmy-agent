@@ -11,7 +11,7 @@ import {
   type JsonObject,
   type ParsedArgs
 } from "./args.js";
-import { sendRequest, type CliRequest, type CliRequestOptions } from "./http.js";
+import { CliResponseError, sendRequest, type CliRequest, type CliRequestOptions } from "./http.js";
 import { renderCliOutput } from "./render/index.js";
 import {
   initMemoryCli,
@@ -20,6 +20,7 @@ import {
   type MemoryCliSetupOptions
 } from "./setup.js";
 import { DEFAULT_MEMORY_URL, loadCliMemoryConfig } from "./config.js";
+import { renderToolResult } from "../service/project-memory/inject/render.js";
 import { bindProjectToolRequest } from "../service/project-memory/inject/tool.js";
 import { PROJECT_VERSION } from "./project-version.js";
 import {
@@ -90,12 +91,28 @@ export async function runCommand(context: CommandContext): Promise<unknown> {
   }
 
   const getVerbose = words[0] === "get" && optionBoolean(options, "verbose") === true;
+  const projectSearch = words[0] === "project" && words[1] === "search";
+  const projectRaw = projectSearch && optionBoolean(options, "raw") === true;
   const request = withSource(await mapTopLevelCommand(words, parsed), parsed);
-  const result = await executeRequest(request, requestOptions(parsed, context.fetch));
-  if (words[0] === "get" && !getVerbose) {
-    return compactMemoryGetOutput(result) ?? result;
+  try {
+    const result = await executeRequest(request, requestOptions(parsed, context.fetch));
+    if (words[0] === "get" && !getVerbose) {
+      return compactMemoryGetOutput(result) ?? result;
+    }
+    if (projectSearch && !projectRaw) return renderToolResult(result);
+    return result;
+  } catch (error) {
+    if (projectSearch && error instanceof CliResponseError && isDomainInvalid(error.payload)) {
+      return projectRaw ? error.payload : renderToolResult(error.payload);
+    }
+    throw error;
   }
-  return result;
+}
+
+function isDomainInvalid(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  const record = payload as Record<string, unknown>;
+  return record.message === "DOMAIN_INVALID" || record.code === 40002;
 }
 
 export function formatOutput(value: unknown): string {
@@ -681,6 +698,7 @@ function helpText(): string {
     `  ${CLI_NAME} search "earlier preference"`,
     `  ${CLI_NAME} search "earlier preference" --verbose`,
     `  ${CLI_NAME} project search "retry policy" --space-id <space-id> --session-id <session-id>`,
+    `  ${CLI_NAME} project search "retry policy" --raw`,
     `  ${CLI_NAME} add "this project stores memory locally in sqlite" --layer L1`,
     `  ${CLI_NAME} get mem_123`,
     `  ${CLI_NAME} get mem_123 --verbose`,

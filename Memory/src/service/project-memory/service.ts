@@ -123,12 +123,13 @@ export class ProjectMemoryService {
     const now = this.now();
     const taskId = newId("task");
     const conversationKey = input.conversationId ?? `anon:${taskId}`;
-    const turns = collectTurns(input.messages, {
+    const collected = collectTurns(input.messages, {
       conversationId: conversationKey,
       userId: input.userId,
       timezone: input.timezone,
       now
     });
+    const turns = collected.turns;
     const batchKey = input.conversationId ? this.batchKey(input, turns) : `anon:${taskId}`;
     const acceptedAt = now.toISOString();
     return this.deps.repos.transaction(() => {
@@ -143,7 +144,9 @@ export class ProjectMemoryService {
           spaceId,
           domains: input.domains,
           agentId: input.agentId,
-          conversationId: input.conversationId
+          conversationId: input.conversationId,
+          strippedBlocks: collected.strippedBlocks,
+          unclosedBlocks: collected.unclosedBlocks
         };
         this.enqueue(spaceId, input.userId, payload, acceptedAt);
       }
@@ -214,6 +217,7 @@ export class ProjectMemoryService {
     const missing: string[] = [];
     const unregistered = new Set<string>();
     const unconfigured: string[] = [];
+    let available: Set<string> | null = null;
     for (const spaceId of spaceIds) {
       const space = await this.store.getSpace(spaceId);
       if (!space) {
@@ -221,6 +225,13 @@ export class ProjectMemoryService {
         continue;
       }
       const registered = new Set((await this.store.listDomains(spaceId)).map((item) => item.domain));
+      if (available === null) {
+        available = registered;
+      } else {
+        const shared = new Set<string>();
+        for (const domain of available) if (registered.has(domain)) shared.add(domain);
+        available = shared;
+      }
       if (forWrite && registered.size === 0) unconfigured.push(spaceId);
       for (const domain of domains) if (!registered.has(domain)) unregistered.add(domain);
     }
@@ -229,7 +240,10 @@ export class ProjectMemoryService {
       throw new ProjectMemoryError("DOMAIN_NOT_CONFIGURED", "spaces have no registered domains", { space_ids: unconfigured });
     }
     if (unregistered.size > 0) {
-      throw new ProjectMemoryError("DOMAIN_INVALID", "domains are not registered in every space", { domains: [...unregistered] });
+      throw new ProjectMemoryError("DOMAIN_INVALID", "domains are not registered in every space", {
+        domains: [...unregistered].sort(),
+        available_domains: [...(available ?? [])].sort()
+      });
     }
   }
 

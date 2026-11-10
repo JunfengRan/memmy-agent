@@ -66,6 +66,10 @@ export interface TaskDetails {
   dropped: Array<{ reason: string; text: string | null }>;
   degraded: string[];
   ops: Array<{ basis: { draftId: string; hit: string | null; checked: string[] } }>;
+  /** Closed `<memos_context>` / `<project_index>` blocks removed before M02. */
+  strippedBlocks?: number;
+  /** Unclosed tags left in the text (Q-34). Not part of the M02 acceptance count. */
+  unclosedBlocks?: number;
 }
 
 export interface SpaceOutcome {

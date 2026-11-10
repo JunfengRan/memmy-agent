@@ -47,6 +47,55 @@ describe("merge candidate union", () => {
 });
 
 describe("project memory organize stages", () => {
+  it("strips closed injection blocks before M02 and counts them on the task details", async () => {
+    const stub = stubStages(combinedStages(() => emptyReply()));
+    const { service, db } = harness.createService();
+    await setupSpace(service, "space_a");
+    const accepted = await call(service, "add/message", {
+      user_id: "user_a",
+      agent_id: "codex",
+      conversation_id: "c_strip",
+      space_ids: ["space_a"],
+      allow_memory_view: ["project"],
+      messages: [{
+        role: "assistant",
+        role_id: "user_a",
+        role_name: "用户A",
+        chat_time: "2026-10-29 10:00:00",
+        content: [
+          { type: "text", text: "前文<project_index>索引</project_index>后文" },
+          "<memos_context v=\"1\" kind=\"turn\">旧结论</memos_context> <memos_context v=\"1\" kind=\"tool\">没关"
+        ],
+        tool_calls: [{
+          function: {
+            name: "search_project_memory",
+            arguments: "<memos_context v=\"1\" kind=\"tool\">参数</memos_context>"
+          }
+        }]
+      }]
+    });
+    expect(accepted.code).toBe(0);
+    await drain(service);
+    const request = JSON.stringify(stub.extract[0]);
+    expect(request).not.toContain("</memos_context>");
+    expect(request).not.toContain("</project_index>");
+    expect(request).not.toContain("<project_index");
+    expect(request).toContain("前文");
+    expect(request).toContain("后文");
+    expect(request).toContain("没关");
+    expect(request).not.toContain("参数");
+    const taskId = accepted.data.task_id as string;
+    const row = db.db.prepare(`SELECT progress_json FROM pm_tasks WHERE task_id = ?`).get(taskId) as { progress_json: string };
+    const details = (JSON.parse(row.progress_json) as {
+      space_a: { details: { strippedBlocks: number; unclosedBlocks: number } };
+    }).space_a.details;
+    expect(details.strippedBlocks).toBe(3);
+    expect(details.unclosedBlocks).toBe(1);
+    const stored = db.db.prepare(`SELECT tool_calls_json FROM pm_raw_turns WHERE task_id = ?`).get(taskId) as { tool_calls_json: string };
+    expect(stored.tool_calls_json).not.toContain("</memos_context>");
+    expect(stored.tool_calls_json).not.toContain("参数");
+  });
+
   it("stops after extract when the model returns no drafts", async () => {
     const stub = stubStages(combinedStages(() => emptyReply()));
     const { service } = harness.createService();

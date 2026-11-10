@@ -19,6 +19,7 @@ import {
   renderMemmyContextPacket,
 } from "./protocol.js";
 import type { MemmyMemoryClient } from "./client.js";
+import { renderDomainInvalidError, renderToolResult } from "./project-inject.js";
 import type { JsonRecord, MemmyMemoryToolRuntime } from "./types.js";
 
 type ToolSpec = {
@@ -125,7 +126,7 @@ export class MemmyMemoryTool extends Tool {
         const result = await this.spec.execute(this.client, params, this.runtime, sessionKey);
         return formatMemmyToolResult(this.spec.name, result, params, this.runtime, sessionKey);
       } catch (error) {
-        return `Error: ${error instanceof Error ? error.message : String(error)}`;
+        return projectToolError(this.spec.name, error);
       }
     }
 
@@ -148,7 +149,7 @@ export class MemmyMemoryTool extends Tool {
         success: false,
         error_code: errorCodeFromUnknown(error),
       });
-      return `Error: ${error instanceof Error ? error.message : String(error)}`;
+      return projectToolError(this.spec.name, error);
     }
   }
 }
@@ -274,6 +275,14 @@ function compact<T extends JsonRecord>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== null && item !== "")) as T;
 }
 
+function projectToolError(toolName: string, error: unknown): string {
+  if (toolName === "search_project_memory") {
+    const rendered = renderDomainInvalidError(error);
+    if (rendered) return rendered;
+  }
+  return `Error: ${error instanceof Error ? error.message : String(error)}`;
+}
+
 function formatMemmyToolResult(
   toolName: string,
   result: any,
@@ -285,9 +294,7 @@ function formatMemmyToolResult(
     ?? (typeof params.query === "string" ? params.query : "")
     ?? "";
   if (toolName === "search_project_memory") {
-    const data = result && typeof result === "object" && "data" in result ? result.data : result;
-    const body = JSON.stringify(data) ?? "null";
-    return `<memos_context v="1" kind="tool">\n${body}\n</memos_context>`;
+    return renderToolResult(result);
   }
   if (toolName === "memmy_memory_search") {
     return renderMemmyContextPacket(markdownFromSearchResult(result), "tool_search", currentUserRequest);

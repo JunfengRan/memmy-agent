@@ -43,7 +43,7 @@
 | PM-19 | M08 三路召回：①用户记忆 ②agent L1/Skill ③project，降级标记 degraded。② 路的 LLM 过滤、分层、墙钟时效和失效的 `contextBudget` 按 Q-20 处理（review-triage Search-6、Search-7） | v3 §3.2.3 | 三路齐全或标记降级 100% | done（三路召回单测通过；跨路融合和 memory_detail_list 仍是 PM-20；未跑评测） |
 | PM-20 | M09 跨路 RRF、relativity 归一化、条目裁剪。三路只按名次融合，不拼接各路分数；relativity 改为 Q-01 的融合分归一（v0.1 用词法 / 向量相关度，阈值已改为按每个主题自身的相关度过滤，review-triage Search-3） | v3 §3.2.5、§3.5 | 确定性 100%；relativity 单调 | done（跨路按名次 RRF 与 relativity 单调性单测通过；列表名等 Q-29；过期向量整次退词法不改，见 Q-30；未跑评测） |
 | PM-21 | 渐进式披露：会话开始 get_memory 索引、每轮 memories、工具 search_project_memory、get_memory_by_id。工具检索写 `via=tool`、不算本轮开始（Q-17）；宿主技能改查 `/api/openmem/v1/search/memory`，不再落到个人记忆（review-triage Search-4、Search-8、Search-9） | v3 §3.1–3.3 | 每轮注入 ≤ 全量的 30%；工具检索的召回记录 `via=tool` 100% | done（`via=tool` 与工具绑定单测通过；每轮注入 ≤ 全量 30% 未在实况回放上测量，见 Q-31。检索算法未改。模板 1–3 留给 PM-22） |
-| PM-22 | 注入模板 1–4、strip_injected、search 技能。`degraded` 非空时模板与技能里可见（Q-21，review-triage Search-12） | v3 §3.3、§3.4 | 注入块回写 M02 = 0；降级结果渲染出提示 100% | todo |
+| PM-22 | 注入模板 1–4、strip_injected、search 技能。`degraded` 非空时模板与技能里可见（Q-21，review-triage Search-12） | v3 §3.3、§3.4 | 注入块回写 M02 = 0；降级结果渲染出提示 100% | done（闭合注入块回写 M02 的单测为 0，`strippedBlocks` 记在任务详情；降级非空时有命中和无命中都渲染固定提示。Claude / Codex / Cursor 宿主钩子未接。非项目记忆段落不渲染。Memmy agent 在 hook.ts 里做了会话指南+索引和每轮模板三。Q-21 状态未改） |
 | PM-23 | 检索延迟与 Recall@K | v3 §3.6 | 单路 P95 ≤800 ms，总 ≤1.2 s | todo |
 
 ## W48（11/23–11/27）M3：云端契约与验收
@@ -66,6 +66,7 @@
 
 | 日期 | 变化 | 原因 |
 | --- | --- | --- |
+| 2026-11-10 | PM-22 改为 done：模板 1–3、回写剥离和降级提示。宿主钩子只接了 Memmy agent | 单测通过，没有新指标。不改检索排序，不改 Q-21 |
 | 2026-11-10 | PM-21 改为 done：工具检索写 `via=tool`，宿主技能改查项目记忆。30% 比例未在实况回放上测量（Q-31） | 单测通过，没有新指标。不渲染模板 1–3（PM-22），不改检索算法 |
 | 2026-11-10 | PM-20 改为 done：M09 按名次融合三路，relativity 用融合分归一。列表名等 Q-29，过期向量整次退词法不改（Q-30） | 单测通过，没有新指标。不实现 PM-21、PM-22 |
 | 2026-11-10 | PM-19 改为 done：M08 并行召回用户记忆、L1/Skill 和 project，失败写入 degraded。不融合、不返回 memory_detail_list | 单测通过，没有新指标。融合留在 PM-20 |
