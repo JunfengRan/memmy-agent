@@ -1,7 +1,7 @@
 ---
 id: PM-13-deferred-backfill
-status: ready-for-review
-owner: reviewer（待接手）
+status: done
+owner: reviewer
 roadmap: PM-13
 branch: dev-project-memory-add-search-dev
 updated: 2026-11-10
@@ -45,3 +45,4 @@ updated: 2026-11-10
 | --- | --- | --- | --- |
 | 2026-11-10 | in-progress | developer / Cursor | item.md |
 | 2026-11-10 | ready-for-review | developer / Cursor | handoff-01.md（7bc8ca04） |
+| 2026-11-10 | done | reviewer / Cursor | review-01.md（无 MUST，2 SHOULD；回填率评测待补） |
