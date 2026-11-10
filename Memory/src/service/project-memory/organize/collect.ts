@@ -7,7 +7,8 @@ import { normalizeChatTime, nowWithOffset } from "../time.js";
  * stripped so recalled content is never organized back into the store.
  */
 const ROLES = new Set(["user", "assistant", "system", "tool"]);
-const INJECTED_BLOCK = /<memos_context>[\s\S]*?<\/memos_context>/gi;
+/** v3 §3.4: drop `<memos_context>` blocks, with or without attributes. */
+const INJECTED_BLOCK = /<memos_context\b[^>]*>[\s\S]*?<\/memos_context>/gi;
 
 export interface CollectOptions {
   conversationId: string;
