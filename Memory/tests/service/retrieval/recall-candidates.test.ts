@@ -31,6 +31,8 @@ describe("recallCandidates", () => {
     vi.setSystemTime(new Date("2026-07-15T00:00:00.000Z"));
     const later = await recall(service, { query: "clockorder", layers: ["L1"], contextBudget: 8_000 });
     expect(later.candidates.map((item) => item.id)).toEqual(tight.candidates.map((item) => item.id));
+    // Rank for fusion is this order. Relativity is applied later; the port still returns score.
+    expect(tight.candidates.every((item) => typeof item.score === "number" && !("relativity" in item))).toBe(true);
     expect(chats.count).toBe(0);
     expect(countRows(db, "recall_events")).toBe(before);
     db.close();
@@ -65,6 +67,7 @@ describe("recallCandidates", () => {
     expect(skill.candidates.map((item) => item.id)).toEqual(["skill-layer"]);
     expect(user.candidates.map((item) => item.layer)).toEqual(["UserMemory"]);
     expect(user.candidates.map((item) => item.id)).toEqual(["user-layer"]);
+    expect(l1.candidates.every((item) => typeof item.score === "number" && !("relativity" in item))).toBe(true);
     db.close();
   });
 });

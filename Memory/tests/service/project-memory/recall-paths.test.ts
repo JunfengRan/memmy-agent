@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Repositories } from "../../../src/storage/repositories.js";
 import type { MemoryRow } from "../../../src/types.js";
 import { PROJECT_MEMORY_LIMITS } from "../../../src/service/project-memory/contract/limits.js";
-import type { RecallRequest, RecallResult, TopicSnapshot } from "../../../src/service/project-memory/contract/types.js";
+import type { RecallLogInput, RecallRequest, RecallResult, TopicSnapshot } from "../../../src/service/project-memory/contract/types.js";
 import {
   recallSearchPaths,
   type NonProjectRecallInput,
@@ -380,6 +380,11 @@ describe("project memory three-path recall", () => {
     expect(searched.data.agent_memory.map((item: { id: string }) => item.id)).toContain("l1-retry");
     expect(searched.data.topic_detail_list.map((topic: { topic_name: string }) => topic.topic_name)).toContain("队列重试");
     expect(searched.data.memory_detail_list).toBeUndefined();
+    for (const list of [searched.data.user_memory, searched.data.agent_memory, searched.data.topic_detail_list]) {
+      const relativities = list.map((item: { relativity: number }) => item.relativity);
+      expect(relativities).toEqual([...relativities].sort((left: number, right: number) => right - left));
+      for (const item of list) expect(item).not.toHaveProperty("score");
+    }
     expect(searched.data.degraded ?? []).not.toEqual(expect.arrayContaining(["user_memory", "agent_memory", "project"]));
 
     (service as unknown as { config: { algorithm: { enableMemorySearch: boolean } } }).config.algorithm.enableMemorySearch = false;
@@ -415,7 +420,134 @@ describe("project memory three-path recall", () => {
     expect(allFailed.data.degraded).toEqual(["user_memory", "agent_memory", "project"]);
     expect(JSON.stringify(allFailed)).not.toMatch(/no memory|没有记忆/i);
   });
+
+  it("keeps the order of the paths that succeeded when one path fails", async () => {
+    const text = "retrybackoff shared";
+    const at = "2026-10-01T00:00:00.000Z";
+    const users = [
+      { id: "user-low", layer: "UserMemory" as const, content: text, score: 0.1, updatedAt: at },
+      { id: "user-high", layer: "UserMemory" as const, content: text, score: 0.9, updatedAt: at }
+    ];
+    const agents = [
+      { id: "l1-low", layer: "L1" as const, content: text, score: 0.2, updatedAt: at },
+      { id: "skill-high", layer: "Skill" as const, content: text, score: 0.8, updatedAt: at }
+    ];
+    const port = (failUser: boolean): NonProjectRecallPort => ({
+      async recallCandidates(request) {
+        if (request.includeUserMemory) {
+          if (failUser) throw new Error("user lane down");
+          return { vectorDegraded: false, candidates: users };
+        }
+        return { vectorDegraded: false, candidates: agents };
+      }
+    });
+    const { store } = projectPair();
+    const views: MemoryViewSelection = { userMemory: true, agentLayers: ["L1", "Skill"], project: true };
+    const all = await recallSearchPaths(input(views), { store, local, nonProjectRecall: port(false) });
+    const failed = await recallSearchPaths(input(views), { store, local, nonProjectRecall: port(true) });
+    const absent = await recallSearchPaths(input({ ...views, userMemory: false }), { store, local, nonProjectRecall: port(false) });
+
+    expect(all.userMemory?.map((item) => item.id)).toEqual(["user-low", "user-high"]);
+    expect(all.userMemory?.[0]).not.toHaveProperty("score");
+    expect(all.userMemory?.[0]?.relativity).toBe(1);
+    expect(all.agentMemory?.map((item) => item.id)).toEqual(["l1-low", "skill-high"]);
+    expect(all.topics?.map((topic) => topic.id)).toEqual(["topic_high", "topic_low"]);
+    expect(failed.degraded).toEqual(["user_memory"]);
+    expect(failed.userMemory).toBeUndefined();
+    expect(failed.agentMemory?.map((item) => item.id)).toEqual(all.agentMemory?.map((item) => item.id));
+    expect(failed.topics?.map((topic) => topic.id)).toEqual(all.topics?.map((topic) => topic.id));
+    expect(failed.agentMemory?.map((item) => item.relativity)).toEqual(absent.agentMemory?.map((item) => item.relativity));
+    expect(failed.topics?.map((topic) => [topic.id, topic.relativity])).toEqual(absent.topics?.map((topic) => [topic.id, topic.relativity]));
+    for (const item of [...(failed.agentMemory ?? []), ...(failed.topics ?? [])]) expect(item).not.toHaveProperty("score");
+  });
+
+  it("logs only topics that are returned, and defaults via to turn_start", async () => {
+    const logged: RecallLogInput[] = [];
+    const recording = {
+      appendRecallLog(entries: RecallLogInput[]) {
+        logged.push(...entries);
+      }
+    } as unknown as ProjectLocalState;
+    const views: MemoryViewSelection = { userMemory: false, agentLayers: [], project: true };
+    const request = { ...input(views), conversationId: "conv_log", relativity: 0.99 };
+    await recallSearchPaths(request, { store: projectPair().store, local: recording, nonProjectRecall: null });
+    expect(logged.map((row) => [row.topicId, row.decisionId, row.via])).toEqual([
+      ["topic_high", null, "turn_start"],
+      ["topic_high", "dec_high", "turn_start"]
+    ]);
+
+    logged.length = 0;
+    await recallSearchPaths({ ...request, via: "tool" }, { store: projectPair().store, local: recording, nonProjectRecall: null });
+    expect(logged.map((row) => row.via)).toEqual(["tool", "tool"]);
+    expect(logged.map((row) => row.topicId)).toEqual(["topic_high", "topic_high"]);
+  });
+
+  it("drops a project topic with no snapshot before fusion", async () => {
+    const logged: RecallLogInput[] = [];
+    const recording = {
+      appendRecallLog(entries: RecallLogInput[]) {
+        logged.push(...entries);
+      }
+    } as unknown as ProjectLocalState;
+    const views: MemoryViewSelection = { userMemory: false, agentLayers: [], project: true };
+    const result = await recallSearchPaths({ ...input(views), conversationId: "conv_gap" }, {
+      store: projectPair({ missingHigh: true }).store,
+      local: recording,
+      nonProjectRecall: null
+    });
+    expect(result.topics?.map((topic) => topic.id)).toEqual(["topic_low"]);
+    expect(result.topics?.[0]?.relativity).toBe(1);
+    expect(logged.map((row) => row.topicId)).toEqual(["topic_low", "topic_low"]);
+    expect(logged.some((row) => row.topicId === "topic_high")).toBe(false);
+  });
 });
+
+function projectPair(options: { missingHigh?: boolean } = {}): { store: ProjectMemoryStore } {
+  const text = "retrybackoff shared";
+  const at = "2026-10-21T10:00:00+08:00";
+  const snapshots = ["topic_high", "topic_low"].map((id): TopicSnapshot => ({
+    topicId: id,
+    spaceId: "space_a",
+    domain: "代码开发",
+    topicName: text,
+    topicSummary: text,
+    topicDescription: text,
+    revision: 1,
+    createTime: at,
+    updateTime: at,
+    decisions: [{ id: id === "topic_high" ? "dec_high" : "dec_low", content: text, time: at, userIds: ["user_a"], history: [], conflicts: [] }],
+    experiences: [],
+    timeline: [],
+    sources: []
+  }));
+  const recallTopic = (snapshot: TopicSnapshot, lexical: number) => ({
+    topicId: snapshot.topicId,
+    spaceId: snapshot.spaceId,
+    revision: snapshot.revision,
+    domain: snapshot.domain,
+    topicName: snapshot.topicName,
+    topicSummary: snapshot.topicSummary,
+    topicDescription: snapshot.topicDescription,
+    updateTime: snapshot.updateTime,
+    hasConversation: false,
+    scores: { lexical, vector: null },
+    entries: [{ kind: "decision" as const, id: snapshot.decisions[0]!.id, scores: { lexical: 1, vector: null } }]
+  });
+  return {
+    store: {
+      async recall() {
+        return {
+          results: [{ qid: "q", topics: [recallTopic(snapshots[0]!, 5), recallTopic(snapshots[1]!, 1)] }],
+          topicSeq: {},
+          degraded: []
+        };
+      },
+      async getTopicsFull() {
+        return options.missingHigh ? snapshots.filter((item) => item.topicId !== "topic_high") : snapshots;
+      }
+    } as unknown as ProjectMemoryStore
+  };
+}
 
 function traceMemory(id: string, text: string, at: string, value: number): MemoryRow {
   return {

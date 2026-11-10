@@ -37,6 +37,7 @@ unchanged during migration so failures remain searchable with `rg` and Vitest
 | REST contract | HTTP seam               | `../contract/memory-rest-service.test.ts` | `MemoryService / REST contract`                   | auth, DTOs, routes, worker drain, startup, shutdown                        | contract    |
 | REST contract | Panel and viewer        | `../contract/rest-panel-events.test.ts`   | `REST panel contract`                             | viewer HTML, panel reads, search, detail, deletion                         | contract    |
 | Project memory | Decision topic experiment | `project-memory/jev-topic.test.ts`     | `OpenAI decision topic choice`                    | opt-in add/search topic choice, default off                                | unit        |
+| Project memory | Rank fusion             | `project-memory/fuse.test.ts`          | `project memory rank fusion`                      | cross-path RRF, relativity, MMR cap                                        | unit        |
 
 ## Find and run tests
 

@@ -71,26 +71,37 @@ describe("project memory search", () => {
     }]);
     const scores = first.data.topic_detail_list.map((topic: { relativity: number }) => topic.relativity);
     expect(scores).toEqual([...scores].sort((a, b) => b - a));
-    expect(scores[0]).toBeGreaterThan(0);
+    expect(scores[0]).toBe(1);
+    expect(top).not.toHaveProperty("score");
 
-    const logged = db.db.prepare("SELECT conversation_id, via FROM pm_recall_log").all() as Array<{ conversation_id: string; via: string }>;
+    const logged = db.db.prepare("SELECT conversation_id, via, topic_id FROM pm_recall_log").all() as Array<{ conversation_id: string; via: string; topic_id: string }>;
     expect(logged.length).toBeGreaterThan(0);
     expect(new Set(logged.map((row) => row.conversation_id))).toEqual(new Set(["conv_search"]));
+    expect(logged.every((row) => row.via === "turn_start")).toBe(true);
+    const returnedIds = new Set(first.data.topic_detail_list.map((topic: { id: string }) => topic.id));
+    expect(logged.every((row) => returnedIds.has(row.topic_id))).toBe(true);
   });
 
   it("caps results at memory_limit_number and filters by relativity", async () => {
     const { service } = await seed("ok");
+    const open = await search(service);
     const capped = await search(service, { memory_limit_number: 1 });
-    expect(capped.data.topic_detail_list).toHaveLength(1);
+    expect(capped.data.topic_detail_list).toEqual([open.data.topic_detail_list[0]]);
+    expect(capped.data.topic_detail_list[0].topic_name).toBe("推送服务重试");
 
+    // Rank 1 is 1. Rank 2 is 61/62 ≈ 0.9839, so 0.99 keeps only the first topic.
     const strict = await search(service, { relativity: 0.99 });
-    expect(strict.data.topic_detail_list.every((topic: { relativity: number }) => topic.relativity >= 0.99)).toBe(true);
+    expect(strict.data.topic_detail_list).toEqual([open.data.topic_detail_list[0]]);
+    expect(strict.data.topic_detail_list).toHaveLength(1);
+    expect(strict.data.topic_detail_list[0].relativity).toBe(1);
+    expect(strict.data.topic_detail_list[0]).not.toHaveProperty("score");
 
     expect((await search(service, { memory_limit_number: 26 })).code).toBe(40001);
   });
 
   it("filters relativity on each topic's own relevance and keeps the list monotonic", () => {
-    // MMR placed a weaker topic first; the stronger one behind it must survive the threshold.
+    // The helper drops on own relevance before the running minimum, so a stronger
+    // item sitting behind a weaker one still clears the threshold.
     const ordered = [{ id: "weak", relevance: 0.4 }, { id: "strong", relevance: 0.9 }, { id: "noise", relevance: 0.2 }];
 
     const kept = assignRelativity(ordered, 0.5);

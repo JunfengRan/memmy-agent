@@ -111,8 +111,9 @@ describe("openmem HTTP contract", () => {
       domain: "代码开发",
       topic_name: "推送服务重试",
       decisions: [{ content: "推送失败后指数退避重试三次。", time: "2026-10-29T10:00:00+08:00", user_ids: ["user_a"] }],
-      relativity: expect.any(Number)
+      relativity: 1
     })]);
+    expect(searched.body.data.topic_detail_list[0]).not.toHaveProperty("score");
 
     const inUse = await post("delete/domains", { space_id: spaceId, domains: ["代码开发"] });
     expect(inUse.status).toBe(409);

@@ -1,20 +1,23 @@
 import { priorityFor } from "../../../algorithm/plugin-algorithms.js";
 import { createMemoryLogger, memoryErrorFields } from "../../../logging/logger.js";
 import { PROJECT_MEMORY_LIMITS } from "../contract/limits.js";
-import type { RecallEntry, RecallLogInput, RecallTopic, TopicSnapshot } from "../contract/types.js";
+import type { RecallEntry, RecallTopic, TopicSnapshot } from "../contract/types.js";
 import type { DecisionTopicRouter } from "../decisions/client.js";
 import { briefFromTopic, orderSearchByJev } from "../decisions/topic-choice.js";
-import type { ProjectLocalState } from "../store/sqlite/local-state.js";
 import type { ProjectMemoryStore } from "../store/store.js";
-import { textTokens, tokenOverlap, uniqueTokens } from "../text.js";
+import { uniqueTokens } from "../text.js";
 import { timeMs } from "../time.js";
+import { RRF_K } from "./fuse.js";
+
+export { assignRelativity } from "./fuse.js";
 
 /**
- * M09 (local): fuse lexical and vector ranks with RRF, boost recent and
- * same-conversation topics, de-duplicate with MMR, trim entries, attach the full
- * decision history and conflicts. The default path does not call a model: equal
- * input, equal output. An opt-in OpenAI Decisions selector may move one topic
- * to the front and is absent unless MEMMY_DECISION_TOPIC=1 (ADR-0006).
+ * Project-path ranking for M09. Lexical and vector ranks are fused with RRF,
+ * then recency (against the newest candidate, not the wall clock) and a
+ * same-conversation boost. There is no MMR on this path. An opt-in OpenAI
+ * Decisions selector may move one topic to rank 1 and is absent unless
+ * MEMMY_DECISION_TOPIC=1 (ADR-0006). Cross-path fusion lives in fuse.ts.
+ * A topic with no snapshot is dropped here, before fusion.
  */
 /** Which local recall paths M08 should run. Omitted HTTP views become user memory plus L1 and Skill. */
 export interface MemoryViewSelection {
@@ -33,6 +36,8 @@ export interface SearchInput {
   memoryLimit: number;
   relativity?: number;
   views: MemoryViewSelection;
+  /** Defaults to turn_start. PM-21 may pass tool; the HTTP body does not accept it yet. */
+  via?: "turn_start" | "tool";
 }
 
 export interface SearchEntryView {
@@ -57,25 +62,24 @@ export interface SearchTopicView {
   update_time: string;
 }
 
-export interface SearchOutput {
-  topics: SearchTopicView[];
-  degraded: string[];
+export interface RankedProjectCandidate {
+  id: string;
+  rank: number;
+  text: string;
+  entries: RecallEntry[];
+  snapshot: TopicSnapshot;
 }
 
 const log = createMemoryLogger("project-memory.search");
 
-const RRF_K = 60;
 const RECENCY_HALF_LIFE_DAYS = 14;
 const RECENCY_WEIGHT = 0.15;
 const CONVERSATION_WEIGHT = 0.1;
-const MMR_LAMBDA = 0.7;
 
-interface Candidate {
+interface ScoredTopic {
   topic: RecallTopic;
   entries: RecallEntry[];
   fused: number;
-  relevance: number;
-  tokens: Set<string>;
 }
 
 function rankMap(topics: RecallTopic[], channel: "lexical" | "vector"): Map<string, number> {
@@ -85,52 +89,10 @@ function rankMap(topics: RecallTopic[], channel: "lexical" | "vector"): Map<stri
   return new Map(scored.map((topic, index) => [topic.topicId, index + 1]));
 }
 
-function jaccard(left: Set<string>, right: Set<string>): number {
-  if (left.size === 0 || right.size === 0) return 0;
-  let shared = 0;
-  for (const token of left) if (right.has(token)) shared += 1;
-  return shared / (left.size + right.size - shared);
-}
-
-function mmr(candidates: Candidate[], limit: number): Candidate[] {
-  const pool = [...candidates];
-  const chosen: Candidate[] = [];
-  const top = Math.max(...pool.map((item) => item.fused), Number.EPSILON);
-  while (chosen.length < limit && pool.length > 0) {
-    let bestIndex = 0;
-    let bestScore = -Infinity;
-    pool.forEach((candidate, index) => {
-      const redundancy = chosen.length === 0 ? 0 : Math.max(...chosen.map((item) => jaccard(item.tokens, candidate.tokens)));
-      const score = MMR_LAMBDA * (candidate.fused / top) - (1 - MMR_LAMBDA) * redundancy;
-      const best = pool[bestIndex]!;
-      if (score > bestScore || (score === bestScore && candidate.topic.topicId < best.topic.topicId)) {
-        bestScore = score;
-        bestIndex = index;
-      }
-    });
-    chosen.push(pool.splice(bestIndex, 1)[0]!);
-  }
-  return chosen;
-}
-
-/**
- * `relativity` must not rise down the returned list (v3 §3.2.5), so each topic shows the
- * running minimum of relevance in output order. The threshold is checked against each
- * topic's own relevance first: MMR can place a less relevant topic ahead, and its lower
- * score must not push a more relevant topic below the threshold.
- */
-export function assignRelativity<T extends { relevance: number }>(
-  selected: readonly T[],
-  threshold?: number
-): Array<{ item: T; relativity: number }> {
-  let ceiling = 1;
-  return selected
-    .map((item) => ({ item, own: Math.round(item.relevance * 10_000) / 10_000 }))
-    .filter(({ own }) => threshold === undefined || own >= threshold)
-    .map(({ item, own }) => {
-      ceiling = Math.min(ceiling, own);
-      return { item, relativity: ceiling };
-    });
+function compareTopicId(left: string, right: string): number {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
 }
 
 function topicText(topic: RecallTopic): string {
@@ -164,10 +126,14 @@ function topicView(snapshot: TopicSnapshot, entries: RecallEntry[], relativity: 
   };
 }
 
-export async function searchProjectMemory(
+export function projectTopicView(candidate: RankedProjectCandidate, relativity: number): SearchTopicView {
+  return topicView(candidate.snapshot, candidate.entries, relativity);
+}
+
+export async function rankProjectCandidates(
   input: SearchInput,
-  deps: { store: ProjectMemoryStore; local: ProjectLocalState; decision?: DecisionTopicRouter | null }
-): Promise<SearchOutput> {
+  deps: { store: ProjectMemoryStore; decision?: DecisionTopicRouter | null }
+): Promise<{ candidates: RankedProjectCandidate[]; degraded: string[] }> {
   const queryTokens = uniqueTokens(input.query);
   const recall = await deps.store.recall({
     spaceIds: input.spaceIds,
@@ -179,85 +145,59 @@ export async function searchProjectMemory(
     entryK: PROJECT_MEMORY_LIMITS.entryK
   });
   const topics = recall.results[0]?.topics ?? [];
-  if (topics.length === 0) return { topics: [], degraded: recall.degraded };
+  if (topics.length === 0) return { candidates: [], degraded: recall.degraded };
 
   const lexicalRanks = rankMap(topics, "lexical");
   const vectorRanks = rankMap(topics, "vector");
   const newest = Math.max(...topics.map((topic) => timeMs(topic.updateTime)));
   const minEntryHits = Math.max(1, Math.ceil(queryTokens.length * 0.2));
-
-  const candidates: Candidate[] = topics.map((topic) => {
+  const scored: ScoredTopic[] = topics.map((topic) => {
     const lexicalRank = lexicalRanks.get(topic.topicId);
     const vectorRank = vectorRanks.get(topic.topicId);
     const rrf = (lexicalRank ? 1 / (RRF_K + lexicalRank) : 0) + (vectorRank ? 1 / (RRF_K + vectorRank) : 0);
-    // Recency is measured against the newest candidate, not the wall clock, so the
-    // same data ranks the same way whenever it is queried.
     const recency = priorityFor(1, timeMs(topic.updateTime), RECENCY_HALF_LIFE_DAYS, newest);
     const fused = rrf * (1 + RECENCY_WEIGHT * recency + (topic.hasConversation ? CONVERSATION_WEIGHT : 0));
     const entries = topic.entries.filter((entry) => (entry.scores.lexical ?? 0) * queryTokens.length >= minEntryHits - 1e-9);
-    const lexicalRelevance = Math.max(tokenOverlap(queryTokens, topicText(topic)), ...entries.map((entry) => entry.scores.lexical ?? 0));
-    const vectorRelevance = topic.scores.vector === null ? 0 : Math.max(0, Math.min(1, topic.scores.vector));
-    return {
-      topic,
-      entries,
-      fused,
-      relevance: Math.max(lexicalRelevance, vectorRelevance),
-      tokens: new Set(textTokens(topicText(topic)))
-    };
-  }).filter((candidate) => candidate.fused > 0);
+    return { topic, entries, fused };
+  }).filter((candidate) => candidate.fused > 0)
+    .sort((left, right) => right.fused - left.fused || compareTopicId(left.topic.topicId, right.topic.topicId));
 
-  const limit = Math.min(input.memoryLimit, PROJECT_MEMORY_LIMITS.memoryLimitMax);
-  const selected = await selectWithOptionalDecision(input.query, candidates, mmr(candidates, limit), limit, deps);
-  const scored = assignRelativity(selected, input.relativity)
-    .map(({ item, relativity }) => ({ candidate: item, relativity }));
-
-  const snapshots = new Map((await deps.store.getTopicsFull(null, scored.map((item) => item.candidate.topic.topicId)))
+  const ordered = await moveOptionalJev(input.query, scored, deps);
+  if (ordered.length === 0) return { candidates: [], degraded: recall.degraded };
+  const snapshots = new Map((await deps.store.getTopicsFull(null, ordered.map((item) => item.topic.topicId)))
     .map((snapshot) => [snapshot.topicId, snapshot]));
-  const views: SearchTopicView[] = [];
-  const recallLog: RecallLogInput[] = [];
-  for (const { candidate, relativity } of scored) {
-    const snapshot = snapshots.get(candidate.topic.topicId);
-    if (!snapshot) continue;
-    const view = topicView(snapshot, candidate.entries, relativity);
-    views.push(view);
-    if (input.conversationId) {
-      recallLog.push({ conversationId: input.conversationId, via: "turn_start", topicId: snapshot.topicId, decisionId: null, hadConflicts: false });
-      for (const decision of snapshot.decisions) {
-        if (!candidate.entries.some((entry) => entry.id === decision.id)) continue;
-        recallLog.push({
-          conversationId: input.conversationId,
-          via: "turn_start",
-          topicId: snapshot.topicId,
-          decisionId: decision.id,
-          hadConflicts: decision.conflicts.length > 0
-        });
-      }
-    }
-  }
-  deps.local.appendRecallLog(recallLog);
-  return { topics: views, degraded: recall.degraded };
+  const available = ordered.flatMap((item) => {
+    const snapshot = snapshots.get(item.topic.topicId);
+    return snapshot ? [{ item, snapshot }] : [];
+  });
+  return {
+    degraded: recall.degraded,
+    candidates: available.map(({ item, snapshot }, index) => ({
+      id: snapshot.topicId,
+      rank: index + 1,
+      text: topicText(item.topic),
+      entries: item.entries,
+      snapshot
+    }))
+  };
 }
 
-async function selectWithOptionalDecision(
+async function moveOptionalJev(
   query: string,
-  pool: Candidate[],
-  selected: Candidate[],
-  limit: number,
-  deps: { store: ProjectMemoryStore; decision?: DecisionTopicRouter | null }
-): Promise<Candidate[]> {
-  if (!deps.decision || pool.length === 0) return selected;
+  ordered: ScoredTopic[],
+  deps: { decision?: DecisionTopicRouter | null }
+): Promise<ScoredTopic[]> {
+  if (!deps.decision || ordered.length === 0) return ordered;
   try {
-    const snapshots = new Map((await deps.store.getTopicsFull(null, pool.map((candidate) => candidate.topic.topicId)))
-      .map((snapshot) => [snapshot.topicId, snapshot]));
     const choice = await deps.decision.chooseSearch({
       query,
-      topics: pool.map((candidate) => briefFromTopic(snapshots.get(candidate.topic.topicId) ?? candidate.topic))
+      topics: ordered.map((candidate) => briefFromTopic(candidate.topic))
     });
-    const ordered = orderSearchByJev(selected, pool, choice, limit, (candidate) => candidate.topic.topicId);
-    log.info("decision.search", { choice: choice.choice, confidence: choice.confidence, pool: pool.length });
-    return ordered;
+    const moved = orderSearchByJev(ordered, ordered, choice, ordered.length, (candidate) => candidate.topic.topicId);
+    log.info("decision.search", { choice: choice.choice, confidence: choice.confidence, pool: ordered.length });
+    return moved;
   } catch (error) {
     log.warn("decision.search.failed", memoryErrorFields(error));
-    return selected;
+    return ordered;
   }
 }
