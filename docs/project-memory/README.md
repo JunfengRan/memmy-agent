@@ -6,6 +6,7 @@
 
 | 文件 | 内容 | 什么时候改 |
 | --- | --- | --- |
+| [findings.md](findings.md) | 开发过程中的发现，给同事和汇报用。不是规格 | 有新的评测结论或设计建议时 |
 | [ONBOARDING.md](ONBOARDING.md) | 给新同事的现状说明：先读什么、做到哪了、接下来做什么 | 每周五随周报 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 模块布局、编码规则、测试与评测命令、提交流程 | 约定变化时 |
 | [ROADMAP.md](ROADMAP.md) | 里程碑、周计划、条目状态、变更记录 | 每周一确认，每周五修订 |

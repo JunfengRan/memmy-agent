@@ -12,7 +12,7 @@
 | --- | --- | --- | --- | --- |
 | PM-01 | 治理落地：AGENTS.md、技能、docs/project-memory | — | 新会话能加载规则；4 个技能可见 | done |
 | PM-02 | 评测清理：数据集只留一份，生成物移出 git | — | `git status` 不跟踪生成物 | done（9aabf84b） |
-| PM-03 | 评测数据集 v2：语料补成员身份、金标按 v3 重推、冲突改为按作者、题目清理 | v3 §2.2.5–2.2.9 | `load-eval-set` 校验通过 | done（9aabf84b；评审 3 项 MUST 已在 672919d5 修复，待 review-02，见 .agents/work/PM-03-eval-dataset-v2） |
+| PM-03 | 评测数据集 v2：语料补成员身份、金标按 v3 重推、冲突改为按作者、题目清理 | v3 §2.2.5–2.2.9 | `load-eval-set` 校验通过 | done（9aabf84b；评审 MUST 已在 672919d5 修复，review-02 approved，工作项 done） |
 | PM-04 | 评测脚本 v2：runner 只调规格接口，scorer 按 topic 计数、拆分 trap、独立评委 | v3 §3.2 | oracle 全 1、empty 全 0 | done（同上） |
 | PM-05 | contract/ 与 schema v10 建表 | v3 §5.1.5、§5.3 | typecheck 通过，迁移测试 | done（44dcbb1e） |
 | PM-06 | SQLite Store：Space/domain、topic 读写、L03 条件写（revision、topic_seq、幂等键） | v3 §5.1.2、§2.2.10 | 409 后库不变；幂等重放无副本 | done（44dcbb1e） |
@@ -66,6 +66,7 @@
 
 | 日期 | 变化 | 原因 |
 | --- | --- | --- |
+| 2026-11-11 | 收尾审计：PM-03 改为与工作项一致的 done。指标总表按端到端、只测写入、只测检索或回答分开 | 上手说明仍停在 11/6。金标上限和产品回放不能放在同一行 |
 | 2026-11-10 | PM-17 改为 done。R-20261110-04 的 answers.llm 为 1.000（31/31） | 阅读提示词升到 v2。q24 标准答案改为决策原文。rubric 仍是 0.871。这是 v2.1 内的小改，不另冻数据集 |
 | 2026-11-10 | PM-17 仍是 doing。第二阅读模型全量上限 R-20261110-03 为 0.935（29/31） | 阅读模型 claude-sonnet-4-6，评委仍是 claude-haiku-4-5-20251001。错题 q03、q24。不把上限写成 1 |
 | 2026-11-10 | PM-18 状态格补上三套对照和 OmniMemEval 开源未做 | 评审 R1-1：只看 Roadmap 会以为 PRD 待办 3 整条已交付 |
