@@ -76,13 +76,27 @@ const RECENCY_HALF_LIFE_DAYS = 14;
 const RECENCY_WEIGHT = 0.15;
 const CONVERSATION_WEIGHT = 0.1;
 
-interface ScoredTopic {
-  topic: RecallTopic;
-  entries: RecallEntry[];
-  fused: number;
+export interface ScoredEntry {
+  entry: RecallEntry;
+  lexical: number | null;
+  kept: boolean;
 }
 
-function rankMap(topics: RecallTopic[], channel: "lexical" | "vector"): Map<string, number> {
+export interface ScoredProjectTopic {
+  topic: RecallTopic;
+  entries: RecallEntry[];
+  entryScores: ScoredEntry[];
+  lexicalRank: number | null;
+  vectorRank: number | null;
+  rrf: number;
+  recency: number;
+  conversationBoost: number;
+  fused: number;
+  minEntryHits: number;
+  queryTokenCount: number;
+}
+
+function rankMap(topics: readonly RecallTopic[], channel: "lexical" | "vector"): Map<string, number> {
   const scored = topics
     .filter((topic) => topic.scores[channel] !== null)
     .sort((left, right) => (right.scores[channel]! - left.scores[channel]!) || left.topicId.localeCompare(right.topicId));
@@ -130,11 +144,47 @@ export function projectTopicView(candidate: RankedProjectCandidate, relativity: 
   return topicView(candidate.snapshot, candidate.entries, relativity);
 }
 
+/** Same ordering rankProjectCandidates uses before the optional Decisions move. */
+export function scoreProjectTopics(query: string, topics: readonly RecallTopic[], options?: { keepZero?: boolean }): ScoredProjectTopic[] {
+  const queryTokens = uniqueTokens(query);
+  const lexicalRanks = rankMap(topics, "lexical");
+  const vectorRanks = rankMap(topics, "vector");
+  const newest = topics.length ? Math.max(...topics.map((topic) => timeMs(topic.updateTime))) : 0;
+  const minEntryHits = Math.max(1, Math.ceil(queryTokens.length * 0.2));
+  const scored = topics.map((topic) => {
+    const lexicalRank = lexicalRanks.get(topic.topicId) ?? null;
+    const vectorRank = vectorRanks.get(topic.topicId) ?? null;
+    const rrf = (lexicalRank ? 1 / (RRF_K + lexicalRank) : 0) + (vectorRank ? 1 / (RRF_K + vectorRank) : 0);
+    const recency = priorityFor(1, timeMs(topic.updateTime), RECENCY_HALF_LIFE_DAYS, newest);
+    const conversationBoost = topic.hasConversation ? CONVERSATION_WEIGHT : 0;
+    const fused = rrf * (1 + RECENCY_WEIGHT * recency + conversationBoost);
+    const entryScores = topic.entries.map((entry) => {
+      const lexical = entry.scores.lexical;
+      const kept = (lexical ?? 0) * queryTokens.length >= minEntryHits - 1e-9;
+      return { entry, lexical, kept };
+    });
+    return {
+      topic,
+      entries: entryScores.filter((item) => item.kept).map((item) => item.entry),
+      entryScores,
+      lexicalRank,
+      vectorRank,
+      rrf,
+      recency,
+      conversationBoost,
+      fused,
+      minEntryHits,
+      queryTokenCount: queryTokens.length
+    };
+  });
+  const visible = options?.keepZero ? scored : scored.filter((candidate) => candidate.fused > 0);
+  return visible.sort((left, right) => right.fused - left.fused || compareTopicId(left.topic.topicId, right.topic.topicId));
+}
+
 export async function rankProjectCandidates(
   input: SearchInput,
   deps: { store: ProjectMemoryStore; decision?: DecisionTopicRouter | null }
 ): Promise<{ candidates: RankedProjectCandidate[]; degraded: string[] }> {
-  const queryTokens = uniqueTokens(input.query);
   const recall = await deps.store.recall({
     spaceIds: input.spaceIds,
     domains: input.domains,
@@ -147,21 +197,7 @@ export async function rankProjectCandidates(
   const topics = recall.results[0]?.topics ?? [];
   if (topics.length === 0) return { candidates: [], degraded: recall.degraded };
 
-  const lexicalRanks = rankMap(topics, "lexical");
-  const vectorRanks = rankMap(topics, "vector");
-  const newest = Math.max(...topics.map((topic) => timeMs(topic.updateTime)));
-  const minEntryHits = Math.max(1, Math.ceil(queryTokens.length * 0.2));
-  const scored: ScoredTopic[] = topics.map((topic) => {
-    const lexicalRank = lexicalRanks.get(topic.topicId);
-    const vectorRank = vectorRanks.get(topic.topicId);
-    const rrf = (lexicalRank ? 1 / (RRF_K + lexicalRank) : 0) + (vectorRank ? 1 / (RRF_K + vectorRank) : 0);
-    const recency = priorityFor(1, timeMs(topic.updateTime), RECENCY_HALF_LIFE_DAYS, newest);
-    const fused = rrf * (1 + RECENCY_WEIGHT * recency + (topic.hasConversation ? CONVERSATION_WEIGHT : 0));
-    const entries = topic.entries.filter((entry) => (entry.scores.lexical ?? 0) * queryTokens.length >= minEntryHits - 1e-9);
-    return { topic, entries, fused };
-  }).filter((candidate) => candidate.fused > 0)
-    .sort((left, right) => right.fused - left.fused || compareTopicId(left.topic.topicId, right.topic.topicId));
-
+  const scored = scoreProjectTopics(input.query, topics);
   const ordered = await moveOptionalJev(input.query, scored, deps);
   if (ordered.length === 0) return { candidates: [], degraded: recall.degraded };
   const snapshots = new Map((await deps.store.getTopicsFull(null, ordered.map((item) => item.topic.topicId)))
@@ -184,9 +220,9 @@ export async function rankProjectCandidates(
 
 async function moveOptionalJev(
   query: string,
-  ordered: ScoredTopic[],
+  ordered: ScoredProjectTopic[],
   deps: { decision?: DecisionTopicRouter | null }
-): Promise<ScoredTopic[]> {
+): Promise<ScoredProjectTopic[]> {
   if (!deps.decision || ordered.length === 0) return ordered;
   try {
     const choice = await deps.decision.chooseSearch({
