@@ -38,3 +38,6 @@ Memory/src/agent-source/integration/workspace-bridge/memmy-workspace-bridge.mjs
 
 # Empty fixture git repos left in the worktree. This branch does not carry those workspaces.
 /eval/project-memory/workspaces/
+
+# Session-router eval inputs and model outputs. Rebuilt locally; not part of the product.
+/eval/session-router/runs/
