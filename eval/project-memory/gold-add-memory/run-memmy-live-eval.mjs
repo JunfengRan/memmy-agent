@@ -19,6 +19,9 @@
  *   MEMMY_EVAL_READER_{PROVIDER,MODEL,BASE_URL,API_KEY}   fixed reader model (required for a replay)
  *   MEMMY_EVAL_RUN_TAG     suffix for space_name / conversation_id, default the run stamp
  *   MEMMY_EVAL_TASK_TIMEOUT_MS  per add_message task, default 300000
+ *   MEMMY_EVAL_TRACE_DB    server sqlite path. Unset: no store diffs and no question snapshots.
+ *   MEMMY_EVAL_TRACE_DIR   trace directory. Default <run>/trace when TRACE_DB is set.
+ *   MEMMY_EVAL_USAGE_PROXY usage-proxy base URL. Unset: skip context tags, do not fail the replay.
  * Output: eval/project-memory/runs/<stamp>/live-run.json (api-checks.json for --api-checks-only);
  * on any HTTP or task error, live-run.partial.json with the error, and exit 1.
  *
@@ -33,10 +36,11 @@ import { loadDataset, orderedTraces, projectAddBody, submittedTrace, traceOrderT
 import { createLlm, resolveModelConfig } from "./llm.mjs";
 import { loadGold } from "./load-eval-set.mjs";
 import { displayNames } from "./oracle.mjs";
-import { createReader, renderTemplate3 } from "./reader.mjs";
+import { createLiveTrace } from "./harness/live-trace.mjs";
+import { READER_SYSTEM, createReader, readerUserMessage, renderTemplate3 } from "./reader.mjs";
 import { RUNS_DIR } from "./run-pipeline-eval.mjs";
 
-export const RUNNER_REVISION = 2;
+export const RUNNER_REVISION = 3;
 const argv = process.argv.slice(2);
 const checksOnlyIndex = argv.indexOf("--api-checks-only");
 const checksOnly = checksOnlyIndex >= 0 ? JSON.parse(readFileSync(argv[checksOnlyIndex + 1] ?? "", "utf8")) : null;
@@ -99,6 +103,15 @@ const run = {
   phaseMs: {},
   usage: {}
 };
+const traceDb = process.env.MEMMY_EVAL_TRACE_DB || "";
+const traceDir = traceDb ? (process.env.MEMMY_EVAL_TRACE_DIR || join(outDir, "trace")) : "";
+if (traceDb) run.traceWarnings = [];
+const tracer = checksOnly ? null : createLiveTrace({
+  dbPath: traceDb,
+  traceDir,
+  proxyBase: process.env.MEMMY_EVAL_USAGE_PROXY || "",
+  warn: (message) => run.traceWarnings?.push(message)
+});
 
 let phase = "setup";
 async function timed(name, fn) {
@@ -171,7 +184,8 @@ function searchBody(conversation, query) {
   };
 }
 
-async function search(conversation, query) {
+async function search(conversation, query, traceContext) {
+  if (tracer && traceContext) await tracer.context({ trace: traceContext.trace ?? null, task_id: null, phase: "search", question_id: traceContext.question_id ?? null });
   const { data } = await timed("search", () => call("/search/memory", searchBody(conversation, query)));
   return data?.topic_detail_list ?? [];
 }
@@ -186,9 +200,12 @@ async function readSpace(space) {
 }
 
 async function ask(question) {
-  const topics = await search(question.conversation, question.question);
+  if (tracer) await tracer.beforeQuestion(question.id);
+  const topics = await search(question.conversation, question.question, { question_id: question.id });
   const rendered = renderTemplate3({ topics, now: question.askedAt, spaceNames: Object.fromEntries(Object.entries(spaceMap).map(([k, v]) => [v, names.spaceNames[k]])), memberNames: names.memberNames });
+  const user = readerUserMessage(question, rendered);
   const answer = await timed("reader", () => reader.answer(question, rendered));
+  if (tracer) tracer.reader({ id: question.id, system: READER_SYSTEM, user, answer });
   run.questions.push({ id: question.id, askedAt: question.askedAt, topic_detail_list: topics, rendered, answer });
 }
 
@@ -237,14 +254,27 @@ try {
     if (event.question) { await ask(event.question); continue; }
     const { trace } = event;
     if (trace.searchBefore) {
-      const topics = await search(trace.conversation, trace.searchBefore.query);
+      const topics = await search(trace.conversation, trace.searchBefore.query, { trace: trace.id });
       run.tasks.push({ trace: trace.id, searchBefore: true, topics: topics.map((t) => t.id) });
     }
     await timed("add", async () => {
-      const accepted = await call("/add/message", addBody(trace));
+      const body = addBody(trace);
+      if (tracer) await tracer.context({ trace: trace.id, task_id: null, phase: "add", question_id: null });
+      const accepted = await call("/add/message", body);
       const taskId = accepted.data?.task_id;
       if (!taskId) throw new Error(`${trace.id}: add/message returned no task_id`);
+      if (tracer) await tracer.context({ trace: trace.id, task_id: taskId, phase: "add", question_id: null });
       const status = await waitTask(taskId, trace.id);
+      if (tracer && status.status === "completed") {
+        const conversation = conversations.get(trace.conversation);
+        tracer.afterAdd({
+          trace: trace.id,
+          taskId,
+          datasetSpaceId: conversation.space_id,
+          serverSpaceId: spaceMap[conversation.space_id],
+          messages: body.messages
+        });
+      }
       run.tasks.push({
         trace: trace.id, task_id: taskId, status: status.status, memory_views: status.memory_views ?? null, error: status.error ?? null,
         acceptMs: accepted.ms,
@@ -259,7 +289,7 @@ try {
   });
   await apiChecks();
   run.wallclockMs = performance.now() - started;
-  console.log(JSON.stringify({ out: save("live-run.json"), questions: run.questions.length, tasks: run.tasks.length, apiChecks: run.apiChecks.map((c) => `${c.id}:${c.passed}`) }));
+  console.log(JSON.stringify({ out: save("live-run.json"), traceDir: traceDir || null, questions: run.questions.length, tasks: run.tasks.length, apiChecks: run.apiChecks.map((c) => `${c.id}:${c.passed}`) }));
 } catch (error) {
   run.wallclockMs = performance.now() - started;
   run.error = { message: String(error.message ?? error), call: error.call ?? null, status: error.status ?? null, body: error.body ?? null };

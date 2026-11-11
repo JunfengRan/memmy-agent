@@ -39,7 +39,7 @@ node load-eval-set.mjs
 
 ```bash
 # 0. （可选）记录被测系统的模型用量：把服务的 MEMMY_SUMMARY_ENDPOINT / MEMMY_EVOLUTION_ENDPOINT 指向代理
-node harness/usage-proxy.mjs --upstream <模型网关>/v1 --port 18970 --out /tmp/pm-eval/sut-usage.jsonl
+node harness/usage-proxy.mjs --upstream <模型网关>/v1 --port 18970 --out /tmp/pm-eval/sut-usage.jsonl [--trace <file.jsonl>]
 
 # 1. 回放：建空间与领域 → 每轮 add_message 并轮询 get/status → 按 askedAt 提问 → 读最终状态 → 接口检查
 export MEMMY_EVAL_BASE=http://127.0.0.1:18960/api/openmem/v1
@@ -72,6 +72,7 @@ node run-memmy-live-eval.mjs --api-checks-only ../runs/<stamp>/live-run.json   #
   - `add_unregistered_domain`：同步返回 `40002` / `DOMAIN_INVALID`，或任务 `failed` 且错误为 `DOMAIN_INVALID`，并且 ledger 主题数不变。
 - 每轮的 `chat_time` 按 `YYYY-MM-DD HH:mm:ss` 发送，带 `X-MemOS-TZ: +08:00`。
 - 带 `searchBefore` 的轨迹（`t_informed`）先在同一会话检索一次，再写入，用来满足「已告知」。
+- **全程追踪**（不设 `MEMMY_EVAL_TRACE_DB` 时与以前一样）：`MEMMY_EVAL_TRACE_DB` 是服务端 sqlite，`MEMMY_EVAL_TRACE_DIR` 默认是本次 `runs/<stamp>/trace`，`MEMMY_EVAL_USAGE_PROXY` 是用量代理地址。回放在每次 add / search 前 `POST /__eval/context`，给之后的模型调用打上 `{trace, task_id, phase, question_id}`。代理的用量 JSONL 仍只有 token；`--trace` 另写 `model-calls.jsonl`，含 messages 和助手回复，不写请求头。每个任务完成后把该空间的主题和条目与上一步做 diff，写入 `add-steps.jsonl`。每题提问前用 `node:sqlite` 的 `backup` 存 `trace/db/before-<qid>.sqlite`。阅读的系统提示、用户文本和回答写 `reader-calls.jsonl`。评分后在 `Memory/` 下执行 `npx tsx ../eval/project-memory/gold-add-memory/harness/explain-search.mjs --run <run-dir>`，再用 `node harness/build-trace.mjs --run <run-dir>` 合成 `trace/questions/<qid>.json` 和 `trace/index.md`。这些文件在 `runs/` 下，不进 git。
 - 回答不由被测系统生成。`search_memory` 返回的 `topic_detail_list` 按模板三（§3.3.4）渲染后，交给固定的阅读模型作答。阅读模型只看渲染结果。
 - `harness/run-control-main.mjs` 是对照组：main 分支没有项目记忆，用通用 `/api/v1` 记忆写入与检索，命中片段包成伪主题，用同一个阅读模型作答、同一个评分脚本打分。写入和决策类得分按定义为 0，只有检索与回答可比；`harness/eval-config.yaml` 是对照组的服务配置。
 
@@ -208,7 +209,11 @@ node run-memmy-live-eval.mjs --api-checks-only ../runs/<stamp>/live-run.json   #
 | `harness/run-reader-ceiling.mjs` | 阅读模型上限：把金标的 `topic_detail_list` 交给固定阅读模型，生成可评分的 run（记录见 metrics.md R-20261105-03） |
 | `harness/run-control-legacy.mjs` | 旧实现（`44dcbb1e^`）的同口径对照：驱动它的 `/api/v1/memory/add`、`search`，同一阅读模型、同一评分。旧实现没有 history / conflicts、没有 get_memory，写入类得分是下界，`api.passRate` 按构造为 0 |
 | `harness/run-legacy-eval.sh` | 一键跑旧实现对照：解出 `44dcbb1e^`、起用量代理和旧服务（配置复制到工作目录，服务回写不会弄脏仓库）、回放。需要环境变量 `SUT_ENV_FILE`（被测模型）、`JUDGE_ENV_FILE`（评委与阅读模型），密钥不进仓库 |
-| `harness/usage-proxy.mjs` | 被测系统模型调用的用量记录代理（JSONL），评分时用 `--sut-usage` 读入 |
+| `harness/usage-proxy.mjs` | 被测系统模型调用的用量记录代理（JSONL），评分时用 `--sut-usage` 读入。`--trace` 另记提示词和回复 |
+| `harness/store-diff.mjs` | 只读导出一个空间并做逐行 diff |
+| `harness/live-trace.mjs` | 回放侧写 add diff、提问前快照和阅读轨迹 |
+| `harness/explain-search.mjs` | 对提问前快照重跑项目路打分，写出 `search-explain.json` |
+| `harness/build-trace.mjs` | 把模型调用、diff、检索打分和评分合成逐题档案 |
 | `run-pipeline-eval.mjs` | 评分，以及 `--oracle` / `--empty` 自检和 `--gate` |
 | `oracle.mjs` | 从金标生成规格形状的 `topic_detail_list` |
 | `reader.mjs` | 模板三渲染与固定阅读模型 |

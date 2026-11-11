@@ -3,6 +3,7 @@
 //   node selftest.mjs        exit 0 when every case passes
 // Cases: R1-2 kind-aware matching probe, R1-1 API checks against refused / 404 / 500 / empty
 // servers, R1-3 efficiency fields on new and old run shapes, R1-4 per-kind answer scores.
+import { execFileSync } from "node:child_process";
 import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -13,6 +14,8 @@ import { createJudge } from "./judge.mjs";
 import { createLlm } from "./llm.mjs";
 import { loadGold } from "./load-eval-set.mjs";
 import { buildOracleRun, oracleTopics } from "./oracle.mjs";
+import { diffTables } from "./harness/store-diff.mjs";
+import { buildTraceRecord } from "./harness/usage-proxy.mjs";
 import { classifyOperation, costUsd, tokenBuckets } from "./metrics.mjs";
 import { efficiency, scoreRun } from "./run-pipeline-eval.mjs";
 
@@ -323,6 +326,57 @@ test("deepseek-flash peak and off-peak rates, and the gpt-6-luna price", () => {
   close(costUsd({ model: "gpt-6-luna", inputTokens: 1_000, cachedInputTokens: 1_000, outputTokens: 1_000 }, pricing), 0.00061);
   close(costUsd({ model: "gpt-6-luna", inputTokens: 1_000_000, cachedInputTokens: 1_000_000, outputTokens: 1_000_000 }, pricing), 0.97);
   close(costUsd({ model: "gpt-6-luna", inputTokens: 0, cachedInputTokens: 0, cacheCreationTokens: 1_000, outputTokens: 0 }, pricing), 0.000125);
+});
+
+test("store diff reports added, updated, and deleted rows", () => {
+  const before = { pm_topics: [{ id: "a", topic_name: "old" }, { id: "b", topic_name: "gone" }] };
+  const after = { pm_topics: [{ id: "a", topic_name: "new" }, { id: "c", topic_name: "added" }] };
+  const diff = diffTables(before, after);
+  assert.deepEqual(diff.pm_topics.added, [{ id: "c", topic_name: "added" }]);
+  assert.deepEqual(diff.pm_topics.updated, [{ before: { id: "a", topic_name: "old" }, after: { id: "a", topic_name: "new" } }]);
+  assert.deepEqual(diff.pm_topics.deleted, [{ id: "b", topic_name: "gone" }]);
+});
+
+test("trace records messages and drops authorization", () => {
+  const record = buildTraceRecord(
+    { model: "m", messages: [{ role: "user", content: "hi" }], headers: { authorization: "Bearer SECRET" }, temperature: 0 },
+    JSON.stringify({ choices: [{ message: { content: "ok" } }], usage: { completion_tokens: 1 } }),
+    { trace: "t_journal", task_id: "task", phase: "add", question_id: null }
+  );
+  assert.equal(record.response.content, "ok");
+  assert.equal(record.request.messages[0].content, "hi");
+  assert.equal(record.request.requestOptions.temperature, 0);
+  assert.equal(JSON.stringify(record).includes("SECRET"), false);
+  assert.equal(JSON.stringify(record).includes("authorization"), false);
+  assert.deepEqual(Object.keys(record.context).sort(), ["phase", "question_id", "task_id", "trace"]);
+});
+
+test("scoreProjectTopics order matches rankProjectCandidates", () => {
+  const memory = join(root, "../../../Memory");
+  const tsx = join(root, "../../../node_modules/.bin/tsx");
+  const script = `
+    async function main() {
+    const { rankProjectCandidates, scoreProjectTopics } = await import("./src/service/project-memory/retrieve/search.ts");
+    const topics = [
+      { topicId: "low", spaceId: "s", revision: 1, domain: "d", topicName: "low", topicSummary: "", topicDescription: "", updateTime: "2026-10-01T00:00:00.000Z", hasConversation: false, scores: { lexical: 0.2, vector: null }, entries: [] },
+      { topicId: "high", spaceId: "s", revision: 1, domain: "d", topicName: "high", topicSummary: "", topicDescription: "", updateTime: "2026-10-21T00:00:00.000Z", hasConversation: false, scores: { lexical: 0.9, vector: 0.9 }, entries: [] }
+    ];
+    const scored = scoreProjectTopics("月报", topics).map((item) => item.topic.topicId);
+    const store = {
+      recall: async () => ({ results: [{ qid: "q", topics }], degraded: [] }),
+      getTopicsFull: async (_space, ids) => ids.map((id) => ({ topicId: id }))
+    };
+    const ranked = await rankProjectCandidates({
+      userId: "u", spaceIds: ["s"], query: "月报", memoryLimit: 9,
+      views: { userMemory: false, agentLayers: [], project: true }
+    }, { store });
+    if (JSON.stringify(ranked.candidates.map((item) => item.id)) !== JSON.stringify(scored)) {
+      throw new Error(JSON.stringify({ ranked: ranked.candidates.map((item) => item.id), scored }));
+    }
+    }
+    main().catch((error) => { console.error(error); process.exit(1); });
+  `;
+  execFileSync(tsx, ["--eval", script], { cwd: memory, stdio: "pipe" });
 });
 
 let failed = 0;
