@@ -35,4 +35,4 @@
 - `adds[0].steps[0].diff`：`{}`。`search.gold[0].locations`：`[]`。
 - `reader.user` 不含「订单号」。
 
-改法方向：复跑 `t_wh_buy` 后，extract 的 `drafts` 不应为空，这句不应再进入 `dropped`；`reader.user` 应能看到「订单号」。
+后续验证建议（本次未实现）：复跑 `t_wh_buy` 后，extract 的 `drafts` 不应为空，这句不应再进入 `dropped`；`reader.user` 应能看到「订单号」。

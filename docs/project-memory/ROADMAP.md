@@ -41,10 +41,10 @@
 | ID | 条目 | 出处 | 验收 | 状态 |
 | --- | --- | --- | --- | --- |
 | PM-19 | M08 三路召回：①用户记忆 ②agent L1/Skill ③project，降级标记 degraded。② 路的 LLM 过滤、分层、墙钟时效和失效的 `contextBudget` 按 Q-20 处理（review-triage Search-6、Search-7） | v3 §3.2.3 | 三路齐全或标记降级 100% | done（三路召回单测通过；跨路融合和 memory_detail_list 仍是 PM-20；未跑评测） |
-| PM-20 | M09 跨路 RRF、relativity 归一化、条目裁剪。三路只按名次融合，不拼接各路分数；relativity 改为 Q-01 的融合分归一（v0.1 用词法 / 向量相关度，阈值已改为按每个主题自身的相关度过滤，review-triage Search-3） | v3 §3.2.5、§3.5 | 确定性 100%；relativity 单调 | done（跨路按名次 RRF 与 relativity 单调性单测通过；列表名等 Q-29；过期向量整次退词法不改，见 Q-30；未跑评测） |
+| PM-20 | M09 跨路 RRF、relativity 归一化、条目裁剪。三路只按名次融合，不拼接各路分数；relativity 改为 Q-01 的融合分归一（v0.1 用词法 / 向量相关度，阈值已改为按每个主题自身的相关度过滤，review-triage Search-3） | v3 §3.2.5、§3.5 | 确定性 100%；relativity 单调 | done（跨路按名次 RRF 与 relativity 单调性单测通过；列表名等 Q-29；过期向量整次退词法不改，见 Q-30；11/11 已有产品回放，见 R-20261111-01，非三路真实语料的独立性能验收） |
 | PM-21 | 渐进式披露：会话开始 get_memory 索引、每轮 memories、工具 search_project_memory、get_memory_by_id。工具检索写 `via=tool`、不算本轮开始（Q-17）；宿主技能改查 `/api/openmem/v1/search/memory`，不再落到个人记忆（review-triage Search-4、Search-8、Search-9） | v3 §3.1–3.3 | 每轮注入 ≤ 全量的 30%；工具检索的召回记录 `via=tool` 100% | done（`via=tool` 与工具绑定单测通过；每轮注入 ≤ 全量 30% 未在实况回放上测量，见 Q-31。检索算法未改。模板 1–3 留给 PM-22） |
 | PM-22 | 注入模板 1–4、strip_injected、search 技能。`degraded` 非空时模板与技能里可见（Q-21，review-triage Search-12） | v3 §3.3、§3.4 | 注入块回写 M02 = 0；降级结果渲染出提示 100% | done（闭合注入块回写 M02 的单测为 0，`strippedBlocks` 记在任务详情；降级非空时有命中和无命中都渲染固定提示。Claude / Codex / Cursor 宿主钩子未接。非项目记忆段落不渲染。Memmy agent 在 hook.ts 里做了会话指南+索引和每轮模板三。Q-21 状态未改） |
-| PM-23 | 检索延迟与 Recall@K | v3 §3.6 | 单路 P95 ≤800 ms，总 ≤1.2 s | done（S+stub，测于 `127cca7e`：第 3 路 P95 0.741 ms，总 P95 1.462 ms，渲染 P95 0.008 ms，超时 0。金标灌库 Recall@1/3/9 0.581/0.968/0.968，不入索引。流水线 Recall 与 HTTP P95 未跑：阅读模型网关 2026-11-10 返回 503。L 只作参照） |
+| PM-23 | 检索延迟与 Recall@K | v3 §3.6 | 单路 P95 ≤800 ms，总 ≤1.2 s | done（S+stub，测于 `127cca7e`：第 3 路 P95 0.741 ms，总 P95 1.462 ms，渲染 P95 0.008 ms，超时 0。金标灌库 Recall@1/3/9 0.581/0.968/0.968，不入索引。11/10 未跑的流水线 Recall 与 HTTP P95 已由 11/11 R-20261111-01 补充：Recall@3 0.871 / 0.903，HTTP search P95 约 13 ms。L 只作参照） |
 
 ## W48（11/23–11/27）M3：云端契约与验收
 
@@ -58,9 +58,9 @@
 
 ## 风险
 
-- W45 很紧。11/5 add 没跑通时，search v0.1 先只做 FTS + RRF，向量移到 W46。
+- W45 曾采用先 FTS + RRF、后补向量的拆分；当前已进入本地基座收尾，现存风险看下列评测与云端验收边界。
 - 规格每周在变。每次变化走 `pm-spec-sync`，变化大的条目在周五重排。
-- 数据集小（7 个 topic），1–2% 级别的阈值在 v2.1 之前没有统计意义。
+- 当前 v2.1 是 50 个 topic、31 道计分题；旧版本曾只有 7 个 topic。两次产品回放仍有波动，小比例阈值不能只靠单次分数判断。
 
 ## 变更记录
 

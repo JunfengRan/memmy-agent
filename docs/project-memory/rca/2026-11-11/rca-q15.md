@@ -39,4 +39,4 @@
 - `adds[1].modelCalls[0].response.content`：`restatement`，原文「客户名为空时整行被丢掉」。
 - `search.gold[0].locations`：`[]`。`reader.user` 不含上述两句。
 
-改法方向：复跑 `t_admin_bug` 与 `t_bug` 后，这两句不应再出现在 extract 的 `dropped` 里，`reader.user` 应能看到「不是样例文件旧了」和「客户名为空时整行被丢掉」。
+后续验证建议（本次未实现）：复跑 `t_admin_bug` 与 `t_bug` 后，这两句不应再出现在 extract 的 `dropped` 里，`reader.user` 应能看到「不是样例文件旧了」和「客户名为空时整行被丢掉」。

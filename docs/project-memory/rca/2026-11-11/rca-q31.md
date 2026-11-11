@@ -35,7 +35,7 @@
 
 ## 4. 根因分类与证据
 
-主因：`add_judge`。
+主因：`add_judge`。共同因素是前一轮归属新建主题并未对照旧决策；裁决轮也只读取新主题，不能把未处理旧决策全部归咎于判断提示词。
 
 `t_column` 新建了重复主题，且 d0 没有对照旧决策。金标要的「转入历史」落在 `t_resolve`：抽取已经给出 resolve，judge 没有执行。
 
@@ -45,4 +45,4 @@
 - `adds[2].modelCalls[2].response.content`：`"resolve":null`，`same_as` 为 `content`。
 - `adds[2].steps[0].diff` 无 history；`reader.user` 仍有「金额继续以文本形式写在 journal 正文」。
 
-改法方向：复跑 `t_resolve` 后，resolve 应作用到旧决策 `dec_c983e6d1a71d426f`，diff 里能看到 journal 正文方案进入 history，`reader.user` 不再把它写成已确定的当前口径。
+后续验证建议（本次未实现）：复跑 `t_resolve` 后，resolve 应作用到旧决策 `dec_c983e6d1a71d426f`，diff 里能看到 journal 正文方案进入 history，`reader.user` 不再把它写成已确定的当前口径。

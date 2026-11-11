@@ -39,4 +39,4 @@ assign 把 d1 标成 `defer: true`，`deferred` 原因是 `work_unresolved`，�
 - `adds[0].steps[0].diff.pm_deferred_segments.added`：同文两条，原因含 `ambiguous_topic`。
 - `search.gold[0].locations`：`[]`。`reader.user` 不含「撤回」。
 
-改法方向：复跑 `t_bug` 后，这句不应再写入 `pm_deferred_segments`，而应出现在可检索的时间线或主题里，`reader.user` 能看到「撤回」。
+后续验证建议（本次未实现）：复跑 `t_bug` 后，这句不应再写入 `pm_deferred_segments`，而应出现在可检索的时间线或主题里，`reader.user` 能看到「撤回」。

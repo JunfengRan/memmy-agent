@@ -43,4 +43,4 @@ judge 回复：`same_question_as` 为 `dec_cf169237fa12418f`，`same_as` 为 nul
 - `adds[0].steps[0].diff.pm_topics.updated[0].after.topic_description`：仍是「没有客户名的分录不计入月报」。
 - `reader.user` 含这句，不含「客户名为空但金额存在的记录保留」。
 
-改法方向：复跑 `t_bug` 后，该主题描述不应再把「没有客户名的分录不计入月报」写成唯一现行口径；新结论与旧口径应同时出现在 `reader.user`，或旧口径进入 history 后不再作为已确定正文。
+后续验证建议（本次未实现）：复跑 `t_bug` 后，该主题描述不应再把「没有客户名的分录不计入月报」写成唯一现行口径；新结论与旧口径应同时出现在 `reader.user`，或旧口径进入 history 后不再作为已确定正文。

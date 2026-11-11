@@ -37,4 +37,4 @@
 - `adds[1].steps[0].diff.pm_decisions.added` 的 `content`：「改为 CSV，不再使用 JSON」。
 - `reader.user` 决策条：「不再使用 JSON」。其中没有 `prices.csv`。
 
-改法方向：抽取时保留文件名 `prices.csv`，不要把这句整句标成 `local_implementation`。决策正文或主题描述应出现 `prices.csv`，`reader.user` 里也能看到。
+后续验证建议（本次未实现）：抽取时保留文件名 `prices.csv`，不要把这句整句标成 `local_implementation`。决策正文或主题描述应出现 `prices.csv`，`reader.user` 里也能看到。

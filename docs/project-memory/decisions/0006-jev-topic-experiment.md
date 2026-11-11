@@ -31,3 +31,7 @@ v3 的默认检索仍要求同样输入得到同样输出，模型调用只出�
 - 用 Jev / SystemOne：用户改为公司内部中转上的 OpenAI Decisions，否决。
 - 把 Decisions 设成默认归类器：会把未完成的实验放进主路径，否决。
 - 用 chat completions 让同一个模型生成 JSON：能做，但 Decisions API 直接返回选项概率，和这次要测的选题一致。
+
+## 阅读提示（2026-11-11）
+
+此处 Decisions 是结构化选择题实验的历史命名。现行实现使用 gpt-6-luna 的 chat completions，不是 Jev 原生模型或原生 Decisions 端点。与两个 Super Agent 工作区的区别及复现边界见 [实验说明](../routing-experiments.html)。

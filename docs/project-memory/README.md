@@ -2,12 +2,15 @@
 
 这里放项目记忆 `add_message` / `search_memory` 的开发规范、计划和过程记录。规格本身在 `design-docs/standard/`（钉钉文档的本地镜像，不进 git）。
 
+先读 [项目记忆为什么难](algorithm-handoff.html)，理解基座与失败链路；再读 [Jev 与 Super Agent 实验](routing-experiments.html)，区分默认实现和实验。接入细节见 ONBOARDING / DEVELOPMENT，指标以 metrics 为准。
+
 ## 文档
 
 | 文件 | 内容 | 什么时候改 |
 | --- | --- | --- |
 | [findings.md](findings.md) | 开发过程中的发现，给同事和汇报用。不是规格 | 有新的评测结论或设计建议时 |
-| [add-showcase.html](add-showcase.html) | 运行 B 写下的主题和条目，以及 topic 粗细的对照图 | 有新的端到端终态时，用 `build-add-showcase.mjs` 重生成 |
+| [algorithm-handoff.html](algorithm-handoff.html) | 算法背景、贯穿示例、topic 粒度、9 道 RCA、接口接入与运行 B 完整附录 | 实现或证据变化时；生成脚本仅更新标记内附录 |
+| [routing-experiments.html](routing-experiments.html) | Jev 思路、Super Agent 路由、两个实验工作区与 Add/Search 接法 | 实验快照或结论变化时 |
 | [ONBOARDING.md](ONBOARDING.md) | 给新同事的现状说明：先读什么、做到哪了、接下来做什么 | 每周五随周报 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 模块布局、编码规则、测试与评测命令、提交流程 | 约定变化时 |
 | [ROADMAP.md](ROADMAP.md) | 里程碑、周计划、条目状态、变更记录 | 每周一确认，每周五修订 |

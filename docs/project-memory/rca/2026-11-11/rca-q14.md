@@ -38,4 +38,4 @@
 - `adds[2].steps[0].diff.pm_decisions.updated.after` 的 `content` 仍是：「说明和普通记录里都不放连接串」。
 - `reader.user` 该主题描述：「发现外泄内容即移除」。其中没有「已经删掉」。
 
-改法方向：抽取时保留「README 里的连接串已经删掉了」，不要把它标成 `local_implementation`。这句应进入决策或主题描述，提问后 `reader.user` 应出现「已经删掉」。
+后续验证建议（本次未实现）：抽取时保留「README 里的连接串已经删掉了」，不要把它标成 `local_implementation`。这句应进入决策或主题描述，提问后 `reader.user` 应出现「已经删掉」。

@@ -31,3 +31,7 @@ v1 的历史分数与 v2 不可比，`metrics.md` 中 v1 的记录只作参照�
 ## 补记（2026-11-10）
 
 「数据集只保留一份」指评分只读 `dataset/`。大版本替换时，上一版整份冻在 `eval/project-memory/gold-add-memory/history/<版本>/`。v2 冻在 `history/v2/`。小改动不另存副本。
+
+## 阅读提示（2026-11-11）
+
+后续 [ADR-0009](0009-eval-protocol-v2-1.md) 已明确现行 v2.1 口径，并对不接受 temperature 的裁判模型作例外；旧 v1 / v2 指标已从当前 metrics 正文撤下，历史全文按 ADR-0009 的提交指针查询。上文保留最初决定的时间语义。

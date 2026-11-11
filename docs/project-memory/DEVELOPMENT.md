@@ -2,6 +2,8 @@
 
 规则摘要在仓库根 [AGENTS.md](../../AGENTS.md)，本文件写细则。
 
+算法与失败样例见 [交接稿](algorithm-handoff.html)，实验名称与分支差异见 [实验说明](routing-experiments.html)。这里描述当前代码；ADR 中的初始版本号不必等于当前提示词版本。
+
 ## 模块布局
 
 按 v3 §1.3 的模块编号组织，v3 §5.4.1 的 `project-memory-core/` 在本仓库对应 `Memory/src/service/project-memory/`。
@@ -12,11 +14,11 @@ Memory/src/service/project-memory/
   store/      ProjectMemoryStore 接口（v3 §5.1.2）
     sqlite/   L01 召回（FTS5 + sqlite-vec）、L02 全量读、L03 条件写、L05 向量化
     cloud/    云端存储服务的 HTTP 适配（/project/recall、topics:batchGet、commit）
-  organize/   M01 采集与剥离注入块、M02 抽取、M04 归类与摘要描述改写
-  merge/      M05 决策 op、经验 op、轨迹去重
+  organize/   M01 采集与剥离注入块、M02 抽取、M04 归类
+  merge/      M05 判断（含摘要描述改写）、确定性条目合并
   pipeline/   异步任务、Space 内串行、OCC 重试、任务状态
   retrieve/   M08 三路召回、M09 融合与组装
-  decisions/  可选 OpenAI Decisions 主题归属，默认关闭（ADR-0006）
+  decisions/  可选结构化主题选择题，gpt-6-luna / chat completions，默认关闭（ADR-0006）
   inject/     注入模板与检索工具定义（v3 §3.3）
   prompts/    产品侧技能与提示词，带版本号
   service.ts  对外门面
@@ -27,10 +29,10 @@ Memory/src/service/project-memory/
 | M01 会话采集 | organize/ | 写 `raw_turns`，剥离 `<memos_context>` |
 | M02 抽取 | organize/ | add 技能；不读存储 |
 | M03 候选召回 | store/ + organize/ | `recall(purpose="merge")`，topic_k=10，entry_k=0 |
-| M04 归类与摘要 | organize/ | topic 技能；归入 / 新建 / 推迟。可选 Decisions 收窄候选，默认关闭 |
+| M04 归类 | organize/ | topic 技能；归入 / 新建 / 推迟。可选 Decisions 收窄候选，默认关闭 |
 | M05 条目合并 | merge/ | 决策 7 种 op、经验 4 种 op、轨迹追加 |
 | M08 多路召回 | retrieve/ | ①用户 ②agent ③project |
-| M09 混排组装 | retrieve/ | RRF → MMR → 条目裁剪 → 附 history/conflicts → 截断 → recall_log。可选 Decisions 把选中 topic 提前，默认关闭 |
+| M09 混排组装 | retrieve/ | 项目路先用 RRF 与确定性信号排序，计算词面条目门槛；跨路按名次融合、相关度过滤、MMR 选择及总数截断，再组装并记录实际返回的主题。保留决策附带 history/conflicts；可选选择题在项目路排序后把选中 topic 提前，默认关闭 |
 | M10 注入组装 | inject/ | v3 规定在 SDK；本仓库先实现模板与工具定义，供 Memmy 宿主和 SDK 共用 |
 | L01–L05 | store/sqlite/ | |
 

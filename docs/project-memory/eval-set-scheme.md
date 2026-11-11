@@ -6,6 +6,8 @@
 - 本文所在提交的父版本：`6f4801ff`
 - 数据集版本：v2.1，入库提交 `e5f03e43`（2026-11-10）
 
+本文保留 11/10 构建快照；后续评测与口径以 [metrics.md](metrics.md) 和 ADR-0009 为准。以下数量带明日期，不代表重复执行了历史检查。
+
 这是评测集的留存和使用方案。可运行的语料、标注、题目和金标在 `eval/project-memory/gold-add-memory/dataset/`。本文不另附一份数据集。操作细节、指标定义和规格含糊处仍以该目录的 [README](../../eval/project-memory/gold-add-memory/README.md) 为准。
 
 ## 版本怎么留
@@ -88,11 +90,11 @@ v2.1 已经覆盖建议里的语料形状：七名成员、两种 `agent_id`、�
 
 已有的对照脚本是另一类对照，写在 README：`harness/run-control-main.mjs` 用没有项目记忆的 main，`harness/run-control-legacy.mjs` 用 v0.1 之前的旧实现。`similar-name` / `same-work` 用来卡错误合并和错误拆分。
 
-## 这次留下的部分
+## 构建时的待办与后续更新
 
-下面几项留在 PM-17，或留到评测集构建排期（PRD 排期表，11/2–12/4）。本文不把它们标成已完成，也不改 [open-questions.md](open-questions.md) 和 [gaps-v01.md](gaps-v01.md)。
+下面记录构建时的工作分配与后续结果；尚未完成的系统对照和开源仍留在评测集排期（PRD 排期表，11/2–12/4）。本文不把它们标成已完成，也不改 [open-questions.md](open-questions.md) 和 [gaps-v01.md](gaps-v01.md)。
 
-1. **q17 的标准答案已改**（Q-14，E-03）。现文同时说明丢行原因和空客户仍有未决分歧。阅读模型上限还没有在这一版上复跑。
+1. **q17 的标准答案已改**（Q-14，E-03）。现文同时说明丢行原因和空客户仍有未决分歧。阅读模型上限后来已复跑：旧口径 R-20261110-04 与现行口径 R-20261111-05 均为 1.000，见 metrics；两者不可逐题混比。
 2. **阅读模型上限**（E-04）来自 `harness/run-reader-ceiling.mjs`，不是 `--oracle`。提示词 v1 时，R-20261110-02 是 0.903，R-20261110-03 是 0.935。提示词 v2、q24 标准答案改为决策原文之后，R-20261110-04 的 answers.llm 是 1.000（31/31），rubric 是 0.871。阅读模型 claude-sonnet-4-6，评委 claude-haiku-4-5-20251001，温度 0。`--oracle` 把标准答案直接写入 run，不能当作这条上限。
 3. **新题 q40–q47 都是 plain。** 门诊 q40、q41，仓储 q42、q43，车队 q44、q45，厨房 q46、q47。这四个空间没有 stale、conflict、cross-project 题。
 4. **PRD 建议的三套系统对照和开源方式没有做。** 没有「无记忆」「仅事实与事件记忆」「竞品」三套对照，也没有把评测集并入 OmniMemEval。

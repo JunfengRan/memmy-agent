@@ -1,0 +1,3395 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>项目记忆为什么难 · 项目记忆交接</title><script>
+    (function () {
+      try {
+        var theme = localStorage.getItem("memtensor-doc-theme");
+        if (theme === "light" || theme === "dark") document.documentElement.setAttribute("data-theme", theme);
+      } catch (e) { /* 读不到本地记录时继续跟随系统 */ }
+    })();
+  </script><style>
+    /* 变量逐个取自 DESIGN.md；改颜色先改 DESIGN.md。 */
+    :root {
+      color-scheme: light dark;
+
+      --primary: light-dark(#4044ED, #7275F7);
+      --primary-soft: light-dark(#EEF0FF, #0F163E);
+      --primary-line: light-dark(#D8DAFB, #20277A);
+      --brand-blue: #408DFC;
+      --brand-violet: #AA75EF;
+      --ink: light-dark(#141D32, #E2E8F0);
+      --body: light-dark(#364153, #CBD5E1);
+      --muted: light-dark(#62748E, #90A1B9);
+      --line: light-dark(#E2E8F0, #1E293B);
+      --line-strong: light-dark(#CAD5E2, #2E3B58);
+      --surface: light-dark(#FFFFFF, #080F21);
+      --panel: light-dark(#F8FAFC, #0A132D);
+      --canvas: light-dark(#FAFAFF, #080F21);
+      --risk: light-dark(#DC2626, #F87171);
+      --risk-ink: light-dark(#B91C1C, #F87171);
+      --risk-soft: light-dark(#FEF2F2, #141D32);
+      --verify: light-dark(#D97706, #FBBF24);
+      --verify-ink: light-dark(#B45309, #FBBF24);
+      --verify-soft: light-dark(#FFFBEB, #141D32);
+      --positive: light-dark(#16A34A, #4ADE80);
+      --positive-ink: light-dark(#15803D, #4ADE80);
+      --positive-soft: light-dark(#F0FDF4, #141D32);
+      --memmy: light-dark(#0E9D88, #5CBFAE);
+      --memmy-ink: light-dark(#0B7D6D, #5CBFAE);
+      --memmy-soft: light-dark(#E7F7F3, #141D32);
+      --clawforce: #F1623D;
+      --clawforce-ink: light-dark(#C2410C, #F1623D);
+      --clawforce-soft: light-dark(#FFF1EC, #141D32);
+
+      --grad-brand: linear-gradient(90deg, var(--brand-blue), var(--primary) 55%, var(--brand-violet));
+      --grad-brand-v: linear-gradient(180deg, var(--brand-blue), var(--primary) 55%, var(--brand-violet));
+      --nav-active-text: light-dark(#4044ED, #E2E8F0);
+
+      --d-group-fill: light-dark(#FFFFFF, #0A132D);
+      --d-group-line: light-dark(#D8DAFB, #1E293B);
+      --d-node-fill: light-dark(#FFFFFF, #0A132D);
+      --d-node-line: light-dark(#E2E8F0, #2E3B58);
+      --d-focus-fill: light-dark(#EEF0FF, #141D32);
+      --d-focus-line: #4044ED;
+      --d-focus-text: light-dark(#4044ED, #01C6FA);
+      --d-chip-fill: light-dark(#FFFFFF, #0A132D);
+      --d-chip-line: light-dark(#D8DAFB, #20277A);
+      --d-chip-text: light-dark(#4044ED, #7275F7);
+      --d-badge-fill: light-dark(#EEF0FF, #0F163E);
+      --d-badge-line: light-dark(transparent, #20277A);
+      --d-risk-fill: light-dark(#FEF2F2, #141D32);
+      --d-risk-line: light-dark(#DC2626, #F87171);
+      --d-risk-text: light-dark(#B91C1C, #F87171);
+      --d-main: light-dark(#4044ED, #01C6FA);
+      --d-edge: light-dark(#62748E, #90A1B9);
+      --d-ext: light-dark(#CAD5E2, #2E3B58);
+      --d-title: light-dark(#141D32, #E2E8F0);
+      --d-sub: light-dark(#62748E, #90A1B9);
+      --d-msg: light-dark(#364153, #CBD5E1);
+
+      --font-display: "Alibaba PuHuiTi 3.0", -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", sans-serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+      --sp-xs: 4px;
+      --sp-sm: 8px;
+      --sp-md: 12px;
+      --sp-base: 16px;
+      --sp-lg: 24px;
+      --sp-xl: 32px;
+      --sp-2xl: 48px;
+      --nav-width: 248px;
+      --content-width: 720px;
+      --page-width: 1160px;
+
+      --r-sm: 4px;
+      --r-md: 8px;
+      --r-lg: 12px;
+      --r-full: 9999px;
+
+      --shadow-card: 0 1px 2px rgba(20, 29, 50, 0.04), 0 8px 24px rgba(64, 68, 237, 0.05);
+      --glow-focus: 0 0 0 transparent;
+    }
+
+    :root[data-theme="light"] { color-scheme: light; }
+    :root[data-theme="dark"] { color-scheme: dark; }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --grad-brand: linear-gradient(90deg, #1D4ED8, #01C6FA);
+        --grad-brand-v: linear-gradient(180deg, #1D4ED8, #01C6FA);
+        --shadow-card: 0 0 0 1px rgba(64, 68, 237, 0.22), 0 0 40px rgba(1, 198, 250, 0.06);
+        --glow-focus: 0 0 10px rgba(1, 198, 250, 0.35);
+      }
+    }
+    :root[data-theme="dark"] {
+      --grad-brand: linear-gradient(90deg, #1D4ED8, #01C6FA);
+      --grad-brand-v: linear-gradient(180deg, #1D4ED8, #01C6FA);
+      --shadow-card: 0 0 0 1px rgba(64, 68, 237, 0.22), 0 0 40px rgba(1, 198, 250, 0.06);
+      --glow-focus: 0 0 10px rgba(1, 198, 250, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-padding-top: var(--sp-lg); }
+    body {
+      margin: 0;
+      background: var(--surface);
+      color: var(--body);
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.75;
+      -webkit-font-smoothing: antialiased;
+    }
+    ::selection { background: var(--primary-soft); color: var(--ink); }
+    a {
+      color: var(--primary);
+      text-decoration: underline;
+      text-decoration-color: var(--primary-line);
+      text-underline-offset: 3px;
+      transition: color 150ms, text-decoration-color 150ms, background-color 150ms;
+    }
+    a:hover { text-decoration-color: var(--primary); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: var(--nav-width) minmax(0, 1fr);
+      max-width: var(--page-width);
+      margin: 0 auto;
+    }
+
+    nav.toc {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      overflow-y: auto;
+      padding: var(--sp-2xl) var(--sp-base) var(--sp-xl) var(--sp-lg);
+      border-right: 1px solid var(--line);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .toc-brand { display: flex; flex-direction: column; gap: 2px; margin: 0 0 var(--sp-lg); }
+    .toc-brand::after {
+      content: "";
+      width: 24px;
+      height: 3px;
+      margin-top: var(--sp-sm);
+      border-radius: var(--r-full);
+      background: var(--grad-brand);
+    }
+    .toc-org {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink);
+    }
+    .toc-kind { font-size: 12px; color: var(--muted); }
+    nav.toc a {
+      position: relative;
+      display: flex;
+      align-items: baseline;
+      gap: var(--sp-sm);
+      margin: 2px 0;
+      padding: 6px var(--sp-md);
+      border-radius: var(--r-sm);
+      color: var(--muted);
+      text-decoration: none;
+    }
+    nav.toc a:hover { color: var(--ink); }
+    nav.toc a[aria-current="true"] {
+      background: var(--primary-soft);
+      color: var(--nav-active-text);
+      font-weight: 600;
+    }
+    nav.toc a[aria-current="true"]::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 6px;
+      bottom: 6px;
+      width: 3px;
+      border-radius: var(--r-full);
+      background: var(--grad-brand-v);
+    }
+    .toc-no {
+      min-width: 1.75em;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      color: var(--primary);
+    }
+
+    main {
+      position: relative;
+      min-width: 0;
+      max-width: calc(var(--content-width) + 2 * var(--sp-2xl));
+      padding: var(--sp-2xl) var(--sp-2xl) 96px;
+    }
+
+    .doc-head { margin-bottom: var(--sp-xl); }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      margin: 0 0 var(--sp-md);
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+    }
+    .title-rule {
+      width: 56px;
+      height: 3px;
+      margin: var(--sp-base) 0 var(--sp-lg);
+      border-radius: var(--r-full);
+      background: var(--grad-brand);
+    }
+    .lead {
+      position: relative;
+      margin: 0 0 var(--sp-base);
+      padding: var(--sp-base) var(--sp-lg);
+      border-radius: var(--r-md);
+      background: var(--primary-soft);
+      color: var(--ink);
+      font-size: 17px;
+      line-height: 1.65;
+    }
+    .lead::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      border-radius: var(--r-md) 0 0 var(--r-md);
+      background: var(--grad-brand-v);
+    }
+    .lead strong { color: var(--primary); }
+    .meta { display: flex; flex-wrap: wrap; gap: var(--sp-sm); margin: 0; }
+    .meta div {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px var(--sp-md);
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--panel);
+      font-size: 12px;
+      line-height: 1.8;
+    }
+    .meta dt { color: var(--muted); }
+    .meta dd { margin: 0; font-family: var(--font-mono); color: var(--ink); }
+
+    section { margin-top: var(--sp-2xl); }
+    h2 {
+      display: flex;
+      align-items: baseline;
+      gap: var(--sp-md);
+      margin: 0 0 var(--sp-base);
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+    .sec-no {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--primary);
+    }
+    h3 {
+      margin: var(--sp-xl) 0 var(--sp-sm);
+      color: var(--ink);
+      font-size: 17px;
+      font-weight: 600;
+      line-height: 1.5;
+    }
+    p, ul, ol { margin: 0 0 var(--sp-base); }
+    ul, ol { padding-left: 1.4em; }
+    li + li { margin-top: var(--sp-xs); }
+    strong { color: var(--ink); font-weight: 600; }
+
+    code, pre { font-family: var(--font-mono); }
+    code {
+      padding: 1px 6px;
+      border: 1px solid var(--line);
+      border-radius: var(--r-sm);
+      background: var(--panel);
+      color: var(--ink);
+      font-size: 0.875em;
+    }
+    pre {
+      margin: 0 0 var(--sp-base);
+      padding: var(--sp-base);
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: var(--panel);
+      color: var(--ink);
+      font-size: 13.5px;
+      line-height: 1.6;
+    }
+    pre code { padding: 0; border: 0; background: none; font-size: inherit; }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 var(--sp-sm);
+      border-radius: var(--r-full);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0;
+      text-transform: none;
+      white-space: nowrap;
+      vertical-align: 1px;
+    }
+    .tag-memos { background: var(--primary-soft); color: var(--primary); }
+    .tag-memmy { background: var(--memmy-soft); color: var(--memmy-ink); }
+    .tag-clawforce { background: var(--clawforce-soft); color: var(--clawforce-ink); }
+    .tag-positive { background: var(--positive-soft); color: var(--positive-ink); }
+
+    .callout {
+      position: relative;
+      margin: var(--sp-lg) 0;
+      padding: var(--sp-md) var(--sp-base) var(--sp-md) calc(var(--sp-base) + 3px);
+      border-radius: var(--r-md);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .callout::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      border-radius: var(--r-md) 0 0 var(--r-md);
+      background: var(--callout-line);
+    }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { color: inherit; }
+    .callout-title {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--callout-title);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+    .callout.info { --callout-line: var(--primary); --callout-title: var(--primary); background: var(--primary-soft); color: var(--body); }
+    .callout.verify { --callout-line: var(--verify); --callout-title: var(--verify-ink); background: var(--verify-soft); color: var(--verify-ink); }
+    .callout.risk { --callout-line: var(--risk); --callout-title: var(--risk-ink); background: var(--risk-soft); color: var(--risk-ink); }
+
+    ol.steps { list-style: none; counter-reset: step; margin: var(--sp-lg) 0; padding: 0; }
+    ol.steps li { position: relative; margin: 0; padding: 0 0 var(--sp-lg) 40px; counter-increment: step; }
+    ol.steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 2px;
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: var(--r-full);
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+    }
+    ol.steps li::after {
+      content: "";
+      position: absolute;
+      left: 11.5px;
+      top: 32px;
+      bottom: var(--sp-xs);
+      width: 1px;
+      background: var(--line);
+    }
+    ol.steps li:last-child { padding-bottom: 0; }
+    ol.steps li:last-child::after { display: none; }
+    ol.steps strong { display: block; }
+
+    .table-wrap {
+      margin: var(--sp-lg) 0;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.6; }
+    th {
+      padding: 10px var(--sp-base);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-align: left;
+      white-space: nowrap;
+    }
+    td { padding: 10px var(--sp-base); border-top: 1px solid var(--line); color: var(--body); vertical-align: top; }
+    td:first-child { color: var(--ink); font-weight: 600; }
+    th.num, td.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    tr.row-ours td { background: var(--primary-soft); color: var(--ink); }
+    tr.row-ours td:first-child { color: var(--primary); }
+
+    figure.diagram {
+      margin: var(--sp-xl) 0;
+      padding: var(--sp-lg) var(--sp-lg) var(--sp-base);
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      background-color: var(--canvas);
+      box-shadow: var(--shadow-card);
+    }
+    figure.diagram svg { display: block; width: 100%; min-width: 560px; height: auto; }
+    figcaption { margin-top: var(--sp-md); color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .fig-no {
+      margin-right: var(--sp-sm);
+      color: var(--primary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .diagram svg text { font-family: var(--font-sans); }
+    .diagram .t-mono { font-family: var(--font-mono); }
+    .diagram .group { fill: var(--d-group-fill); stroke: var(--d-group-line); }
+    .diagram .node { fill: var(--d-node-fill); stroke: var(--d-node-line); }
+    .diagram .node-focus { fill: var(--d-focus-fill); stroke: var(--d-focus-line); filter: drop-shadow(var(--glow-focus)); }
+    .diagram .chip { fill: var(--d-chip-fill); stroke: var(--d-chip-line); }
+    .diagram .badge { fill: var(--d-badge-fill); stroke: var(--d-badge-line); }
+    .diagram .risk { fill: var(--d-risk-fill); stroke: var(--d-risk-line); }
+    .diagram .legend-box { fill: var(--d-node-fill); stroke: var(--d-node-line); }
+    .diagram .edge-main { stroke: var(--d-main); }
+    .diagram .edge, .diagram .edge-async { stroke: var(--d-edge); }
+    .diagram .edge-ext { stroke: var(--d-ext); }
+    .diagram .arrow-main { fill: var(--d-main); }
+    .diagram .arrow { fill: var(--d-edge); }
+    .diagram .t-title { fill: var(--d-title); font-weight: 600; }
+    .diagram .t-sub { fill: var(--d-sub); }
+    .diagram .t-label { fill: var(--d-sub); font-weight: 600; letter-spacing: 0.08em; }
+    .diagram .t-chip { fill: var(--d-chip-text); font-weight: 500; }
+    .diagram .t-focus { fill: var(--d-focus-text); font-weight: 600; }
+    .diagram .t-risk { fill: var(--d-risk-text); font-weight: 600; }
+    .diagram .t-msg { fill: var(--d-msg); }
+    .diagram .t-guard { fill: var(--d-sub); }
+    .diagram .t-msg, .diagram .t-guard { stroke: var(--canvas); paint-order: stroke; }
+    .diagram .group.frame { fill: none; }
+
+    .page-tools {
+      position: fixed;
+      top: var(--sp-base);
+      right: var(--sp-base);
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+    }
+    .theme-toggle {
+      --icon-sun: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%224%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.6%22%2F%3E%3Cpath%20d%3D%22M12%202.5v2.5M12%2019v2.5M2.5%2012H5M19%2012h2.5M5.2%205.2l1.8%201.8M17%2017l1.8%201.8M18.8%205.2%2017%207M7%2017l-1.8%201.8%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E");
+      --icon-moon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M16%203.2A8.2%208.2%200%201%200%2020.8%2015%206.4%206.4%200%200%201%2016%203.2z%22%20fill%3D%22black%22%2F%3E%3C%2Fsvg%3E");
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      margin: 0;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+    }
+    .theme-toggle::before {
+      content: "";
+      width: 16px;
+      height: 16px;
+      background: currentColor;
+      -webkit-mask: var(--icon-sun) center / contain no-repeat;
+      mask: var(--icon-sun) center / contain no-repeat;
+    }
+    :root[data-theme="dark"] .theme-toggle::before {
+      -webkit-mask-image: var(--icon-moon);
+      mask-image: var(--icon-moon);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .theme-toggle::before {
+        -webkit-mask-image: var(--icon-moon);
+        mask-image: var(--icon-moon);
+      }
+    }
+    .diagram-edit-open {
+      padding: var(--sp-xs) var(--sp-md);
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--surface);
+      color: var(--muted);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .diagram-edit-open[aria-pressed="true"] { color: var(--primary); border-color: var(--primary-line); }
+    .diagram-edit-bar:not([hidden]) {
+      position: fixed;
+      top: 60px;
+      right: var(--sp-base);
+      z-index: 30;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--sp-sm);
+      max-width: min(440px, calc(100% - 32px));
+      padding: var(--sp-sm) var(--sp-md);
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      background: var(--surface);
+      box-shadow: var(--shadow-card);
+      color: var(--body);
+      font-family: var(--font-sans);
+      font-size: 13px;
+    }
+    .diagram-edit-bar.is-plain label { opacity: 0.45; pointer-events: none; }
+    .diagram-edit-bar label { display: flex; align-items: center; gap: var(--sp-xs); color: var(--muted); }
+    .diagram-edit-bar select,
+    .diagram-edit-bar input[type="number"] {
+      border: 1px solid var(--line);
+      border-radius: var(--r-sm);
+      background: var(--panel);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      padding: var(--sp-xs);
+    }
+    .diagram-edit-bar select { max-width: 148px; }
+    .diagram-edit-bar input[type="number"] { width: 64px; }
+    .diagram-edit-bar button {
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--panel);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      cursor: pointer;
+      padding: var(--sp-xs) var(--sp-md);
+    }
+    .diagram-edit-tools {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--sp-sm);
+      flex: 0 0 auto;
+    }
+    .diagram-edit-bar.is-code {
+      flex-direction: column;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      width: min(440px, calc(100% - 32px));
+    }
+    .diagram-edit-code:not([hidden]) {
+      flex: 1 1 auto;
+      align-self: stretch;
+      width: auto;
+      min-width: 0;
+      min-height: 0;
+      max-height: 220px;
+      margin: 0;
+      overflow: auto;
+      white-space: pre;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+    .diagram-edit-bar.is-sized .diagram-edit-code:not([hidden]) {
+      max-height: none;
+    }
+    .diagram-edit-resize {
+      position: absolute;
+      z-index: 2;
+      touch-action: none;
+    }
+    .diagram-edit-resize[data-resize="w"] {
+      left: -4px;
+      top: 0;
+      bottom: 8px;
+      width: 8px;
+      cursor: ew-resize;
+      box-shadow: inset 2px 0 0 var(--line-strong);
+    }
+    .diagram-edit-resize[data-resize="s"] {
+      left: 8px;
+      right: 0;
+      bottom: -4px;
+      height: 8px;
+      cursor: ns-resize;
+      box-shadow: inset 0 -2px 0 var(--line-strong);
+    }
+    .diagram-edit-resize[data-resize="sw"] {
+      left: -4px;
+      bottom: -4px;
+      width: 8px;
+      height: 8px;
+      cursor: nesw-resize;
+      background: var(--line-strong);
+    }
+    .edit-spacer {
+      visibility: hidden;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .diagram-edit-text {
+      position: fixed;
+      z-index: 32;
+      min-width: 4em;
+      margin: 0;
+      padding: var(--sp-xs);
+      border: 1px solid var(--primary);
+      border-radius: var(--r-sm);
+      background: var(--surface);
+      color: var(--ink);
+      outline: none;
+    }
+    body.is-diagram-edit [data-editable] { cursor: grab; touch-action: none; }
+    body.is-diagram-edit [data-editable].is-editing { cursor: text; touch-action: auto; }
+    body.is-diagram-edit .diagram rect,
+    body.is-diagram-edit .diagram text { cursor: grab; }
+    .edit-frame {
+      position: fixed;
+      z-index: 28;
+      border: 1px solid var(--primary);
+      pointer-events: none;
+    }
+    .edit-frame [data-edge] {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      margin: -4px 0 0 -4px;
+      border: 1px solid var(--primary);
+      border-radius: 1px;
+      background: var(--surface);
+      pointer-events: auto;
+    }
+    .edit-frame [data-edge="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+    .edit-frame [data-edge="n"] { left: 50%; top: 0; cursor: ns-resize; }
+    .edit-frame [data-edge="ne"] { left: 100%; top: 0; cursor: nesw-resize; }
+    .edit-frame [data-edge="e"] { left: 100%; top: 50%; cursor: ew-resize; }
+    .edit-frame [data-edge="se"] { left: 100%; top: 100%; cursor: nwse-resize; }
+    .edit-frame [data-edge="s"] { left: 50%; top: 100%; cursor: ns-resize; }
+    .edit-frame [data-edge="sw"] { left: 0; top: 100%; cursor: nesw-resize; }
+    .edit-frame [data-edge="w"] { left: 0; top: 50%; cursor: ew-resize; }
+
+    details {
+      margin: var(--sp-base) 0;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: var(--surface);
+    }
+    summary {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: var(--sp-md) var(--sp-base);
+      color: var(--ink);
+      font-weight: 600;
+      cursor: pointer;
+      list-style: none;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::before { content: "+"; width: 1em; color: var(--primary); font-family: var(--font-mono); }
+    details[open] summary { border-bottom: 1px solid var(--line); }
+    details[open] summary::before { content: "−"; }
+    .details-body { padding: var(--sp-base); }
+    .details-body > :last-child { margin-bottom: 0; }
+    .details-body .table-wrap { margin: 0; }
+
+    .site-foot {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: var(--sp-base);
+      margin-top: 64px;
+      padding-top: var(--sp-base);
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+    }
+
+    @media (max-width: 860px) {
+      body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: stretch;
+      }
+      .layout { display: contents; }
+      .page-tools {
+        position: sticky;
+        top: 0;
+        right: auto;
+        grid-column: 2;
+        grid-row: 1;
+        z-index: 11;
+        align-self: stretch;
+        height: auto;
+        margin: 0;
+        padding: var(--sp-sm) var(--sp-base);
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+      }
+      .diagram-edit-open { display: none; }
+      nav.toc {
+        position: sticky;
+        top: 0;
+        grid-column: 1;
+        grid-row: 1;
+        align-self: stretch;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: var(--sp-xs);
+        min-width: 0;
+        height: auto;
+        overflow-x: auto;
+        padding: var(--sp-sm) var(--sp-base);
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        background: var(--surface);
+        white-space: nowrap;
+        scrollbar-width: none;
+      }
+      nav.toc::-webkit-scrollbar { display: none; }
+      .toc-brand { display: none; }
+      nav.toc a { margin: 0; padding: var(--sp-xs) var(--sp-md); }
+      nav.toc a[aria-current="true"]::before {
+        top: auto;
+        right: var(--sp-md);
+        bottom: 0;
+        left: var(--sp-md);
+        width: auto;
+        height: 2px;
+        background: var(--grad-brand);
+      }
+      main {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        padding: var(--sp-xl) var(--sp-base) 64px;
+      }
+    }
+    @media (max-width: 480px) {
+      .page-tools { gap: var(--sp-xs); padding: var(--sp-xs) var(--sp-sm); }
+      nav.toc { padding: var(--sp-xs) var(--sp-sm); }
+    }
+
+    @media print {
+      body { display: block; }
+      nav.toc { display: none; }
+      .layout { display: block; }
+      main { max-width: none; padding: 0; }
+      figure.diagram { break-inside: avoid; box-shadow: none; }
+      .page-tools, .diagram-edit-bar, .edit-frame { display: none !important; }
+      a { text-decoration: none; }
+    }
+  </style></head><body><div class="page-tools">
+    <button type="button" class="diagram-edit-open" aria-pressed="false" title="点选后拖动、贴边缩放，双击改字">调整排版</button>
+    <button type="button" class="theme-toggle" data-theme-toggle aria-label="切换配色"></button>
+  </div><div class="layout"><nav class="toc" aria-label="目录"><p class="toc-brand"><span class="toc-org">MemTensor</span><span class="toc-kind">项目记忆交接</span></p><a href="#foundation"><span class="toc-no">01</span>先理解这份基座</a><a href="#write"><span class="toc-no">02</span>一轮消息如何成为记忆</a><a href="#hard-parts"><span class="toc-no">03</span>复杂性藏在状态变化里</a><a href="#search"><span class="toc-no">04</span>主题召回以后，还有一道门</a><a href="#granularity"><span class="toc-no">05</span>topic 切得细，为什么仍然会错</a><a href="#rca"><span class="toc-no">06</span>九道错题怎样定位</a><a href="#integration"><span class="toc-no">07</span>从接口接入，而不是复制算法</a><a href="#gallery"><span class="toc-no">08</span>运行 B 的完整终态</a></nav><main><header class="doc-head"><p class="eyebrow">应用深挖 <span class="tag tag-memos">MemOS</span></p>
+<h1>项目记忆为什么难</h1>
+<div class="title-rule" aria-hidden="true"></div><p class="lead">项目记忆的核心是把会话整理成可持续更新的共享状态。难点贯穿抽取、主题归属、冲突裁决与检索呈现；接口已能作为基座，效果问题要沿证据链定位。</p>
+<dl class="meta"><div><dt>基线</dt><dd>71d3faff · 2026-11-11</dd></div><div><dt>读者</dt><dd>接手研发同事</dd></div><div><dt>配套阅读</dt><dd><a href="routing-experiments.html">Jev 与 Super Agent 实验</a></dd></div></dl></header><section id="foundation"><h2><span class="sec-no">01</span>先理解这份基座</h2>
+<p>项目记忆解决的是多人、多 Agent 共同推进一个项目时，结论散在不同会话里的问题。接手者需要知道现在按什么做、为什么变了、谁还有不同意见，以及哪些工作已经完成。只保存聊天记录会把找上下文的工作留给下一位；只保存一段摘要，又容易把过程、分歧和当前状态压成一句话。</p>
+<p>当前开发分支已经提供项目记忆的本地接口与整理、检索、注入链路，可以作为后续开发基座。这里的“完成”指已有可接入的实现；不表示所有算法目标均达标，也不表示云端实现与最终验收已经完成。W48 的云端 Store、故障注入与验收表仍是后续工作。</p>
+<div class="table-wrap"><table><thead><tr><th>概念</th><th>职责</th><th>通知服务例子（教学示例）</th></tr></thead><tbody><tr><td>Space</td><td>项目共享边界，存放项目指令、领域和主题</td><td>团队的通知服务</td></tr><tr><td>domain</td><td>由调用方指定的范围；模型不自行判定领域</td><td>服务可靠性</td></tr><tr><td>topic</td><td>围绕一项工作组织的知识，不等于聊天会话</td><td>失败重试策略</td></tr><tr><td>decision</td><td>当前约定及其作者、未决分歧、历史</td><td>失败后最多重试三次</td></tr><tr><td>experience</td><td>可复用的经验，允许保留历史，不挂 conflicts</td><td>先检查幂等键，再排查重复通知</td></tr><tr><td>timeline</td><td>发生过的工作进展</td><td>已上线重试监控</td></tr></tbody></table>
+</div><p>默认路径由本机完成抽取、归属与判断，再通过 ProjectMemoryStore 读取和提交。存储层不调用模型。对外入口统一在 <code>/api/openmem/v1/</code>。接口实现见 <a href="../../Memory/src/service/project-memory/api.ts">api.ts</a>；状态和待办见 <a href="ONBOARDING.md">上手说明</a>、<a href="ROADMAP.md">Roadmap</a>。</p>
+</section>
+<section id="write"><h2><span class="sec-no">02</span>一轮消息如何成为记忆</h2>
+<p>下面是一组新编的通知服务会话，用于解释机制，不是测评样本，也不是对当前模型输出的实测承诺。调用方先选择 Space 和唯一的 domain“服务可靠性”。成员甲说：“通知失败最多重试三次，因为下游对突发请求敏感。”助手答：“已按三次配置，并补充失败计数。”</p>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 472" role="img" aria-label="图 1 · 默认 Add 的处理主线；只有抽取、归属和判断调用模型。"><defs><marker id="arrow-add" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#62748E"/></marker></defs><path class="edge" d="M340 92 L340 140" stroke="#62748E" fill="none" marker-end="url(#arrow-add)"/><path class="edge" d="M340 212 L340 260" stroke="#62748E" fill="none" marker-end="url(#arrow-add)"/><path class="edge" d="M340 332 L340 380" stroke="#62748E" fill="none" marker-end="url(#arrow-add)"/><rect class="node" x="40" y="20" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="node-focus" x="40" y="140" width="600" height="72" rx="8" fill="#EEF0FF" stroke="#4044ED"/><rect class="node" x="40" y="260" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="node" x="40" y="380" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="chip" x="290.0" y="104" width="100" height="24" rx="12" fill="#FFFFFF" stroke="#D8DAFB"/><text class="t-chip" x="340" y="120" text-anchor="middle" fill="#4044ED">草稿</text><rect class="chip" x="290.0" y="224" width="100" height="24" rx="12" fill="#FFFFFF" stroke="#D8DAFB"/><text class="t-chip" x="340" y="240" text-anchor="middle" fill="#4044ED">完整主题</text><rect class="chip" x="272.0" y="344" width="136" height="24" rx="12" fill="#FFFFFF" stroke="#D8DAFB"/><text class="t-chip" x="340" y="360" text-anchor="middle" fill="#4044ED">ChangeSet</text><text class="t-title" x="64" y="48" fill="#141D32">采集与抽取：M01 / M02</text><text class="t-sub" x="64" y="71" fill="#62748E">去掉闭合注入块；从会话提炼草稿与信号</text><text class="t-title" x="64" y="168" fill="#141D32">候选召回与归属：M03 / M04</text><text class="t-sub" x="64" y="191" fill="#62748E">围绕草稿找主题；归入、新建或推迟</text><text class="t-title" x="64" y="288" fill="#141D32">判断与合并：M05</text><text class="t-sub" x="64" y="311" fill="#62748E">读取已有条目；模型判断，代码生成确定性的动作</text><text class="t-title" x="64" y="408" fill="#141D32">条件提交：ProjectMemoryStore</text><text class="t-sub" x="64" y="431" fill="#62748E">检查版本与主题集合，再原子落库</text></svg><figcaption>图 1 · 默认 Add 的处理主线；只有抽取、归属和判断调用模型。 窄屏可横向滚动查看全图。</figcaption></figure>
+<ol class="steps"><li><strong>采集。</strong>保存原始轮次，剥离此前注入的记忆，避免“检索出来的话又被当作新事实”形成回声。时间与作者来自消息，不能让模型补造。</li>
+<li><strong>抽取。</strong>“最多三次”是约定，“已补计数”可能是进展；“因为下游敏感”只能在原文确有依据时保留。草稿不读候选主题，避免主题反过来诱导要写什么。</li>
+<li><strong>召回与归属。</strong>每条草稿发一条召回 query；候选并集通常上限 20，必须考虑的主题不受此限。M04 看候选的领域、摘要和描述，决定归到哪里。未知主题 id 进入推迟，不擅自新建。</li>
+<li><strong>判断。</strong>已归入既有主题的草稿，才读取完整条目并交 M05 判断。全是新主题时没有旧决策要比较，可以跳过这次调用。当前实现也在 M05 提议主题摘要和描述改写。</li>
+<li><strong>合并和提交。</strong>代码根据作者、时间、认可与判断信号生成动作，再带 expectedRevision 提交。存储只执行经过校验的动作，不自行解释会话。</li>
+</ol><p>同一任务的抽取只执行一次。主题集合变化，要重新召回与归属；条目版本冲突，只重读并重跑判断与合并，不重放旧 ChangeSet。总提交尝试预算最多三次。比如另一个 Agent 抢先修改了“三次”，当前任务不能把基于旧内容生成的动作直接覆盖回去。</p>
+<p>完整阶段约定见 <a href="decisions/0007-split-organize-stages.md">ADR-0007</a>。它记录了当时的版本号；当前提示词版本应看源码和具体评测记录。</p>
+</section>
+<section id="hard-parts"><h2><span class="sec-no">03</span>复杂性藏在状态变化里</h2>
+<h3>“不写过程”不能变成“丢掉约定的一半”</h3>
+<p>“打开文件看一下”通常是执行步骤；“失败记录固定写入 retries.ndjson”可能已经规定了后续接口依赖的产物；“已删除临时降级开关”是当前状态。三个句子都像实现细节，是否保留却取决于它是否承载项目可复用的事实。q07 和 q14 正是在这条边界上丢了文件名、已完成删除的信息。</p>
+<h3>同一句话，复述与新增的区别来自已有状态</h3>
+<p>成员甲首次说“三次”，助手复述，不能把两句话都当作已经记过而丢掉。下一轮在同一 Space、同一 domain 已经整理过的消息，可以只作上下文。若甲说“现在改五次”，即使句子大半相同，也发生了状态变化。q42 中首次出现的约定被两次标为 restatement，最终没有任何草稿。</p>
+<h3>不同意见不等于已经替换</h3>
+<div class="table-wrap"><table><thead><tr><th>会话与条件</th><th>应理解的状态变化</th></tr></thead><tbody><tr><td>甲已提出三次；乙另提五次，没有认可证据</td><td>保留甲的 content，乙的不同结论进入 conflicts</td></tr><tr><td>甲明确认可五次，并能定位到同一决策</td><td>可进入改写或裁决路径；原结论进入 history，具体动作由规则和信号决定</td></tr><tr><td>甲只是继续说三次</td><td>可能只是加入已有结论或复述，不新增一条当前决策</td></tr><tr><td>迟交的旧会话建议两次</td><td>不能改写时间更晚的当前决策；依据迟交与作者规则处理</td></tr></tbody></table>
+</div><p>history 是已经发生的版本变化，conflicts 是尚未收敛的不同结论。清空 conflicts 时必须在同一事务写入 history。不能因“这次文字更像最新方案”就越过认可关系。内容作者加入已有 conflict 而挪空当前成员的边界仍待 Q-23 裁决，不能在交接稿里写成已解决。</p>
+<h3>推迟是等待证据，也会造成暂时不可检索</h3>
+<p>“刚才那个改动撤回了”没有可定位的工作时，应等待同会话后续上下文；但“重试监控已撤回”已有明确对象时，过度推迟就会让 Search 看不到完成状态。回填只处理同一会话、同一 Space 的适用片段，不代表所有推迟内容在任何提问前都能补齐。q16 的撤回已被抽取，却停在 deferred 表里。</p>
+<p>作者、时间、Space 与 domain 是写入语义的一部分。重发网络请求应保持原 chat_time；没有时间时按到达时间的秒处理，同一秒同文仍可能归为同一任务。任务幂等解决重复提交，不能代替对多轮会话含义的判断。</p>
+</section>
+<section id="search"><h2><span class="sec-no">04</span>主题召回以后，还有一道门</h2>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 472" role="img" aria-label="图 2 · 默认 Search 分三路召回；选中主题不代表全部条目都会交给阅读模型。"><defs><marker id="arrow-search" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#62748E"/></marker></defs><path class="edge" d="M340 92 L340 140" stroke="#62748E" fill="none" marker-end="url(#arrow-search)"/><path class="edge" d="M340 212 L340 260" stroke="#62748E" fill="none" marker-end="url(#arrow-search)"/><path class="edge" d="M340 332 L340 380" stroke="#62748E" fill="none" marker-end="url(#arrow-search)"/><rect class="node" x="40" y="20" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="node-focus" x="40" y="140" width="600" height="72" rx="8" fill="#EEF0FF" stroke="#4044ED"/><rect class="node" x="40" y="260" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="node" x="40" y="380" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="chip" x="290.0" y="104" width="100" height="24" rx="12" fill="#FFFFFF" stroke="#D8DAFB"/><text class="t-chip" x="340" y="120" text-anchor="middle" fill="#4044ED">候选</text><rect class="chip" x="290.0" y="224" width="100" height="24" rx="12" fill="#FFFFFF" stroke="#D8DAFB"/><text class="t-chip" x="340" y="240" text-anchor="middle" fill="#4044ED">主题与条目</text><rect class="chip" x="290.0" y="344" width="100" height="24" rx="12" fill="#FFFFFF" stroke="#D8DAFB"/><text class="t-chip" x="340" y="360" text-anchor="middle" fill="#4044ED">阅读上下文</text><text class="t-title" x="64" y="48" fill="#141D32">请求选择视图与范围</text><text class="t-sub" x="64" y="71" fill="#62748E">project 必须显式请求；Space / domain 控制项目范围</text><text class="t-title" x="64" y="168" fill="#141D32">召回与融合：M08 / M09</text><text class="t-sub" x="64" y="191" fill="#62748E">用户记忆、L1/Skill、项目并行；按名次融合与选择</text><text class="t-title" x="64" y="288" fill="#141D32">主题与条目组装</text><text class="t-sub" x="64" y="311" fill="#62748E">项目条目经过词面门槛；保留条目附带其冲突和历史</text><text class="t-title" x="64" y="408" fill="#141D32">注入与回答：M10 / 宿主</text><text class="t-sub" x="64" y="431" fill="#62748E">模板呈现已确定与未确定内容；降级提示交给宿主</text></svg><figcaption>图 2 · 默认 Search 分三路召回；选中主题不代表全部条目都会交给阅读模型。 窄屏可横向滚动查看全图。</figcaption></figure>
+<p>项目一路结合词面、向量名次与确定性信号，再参与跨路融合；默认不调用模型重排。候选主题会进行 MMR 选择与数量截断，条目有自己的词面门槛。主题摘要和描述仍可能被返回，而该主题下的决策正文却已经被删掉。q04 的冲突正是在这里消失：主题已召回，带 conflicts 的决策未被保留，阅读模型只看到旧的主题描述。</p>
+<p>条目门槛来自 query token 数：至少需要 <code>max(1, ceil(queryTokens × 0.2))</code> 个词面命中。它不直接判断冲突对答题是否关键。提高主题 Recall@K 无法自动修好这种条目缺失；同样，抽取已丢掉的句子，也不能靠放宽检索门槛找回来。</p>
+<p>三路失败通过 degraded 表达，可能仍是成功信封，调用方必须检查。只请求 project 就只运行项目一路；省略 include_memory_view 则默认运行用户记忆与 L1/Skill，不搜索项目。这是当前实现，缺省行为的设计确认仍记在 Q-28。</p>
+</section>
+<section id="granularity"><h2><span class="sec-no">05</span>topic 切得细，为什么仍然会错</h2>
+<p>topic 要同时支持稳定归属、定位需要更新的旧决策、检索相关内容和供人浏览。一项新改动既可独立交付，又会影响已有约定：只看“可独立交付”很容易新建主题；只看词汇相近，又会把不同工作合在一起。主题数量本身没有告诉我们哪一种错更多。</p>
+<div class="table-wrap"><table><thead><tr><th>运行（v2.1）</th><th>主题 / 金标</th><th>B³ P / R / F1</th><th>重复 / 误并</th><th>条目 F1</th></tr></thead><tbody><tr><td>当前 A</td><td>65 / 50</td><td>0.855 / 0.559 / 0.676</td><td>10 / 1</td><td>0.816</td></tr><tr><td>当前 B</td><td>58 / 50</td><td>0.894 / 0.575 / 0.700</td><td>9 / 3</td><td>0.861</td></tr><tr><td>旧实现</td><td>30 / 50</td><td>见原报告；F1 0.407</td><td>1 / 2</td><td>0.487</td></tr></tbody></table>
+</div><p>上表 P/R 需与原报告一致，附录生成脚本会校验主题数、B³ F1 和错误计数。重复率与误并率的分母不同于主题总数，不能用“58−50=8”代替 9 次重复计数。运行 B 的正文完全相等匹配只对上 2 条必写条目，无法复现评分器的 9 / 3，因此完整陈列不冒充逐主题错误标注。</p>
+<h3>q31：拆成两项“当前工作”，裁决找不到旧结论</h3>
+<p>旧主题说“金额继续写在 journal 正文”；新消息说“改成 entries.amount”，归属阶段新建了另一个金额主题，且没有对照旧决策。随后“以周工的为准”已抽出 resolve 信号，却只归到新主题。判断把它当作与新内容相同，resolve 为空。旧主题仍保持当前状态，Search 同时返回两种口径。这里既有归属造成的隔离，也有判断未完成裁决，不能归结为“主题多一点只是界面难看”。</p>
+<h3>建议：把展示归纳与算法匹配分开讨论</h3>
+<p>一种待验证方向是保留可追踪的细 topic，再把相关主题归纳成面向人的工作列表；展示归纳不反过来替代写入匹配键。这个方向还没有进 v3，也没有实现。它能否改善跨主题更新、归纳什么时候刷新、人修改后如何同步，都需要单独设计与评测。当前数据也不能证明“越细越好”；细主题仍可能拆散同一决策。</p>
+<p>指标及记录见 <a href="metrics.md#r-20261111-01">R-20261111-01</a>、<a href="eval-set-scheme.md">评测集方案</a>。</p>
+</section>
+<section id="rca"><h2><span class="sec-no">06</span>九道错题怎样定位</h2>
+<p>材料是带追踪跑次 R-20261111-06：answers.llm 0.710，entries.f1 0.828，Recall@3 0.903，entryHit 0.355。这次独立记录，不合并进前两次均值。31 道计分题中 9 道答错；以下按现有 RCA 的主因分组，不把主因理解成唯一原因。</p>
+<div class="table-wrap"><table><thead><tr><th>题目</th><th>主因</th><th>直接证据</th><th>影响与共同因素</th></tr></thead><tbody><tr><td><a href="rca/2026-11-11/rca-q04.md">q04</a></td><td>检索条目过滤</td><td>不同结论已在 conflicts，决策 kept=false</td><td>主题召回成功仍只读到旧描述</td></tr><tr><td><a href="rca/2026-11-11/rca-q06.md">q06</a></td><td>抽取丢句</td><td>取整被标 local_implementation</td><td>保留两位小数被缩成格式化</td></tr><tr><td><a href="rca/2026-11-11/rca-q07.md">q07</a></td><td>抽取丢句</td><td>prices.csv 随实现细节整句丢弃</td><td>格式被记住，文件名丢失</td></tr><tr><td><a href="rca/2026-11-11/rca-q14.md">q14</a></td><td>抽取丢句</td><td>已删除连接串的完成状态被丢弃</td><td>今后不写，不能证明现在已删除</td></tr><tr><td><a href="rca/2026-11-11/rca-q15.md">q15</a></td><td>抽取丢句</td><td>诊断标 process_material / restatement</td><td>同轮撤回又被推迟，原因与进展都不可见</td></tr><tr><td><a href="rca/2026-11-11/rca-q16.md">q16</a></td><td>延迟写入</td><td>已撤回抽到但 work_unresolved</td><td>片段在 deferred，不在可搜索主题</td></tr><tr><td><a href="rca/2026-11-11/rca-q17.md">q17</a></td><td>判断未更新</td><td>topic_updates 为空，描述仍是旧规则</td><td>同时有诊断丢句、撤回推迟、条目被滤</td></tr><tr><td><a href="rca/2026-11-11/rca-q31.md">q31</a></td><td>判断未裁决</td><td>resolve 信号被判空，旧主题没入历史</td><td>此前归属新建重复主题，只匹配新主题</td></tr><tr><td><a href="rca/2026-11-11/rca-q42.md">q42</a></td><td>抽取丢句</td><td>首次约定两句都判 restatement</td><td>草稿为空，后续归属和判断都没执行</td></tr></tbody></table>
+</div><p>主因计数是抽取 5、判断 2、推迟 1、检索条目过滤 1。先问“答题事实是否以原句或同义内容进入可检索状态”，再查草稿、归属、判断、提交、条目保留和最终 reader.user。这比看到错误就调 Top-K 更能定位修复层。</p>
+<div class="callout info"><p class="callout-title">不要用一个字段替代归因</p>
+<p>locations 是金标整句的定位结果，空数组只说明整句未命中，不能直接证明库里没有事实。q04 的同义内容已在 conflicts；q07 的 entryHit=1，但文件名仍丢失。entryHit、整句定位、语义正确性是三种检查。</p>
+</div><p>现有追踪没有发现一道“正确关键信息完整呈现给阅读模型，模型仍把它读错”的独立主因。但 q31 的回答也把两个已确定描述改写为“尚未确定”，阅读侧仍有表述问题。8 道非 q04 题各自缺少、过时或未正确组织关键事实，不能进一步推断阅读模型完全没有问题。另有 12 道答对但 entryHit=0，本轮未逐题分析。</p>
+<p>RCA 中的修复方向是后续假设，不是本次实现。特别是不能为了修一题就把所有文件名都写成决策，也不能把所有新结论直接覆盖旧内容。抽取边界待 Q-11 / Q-36 讨论；q04 应验证关键冲突能否到达阅读上下文；q31 必须核对旧决策历史是否真实发生，而非只改一段摘要。</p>
+</section>
+<section id="integration"><h2><span class="sec-no">07</span>从接口接入，而不是复制算法</h2>
+<p>下列是 HTTP 路径与 JSON 请求体示例；通过已有鉴权访问服务，不包含地址、端口或真实身份。示例字段以当前 api.ts 为准，不需要改 SDK 公共契约。</p>
+<h3>先创建空间和领域</h3>
+<pre><code>POST /api/openmem/v1/create/space
+{
+  &quot;space_name&quot;: &quot;通知服务&quot;,
+  &quot;instructions&quot;: &quot;维护团队共享的通知服务决策与进展。&quot;,
+  &quot;domains&quot;: [
+    {
+      &quot;domain&quot;: &quot;服务可靠性&quot;,
+      &quot;description&quot;: &quot;失败处理与运行约定&quot;
+    }
+  ]
+}</code></pre>
+<p>服务生成 space_id；不要自己传同名字段。保存成功信封 data 中的 space_id。domains 预先登记，本例只传一个领域，从而允许新建主题；多个候选领域不能由模型私自替调用方选。</p>
+<h3>提交一轮消息，再查询任务</h3>
+<pre><code>POST /api/openmem/v1/add/message
+{
+  &quot;user_id&quot;: &quot;member-a&quot;,
+  &quot;agent_id&quot;: &quot;handoff-demo&quot;,
+  &quot;conversation_id&quot;: &quot;notification-retry-demo&quot;,
+  &quot;space_ids&quot;: [
+    &quot;&lt;create/space 返回的 space_id&gt;&quot;
+  ],
+  &quot;domains&quot;: [
+    &quot;服务可靠性&quot;
+  ],
+  &quot;allow_memory_view&quot;: [
+    &quot;project&quot;
+  ],
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;通知失败最多重试三次，因为下游对突发请求敏感。&quot;,
+      &quot;chat_time&quot;: &quot;2026-11-11T10:00:00+08:00&quot;
+    },
+    {
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;content&quot;: &quot;已按三次配置，并补充失败计数。&quot;,
+      &quot;chat_time&quot;: &quot;2026-11-11T10:00:20+08:00&quot;
+    }
+  ]
+}</code></pre>
+<pre><code>POST /api/openmem/v1/get/status
+{&quot;task_id&quot;:&quot;&lt;add 返回的 task_id&gt;&quot;}</code></pre>
+<p>成功信封为 code=0。Add 受理返回 task_id 与 status，不等于整理已完成。轮询直到 completed 或 failed；running 时继续等待。任一 Space 失败会让任务最终标为 failed，但其他 Space 可能已经成功；公开 get/status 返回聚合结果与 error，不暴露内部逐 Space details，不能据此假定整批回滚。memory_views.project 包含主题 ids 与 deferred_count，推迟不等于已写成可检索条目。</p>
+<h3>显式搜索项目</h3>
+<pre><code>POST /api/openmem/v1/search/memory
+{
+  &quot;user_id&quot;: &quot;member-a&quot;,
+  &quot;conversation_id&quot;: &quot;notification-retry-demo&quot;,
+  &quot;space_ids&quot;: [
+    &quot;&lt;同一个 space_id&gt;&quot;
+  ],
+  &quot;domains&quot;: [
+    &quot;服务可靠性&quot;
+  ],
+  &quot;include_memory_view&quot;: [
+    &quot;project&quot;
+  ],
+  &quot;query&quot;: &quot;通知失败重试几次，为什么？&quot;,
+  &quot;memory_limit_number&quot;: 9
+}</code></pre>
+<p>读取 data.topic_detail_list；若有 data.degraded，按部分召回处理。relativity 是本次结果的相对值，不能把某个固定值跨请求解释为绝对概率。工具检索可额外传本机字段 recall_via="tool"；它不属于公开 SDK 参数。会话开始的索引通过 POST get/memory（space_id）读取；完整主题通过 GET get/memory/:id，data 仍是 topic_detail_list 数组，不是裸主题。</p>
+<p>可重试的模型失败或版本冲突耗尽，再提交原批次会创建恢复任务；多 Space 时只重跑符合恢复条件的 Space。若存在不可重试失败，当前逻辑会保留原任务。先检查错误类别，再决定恢复，避免盲目创建新会话。</p>
+<div class="table-wrap"><table><thead><tr><th>要接手什么</th><th>代码入口</th></tr></thead><tbody><tr><td>参数和信封</td><td><a href="../../Memory/src/service/project-memory/api.ts">api.ts</a></td></tr><tr><td>任务、Space 与服务门面</td><td><a href="../../Memory/src/service/project-memory/service.ts">service.ts</a></td></tr><tr><td>抽取到提交</td><td><a href="../../Memory/src/service/project-memory/pipeline/organize-job.ts">pipeline/organize-job.ts</a></td></tr><tr><td>确定性合并</td><td><a href="../../Memory/src/service/project-memory/merge/merge.ts">merge/merge.ts</a></td></tr><tr><td>项目排序及条目门槛</td><td><a href="../../Memory/src/service/project-memory/retrieve/search.ts">retrieve/search.ts</a></td></tr><tr><td>三路召回与融合</td><td><a href="../../Memory/src/service/project-memory/retrieve/recall-paths.ts">retrieve/recall-paths.ts</a></td></tr><tr><td>存储边界</td><td><a href="../../Memory/src/service/project-memory/store/store.ts">store/store.ts</a></td></tr></tbody></table>
+</div><p>实现规则见 <a href="DEVELOPMENT.md">DEVELOPMENT.md</a>；待裁决边界见 <a href="open-questions.md">open-questions.md</a>；云端与最终验收见 <a href="ROADMAP.md">ROADMAP.md</a>。接手时先以这些入口定位职责，不把历史设计目录里的方案当成当前缺口。</p>
+</section>
+<section id="gallery"><h2><span class="sec-no">08</span>运行 B 的完整终态</h2>
+<p>这是运行 B（2026-11-11T04-21-01-504Z）的固定快照，共 58 个主题。它不是实时服务状态，也不是逐主题错误判定。原页面内容保留在下面；教学主线不要求先读完所有主题。</p>
+<details><summary>展开运行 B 的 58 个主题及决策、冲突和历史</summary><div class="details-body">
+<!-- ADD-GALLERY:START -->
+<p>运行 B 的固定终态，按空间分组；不是逐主题拆分或误并标注。</p>
+<ul><li><a href="#space_ledger">记账</a>，13 个主题</li><li><a href="#space_catalog">价格目录</a>，6 个主题</li><li><a href="#space_clinic">门诊</a>，10 个主题</li><li><a href="#space_warehouse">仓储</a>，9 个主题</li><li><a href="#space_fleet">车队</a>，9 个主题</li><li><a href="#space_kitchen">厨房</a>，11 个主题</li></ul>
+<h3 id="space_ledger">记账</h3>
+<p>ledger 是记账服务，按客户出月度账务报表。这一空间写下 13 个主题。</p>
+<details>
+    <summary>月报归档保留期限约定 · 代码开发</summary>
+    <div class="details-body">
+      <p>约定月报定稿后归档到 archive/ 目录并只保留十二个月，以控制归档范围、便于查找历史报表。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>月报定稿后归档到 archive/ 目录，只保留十二个月</p>
+      <p>2026-10-21T21:00:00+08:00 · 林工</p>
+      <p><strong>冲突</strong></p>
+      <ul><li>月报保留六个月，不留十二个月。 2026-10-21T20:55:00+08:00 · 周工</li></ul>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>entries 表新增 amount 列 · 代码开发</summary>
+    <div class="details-body">
+      <p>在 entries 表增加 amount 列，月报汇总直接读该列，不再扫描 journal 全文，以提升月报生成速度。</p>
+      <p>决策 1 条，经验 0 条，时间线 2 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>entries 表增加 amount 列，月报汇总直接读该列，不再扫描 journal 全文。</p>
+      <p>2026-10-21T16:40:00+08:00 · 周工、林工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <ul><li>entries 已加 amount 列，report.ts 月报改为按该列汇总，空客户测试已改。 2026-10-21T16:42:00+08:00 · 周工</li><li>month.json 的改动已撤回 2026-10-21T17:40:00+08:00 · 周工</li></ul>
+    </div>
+  </details><details>
+    <summary>月报按客户过滤 · 代码开发</summary>
+    <div class="details-body">
+      <p>月报按客户过滤，没有客户名的分录不计入月报，以保证报表归属清晰。</p>
+      <p>决策 1 条，经验 0 条，时间线 1 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>月报按客户过滤，没有客户名的分录不计入月报。</p>
+      <p>2026-10-21T11:30:00+08:00 · 林工</p>
+      <p><strong>冲突</strong></p>
+      <ul><li>report.ts 读取分录时只跳过金额列为空的行，客户名为空但金额存在的行保留。 2026-10-21T17:42:00+08:00 · 周工</li></ul>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <ul><li>report.ts 已改为先按客户过滤再汇总，并加了空客户测试，README 已写明金额仍在 journal 正文。 2026-10-21T11:32:00+08:00 · 林工</li></ul>
+    </div>
+  </details><details>
+    <summary>月报不使用 export 拷贝 · 代码开发</summary>
+    <div class="details-body">
+      <p>月报生成不使用 export 的拷贝，也不将其迁入 ledger，以简化月报实现。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>月报不使用 export，export 的拷贝不再恢复，也不往 ledger 搬。</p>
+      <p>2026-10-21T19:12:00+08:00 · 周工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>密钥文件本地保管约定 · 工程规范</summary>
+    <div class="details-body">
+      <p>约定 .env 密钥文件只保留在本机，说明文档和普通记录中不出现连接串，避免密钥外泄。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>密钥文件 .env 只留在本机，说明和普通记录里都不放连接串。</p>
+      <p>2026-10-21T14:40:00+08:00 · 周工、林工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>重复分录去重规则 · 代码开发</summary>
+    <div class="details-body">
+      <p>约定重复分录按 id 去重并保留最早一条，避免同一笔分录在月报中重复计入。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>重复的分录按 id 去重，保留最早的一条。</p>
+      <p>2026-10-21T15:20:00+08:00 · 林工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>功能分支协作约定 · 工程规范</summary>
+    <div class="details-body">
+      <p>约定改动先提交到 feature 分支、不直接修改 main，以隔离未完成改动并保留主干稳定。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>改动先放 feature 分支，不直接改 main。</p>
+      <p>2026-10-21T15:10:00+08:00 · 周工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>main 分支直接修改约定 · 工程规范</summary>
+    <div class="details-body">
+      <p>约定代码直接在 main 分支上修改，不开分支、不做合并，以省去合并流程。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>代码直接在 main 分支上修改，不开分支、不做合并。</p>
+      <p>2026-10-21T15:00:00+08:00 · 林工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>月报金额整数分计算约定 · 代码开发</summary>
+    <div class="details-body">
+      <p>约定月报金额以整数分计算而非浮点，避免浮点误差影响账务报表金额准确性。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>月报金额按整数分计算，不用浮点。</p>
+      <p>2026-10-21T13:40:00+08:00 · 林工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>月报输出目录创建约定 · 代码开发</summary>
+    <div class="details-body">
+      <p>月报导出前先创建 output 目录，确保导出流程有可写的输出位置。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>月报导出前先创建 output 目录</p>
+      <p>2026-10-21T13:02:00+08:00 · 林工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>月报输出文件命名与目录约定 · 代码开发</summary>
+    <div class="details-body">
+      <p>约定月报结果写入 reports 目录，文件名按月份命名，便于按月查找和归档报表。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>月报结果写到 reports 目录下，文件名按月份命名，如 2026-10.txt</p>
+      <p>2026-10-21T12:50:00+08:00 · 周工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>月报时区计算约定 · 代码开发</summary>
+    <div class="details-body">
+      <p>约定月报的月初月末按东八区（UTC+8）计算，不用 UTC，以保证账期边界与客户所在时区一致。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>月报的月初月末按东八区（UTC+8）计算，不用 UTC</p>
+      <p>2026-10-21T11:20:00+08:00 · 周工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>月报金额读取约定 · 代码开发</summary>
+    <div class="details-body">
+      <p>约定月报不改动 entries 表结构，金额仍写在 journal 正文中，读取时再解析提取，以降低改动成本。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>月报不改 entries 表结构，金额继续写在 journal 正文里，读取时再挑出来。</p>
+      <p>2026-10-21T09:15:00+08:00 · 林工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details>
+<h3 id="space_catalog">价格目录</h3>
+<p>catalog 是商品价格目录服务，提供价格查询与价格表导出。这一空间写下 6 个主题。</p>
+<details>
+    <summary>价格表导出格式改为 CSV · 代码开发</summary>
+    <div class="details-body">
+      <p>将价格表导出格式由 JSON 改为 CSV，以满足导出场景对表格格式的需求。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>价格表导出格式改为 CSV，不再使用 JSON</p>
+      <p>2026-10-21T16:20:00+08:00 · 陈工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>重复价格记录取值规则 · 代码开发</summary>
+    <div class="details-body">
+      <p>约定同一 SKU 存在多条价格记录时的取值规则，明确以最后一条为准、忽略前面的记录，避免查询结果不确定。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>同一 sku 出现多条价格记录时，取最后一条，前面的忽略。</p>
+      <p>2026-10-21T15:00:00+08:00 · 陈工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>价格生效日时区约定 · 代码开发</summary>
+    <div class="details-body">
+      <p>约定价格生效日按 UTC 零点切换，不依赖本地时区，以保证价格切换时刻在各环境一致。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>价格生效日按 UTC 零点切换，不看本地时区</p>
+      <p>2026-10-21T14:00:00+08:00 · 陈工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>价格显示小数位约定 · 代码开发</summary>
+    <div class="details-body">
+      <p>约定价格显示统一保留两位小数，保证各展示与导出场景的金额格式一致。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>价格显示保留两位小数</p>
+      <p>2026-10-21T13:30:00+08:00 · 陈工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>SKU 比较大小写规范 · 代码开发</summary>
+    <div class="details-body">
+      <p>约定比较 SKU 前统一转为大写，避免因大小写差异导致同一 SKU 被误判为不同商品。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>比较 sku 前统一转成大写</p>
+      <p>2026-10-21T12:40:00+08:00 · 陈工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>价格表 amount 列改造 · 代码开发</summary>
+    <div class="details-body">
+      <p>在 price 表增加 amount 列，价格列表直接读取该列，替代原先拼装说明文字的做法，以提升价格查询速度。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>price 表增加 amount 列，价格列表直接读取该列，不再拼装说明文字。</p>
+      <p>2026-10-21T11:40:00+08:00 · 陈工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details>
+<h3 id="space_clinic">门诊</h3>
+<p>门诊部负责号源、叫号和药房发药。这一空间写下 10 个主题。</p>
+<details>
+    <summary>药袋药品名称标注规则 · 药房管理</summary>
+    <div class="details-body">
+      <p>规定药袋上标注药品通用名而非商品名，便于患者识别药品并避免名称混淆。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>药袋上写通用名，不写商品名</p>
+      <p>2026-11-03T11:40:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>退药受理时间窗口 · 药房管理</summary>
+    <div class="details-body">
+      <p>规定退药只在上午窗口收取、下午不受理，以统一退药受理时段并便于窗口安排。</p>
+      <p>决策 1 条，经验 0 条，时间线 1 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>退药只在上午窗口收取，下午不收。</p>
+      <p>2026-11-03T11:00:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <ul><li>上午退药窗口已挂牌 2026-11-03T11:20:00+08:00 · 赵工</li></ul>
+    </div>
+  </details><details>
+    <summary>发药前患者与批号核对 · 药房管理</summary>
+    <div class="details-body">
+      <p>规定发药前核对患者姓名和药品批号，防止发错患者或药品，保障用药安全。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>发药前核对患者姓名和药品批号</p>
+      <p>2026-11-03T10:50:00+08:00 · 吴工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>冷藏药品存放温度规范 · 药房管理</summary>
+    <div class="details-body">
+      <p>规定冷藏药品须存放于2至8度冷藏柜、不得置于常温架，以保证药品质量与用药安全。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>冷藏药存放于 2 到 8 度的柜子，不放常温架。</p>
+      <p>2026-11-03T10:40:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>近效期药品标识规则 · 药房管理</summary>
+    <div class="details-body">
+      <p>为距失效不足30天的药品制定不下架、仅贴黄标的处理规则，避免误发和浪费。</p>
+      <p>决策 2 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>距失效不足30天的药品不下架，只贴黄标。</p>
+      <p>2026-11-03T10:20:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details><details>
+    <summary>决策 2</summary>
+    <div class="details-body">
+      <p>近效期药品优先调拨给住院药房</p>
+      <p>2026-11-03T10:30:00+08:00 · 吴工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>处方有效期规则 · 门诊排班</summary>
+    <div class="details-body">
+      <p>约定普通处方的有效期限，明确患者取药的时间范围，避免过期处方继续取药。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>普通处方仅在开具当天有效，过期不能取药。</p>
+      <p>2026-11-03T10:00:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <ul><li>普通处方在三天内均可取药。 2026-11-03T09:30:00+08:00 · 吴工</li></ul>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>临时加号数量上限 · 门诊排班</summary>
+    <div class="details-body">
+      <p>约定临时加号的数量上限，控制每个半天的加号规模，避免号源超量影响接诊秩序。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>临时加号每个半天最多加 5 个</p>
+      <p>2026-11-03T10:10:00+08:00 · 吴工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>门诊接诊时段安排 · 门诊排班</summary>
+    <div class="details-body">
+      <p>约定门诊上午和下午的接诊起止时间，让患者和门诊人员明确各时段的接诊安排。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>上午门诊接诊到 11 点半，下午从 13 点半开始接诊</p>
+      <p>2026-11-03T09:40:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>叫号顺序规则 · 门诊排班</summary>
+    <div class="details-body">
+      <p>约定叫号按挂号先后顺序进行，过号患者排到当前队尾再叫，以保证候诊秩序公平。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>叫号按挂号先后顺序；过号患者排到当前队尾再叫。</p>
+      <p>2026-11-03T09:20:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>门诊号源释放规则 · 门诊排班</summary>
+    <div class="details-body">
+      <p>确定门诊号源的释放时间规则，让患者和门诊人员明确何时可以挂到第二天的号。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>号源每天早上 7 点释放第二天的门诊号源</p>
+      <p>2026-11-03T09:00:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details>
+<h3 id="space_warehouse">仓储</h3>
+<p>仓储负责收货、存储和拣货出库。这一空间写下 9 个主题。</p>
+<details>
+    <summary>到货保质期抽检 · 入库验收</summary>
+    <div class="details-body">
+      <p>规定每批到货抽取 3 箱检查保质期，用于到货验收时控制临期商品入库风险。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>每批到货抽 3 箱检查保质期</p>
+      <p>2026-11-04T14:00:00+08:00 · 孙工</p>
+      <p><strong>冲突</strong></p>
+      <ul><li>每批到货整批检查保质期，不抽样。 2026-11-04T13:40:00+08:00 · 郑工</li></ul>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>出库先进先出顺序约定 · 拣货出库</summary>
+    <div class="details-body">
+      <p>约定出库按进仓先后顺序执行先进先出，以保证库存周转和货物时效。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>出库按进仓先后顺序，先进来的先出去。</p>
+      <p>2026-11-04T12:00:00+08:00 · 孙工</p>
+      <p><strong>冲突</strong></p>
+      <ul><li>出库按失效日期排序，快过期的先出。 2026-11-04T11:50:00+08:00 · 郑工</li></ul>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>外箱标签印刷内容约定 · 拣货出库</summary>
+    <div class="details-body">
+      <p>约定外箱只印批次和库位、不印价格，以统一出库包装标识并避免价格信息外露。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>外箱只印批次和库位，不印价格。</p>
+      <p>2026-11-04T11:40:00+08:00 · 孙工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>外箱破损货登记与收货判定 · 入库验收</summary>
+    <div class="details-body">
+      <p>规定外箱破损货物先登记再决定是否收货，用于到货验收时统一处理破损货。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>外箱破损的货先登记，再决定是否收货</p>
+      <p>2026-11-04T11:00:00+08:00 · 孙工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>库存商品盘点周期 · 入库验收</summary>
+    <div class="details-body">
+      <p>按货值区分盘点频率，高货值商品每周盘点、普通商品每月盘点，用于控制库存准确性。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>高货值商品每周盘点一次，普通商品每月盘点一次</p>
+      <p>2026-11-04T10:00:00+08:00 · 孙工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>未预约月台车辆卸货规则 · 入库验收</summary>
+    <div class="details-body">
+      <p>规定未预约月台的车辆不得卸货，用于到货环节控制月台秩序和收货节奏。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>未预约月台的车不许卸货</p>
+      <p>2026-11-04T10:50:00+08:00 · 郑工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>冷链到货温度验收标准 · 入库验收</summary>
+    <div class="details-body">
+      <p>规定冷链货到货温度高于 8 度时整车退回，用于到货验收时判定是否收货。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>冷链货到货温度高于 8 度时整车退回</p>
+      <p>2026-11-04T09:20:00+08:00 · 孙工</p>
+      <p><strong>冲突</strong></p>
+      <ul><li>冷冻货到货温度高于零下12度就整车拒收退回 2026-11-04T10:30:00+08:00 · 郑工</li></ul>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>退货单独清点 · 入库验收</summary>
+    <div class="details-body">
+      <p>规定退回来的货单独清点、不与采购货混放，避免退货与正常到货混淆。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>退回来的货单独清点，不与采购货混放。</p>
+      <p>2026-11-04T10:10:00+08:00 · 郑工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>拣货出库顺序约定 · 拣货出库</summary>
+    <div class="details-body">
+      <p>约定拣货按库区顺序进行、不跨区来回，并将同一订单合成一批出库，以规范拣货出库作业。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>拣货按库区顺序走，不跨区来回；同一订单合成一批再出库。</p>
+      <p>2026-11-04T09:40:00+08:00 · 孙工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details>
+<h3 id="space_fleet">车队</h3>
+<p>车队负责车辆保养和线路发车。这一空间写下 9 个主题。</p>
+<details>
+    <summary>市区线路限速规定 · 线路调度</summary>
+    <div class="details-body">
+      <p>规定市区线路最高限速 60，用于统一线路调度的速度口径。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>市区线路最高限速 60。</p>
+      <p>2026-11-05T14:00:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <ul><li>市区线路限速 50。 2026-11-05T13:40:00+08:00 · 孙工</li></ul>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>每周五收车后洗车 · 车辆维保</summary>
+    <div class="details-body">
+      <p>规定每周五收车后统一洗车，用于保持车辆清洁并统一车队洗车安排。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>每周五收车后洗车。</p>
+      <p>2026-11-05T13:00:00+08:00 · 孙工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>出车前安全带检查 · 车辆维保</summary>
+    <div class="details-body">
+      <p>规定出车前全员必须系好安全带，有人未系则不发车，用于统一出车前的安全条件。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>出车前全员必须系安全带，有人不系就不发车。</p>
+      <p>2026-11-05T12:20:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>车辆保险续保管理 · 车辆维保</summary>
+    <div class="details-body">
+      <p>规定保险到期前15天完成续保，过期车辆不得出场运营，用于统一车队保险合规管理。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>保险到期前 15 天完成续保，保险过期的车辆不得出场运营</p>
+      <p>2026-11-05T12:00:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>车辆途中故障处置流程 · 车辆维保</summary>
+    <div class="details-body">
+      <p>规定车辆在路上发生故障时先报调度、再就近维修，用于统一途中故障的处置顺序。</p>
+      <p>决策 1 条，经验 0 条，时间线 1 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>车辆路上故障时先报调度，再就近维修。</p>
+      <p>2026-11-05T11:00:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <ul><li>故障上报群已建好 2026-11-05T11:22:00+08:00 · 赵工</li></ul>
+    </div>
+  </details><details>
+    <summary>加油付款方式约定 · 车辆维保</summary>
+    <div class="details-body">
+      <p>规定车队加油统一使用公司卡结算，禁止个人垫付后报销，以规范费用与资金流程。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>加油统一刷公司卡，不允许先垫付个人款项。</p>
+      <p>2026-11-05T10:30:00+08:00 · 孙工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>早班发车时刻规则 · 线路调度</summary>
+    <div class="details-body">
+      <p>确定早班 6 点发车、晚到 10 分钟即取消的对外发车约定，用于统一线路调度口径。</p>
+      <p>决策 3 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>早班 6 点发车，晚到 10 分钟这班就取消。</p>
+      <p>2026-11-05T09:00:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details><details>
+    <summary>决策 2</summary>
+    <div class="details-body">
+      <p>早高峰不走中山路，绕行。</p>
+      <p>2026-11-05T10:00:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details><details>
+    <summary>决策 3</summary>
+    <div class="details-body">
+      <p>夜班 22 点发车，晚到 10 分钟这班取消</p>
+      <p>2026-11-05T10:10:00+08:00 · 孙工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>轮胎花纹更换标准 · 车辆维保</summary>
+    <div class="details-body">
+      <p>规定轮胎花纹深度低于2毫米时必须更换，用于统一车队轮胎安全更换标准。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>轮胎花纹深度低于2毫米时必须更换。</p>
+      <p>2026-11-05T09:40:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>车辆保养周期规则 · 车辆维保</summary>
+    <div class="details-body">
+      <p>明确车辆保养的触发条件，按行驶里程或时间先到者执行，统一车队维保节奏。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>车辆保养按行驶 1 万公里或满 6 个月执行，以先到者为准。</p>
+      <p>2026-11-05T09:20:00+08:00 · 赵工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details>
+<h3 id="space_kitchen">厨房</h3>
+<p>厨房负责备菜、出餐和留样。这一空间写下 11 个主题。</p>
+<details>
+    <summary>试吃范围与带出限制 · 菜品备料</summary>
+    <div class="details-body">
+      <p>规定试吃仅限当班厨师在厨房内品尝，不得将试吃菜品带出厨房，以规范试吃行为。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>试吃只限当班厨师品尝，不得带出厨房。</p>
+      <p>2026-11-06T14:00:00+08:00 · 吴工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>热菜出餐温度标准 · 菜品备料</summary>
+    <div class="details-body">
+      <p>规定热菜出餐温度不低于60度，保证出餐品质与食品安全。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>热菜出餐温度不低于 60 度</p>
+      <p>2026-11-06T12:20:00+08:00 · 吴工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>厨余清运时间约定 · 菜品备料</summary>
+    <div class="details-body">
+      <p>规定厨余每天下午4点拉走、不得留到第二天，避免积存影响厨房卫生。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>厨余每天下午 4 点拉走，不许留到第二天。</p>
+      <p>2026-11-06T12:00:00+08:00 · 吴工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>切配菜冷藏时限 · 菜品备料</summary>
+    <div class="details-body">
+      <p>规定切好的菜必须在2小时内冷藏，控制备菜环节的食材变质风险。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>切好的菜必须在 2 小时内放进冷藏。</p>
+      <p>2026-11-06T11:00:00+08:00 · 吴工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>熟食操作手套更换规范 · 食安留样</summary>
+    <div class="details-body">
+      <p>规定接触熟食前及手套破损时立即更换新手套，保障熟食操作卫生。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>接触熟食前换新手套，手套破损时也立即更换。</p>
+      <p>2026-11-06T10:50:00+08:00 · 郑工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>煎炸油更换标准 · 菜品备料</summary>
+    <div class="details-body">
+      <p>规定煎炸油发黑或连续使用满8小时即更换，保证用油卫生与出餐品质。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>煎炸油发黑或连续使用满8小时即更换新油</p>
+      <p>2026-11-06T10:30:00+08:00 · 郑工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>酱汁备料量与当日使用 · 菜品备料</summary>
+    <div class="details-body">
+      <p>确定酱汁按 50 份备料并当天用完，控制备料量并保证酱汁新鲜。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>酱汁按 50 份备料，且当天必须用完。</p>
+      <p>2026-11-06T10:10:00+08:00 · 郑工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>刀具消毒频次约定 · 菜品备料</summary>
+    <div class="details-body">
+      <p>规定刀具每两小时消毒一次，作为厨房卫生操作的一项共同约定。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>刀具每两小时消毒一次。</p>
+      <p>2026-11-06T10:00:00+08:00 · 吴工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>致敏菜品菜单标注 · 菜品备料</summary>
+    <div class="details-body">
+      <p>在菜单上用红字标出含花生或虾的菜品，让顾客点餐时能识别致敏成分。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>含花生或虾的菜品在菜单上用红字标出</p>
+      <p>2026-11-06T09:40:00+08:00 · 吴工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>菜品留样规范 · 食安留样</summary>
+    <div class="details-body">
+      <p>规定每道菜的留样重量、保存时长和存放温度，用于食安留样管理。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>每道菜留样 125 克，保存 48 小时，存放于 0 到 4 度冰箱。</p>
+      <p>2026-11-06T09:20:00+08:00 · 吴工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details><details>
+    <summary>例汤备量与售罄规则 · 菜品备料</summary>
+    <div class="details-body">
+      <p>确定例汤每餐备量及售罄后的处理方式，控制备料与出餐节奏。</p>
+      <p>决策 1 条，经验 0 条，时间线 0 条。</p>
+      
+      <p><strong>决策</strong></p>
+      <details>
+    <summary>决策 1</summary>
+    <div class="details-body">
+      <p>例汤备 200 份，卖完即停，不补锅。</p>
+      <p>2026-11-06T09:00:00+08:00 · 吴工</p>
+      <p><strong>冲突</strong></p>
+      <p>没有冲突。</p>
+      <p><strong>历史</strong></p>
+      <p>没有历史。</p>
+    </div>
+  </details>
+      <p><strong>经验</strong></p>
+      <p>没有。</p>
+      <p><strong>时间线</strong></p>
+      <p>没有。</p>
+    </div>
+  </details>
+<!-- ADD-GALLERY:END -->
+</div></details>
+<h3>证据与维护</h3>
+<p>所有指标以 <a href="metrics.md">评测记录</a> 为准。原始 run 在 eval/project-memory/runs/ 下且不进 git；HTML 内已嵌入展示所需内容，离线阅读不依赖这些文件。生成脚本只更新标记包围的附录，不覆盖正文。</p>
+<pre><code>node eval/project-memory/gold-add-memory/build-add-showcase.mjs --check
+node eval/project-memory/gold-add-memory/build-add-showcase.mjs</code></pre>
+<p>算法规格唯一来源是 design-docs/standard/ 的现行镜像与已定 ADR；对齐版本见 <a href="spec-snapshots.md">spec-snapshots.md</a>。本文描述当前实现，不替代规格决策。</p>
+</section>
+<footer class="site-foot">MEMTENSOR · 项目记忆交接 · 2026-11-11</footer></main></div><script>
+    (() => {
+      const links = [...document.querySelectorAll('nav.toc a[href^="#"]')];
+      const sections = links.map((link) => document.getElementById(link.hash.slice(1))).filter(Boolean);
+      if (sections.length === 0) return;
+      let frame = 0;
+      const update = () => {
+        frame = 0;
+        const line = window.innerHeight * 0.3;
+        const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+        let current = sections[0];
+        for (const section of sections) if (section.getBoundingClientRect().top <= line) current = section;
+        if (atBottom) current = sections[sections.length - 1];
+        for (const link of links) {
+          if (link.hash.slice(1) === current.id) link.setAttribute("aria-current", "true");
+          else link.removeAttribute("aria-current");
+        }
+      };
+      const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
+      window.addEventListener("scroll", schedule, { passive: true });
+      window.addEventListener("resize", schedule);
+      update();
+    })();
+
+    (() => {
+      const KEY = "memtensor-doc-theme";
+      const root = document.documentElement;
+      const btn = document.querySelector("[data-theme-toggle]");
+      if (!btn) return;
+      const appearance = () => {
+        const chosen = root.getAttribute("data-theme");
+        if (chosen === "light" || chosen === "dark") return chosen;
+        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      };
+      const paint = () => {
+        const dark = appearance() === "dark";
+        btn.setAttribute("aria-label", dark ? "切换到浅色" : "切换到深色");
+        btn.title = btn.getAttribute("aria-label");
+      };
+      btn.addEventListener("click", () => {
+        const next = appearance() === "dark" ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        try { localStorage.setItem(KEY, next); } catch { /* 当次切换仍然生效 */ }
+        paint();
+      });
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+        if (!root.getAttribute("data-theme")) paint();
+      });
+      paint();
+    })();
+
+    (() => {
+      const open = document.querySelector(".diagram-edit-open");
+      if (!open) return;
+      const SVG_NS = "http://www.w3.org/2000/svg";
+      const FONTS = [
+        ["", "默认"],
+        ["var(--font-sans)", "正文"],
+        ["var(--font-display)", "标题"],
+        ["var(--font-mono)", "等宽"],
+        ["Segoe UI, PingFang SC, Microsoft YaHei, sans-serif", "Sans Serif"],
+        ["Georgia, Times New Roman, serif", "Serif"],
+        ["Arial, Helvetica, sans-serif", "Arial"],
+        ["Microsoft YaHei, PingFang SC, sans-serif", "微软雅黑"],
+        ["KaiTi, STKaiti, serif", "楷体"],
+        ["Cascadia Code, Consolas, monospace", "Cascadia"],
+      ];
+      const bar = document.createElement("div");
+      bar.className = "diagram-edit-bar";
+      bar.hidden = true;
+      bar.setAttribute("role", "toolbar");
+      bar.innerHTML = '<div class="diagram-edit-tools"><label>字体 <select data-act="font"></select></label><label>字号 <input data-act="size" type="number" min="8" max="200" step="1" value="16"></label><button type="button" data-act="code">展开原始代码</button><button type="button" data-act="copy" hidden>复制这段</button><button type="button" data-act="done">完成</button></div><pre class="diagram-edit-code" hidden></pre><span class="diagram-edit-resize" data-resize="w" hidden></span><span class="diagram-edit-resize" data-resize="s" hidden></span><span class="diagram-edit-resize" data-resize="sw" hidden></span>';
+      const fontInput = bar.querySelector('[data-act="font"]');
+      for (const [value, label] of FONTS) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        fontInput.append(option);
+      }
+      document.body.append(bar);
+      const frame = document.createElement("div");
+      frame.className = "edit-frame";
+      frame.hidden = true;
+      for (const edge of ["nw", "n", "ne", "e", "se", "s", "sw", "w"]) {
+        const handle = document.createElement("span");
+        handle.dataset.edge = edge;
+        frame.append(handle);
+      }
+      document.body.append(frame);
+      const sizeInput = bar.querySelector('[data-act="size"]');
+      const codeBtn = bar.querySelector('[data-act="code"]');
+      const copyBtn = bar.querySelector('[data-act="copy"]');
+      const codeBox = bar.querySelector(".diagram-edit-code");
+      const CURSOR = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", nw: "nwse-resize", se: "nwse-resize", ne: "nesw-resize", sw: "nesw-resize" };
+      let selected = null;
+      let drag = null;
+      let editingEl = null;
+      let editSnapshot = "";
+      let svgTextEdit = null;
+      let savedRange = null;
+      let pendingTarget = null;
+      let interactingWithFormatBar = false;
+      const undo = [];
+      let dirty = false;
+      let saveQueue = Promise.resolve();
+      let textUndo = null;
+      const baselines = new Map();
+      const originals = new Map();
+      const spacers = new Map();
+      const placedAtStart = new Set();
+
+      const n = (el, name) => Number(el.getAttribute(name) || 0);
+      const round = (value) => Math.round(value * 10) / 10;
+      const boxOf = (el) => ({ x: n(el, "x"), y: n(el, "y"), w: n(el, "width"), h: n(el, "height") });
+      const holds = (rect, x, y) => x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+      const fullyInside = (outer, inner) =>
+        inner.x >= outer.x - 0.5 && inner.y >= outer.y - 0.5 && inner.x + inner.w <= outer.x + outer.w + 0.5 && inner.y + inner.h <= outer.y + outer.h + 0.5;
+      const isSvg = (el) => el?.namespaceURI === SVG_NS;
+      const htmlTargets = () => {
+        const all = [...document.querySelectorAll("main h1, main h2, main h3, main p, main li, main dt, main dd, main .callout, main pre")];
+        return all.filter((el) => !el.classList.contains("edit-spacer") && !el.closest("figure.diagram") && !all.some((other) => other !== el && !other.classList.contains("edit-spacer") && other.contains(el)));
+      };
+      const mainEl = () => document.querySelector("main");
+
+      function scaleOf(svg) {
+        const vb = svg.viewBox.baseVal;
+        const rect = svg.getBoundingClientRect();
+        return { sx: vb.width / rect.width || 1, sy: vb.height / rect.height || 1 };
+      }
+      function hitResizeEdge(rect, x, y, threshold = 8) {
+        const left = rect.left;
+        const top = rect.top;
+        const right = rect.right;
+        const bottom = rect.bottom;
+        if (x < left - threshold || x > right + threshold || y < top - threshold || y > bottom + threshold) return "";
+        const onLeft = Math.abs(x - left) <= threshold;
+        const onRight = Math.abs(x - right) <= threshold;
+        const onTop = Math.abs(y - top) <= threshold;
+        const onBottom = Math.abs(y - bottom) <= threshold;
+        if (onTop && onLeft) return "nw";
+        if (onTop && onRight) return "ne";
+        if (onBottom && onLeft) return "sw";
+        if (onBottom && onRight) return "se";
+        if (onLeft) return "w";
+        if (onRight) return "e";
+        if (onTop) return "n";
+        if (onBottom) return "s";
+        return "";
+      }
+      function writePoints(item, points) {
+        if (item.el.tagName === "line") {
+          item.el.setAttribute("x1", String(points[0]));
+          item.el.setAttribute("y1", String(points[1]));
+          item.el.setAttribute("x2", String(points[2]));
+          item.el.setAttribute("y2", String(points[3]));
+          return;
+        }
+        let d = `M${points[0]},${points[1]}`;
+        for (let i = 2; i < points.length; i += 2) d += ` L${points[i]},${points[i + 1]}`;
+        item.el.setAttribute("d", d);
+      }
+      function unitFrom(target) {
+        const root = target.closest?.("svg");
+        if (!root || !root.closest("figure.diagram") || target.closest("g.legend")) return null;
+        const texts = [...root.querySelectorAll("text")].filter((el) => !el.closest("g.legend"));
+        const rects = [...root.querySelectorAll("rect")];
+        let rect = target.closest("rect");
+        if (!rect && target.closest("text")) {
+          const text = target.closest("text");
+          const x = n(text, "x");
+          const y = n(text, "y");
+          rect = rects.filter((el) => holds(boxOf(el), x, y)).sort((a, b) => boxOf(a).w * boxOf(a).h - boxOf(b).w * boxOf(b).h)[0] || null;
+          if (!rect) return { svg: root, rect: null, rects: [], texts: [text], edges: [] };
+        }
+        if (!rect) return null;
+        const area = boxOf(rect);
+        const members = rects.filter((el) => el !== rect && fullyInside(area, boxOf(el)));
+        const moving = [rect, ...members];
+        const boxes = moving.map(boxOf);
+        const labels = texts.filter((el) => boxes.some((item) => holds(item, n(el, "x"), n(el, "y"))));
+        const group = rect.classList.contains("group");
+        const edges = [];
+        for (const el of root.querySelectorAll("line, path")) {
+          const points = el.tagName === "line"
+            ? [n(el, "x1"), n(el, "y1"), n(el, "x2"), n(el, "y2")]
+            : (el.getAttribute("d") || "").match(/-?\d*\.?\d+/g)?.map(Number);
+          if (!points || points.length < 4 || points.length % 2) continue;
+          const indexes = [];
+          for (let i = 0; i < points.length; i += 2) {
+            const x = points[i];
+            const y = points[i + 1];
+            const hit = group
+              ? holds({ x: area.x - 2, y: area.y - 2, w: area.w + 4, h: area.h + 4 }, x, y)
+              : boxes.some((item) => {
+                  const nearX = Math.abs(x - item.x) <= 8 || Math.abs(x - (item.x + item.w)) <= 8;
+                  const nearY = Math.abs(y - item.y) <= 8 || Math.abs(y - (item.y + item.h)) <= 8;
+                  const inX = x >= item.x - 8 && x <= item.x + item.w + 8;
+                  const inY = y >= item.y - 8 && y <= item.y + item.h + 8;
+                  return inX && inY && (nearX || nearY);
+                });
+            if (hit) indexes.push(i);
+          }
+          if (indexes.length) edges.push({ el, points, indexes });
+        }
+        return { svg: root, rect, rects: moving, texts: labels, edges };
+      }
+      function guidesFor(root, skip) {
+        const vb = root.viewBox.baseVal;
+        const vertical = [0, vb.width / 2, vb.width];
+        const horizontal = [0, vb.height / 2, vb.height];
+        for (const el of root.querySelectorAll("rect")) {
+          if (skip.has(el) || el.closest("g.legend")) continue;
+          const box = boxOf(el);
+          vertical.push(box.x, box.x + box.w / 2, box.x + box.w);
+          horizontal.push(box.y, box.y + box.h / 2, box.y + box.h);
+        }
+        return { vertical, horizontal };
+      }
+      function htmlGuides(current) {
+        const parent = mainEl().getBoundingClientRect();
+        const vertical = [0, parent.width / 2, parent.width];
+        const horizontal = [0, parent.height / 2, parent.height];
+        const guides = [...htmlTargets(), ...document.querySelectorAll("main figure.diagram")];
+        for (const el of guides) {
+          if (el === current) continue;
+          const rect = el.getBoundingClientRect();
+          vertical.push(rect.left - parent.left, rect.left - parent.left + rect.width / 2, rect.right - parent.left);
+          horizontal.push(rect.top - parent.top, rect.top - parent.top + rect.height / 2, rect.bottom - parent.top);
+        }
+        return { vertical, horizontal };
+      }
+      function snapShift(pos, size, guides) {
+        let best = 0;
+        let bestDist = 6;
+        for (const at of [pos, pos + size / 2, pos + size]) {
+          for (const guide of guides) {
+            const dist = Math.abs(guide - at);
+            if (dist < bestDist) {
+              bestDist = dist;
+              best = guide - at;
+            }
+          }
+        }
+        return best;
+      }
+      function paintMove(dx, dy, snap = true) {
+        const primary = drag.rects[0];
+        if (!primary) {
+          const text = drag.texts[0];
+          if (!text) return;
+          text.el.setAttribute("x", String(round(text.x0 + dx)));
+          text.el.setAttribute("y", String(round(text.y0 + dy)));
+          return;
+        }
+        if (snap) {
+          const guides = guidesFor(drag.svg, new Set(drag.rects.map((item) => item.el)));
+          dx += snapShift(primary.x0 + dx, primary.w0, guides.vertical);
+          dy += snapShift(primary.y0 + dy, primary.h0, guides.horizontal);
+        }
+        for (const item of drag.rects) {
+          item.el.setAttribute("x", String(round(item.x0 + dx)));
+          item.el.setAttribute("y", String(round(item.y0 + dy)));
+        }
+        for (const item of drag.texts) {
+          item.el.setAttribute("x", String(round(item.x0 + dx)));
+          item.el.setAttribute("y", String(round(item.y0 + dy)));
+        }
+        for (const item of drag.edges) {
+          const moved = item.points.map((value, index) => {
+            if (!item.indexes.includes(index - (index % 2))) return value;
+            return round(value + (index % 2 === 0 ? dx : dy));
+          });
+          writePoints(item, moved);
+        }
+      }
+      function paintResize(dx, dy) {
+        const origin = drag.box;
+        let x = origin.x;
+        let y = origin.y;
+        let w = origin.w;
+        let h = origin.h;
+        if (drag.edge.includes("w")) { x += dx; w -= dx; }
+        if (drag.edge.includes("e")) w += dx;
+        if (drag.edge.includes("n")) { y += dy; h -= dy; }
+        if (drag.edge.includes("s")) h += dy;
+        if (drag.edge.includes("w")) { x = Math.min(x, origin.x + origin.w - 40); w = origin.x + origin.w - x; }
+        if (drag.edge.includes("e")) w = Math.max(40, w);
+        if (drag.edge.includes("n")) { y = Math.min(y, origin.y + origin.h - 24); h = origin.y + origin.h - y; }
+        if (drag.edge.includes("s")) h = Math.max(24, h);
+        const guides = guidesFor(drag.svg, new Set(drag.rects.map((item) => item.el)));
+        if (drag.edge.includes("w")) x += snapShift(x, 0, guides.vertical);
+        if (drag.edge.includes("e")) w += snapShift(x + w, 0, guides.vertical);
+        if (drag.edge.includes("n")) y += snapShift(y, 0, guides.horizontal);
+        if (drag.edge.includes("s")) h += snapShift(y + h, 0, guides.horizontal);
+        w = Math.max(40, w);
+        h = Math.max(24, h);
+        const primary = drag.rects[0];
+        primary.el.setAttribute("x", String(round(x)));
+        primary.el.setAttribute("y", String(round(y)));
+        primary.el.setAttribute("width", String(round(w)));
+        primary.el.setAttribute("height", String(round(h)));
+        const shiftX = x - origin.x;
+        const shiftY = y - origin.y;
+        for (const item of drag.rects.slice(1)) {
+          item.el.setAttribute("x", String(round(item.x0 + shiftX)));
+          item.el.setAttribute("y", String(round(item.y0 + shiftY)));
+        }
+        for (const item of drag.texts) {
+          const nextX = item.anchor === "middle" ? x + w / 2 : x + (item.x0 - origin.x);
+          item.el.setAttribute("x", String(round(nextX)));
+          item.el.setAttribute("y", String(round(y + (item.y0 - origin.y))));
+        }
+        for (const item of drag.edges) {
+          const moved = item.points.map((value, index) => {
+            if (!item.indexes.includes(index - (index % 2))) return value;
+            const px = item.points[index - (index % 2)];
+            const py = item.points[index - (index % 2) + 1];
+            if (index % 2 === 0) {
+              if (Math.abs(px - origin.x) <= 8) return round(x + (px - origin.x));
+              if (Math.abs(px - (origin.x + origin.w)) <= 8) return round(x + w - (origin.x + origin.w - px));
+              return value;
+            }
+            if (Math.abs(py - origin.y) <= 8) return round(y + (py - origin.y));
+            if (Math.abs(py - (origin.y + origin.h)) <= 8) return round(y + h - (origin.y + origin.h - py));
+            return value;
+          });
+          writePoints(item, moved);
+        }
+      }
+      function paintHtmlMove(dx, dy, snap = true) {
+        let left = drag.x + dx;
+        let top = drag.y + dy;
+        if (snap) {
+          const guides = htmlGuides(drag.el);
+          left += snapShift(left, drag.w, guides.vertical);
+          top += snapShift(top, drag.h, guides.horizontal);
+        }
+        drag.el.style.left = `${Math.round(left)}px`;
+        drag.el.style.top = `${Math.round(top)}px`;
+      }
+      function paintHtmlResize(dx, dy) {
+        let left = drag.x;
+        let top = drag.y;
+        let width = drag.w;
+        let height = drag.h;
+        if (drag.edge.includes("w")) { left += dx; width -= dx; }
+        if (drag.edge.includes("e")) width += dx;
+        if (drag.edge.includes("n")) { top += dy; height -= dy; }
+        if (drag.edge.includes("s")) height += dy;
+        width = Math.max(40, width);
+        height = Math.max(24, height);
+        const guides = htmlGuides(drag.el);
+        if (drag.edge.includes("w")) left += snapShift(left, 0, guides.vertical);
+        if (drag.edge.includes("e")) width += snapShift(left + width, 0, guides.vertical);
+        if (drag.edge.includes("n")) top += snapShift(top, 0, guides.horizontal);
+        if (drag.edge.includes("s")) height += snapShift(top + height, 0, guides.horizontal);
+        width = Math.max(40, width);
+        height = Math.max(24, height);
+        drag.el.style.left = `${Math.round(left)}px`;
+        drag.el.style.top = `${Math.round(top)}px`;
+        drag.el.style.width = `${Math.round(width)}px`;
+        drag.el.style.height = `${Math.round(height)}px`;
+      }
+      function flowBox(el) {
+        const parent = mainEl().getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
+        return {
+          left: rect.left - parent.left,
+          top: rect.top - parent.top,
+          width: rect.width,
+          height: rect.height,
+        };
+      }
+      function lift(el) {
+        if (spacers.has(el) || !el.isConnected) return;
+        const prev = el.previousElementSibling;
+        if (prev?.classList.contains("edit-spacer")) {
+          spacers.set(el, prev);
+          return;
+        }
+        const box = flowBox(el);
+        const cs = getComputedStyle(el);
+        const spacer = document.createElement("div");
+        spacer.className = "edit-spacer";
+        spacer.setAttribute("aria-hidden", "true");
+        spacer.style.boxSizing = "border-box";
+        spacer.style.display = "block";
+        spacer.style.flex = "0 0 auto";
+        spacer.style.width = `${Math.round(box.width)}px`;
+        spacer.style.height = `${Math.round(box.height)}px`;
+        spacer.style.marginTop = cs.marginTop;
+        spacer.style.marginRight = cs.marginRight;
+        spacer.style.marginBottom = cs.marginBottom;
+        spacer.style.marginLeft = cs.marginLeft;
+        spacer.style.padding = "0";
+        spacer.style.border = "0";
+        el.before(spacer);
+        spacers.set(el, spacer);
+        el.style.position = "absolute";
+        el.style.left = `${Math.round(box.left)}px`;
+        el.style.top = `${Math.round(box.top)}px`;
+        el.style.width = `${Math.round(box.width)}px`;
+        el.style.height = `${Math.round(box.height)}px`;
+        el.style.margin = "0";
+        el.style.right = "auto";
+        el.style.bottom = "auto";
+        el.style.maxWidth = "none";
+        el.style.maxHeight = "none";
+        el.style.zIndex = "2";
+      }
+      function armEditables() {
+        for (const el of htmlTargets()) {
+          if (!spacers.has(el) && el.previousElementSibling?.classList.contains("edit-spacer")) {
+            spacers.set(el, el.previousElementSibling);
+          }
+          if (!originals.has(el)) originals.set(el, el.getAttribute("style"));
+          el.setAttribute("data-editable", "");
+          const box = flowBox(el);
+          baselines.set(el, {
+            left: Math.round(box.left),
+            top: Math.round(box.top),
+            width: Math.round(box.width),
+            height: Math.round(box.height),
+            html: el.innerHTML,
+          });
+          if (spacers.has(el)) placedAtStart.add(el);
+        }
+      }
+      function dropSpacer(el) {
+        const spacer = spacers.get(el);
+        if (!spacer) return;
+        spacer.remove();
+        spacers.delete(el);
+      }
+      function restoreClean() {
+        const main = mainEl();
+        let dirtyBottom = 0;
+        const parent = main.getBoundingClientRect();
+        for (const [el, style] of originals) {
+          if (!el.isConnected) continue;
+          const base = baselines.get(el);
+          const spacer = spacers.get(el);
+          const left = parseFloat(el.style.left);
+          const top = parseFloat(el.style.top);
+          const width = parseFloat(el.style.width);
+          const height = parseFloat(el.style.height);
+          const moved = !!(spacer && base && (Math.abs(left - base.left) >= 1 || Math.abs(top - base.top) >= 1 || Math.abs(width - base.width) >= 1 || Math.abs(height - base.height) >= 1));
+          const fontFamily = el.style.fontFamily;
+          const fontSize = el.style.fontSize;
+          const html = el.innerHTML;
+          const typed = base && (html !== base.html || fontFamily || fontSize);
+          el.classList.remove("is-picked", "is-editing");
+          el.removeAttribute("contenteditable");
+          el.removeAttribute("data-editable");
+          if (!moved && !placedAtStart.has(el)) {
+            if (style == null) el.removeAttribute("style");
+            else el.setAttribute("style", style);
+            if (typed) {
+              el.innerHTML = html;
+              if (fontFamily) el.style.fontFamily = fontFamily;
+              if (fontSize) el.style.fontSize = fontSize;
+            }
+            dropSpacer(el);
+          } else if (moved) {
+            const rect = el.getBoundingClientRect();
+            dirtyBottom = Math.max(dirtyBottom, rect.bottom - parent.top);
+          }
+        }
+        originals.clear();
+        baselines.clear();
+        placedAtStart.clear();
+        if (dirtyBottom + 24 > parent.height) {
+          const current = parseFloat(main.style.minHeight) || 0;
+          main.style.minHeight = `${Math.ceil(Math.max(current, dirtyBottom + 24))}px`;
+        }
+      }
+      function cleanClone(el) {
+        const clone = el.cloneNode(true);
+        clone.querySelectorAll("*").forEach((node) => {
+          node.classList?.remove("is-picked", "is-editing");
+          if (node.classList && node.classList.length === 0) node.removeAttribute("class");
+          node.removeAttribute?.("contenteditable");
+          node.removeAttribute?.("data-editable");
+        });
+        clone.classList?.remove("is-picked", "is-editing");
+        if (clone.classList && clone.classList.length === 0) clone.removeAttribute("class");
+        clone.removeAttribute?.("contenteditable");
+        clone.removeAttribute?.("data-editable");
+        return clone.outerHTML.replace(/></g, ">\n<");
+      }
+      function sourceHost() {
+        if (selected?.kind === "svg") return selected.unit.svg;
+        if (selected?.kind === "html") return selected.el;
+        return null;
+      }
+      function showCode() {
+        if (codeBox.hidden) return;
+        const host = sourceHost();
+        codeBox.textContent = host ? cleanClone(host) : "先点选一个框或一段文字。";
+      }
+      function snapshot() {
+        if (selected?.kind === "svg") {
+          const svg = selected.unit.svg;
+          const html = svg.innerHTML;
+          return () => {
+            svg.innerHTML = html;
+            clearSelection();
+          };
+        }
+        if (selected?.kind === "html") {
+          const el = selected.el;
+          const style = el.getAttribute("style");
+          const html = el.innerHTML;
+          const spacer = spacers.get(el) || null;
+          const spacerParent = spacer ? spacer.parentNode : null;
+          return () => {
+            if (style == null) el.removeAttribute("style");
+            else el.setAttribute("style", style);
+            el.innerHTML = html;
+            const current = spacers.get(el);
+            if (spacer) {
+              if (current && current !== spacer) current.remove();
+              if (!spacer.isConnected && spacerParent) spacerParent.insertBefore(spacer, el);
+              spacers.set(el, spacer);
+            } else if (current) dropSpacer(el);
+            placeFrame();
+            showCode();
+          };
+        }
+        return null;
+      }
+      function pushUndo(entry) {
+        if (!entry) return;
+        undo.push(entry);
+        dirty = true;
+        if (undo.length > 30) undo.shift();
+      }
+      function remember() {
+        pushUndo(snapshot());
+      }
+      function pageHtml() {
+        const root = document.documentElement.cloneNode(true);
+        root.removeAttribute("data-theme");
+        root.querySelector("body")?.classList.remove("is-diagram-edit");
+        root.querySelectorAll(".diagram-edit-bar, .edit-frame, .diagram-edit-text").forEach((el) => el.remove());
+        root.querySelectorAll("[data-editable], [contenteditable]").forEach((el) => {
+          el.removeAttribute("data-editable");
+          el.removeAttribute("contenteditable");
+        });
+        root.querySelectorAll(".is-picked, .is-editing").forEach((el) => {
+          el.classList.remove("is-picked", "is-editing");
+          if (el.classList.length === 0) el.removeAttribute("class");
+        });
+        return "<!DOCTYPE html>\n" + root.outerHTML;
+      }
+      function persistPage() {
+        const html = pageHtml();
+        const headerPath = location.protocol === "file:" ? location.href : location.pathname;
+        const urls = [];
+        if (location.protocol === "http:" || location.protocol === "https:") urls.push(`${location.origin}/__memtensor/save`);
+        const fallback = "http://127.0.0.1:4173/__memtensor/save";
+        if (!urls.includes(fallback)) urls.push(fallback);
+        saveQueue = saveQueue.catch(() => {}).then(async () => {
+          for (const url of urls) {
+            try {
+              const res = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain", "X-Doc-Path": headerPath },
+                body: html,
+              });
+              if (res.ok) {
+                open.title = "已写回文件";
+                return;
+              }
+            } catch { /* 下一个地址 */ }
+          }
+          open.title = "没能写回文件";
+        });
+      }
+      function placeFrame() {
+        const el = selected?.el;
+        if (!el?.isConnected || editingEl) {
+          frame.hidden = true;
+          return;
+        }
+        const rect = el.getBoundingClientRect();
+        frame.hidden = false;
+        frame.style.left = `${rect.left}px`;
+        frame.style.top = `${rect.top}px`;
+        frame.style.width = `${rect.width}px`;
+        frame.style.height = `${rect.height}px`;
+      }
+      function setFormatEnabled(on) {
+        bar.classList.toggle("is-plain", !on);
+        fontInput.disabled = !on;
+        sizeInput.disabled = !on;
+      }
+      function isSimpleText(el) {
+        return ![...el.childNodes].some((node) => node.nodeType === Node.ELEMENT_NODE);
+      }
+      function rangeParent(range) {
+        const node = range.commonAncestorContainer;
+        return node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+      }
+      function saveTextRange() {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount && !sel.isCollapsed && editingEl && !svgTextEdit && editingEl.contains(sel.anchorNode)) {
+          savedRange = sel.getRangeAt(0).cloneRange();
+          return;
+        }
+        if (!interactingWithFormatBar) savedRange = null;
+      }
+      function typographyTarget() {
+        if (svgTextEdit) return { kind: "element", el: svgTextEdit.node };
+        if (savedRange && !savedRange.collapsed) return { kind: "range", range: savedRange };
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount && !sel.isCollapsed && editingEl && editingEl.contains(sel.anchorNode)) {
+          return { kind: "range", range: sel.getRangeAt(0) };
+        }
+        if (editingEl && sel?.anchorNode && editingEl.contains(sel.anchorNode)) {
+          const el = sel.anchorNode.nodeType === Node.TEXT_NODE ? sel.anchorNode.parentElement : sel.anchorNode;
+          if (el && editingEl.contains(el)) return { kind: "element", el };
+        }
+        if (selected?.kind === "svg") return { kind: "texts", texts: selected.unit.texts };
+        if (selected?.kind === "html") return { kind: "element", el: selected.el };
+        return null;
+      }
+      function applyTypography(el, styles) {
+        if (!el?.style) return;
+        if (styles.fontFamily != null) el.style.fontFamily = styles.fontFamily;
+        if (styles.fontSize == null || styles.fontSize === "") return;
+        el.style.fontSize = `${Math.round(Number(styles.fontSize))}px`;
+        if (!isSvg(el) && el.scrollHeight > el.clientHeight + 1) el.style.height = "auto";
+      }
+      function applyTypographyToRange(range, styles) {
+        if (!range || range.collapsed) return null;
+        const existing = rangeParent(range);
+        if (existing && existing.tagName === "SPAN" && existing.textContent === range.toString()) {
+          applyTypography(existing, styles);
+          return existing;
+        }
+        const span = document.createElement("span");
+        applyTypography(span, styles);
+        try { range.surroundContents(span); }
+        catch { span.append(range.extractContents()); range.insertNode(span); }
+        return span;
+      }
+      function applyCurrentTypography(styles) {
+        const target = typographyTarget() || pendingTarget;
+        if (!target) return;
+        remember();
+        if (target.kind === "range") {
+          const span = applyTypographyToRange(target.range, styles);
+          if (span) {
+            const next = document.createRange();
+            next.selectNodeContents(span);
+            savedRange = next;
+          }
+        } else if (target.kind === "texts") {
+          for (const text of target.texts) applyTypography(text, styles);
+        } else applyTypography(target.el, styles);
+        placeFrame();
+        showCode();
+        readTypography();
+      }
+      function readTypography() {
+        const target = typographyTarget();
+        const el = target?.kind === "texts" ? target.texts[0] : target?.kind === "range" ? rangeParent(target.range) : target?.el;
+        if (!el?.isConnected) return;
+        sizeInput.value = String(Math.round(parseFloat(getComputedStyle(el).fontSize) || 16));
+        const family = el.style?.fontFamily || "";
+        fontInput.value = [...fontInput.options].some((opt) => opt.value === family) ? family : "";
+      }
+      function clearSelection() {
+        document.querySelectorAll(".is-picked").forEach((node) => node.classList.remove("is-picked"));
+        selected = null;
+        pendingTarget = null;
+        frame.hidden = true;
+        setFormatEnabled(false);
+        showCode();
+      }
+      function selectUnit(unit) {
+        if (!unit) return;
+        if (editingEl && !svgTextEdit) endInlineEdit(true);
+        document.querySelectorAll(".is-picked").forEach((node) => node.classList.remove("is-picked"));
+        const el = unit.rect || unit.texts[0];
+        selected = { kind: "svg", unit, el };
+        el.classList.add("is-picked");
+        setFormatEnabled(true);
+        readTypography();
+        pendingTarget = typographyTarget();
+        placeFrame();
+        showCode();
+      }
+      function selectHtml(el) {
+        if (editingEl && editingEl !== el) endInlineEdit(true);
+        document.querySelectorAll(".is-picked").forEach((node) => node.classList.remove("is-picked"));
+        selected = { kind: "html", el };
+        el.classList.add("is-picked");
+        setFormatEnabled(true);
+        readTypography();
+        pendingTarget = typographyTarget();
+        placeFrame();
+        showCode();
+      }
+      function beginSvg(unit, edge, clientX, clientY) {
+        const scale = scaleOf(unit.svg);
+        drag = {
+          kind: "svg",
+          mode: edge && unit.rect ? "resize" : "move",
+          edge: edge || "",
+          svg: unit.svg,
+          sx: scale.sx,
+          sy: scale.sy,
+          clientX,
+          clientY,
+          box: unit.rect ? boxOf(unit.rect) : null,
+          rects: unit.rects.map((el) => ({ el, x0: n(el, "x"), y0: n(el, "y"), w0: n(el, "width"), h0: n(el, "height") })),
+          texts: unit.texts.map((el) => ({ el, x0: n(el, "x"), y0: n(el, "y"), anchor: el.getAttribute("text-anchor") || "start" })),
+          edges: unit.edges,
+          snap: true,
+          noted: false,
+        };
+      }
+      function beginHtml(el, edge, clientX, clientY) {
+        drag = {
+          kind: "html",
+          mode: edge ? "resize" : "move",
+          edge: edge || "",
+          el,
+          x: parseFloat(el.style.left) || 0,
+          y: parseFloat(el.style.top) || 0,
+          w: el.getBoundingClientRect().width,
+          h: el.getBoundingClientRect().height,
+          clientX,
+          clientY,
+          snap: true,
+          noted: false,
+        };
+      }
+      function syncHtmlDragBox() {
+        if (drag?.kind !== "html") return;
+        drag.x = parseFloat(drag.el.style.left) || 0;
+        drag.y = parseFloat(drag.el.style.top) || 0;
+        drag.w = parseFloat(drag.el.style.width) || drag.el.getBoundingClientRect().width;
+        drag.h = parseFloat(drag.el.style.height) || drag.el.getBoundingClientRect().height;
+      }
+      function liftForDrag() {
+        if (drag?.kind !== "html" || spacers.has(drag.el)) return;
+        if (!drag.noted) {
+          remember();
+          drag.noted = true;
+        }
+        lift(drag.el);
+        syncHtmlDragBox();
+      }
+      function startInlineEdit(el) {
+        if (!el || editingEl === el) return;
+        endInlineEdit(true);
+        if (el.hasAttribute?.("data-editable")) selectHtml(el);
+        textUndo = snapshot();
+        editingEl = el;
+        editSnapshot = el.innerHTML;
+        el.contentEditable = "true";
+        el.classList.add("is-editing");
+        frame.hidden = true;
+        el.focus();
+        if (isSimpleText(el)) {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      }
+      function openSvgText(text) {
+        endInlineEdit(true);
+        const unit = unitFrom(text);
+        if (unit) selectUnit(unit);
+        textUndo = snapshot();
+        const bounds = text.getBoundingClientRect();
+        const input = document.createElement("div");
+        input.className = "diagram-edit-text";
+        input.contentEditable = "true";
+        input.textContent = text.textContent;
+        const computed = getComputedStyle(text);
+        input.style.left = `${bounds.left}px`;
+        input.style.top = `${bounds.top}px`;
+        input.style.minWidth = `${Math.max(96, bounds.width + 24)}px`;
+        input.style.font = computed.font;
+        input.style.fontFamily = computed.fontFamily;
+        document.body.append(input);
+        svgTextEdit = { node: text, snapshot: text.textContent };
+        editingEl = input;
+        frame.hidden = true;
+        input.focus();
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        const finish = (commit) => {
+          if (!svgTextEdit || svgTextEdit.node !== text) return;
+          endInlineEdit(commit);
+        };
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") { event.preventDefault(); finish(true); }
+          if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); finish(false); }
+        });
+        input.addEventListener("focusout", (event) => {
+          if (interactingWithFormatBar) return;
+          const next = event.relatedTarget;
+          if (next && bar.contains(next)) return;
+          finish(true);
+        });
+      }
+      function endInlineEdit(commit) {
+        if (svgTextEdit) {
+          const changed = commit && editingEl.textContent !== svgTextEdit.snapshot;
+          if (!commit) svgTextEdit.node.textContent = svgTextEdit.snapshot;
+          else svgTextEdit.node.textContent = editingEl.textContent;
+          if (changed) pushUndo(textUndo);
+          textUndo = null;
+          editingEl.remove();
+          svgTextEdit = null;
+          editingEl = null;
+          savedRange = null;
+          placeFrame();
+          showCode();
+          return;
+        }
+        if (!editingEl) return;
+        const el = editingEl;
+        const changed = commit && el.innerHTML !== editSnapshot;
+        if (!commit) el.innerHTML = editSnapshot;
+        if (changed) pushUndo(textUndo);
+        textUndo = null;
+        el.removeAttribute("contenteditable");
+        el.classList.remove("is-editing");
+        editingEl = null;
+        editSnapshot = "";
+        savedRange = null;
+        placeFrame();
+        showCode();
+      }
+      function setSourceOpen(show) {
+        codeBox.hidden = !show;
+        copyBtn.hidden = !show;
+        codeBtn.textContent = show ? "收起原始代码" : "展开原始代码";
+        bar.classList.toggle("is-code", show);
+        for (const handle of bar.querySelectorAll("[data-resize]")) handle.hidden = !show;
+        if (!show) {
+          bar.classList.remove("is-sized");
+          bar.style.height = "";
+          bar.style.width = "";
+          bar.style.maxWidth = "";
+        } else showCode();
+      }
+      function resizeSource(event) {
+        if (drag.edge === "w" || drag.edge === "sw") {
+          const width = Math.round(Math.max(240, Math.min(drag.right - 8, drag.right - event.clientX)));
+          bar.style.width = `${width}px`;
+          bar.style.maxWidth = "none";
+        }
+        if (drag.edge === "s" || drag.edge === "sw") {
+          const height = Math.round(Math.max(120, Math.min(window.innerHeight - drag.top - 8, event.clientY - drag.top)));
+          bar.style.height = `${height}px`;
+          bar.classList.add("is-sized");
+        }
+      }
+      function setEditing(on) {
+        document.body.classList.toggle("is-diagram-edit", on);
+        open.setAttribute("aria-pressed", on ? "true" : "false");
+        bar.hidden = !on;
+        document.body.style.cursor = "";
+        if (on) {
+          armEditables();
+          setFormatEnabled(false);
+        } else {
+          endInlineEdit(true);
+          clearSelection();
+          restoreClean();
+          setSourceOpen(false);
+          if (dirty) persistPage();
+        }
+      }
+      open.addEventListener("click", () => setEditing(bar.hidden));
+      bar.addEventListener("click", async (event) => {
+        const act = event.target?.dataset?.act;
+        if (act === "done") setEditing(false);
+        if (act === "code") setSourceOpen(codeBox.hidden);
+        if (act === "copy") {
+          const host = sourceHost();
+          if (!host) return;
+          try { await navigator.clipboard.writeText(cleanClone(host)); } catch { /* 仍可从展开的代码里选取 */ }
+        }
+      });
+      fontInput.addEventListener("change", () => applyCurrentTypography({ fontFamily: fontInput.value }));
+      sizeInput.addEventListener("input", () => {
+        const value = Number(sizeInput.value);
+        if (value >= 8 && value <= 200) applyCurrentTypography({ fontSize: value });
+      });
+      bar.addEventListener("pointerdown", (event) => {
+        const handle = event.target.closest?.("[data-resize]");
+        if (handle && !handle.hidden && bar.classList.contains("is-code")) {
+          event.preventDefault();
+          event.stopPropagation();
+          const rect = bar.getBoundingClientRect();
+          document.body.style.cursor = CURSOR[handle.dataset.resize] || "";
+          drag = {
+            kind: "bar",
+            edge: handle.dataset.resize,
+            right: rect.right,
+            top: rect.top,
+            noted: true,
+          };
+          return;
+        }
+        event.stopPropagation();
+        interactingWithFormatBar = true;
+        saveTextRange();
+        pendingTarget = typographyTarget();
+      }, true);
+      window.addEventListener("pointerup", () => { interactingWithFormatBar = false; });
+      window.addEventListener("pointercancel", () => { interactingWithFormatBar = false; });
+      document.addEventListener("selectionchange", () => {
+        if (interactingWithFormatBar || !editingEl || svgTextEdit) return;
+        saveTextRange();
+      });
+      frame.addEventListener("pointerdown", (event) => {
+        const edge = event.target?.dataset?.edge;
+        if (!edge || !selected || editingEl || event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (selected.kind === "svg") beginSvg(selected.unit, edge, event.clientX, event.clientY);
+        else beginHtml(selected.el, edge, event.clientX, event.clientY);
+      });
+      document.addEventListener("pointerdown", (event) => {
+        if (!document.body.classList.contains("is-diagram-edit") || event.button !== 0) return;
+        if (bar.contains(event.target) || open.contains(event.target) || frame.contains(event.target) || event.target.closest(".page-tools") || event.target.closest(".diagram-edit-text")) return;
+        if (editingEl && (editingEl === event.target || editingEl.contains(event.target))) return;
+        const svg = event.target.closest?.("figure.diagram svg");
+        if (svg) {
+          const unit = unitFrom(event.target);
+          if (!unit) {
+            endInlineEdit(true);
+            clearSelection();
+            return;
+          }
+          selectUnit(unit);
+          if (editingEl) return;
+          const edge = unit.rect ? hitResizeEdge(unit.rect.getBoundingClientRect(), event.clientX, event.clientY) : "";
+          beginSvg(unit, edge, event.clientX, event.clientY);
+          event.preventDefault();
+          return;
+        }
+        const html = event.target.closest?.("[data-editable]");
+        if (!html) {
+          endInlineEdit(true);
+          clearSelection();
+          return;
+        }
+        selectHtml(html);
+        if (editingEl) return;
+        const edge = hitResizeEdge(html.getBoundingClientRect(), event.clientX, event.clientY);
+        beginHtml(html, edge, event.clientX, event.clientY);
+        event.preventDefault();
+      });
+      document.addEventListener("pointermove", (event) => {
+        if (drag?.kind === "bar") {
+          resizeSource(event);
+          return;
+        }
+        if (document.body.classList.contains("is-diagram-edit") && !drag && !editingEl) {
+          const rect = event.target.closest?.("rect, [data-editable]");
+          const edge = rect && !rect.closest("g.legend") ? hitResizeEdge(rect.getBoundingClientRect(), event.clientX, event.clientY) : "";
+          document.body.style.cursor = edge ? CURSOR[edge] : "";
+        }
+        if (!drag) return;
+        if (drag.kind === "html" && !spacers.has(drag.el)) {
+          const traveled = Math.hypot(event.clientX - drag.clientX, event.clientY - drag.clientY);
+          if (traveled < 3) return;
+          liftForDrag();
+        }
+        if (!drag.noted) {
+          remember();
+          drag.noted = true;
+        }
+        const dx = event.clientX - drag.clientX;
+        const dy = event.clientY - drag.clientY;
+        if (drag.kind === "svg") {
+          const sdx = dx * drag.sx;
+          const sdy = dy * drag.sy;
+          if (drag.mode === "resize") paintResize(sdx, sdy);
+          else paintMove(sdx, sdy, drag.snap);
+        } else if (drag.mode === "resize") paintHtmlResize(dx, dy);
+        else paintHtmlMove(dx, dy, drag.snap);
+        placeFrame();
+        showCode();
+      });
+      const endDrag = () => {
+        if (drag?.kind === "bar") document.body.style.cursor = "";
+        drag = null;
+      };
+      document.addEventListener("pointerup", endDrag);
+      document.addEventListener("pointercancel", endDrag);
+      document.addEventListener("dblclick", (event) => {
+        if (!document.body.classList.contains("is-diagram-edit")) return;
+        if (bar.contains(event.target)) return;
+        const text = event.target.closest?.("text");
+        if (text && text.closest("figure.diagram") && !text.closest("g.legend")) {
+          event.preventDefault();
+          openSvgText(text);
+          return;
+        }
+        const html = event.target.closest?.("[data-editable]");
+        if (!html || isSvg(html)) return;
+        event.preventDefault();
+        startInlineEdit(html);
+      });
+      document.addEventListener("keydown", (event) => {
+        const undoKey = (event.metaKey || event.ctrlKey) && event.key === "z" && !event.shiftKey;
+        const typing = Boolean(editingEl) || Boolean(event.target.closest?.("input, textarea, select"));
+        if (undoKey && undo.length && !typing) {
+          event.preventDefault();
+          undo.pop()();
+          if (!document.body.classList.contains("is-diagram-edit")) persistPage();
+          return;
+        }
+        if (!document.body.classList.contains("is-diagram-edit")) return;
+        if (editingEl && !svgTextEdit) {
+          if (event.key === "Escape") { event.preventDefault(); endInlineEdit(false); return; }
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey || isSimpleText(editingEl))) {
+            event.preventDefault();
+            endInlineEdit(true);
+          }
+          return;
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key === "z" && undo.length) {
+          event.preventDefault();
+          undo.pop()();
+          return;
+        }
+        if (event.key === "Escape") {
+          if (!codeBox.hidden) setSourceOpen(false);
+          else setEditing(false);
+          return;
+        }
+        const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
+        if (!step || !selected || editingEl) return;
+        event.preventDefault();
+        if (selected.kind === "svg") {
+          beginSvg(selected.unit, "", 0, 0);
+          drag.snap = false;
+          drag.noted = true;
+          remember();
+          paintMove(step[0] * drag.sx, step[1] * drag.sy, false);
+        } else {
+          beginHtml(selected.el, "", 0, 0);
+          drag.snap = false;
+          liftForDrag();
+          if (!drag.noted) {
+            remember();
+            drag.noted = true;
+          }
+          paintHtmlMove(step[0], step[1], false);
+        }
+        drag = null;
+        placeFrame();
+        showCode();
+      });
+      document.addEventListener("focusout", (event) => {
+        if (!editingEl || svgTextEdit) return;
+        if (interactingWithFormatBar) return;
+        const next = event.relatedTarget;
+        if (next && (editingEl.contains(next) || bar.contains(next))) return;
+        endInlineEdit(true);
+      });
+      window.addEventListener("scroll", () => placeFrame(), true);
+      window.addEventListener("resize", () => placeFrame());
+    })();
+  </script></body></html>

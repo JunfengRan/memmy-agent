@@ -38,4 +38,4 @@ assign 把 `d0` 送进新主题「价格显示小数位约定」。`steps[0].dif
 - `adds[0].steps[0].diff.pm_decisions.added` 的 `content`：「价格显示保留两位小数」。
 - `reader.user` 该主题描述：「统一按两位小数格式化输出」。记忆段无「取整」。
 
-改法方向：抽取时保留「输出前按两位小数取整」，不要把它标成 `local_implementation`。入库后决策或主题描述应含「取整」，`search.gold[0].locations` 不应再是空数组。
+后续验证建议（本次未实现）：抽取时保留「输出前按两位小数取整」，不要把它标成 `local_implementation`。入库后决策或主题描述应含「取整」，应检查语义事实的落库与渲染；`locations` 是整句定位，改写后仍可能为空，不作为唯一验收。
