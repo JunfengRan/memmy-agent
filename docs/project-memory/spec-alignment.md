@@ -11,7 +11,7 @@
 | §5.1.2 | ProjectMemoryStore 接口 | store/store.ts | 已对齐 | | 云端实现未做（ADR-0005 #8） |
 | §5.1.5 | 错误码 | contract/errors.ts | 已对齐 | http 契约测试 | |
 | §5.3 | SQLite 表 | storage/schema.ts v10 | 已对齐（分表前缀 `pm_`） | 迁移测试 | |
-| §2.2.1–2.2.2 M01 | 采集、raw_turns、剥离注入块、返回 task_id | organize/collect.ts、service.ts、pipeline/ | 部分对齐 | task-resubmit.test.ts；restatement-pipeline.test.ts | 已剥离带属性的 `<memos_context>`。同一 Space、同一 domain 集合里已完成任务整理过的消息只作上下文（Q-27）。跨 Space 复用同一批消息会丢（review R1-2）。`chat_time` 缺失回落到秒精度到达时间，同一秒的同文提交仍是一条任务（Q-24） |
+| §2.2.1–2.2.2 M01 | 采集、raw_turns、剥离注入块、返回 task_id | organize/collect.ts、service.ts、pipeline/ | 部分对齐 | task-resubmit.test.ts；restatement-pipeline.test.ts | 已剥离带属性的 `<memos_context>`。同一 Space、同一 domain 集合里已完成任务整理过的消息只作上下文（Q-27）。进度里没有 `domains` 的旧任务不参与去重，缺字段不是空集合（`9953ace9`）。跨 Space 复用同一批消息会丢（review R1-2）。`chat_time` 缺失回落到秒精度到达时间，同一秒的同文提交仍是一条任务（Q-24） |
 | §2.2.3 | 会话上云 | — | 未开始 | | 本期只做 cloud store 适配 |
 | §2.2.4 | Space / domain 校验 | service.ts `validateScope`、api.ts | 部分对齐：add 与带 project 视图的 search 会检查 Space 存在、domain 已登记 | http-contract.test.ts | 写权限按原始路径判断，见 §1.6 |
 | §2.2.5 M02 | 抽取：是否写入、回复拆分、字段判定 | organize/extract.ts、prompts/extract.ts（pm-extract-v0.2.2）；organize/restatement.ts；pipeline/organize-job.ts | 部分对齐（独立调用；同一会话的推迟片段可随本批进入抽取；dropped 收 7 类原因；复述与 recall_log 比对已接入） | 数据集 v2 add 指标；organize-stages.test.ts；deferred-backfill.test.ts；restatement-pipeline.test.ts | ADR-0005 #2 由 ADR-0007 收回；ADR-0005 #3 由 PM-15 收回 |

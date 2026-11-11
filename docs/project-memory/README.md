@@ -7,6 +7,7 @@
 | 文件 | 内容 | 什么时候改 |
 | --- | --- | --- |
 | [findings.md](findings.md) | 开发过程中的发现，给同事和汇报用。不是规格 | 有新的评测结论或设计建议时 |
+| [add-showcase.html](add-showcase.html) | 运行 B 写下的主题和条目，以及 topic 粗细的对照图 | 有新的端到端终态时，用 `build-add-showcase.mjs` 重生成 |
 | [ONBOARDING.md](ONBOARDING.md) | 给新同事的现状说明：先读什么、做到哪了、接下来做什么 | 每周五随周报 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 模块布局、编码规则、测试与评测命令、提交流程 | 约定变化时 |
 | [ROADMAP.md](ROADMAP.md) | 里程碑、周计划、条目状态、变更记录 | 每周一确认，每周五修订 |
@@ -14,7 +15,7 @@
 | [spec-snapshots.md](spec-snapshots.md) | 每次对齐时三份规格的日期和 sha256 | 跑 `pm-spec-sync` 时 |
 | [open-questions.md](open-questions.md) | 规格 TBD、实现中发现的问题和我们的提议 | 随时；周报汇总 |
 | [gaps-v01.md](gaps-v01.md) | v0.1 的实现缺口与评测缺口，含证据、归属条目、状态 | 每次评测后、缺口收回时 |
-| [metrics.md](metrics.md) | 每次评测完整记录全部指标，对照 v3 目标 | 每次跑 `pm-eval` |
+| [metrics.md](metrics.md) | 端到端、只测写入、只测检索三张总表（效果、费用、时延），分项在每条记录里 | 每次跑 `pm-eval` |
 | [../../.agents/](../../.agents/README.md) | designer / developer / reviewer 的交接规范与工作项 | 每次交接 |
 | [decisions/](decisions/) | ADR，只追加 | 改契约、表结构或已定决策时 |
 | [weekly/](weekly/) | 周报 | 每周五 |

@@ -23,12 +23,12 @@ W45 的 v0.1 已经用来暴露问题。W46 和 W47 的代码已经落地，评�
 - **数据集**：可跑的是 v2.1（6 个项目、50 个 topic、113 轮写入）。v2 冻在 `eval/project-memory/gold-add-memory/history/v2/`。
 - **实验，默认关闭**：`MEMMY_DECISION_TOPIC=1` 才用 gpt-6-luna 做主题选择题，见 [ADR-0006](decisions/0006-jev-topic-experiment.md)。
 
-产品端到端（先 add，再用写下的记忆 search）的最近一次数仍是 v0.1 在数据集 v2 上的 R-20261105-02：`entries.f1` 0.667，Recall@3 0.913，answers.llm 0.609。当前代码在 v2.1 上还没有这次回放。金标阅读上限 R-20261110-04 的 answers.llm 是 1.000，那是阅读模型在看金标，不是产品写入的结果。总表和口径见 [metrics.md](metrics.md)。
+产品端到端的现行数字在 [metrics.md](metrics.md) 文首。口径见 [ADR-0009](decisions/0009-eval-protocol-v2-1.md)：被测和回答都是 deepseek-v4.1-flash-1017，裁判是 gpt-6-luna 且不计入产品开销。当前版本两次的 `entries.f1` 是 0.816 和 0.861，`answers.llm` 是 0.645 和 0.742。v2 上的旧分数已从正文删除，全文在提交 `47355fa0`。
 
 ## 接下来
 
 - **W48**：云端 Store 契约测试、小范围云端测试、按 v3 验收表逐项核对。
-- 当前代码的 v2.1 端到端回放还没跑成。补上之前，不要用 v0.1 的 0.667 / 0.913 或金标上限的 1.000 描述现在的产品。
+- 讨论效果时用 metrics 文首的三张表。阅读上限的 1.000 是金标直接给阅读模型，不是产品写入。
 
 ## 怎么开始干活
 

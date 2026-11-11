@@ -86,7 +86,7 @@ node run-memmy-live-eval.mjs --api-checks-only ../runs/<stamp>/live-run.json   #
 | `dataset/conflicts.json` | 10 个分歧场景：作者、现有结论作者、认可、已告知，以及据此推出的动作 |
 | `dataset/questions.json` | 24 道题（1 道 excluded）与 4 项接口检查 |
 | `dataset/gold.json` | 由 `build-gold-baseline.mjs` 推出：最终条目（content、time、user_ids、conflicts、history）、不该写入的内容、每轮结果、每题提问时刻的期望条目与陷阱 |
-| `report.html` | 给新同事和负责人读的介绍页：35 轮对话按五条时间线排列，每轮有原话、回复和写入结果 |
+| `report.html` | 给新同事和负责人读的介绍页。这一页仍是数据集 v2（35 轮、五条时间线），v2.1 入库时没有重写 |
 
 ### 标注规则
 
