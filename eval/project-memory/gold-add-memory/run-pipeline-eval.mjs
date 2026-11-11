@@ -22,9 +22,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { finalPointTexts, loadDataset } from "./build-gold-baseline.mjs";
 import { JUDGE_PROMPT_VERSION, createJudge } from "./judge.mjs";
-import { assertJudgeFamily, createLlm, resolveModelConfig } from "./llm.mjs";
+import { assertJudgeFamily, createLlm, omitsTemperature, resolveModelConfig } from "./llm.mjs";
 import { LIMITS, length, loadGold } from "./load-eval-set.mjs";
-import { mean, percentile, priceCalls, priceUsage, prf, tokenF1 } from "./metrics.mjs";
+import { mean, percentile, priceCalls, priceUsage, prf, resolveModelPrice, tokenBuckets, tokenF1 } from "./metrics.mjs";
 import { buildEmptyRun, buildOracleRun } from "./oracle.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -376,8 +376,8 @@ export async function scoreRun(run, { ds, gold, judge }) {
 }
 
 // SUT model usage recorded by harness/usage-proxy.mjs, one JSON object per line:
-// {at, path, status, latencyMs, model, usage: {prompt_tokens, completion_tokens, prompt_tokens_details: {cached_tokens}}}
-// or {at, path, error} when the upstream call failed.
+// {at, path, status, latencyMs, model, operation, usage, cacheReadTokens, cacheWriteTokens, outputTokens}
+// or {at, path, error} when the upstream call failed. `usage` is the provider object, unchanged.
 export function loadSutUsage(path) {
   const lines = [];
   let unparsed = 0;
@@ -391,121 +391,213 @@ export function loadSutUsage(path) {
 const PHASE_BY_PATH = { "/add/message": "add", "/get/status": "add", "/search/memory": "search", "/api/v1/memory/add": "add", "/api/v1/memory/search": "search" };
 const NO_USAGE = "no SUT usage file: pass --sut-usage <file> or MEMMY_EVAL_SUT_USAGE (written by harness/usage-proxy.mjs)";
 const OLD_RUNNER = "run was recorded by a runner without task timing and request phases (runnerRevision < 2)";
+const JUDGE_NOTE = "judge is not part of add, search, or answer";
+const MODEL_FIELDS = ["llmCalls", "cacheWriteTokens", "cacheReadTokens", "outputTokens", "totalCostUsd", "latencyMs"];
 const latency = (values) => ({ n: values.length, p50: percentile(values, 50), p95: percentile(values, 95) });
+const ZERO_LATENCY = { n: 0, p50: 0, p95: 0 };
 
-// Efficiency per phase (metrics.md「指标定义 … 效率」). Averages of tokens are per SUT model call and
-// input tokens include cache hits; avgCostUsd is per product request (add/message or search/memory).
-// Fields that cannot be measured are null and explained in that block's `reasons`.
+function zeroModelStage() {
+  return { llmCalls: 0, cacheWriteTokens: 0, cacheReadTokens: 0, outputTokens: 0, totalCostUsd: 0, latencyMs: { ...ZERO_LATENCY } };
+}
+
+function nullModelStage(reason) {
+  return {
+    llmCalls: null, cacheWriteTokens: null, cacheReadTokens: null, outputTokens: null, totalCostUsd: null,
+    latencyMs: { n: null, p50: null, p95: null },
+    reasons: Object.fromEntries(MODEL_FIELDS.map((field) => [field, reason]))
+  };
+}
+
+function isChatLine(line) {
+  const path = String(line.path ?? "");
+  if (!path) return true;
+  return !/embeddings|rerank/i.test(path);
+}
+
+function lineBuckets(line) {
+  if (line.cacheWriteTokens !== undefined || line.cacheReadTokens !== undefined || line.outputTokens !== undefined) {
+    return {
+      cacheWrite: line.cacheWriteTokens ?? 0,
+      cacheRead: line.cacheReadTokens ?? 0,
+      cacheCreation: line.cacheCreationTokens ?? 0,
+      output: line.outputTokens ?? 0
+    };
+  }
+  const parsed = tokenBuckets(line.usage);
+  if (!parsed) return null;
+  return {
+    cacheWrite: parsed.cacheWriteTokens,
+    cacheRead: parsed.cacheReadTokens,
+    cacheCreation: parsed.cacheCreationTokens ?? 0,
+    output: parsed.outputTokens
+  };
+}
+
+// Efficiency for add / search / answer / judge (ADR-0009). A stage with no calls is 0.
+// Null is only for a field that cannot be measured; the reason sits on that block.
 export function efficiency(run, { judgeUsage, sutUsage, pricing }) {
   const requests = run.requests ?? [];
   const phased = requests.length > 0 && requests.every((r) => typeof r.phase === "string");
   const phaseOf = (r) => (phased ? r.phase : PHASE_BY_PATH[r.call] ?? "other");
   const isPoll = (r) => r.poll ?? r.call === "/get/status";
+  const searchRequests = requests.filter((r) => (phased ? phaseOf(r) === "search" : r.call === "/search/memory" || r.call === "/api/v1/memory/search"));
+  const searchWindows = !searchRequests.length
+    ? []
+    : searchRequests.every((r) => typeof r.at === "number" && typeof r.ms === "number")
+      ? searchRequests.map((r) => [r.at, r.at + r.ms])
+      : null;
 
-  // SUT calls inside the run's time window; v0.1 search makes no model call, so all go to add.
   let sut = null;
+  let addCalls = null;
+  let searchCalls = null;
+  let splitReason = null;
   if (sutUsage) {
     const from = run.startedAt ? Date.parse(run.startedAt) - 1_000 : -Infinity;
     const to = run.startedAt && typeof run.wallclockMs === "number" ? Date.parse(run.startedAt) + run.wallclockMs + 5_000 : Infinity;
     const inRun = sutUsage.lines.filter((line) => { const at = Date.parse(line.at); return !Number.isFinite(at) || (at >= from && at <= to); });
-    const calls = inRun.map((line) => {
-      const u = line.usage ?? null;
-      const prompt = u?.prompt_tokens ?? (u?.input_tokens !== undefined ? u.input_tokens + (u.cache_read_input_tokens ?? 0) : null);
-      const cached = u?.prompt_tokens_details?.cached_tokens ?? u?.cache_read_input_tokens ?? 0;
-      return { at: Date.parse(line.at), failed: Boolean(line.error) || !(line.status >= 200 && line.status < 300), hasUsage: prompt !== null, model: line.model ?? run.sut?.model ?? null, prompt: prompt ?? 0, cached, output: u?.completion_tokens ?? u?.output_tokens ?? 0, latencyMs: line.latencyMs };
+    const calls = inRun.filter(isChatLine).map((line) => {
+      const buckets = lineBuckets(line);
+      const ok = !line.error && line.status >= 200 && line.status < 300;
+      const operation = ["extract", "assign", "judge", "other"].includes(line.operation) ? line.operation : "other";
+      return {
+        at: Date.parse(line.at), operation, hasUsage: Boolean(ok && buckets),
+        model: [line.model, line.requestedModel, run.sut?.model].find((name) => name && resolveModelPrice(name, pricing)) ?? line.model ?? line.requestedModel ?? run.sut?.model ?? null,
+        cacheWrite: buckets?.cacheWrite ?? 0, cacheRead: buckets?.cacheRead ?? 0,
+        cacheCreation: buckets?.cacheCreation ?? 0, output: buckets?.output ?? 0,
+        latencyMs: line.latencyMs
+      };
     });
-    const searchWindows = phased ? requests.filter((r) => phaseOf(r) === "search" && typeof r.at === "number").map((r) => [r.at, r.at + r.ms]) : null;
+    const inSearch = (call) => searchWindows.some(([start, end]) => Number.isFinite(call.at) && call.at >= start && call.at <= end);
     sut = {
       file: sutUsage.path,
       lines: sutUsage.lines.length,
       unparsedLines: sutUsage.unparsed,
       outsideRun: sutUsage.lines.length - inRun.length,
-      models: [...new Set(calls.map((c) => c.model))],
-      attribution: "v0.1 search makes no SUT model calls: every call in the usage file is attributed to add, search is 0 measured",
-      callsDuringSearchRequests: searchWindows ? calls.filter((c) => searchWindows.some(([a, b]) => c.at >= a && c.at <= b)).length : null,
-      calls
+      nonChat: inRun.filter((line) => !isChatLine(line)).length,
+      models: [...new Set(calls.map((call) => call.model))],
+      attribution: searchWindows === null
+        ? "search request timestamps are missing, so chat calls cannot be split between add and search"
+        : "chat calls inside search/memory request windows are search; other chat calls in the run are add. Embedding calls are not priced",
+      callsDuringSearchRequests: searchWindows === null ? null : calls.filter(inSearch).length
     };
-    if (sut.callsDuringSearchRequests === null) sut.reasons = { callsDuringSearchRequests: OLD_RUNNER };
+    if (searchWindows === null) {
+      splitReason = `${OLD_RUNNER}; search request timestamps are missing, so add and search token counts cannot be split`;
+      sut.reasons = { callsDuringSearchRequests: splitReason };
+    } else {
+      searchCalls = calls.filter(inSearch);
+      addCalls = calls.filter((call) => !inSearch(call));
+    }
   }
 
   const tasks = (run.tasks ?? []).filter((t) => t.task_id);
   const timedTasks = tasks.filter((t) => typeof t.completedMs === "number");
 
-  function block(name) {
+  function summarize(calls) {
+    if (!calls) return nullModelStage(splitReason ?? NO_USAGE);
+    if (!calls.length) return zeroModelStage();
+    const withUsage = calls.filter((call) => call.hasUsage);
+    const price = priceCalls(withUsage.map((call) => ({
+      model: call.model, at: call.at,
+      cacheWriteTokens: call.cacheWrite, cacheReadTokens: call.cacheRead,
+      cacheCreationTokens: call.cacheCreation, outputTokens: call.output
+    })), pricing);
+    const samples = calls.map((call) => call.latencyMs).filter((value) => typeof value === "number");
+    const reasons = {};
+    if (withUsage.length < calls.length) reasons.outputTokens = `${calls.length - withUsage.length} call(s) have no usage (upstream error); token sums cover the rest`;
+    if (price.reason) reasons.totalCostUsd = price.reason;
+    if (!samples.length) reasons.latencyMs = "no latency recorded";
+    return {
+      llmCalls: calls.length,
+      cacheWriteTokens: withUsage.reduce((total, call) => total + call.cacheWrite, 0),
+      cacheReadTokens: withUsage.reduce((total, call) => total + call.cacheRead, 0),
+      outputTokens: withUsage.reduce((total, call) => total + call.output, 0),
+      totalCostUsd: price.costUsd,
+      latencyMs: samples.length ? latency(samples) : { n: calls.length, p50: null, p95: null },
+      ...(Object.keys(reasons).length ? { reasons } : {})
+    };
+  }
+
+  function requestStats(name) {
     const product = requests.filter((r) => phaseOf(r) === name && !isPoll(r));
     const polls = requests.filter((r) => phaseOf(r) === name && isPoll(r));
     const reasons = {};
-    const out = {
-      requests: product.length,
-      pollingRequests: polls.length,
-      wallclockMs: run.phaseMs?.[name] ?? null,
-      latencyMs: latency(product.map((r) => r.ms)),
-      llmCalls: null, failedLlmCalls: null, inputTokens: null, cachedInputTokens: null, outputTokens: null,
-      avgInputTokens: null, avgOutputTokens: null, avgCostUsd: null, totalCostUsd: null
-    };
+    const wallclockMs = run.phaseMs?.[name] ?? null;
     if (!requests.length) reasons.requests = "run has no request log";
     else if (!phased) reasons.requests = `${OLD_RUNNER}; requests are split by path, so API-check calls are included`;
-    if (out.wallclockMs === null) reasons.wallclockMs = run.phaseMs ? `no time was spent in ${name}` : `${OLD_RUNNER}; efficiency.wallclockMs is the whole run`;
-    if (!product.length) reasons.latencyMs = "no requests";
-    const calls = name === "add" ? sut?.calls ?? null : sut ? [] : null;
-    if (!calls) {
-      for (const field of ["llmCalls", "failedLlmCalls", "inputTokens", "cachedInputTokens", "outputTokens", "avgInputTokens", "avgOutputTokens", "avgCostUsd", "totalCostUsd"]) reasons[field] = NO_USAGE;
-    } else {
-      const withUsage = calls.filter((c) => c.hasUsage);
-      Object.assign(out, {
-        llmCalls: calls.length,
-        failedLlmCalls: calls.filter((c) => c.failed).length,
-        inputTokens: withUsage.reduce((t, c) => t + c.prompt, 0),
-        cachedInputTokens: withUsage.reduce((t, c) => t + c.cached, 0),
-        outputTokens: withUsage.reduce((t, c) => t + c.output, 0)
-      });
-      if (withUsage.length < calls.length) reasons.inputTokens = reasons.outputTokens = `${calls.length - withUsage.length} call(s) have no usage (upstream error); token sums cover the rest`;
-      if (name === "add") {
-        out.avgInputTokens = withUsage.length ? out.inputTokens / withUsage.length : null;
-        out.llmLatencyMs = latency(calls.map((c) => c.latencyMs).filter((v) => typeof v === "number"));
-      } else {
-        reasons.avgInputTokens = "measured for add only (metrics.md)";
-        reasons.llmCalls = sut.attribution;
-      }
-      out.avgOutputTokens = withUsage.length ? out.outputTokens / withUsage.length : null;
-      if (!withUsage.length) reasons.avgOutputTokens = `no SUT model calls in ${name}`;
-      if (name === "add" && !withUsage.length) reasons.avgInputTokens = "no SUT model calls in add";
-      const price = priceCalls(withUsage.map((c) => ({ model: c.model, inputTokens: c.prompt - c.cached, cachedInputTokens: c.cached, outputTokens: c.output })), pricing);
-      out.totalCostUsd = price.costUsd;
-      out.avgCostUsd = price.costUsd === null || !product.length ? null : price.costUsd / product.length;
-      if (price.reason) reasons.totalCostUsd = reasons.avgCostUsd = price.reason;
-      else if (!product.length) reasons.avgCostUsd = "no requests";
-    }
-    if (name === "add") {
-      out.task = timedTasks.length
-        ? { n: timedTasks.length, of: tasks.length, p50: percentile(timedTasks.map((t) => t.completedMs), 50), p95: percentile(timedTasks.map((t) => t.completedMs), 95), mean: mean(timedTasks.map((t) => t.completedMs)), detectionSlackMeanMs: mean(timedTasks.map((t) => t.detectionSlackMs ?? 0)) }
-        : null;
-      if (!out.task) reasons.task = tasks.length ? OLD_RUNNER : "no add tasks";
-    }
-    if (Object.keys(reasons).length) out.reasons = reasons;
-    return out;
+    if (wallclockMs === null) reasons.wallclockMs = run.phaseMs ? `no time was spent in ${name}` : `${OLD_RUNNER}; efficiency.wallclockMs is the whole run`;
+    if (!product.length) reasons.requestLatencyMs = "no requests";
+    return {
+      requests: product.length,
+      pollingRequests: polls.length,
+      wallclockMs,
+      requestLatencyMs: product.length ? latency(product.map((r) => r.ms)) : { n: 0, p50: null, p95: null },
+      reasons
+    };
   }
 
-  const model = (usage) => {
-    if (!usage) return null;
-    const { perCall, latencyMs, ...rest } = usage;
-    const price = priceUsage(usage, pricing);
-    return { ...rest, costUsd: price.costUsd, ...(price.reason ? { reasons: { costUsd: price.reason } } : {}) };
+  function productStage(name, calls) {
+    const http = requestStats(name);
+    const model = summarize(calls);
+    const { reasons: modelReasons, ...counts } = model;
+    const reasons = { ...http.reasons, ...(modelReasons ?? {}) };
+    const stage = { requests: http.requests, pollingRequests: http.pollingRequests, wallclockMs: http.wallclockMs, requestLatencyMs: http.requestLatencyMs, ...counts };
+    if (Object.keys(reasons).length) stage.reasons = reasons;
+    return stage;
+  }
+
+  const addHttp = requestStats("add");
+  const addModel = summarize(addCalls);
+  const { reasons: addModelReasons, ...addCounts } = addModel;
+  const addReasons = { ...addHttp.reasons, ...(addModelReasons ?? {}) };
+  const add = {
+    requests: addHttp.requests, pollingRequests: addHttp.pollingRequests, wallclockMs: addHttp.wallclockMs, requestLatencyMs: addHttp.requestLatencyMs,
+    ...addCounts,
+    extract: summarize(addCalls?.filter((call) => call.operation === "extract") ?? null),
+    assign: summarize(addCalls?.filter((call) => call.operation === "assign") ?? null),
+    judge: summarize(addCalls?.filter((call) => call.operation === "judge") ?? null),
+    other: summarize(addCalls?.filter((call) => call.operation === "other") ?? null)
   };
+  add.task = timedTasks.length
+    ? { n: timedTasks.length, of: tasks.length, p50: percentile(timedTasks.map((t) => t.completedMs), 50), p95: percentile(timedTasks.map((t) => t.completedMs), 95), mean: mean(timedTasks.map((t) => t.completedMs)), detectionSlackMeanMs: mean(timedTasks.map((t) => t.detectionSlackMs ?? 0)) }
+    : null;
+  if (!add.task) addReasons.task = tasks.length ? OLD_RUNNER : "no add tasks";
+  if (Object.keys(addReasons).length) add.reasons = addReasons;
+
+  function clientStage(usage, missingReason) {
+    if (!usage) return nullModelStage(missingReason);
+    const calls = usage.calls ?? 0;
+    if (!calls) return zeroModelStage();
+    const price = priceUsage(usage, pricing);
+    const samples = (usage.latencyMs ?? []).filter((value) => typeof value === "number");
+    const reasons = {};
+    if (price.reason) reasons.totalCostUsd = price.reason;
+    if (!samples.length) reasons.latencyMs = "no per-call latency recorded";
+    return {
+      llmCalls: calls,
+      cacheWriteTokens: usage.cacheWriteTokens ?? usage.inputTokens ?? 0,
+      cacheReadTokens: usage.cacheReadTokens ?? usage.cachedInputTokens ?? 0,
+      outputTokens: usage.outputTokens ?? 0,
+      totalCostUsd: price.costUsd,
+      latencyMs: samples.length ? latency(samples) : { n: calls, p50: null, p95: null },
+      ...(Object.keys(reasons).length ? { reasons } : {})
+    };
+  }
+
   const byCall = {};
   for (const request of requests) (byCall[request.call] ??= []).push(request.ms);
   const checkRequests = requests.filter((r) => r.phase === "check");
+  const judge = { ...clientStage(judgeUsage, "no judge usage recorded"), note: JUDGE_NOTE };
   return {
-    notes: "avgInputTokens / avgOutputTokens are per SUT model call, input includes cache hits; avgCostUsd is per add/message or search/memory request; task.* is add/message response → the get/status poll that saw completed (upper bound, completion happened at most detectionSlackMs earlier); judge and reader are not part of the product",
+    notes: `add, search, and answer are product cost. ${JUDGE_NOTE}. add chat calls are split by prompt operation into extract (M02), assign (M04), judge (M05), and other. search counts chat calls whose timestamps fall inside search/memory requests; embedding calls are not priced. task.* is add/message response → the get/status poll that saw completed (upper bound, completion happened at most detectionSlackMs earlier).`,
     wallclockMs: run.wallclockMs ?? null,
     phaseWallclockMs: run.phaseMs ?? null,
-    add: block("add"),
-    search: block("search"),
+    add,
+    search: productStage("search", searchCalls),
+    answer: clientStage(run.usage?.reader ?? null, "no reader usage recorded"),
     checks: phased ? { requests: checkRequests.length } : { requests: null, reasons: { requests: OLD_RUNNER } },
     sutUsage: sut ? { ...sut, calls: undefined } : { reasons: { file: NO_USAGE } },
     latencyByCall: Object.fromEntries(Object.entries(byCall).map(([call, values]) => [call, latency(values)])),
-    reader: model(run.usage?.reader ?? null),
-    judge: model(judgeUsage)
+    judge
   };
 }
 
@@ -550,7 +642,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       console.error(error.message);
       process.exit(2);
     }
-    llm = createLlm({ config, cachePath: join(RUNS_DIR, "judge-cache.json"), concurrency: Number(process.env.MEMMY_EVAL_JUDGE_CONCURRENCY ?? 6) });
+    llm = createLlm({ config, cachePath: process.env.MEMMY_EVAL_JUDGE_CACHE ?? join(RUNS_DIR, "judge-cache.json"), concurrency: Number(process.env.MEMMY_EVAL_JUDGE_CONCURRENCY ?? 6) });
   }
   const judge = createJudge(llm);
   let result;
@@ -564,7 +656,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const report = {
     reportVersion: 2,
     run: { kind: run.kind ?? "live", input: options.input ?? null, startedAt: run.startedAt ?? null, base: run.base ?? null, sut: run.sut ?? null, reader: run.reader ?? null },
-    judge: { model: llm.config?.model ?? null, family: llm.config?.family ?? null, promptVersion: JUDGE_PROMPT_VERSION, temperature: 0 },
+    judge: { model: llm.config?.model ?? null, family: llm.config?.family ?? null, promptVersion: JUDGE_PROMPT_VERSION, temperature: llm.config?.model && omitsTemperature(llm.config.model) ? null : 0 },
     ...result,
     efficiency: efficiency(run, { judgeUsage: llm.usage, sutUsage: sutUsagePath ? loadSutUsage(sutUsagePath) : null, pricing })
   };

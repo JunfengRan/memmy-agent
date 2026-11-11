@@ -1,7 +1,30 @@
 {
-  "source": "https://docs.anthropic.com/en/docs/about-claude/pricing",
-  "fetchedAt": "2026-11-03",
-  "unit": "USD per 1M tokens; input excludes cache hits, cachedInput is the cache-hit rate",
+  "source": "https://api-docs.deepseek.com/quick_start/pricing",
+  "fetchedAt": "2026-11-11",
+  "unit": "USD per 1M tokens. input is uncached or cache-miss; cachedInput is cache-hit. DeepSeek input/cachedInput/output are the off-peak rates; peak is the weekday window on that model. gpt-6-luna cacheWrite is the explicit cache-write rate and is applied only to cacheCreationTokens.",
+  "sources": {
+    "anthropic": {
+      "source": "https://docs.anthropic.com/en/docs/about-claude/pricing",
+      "fetchedAt": "2026-11-03"
+    },
+    "deepseek": {
+      "source": "https://api-docs.deepseek.com/quick_start/pricing",
+      "fetchedAt": "2026-11-11",
+      "pricedModelId": "deepseek-flash",
+      "modelVersion": "DeepSeek-V4.1-Flash-1017"
+    },
+    "openai": {
+      "source": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+      "fetchedAt": "2026-11-11"
+    }
+  },
+  "aliases": {
+    "deepseek-v4.1-flash-1017": "deepseek-flash",
+    "DeepSeek-V4.1-Flash-1017": "deepseek-flash",
+    "deepseek-v4-flash": "deepseek-flash",
+    "deepseek-v4-flash-vision-exp": "deepseek-flash",
+    "deepseek-v4-1-flash-261017": "deepseek-flash"
+  },
   "models": {
     "claude-haiku-5-5": {
       "input": 0.1,
@@ -10,6 +33,26 @@
       "longContext": { "overInputTokens": 100000, "input": 0.5, "cachedInput": 0.05, "output": 2.5 }
     },
     "claude-sonnet-5-5": { "input": 2, "cachedInput": 0.1, "output": 10 },
-    "claude-opus-5-5": { "input": 4, "cachedInput": 0.2, "output": 20 }
+    "claude-opus-5-5": { "input": 4, "cachedInput": 0.2, "output": 20 },
+    "deepseek-flash": {
+      "input": 0.15,
+      "cachedInput": 0.003,
+      "output": 0.6,
+      "peak": {
+        "input": 0.3,
+        "cachedInput": 0.006,
+        "output": 1.2,
+        "utcMinutes": [[60, 240], [360, 600]],
+        "days": "Monday-Friday",
+        "note": "Half-open UTC windows 01:00-04:00 and 06:00-10:00. Weekends are off-peak. Chinese public holidays are off-peak and are not listed here."
+      }
+    },
+    "gpt-6-luna": {
+      "input": 0.1,
+      "cachedInput": 0.01,
+      "output": 0.5,
+      "cacheWrite": 0.125,
+      "longContext": { "overInputTokens": 272000, "input": 0.2, "cachedInput": 0.02, "cacheWrite": 0.25, "output": 0.75 }
+    }
   }
 }

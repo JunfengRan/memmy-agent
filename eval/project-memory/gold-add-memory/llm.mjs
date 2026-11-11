@@ -3,6 +3,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { tokenBuckets } from "./metrics.mjs";
 
 const sha256 = (value) => createHash("sha256").update(typeof value === "string" ? value : JSON.stringify(value)).digest("hex");
 
@@ -58,10 +59,16 @@ function createLimiter(concurrency) {
   return (task) => new Promise((resolve, reject) => { queue.push({ task, resolve, reject }); next(); });
 }
 
-// Claude 5 models reject `temperature` (the API returns 400), so those calls rely on the model's
-// default sampling; every other judge and reader runs at temperature 0.
-function omitsTemperature(model) {
-  return /^claude-[a-z]+-5/.test(String(model));
+// Claude 5 rejects `temperature`. gpt-6 only accepts the default (1) and rejects `max_tokens`
+// in favor of `max_completion_tokens`. Those calls use the model's default sampling.
+// Everything else runs at temperature 0. Chat completions only; this client never calls /decisions.
+export function omitsTemperature(model) {
+  const name = String(model);
+  return /^claude-[a-z]+-5/.test(name) || /^gpt-6/.test(name);
+}
+
+function usesMaxCompletionTokens(model) {
+  return /^gpt-6/.test(String(model));
 }
 
 async function callOnce(config, system, user, maxTokens) {
@@ -73,26 +80,33 @@ async function callOnce(config, system, user, maxTokens) {
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(`${config.model} ${response.status}: ${JSON.stringify(body).slice(0, 300)}`);
-    return {
-      text: (body.content ?? []).filter((block) => block.type === "text").map((block) => block.text).join(""),
-      inputTokens: body.usage?.input_tokens ?? 0,
-      outputTokens: body.usage?.output_tokens ?? 0,
-      cachedInputTokens: body.usage?.cache_read_input_tokens ?? 0
-    };
+    return { text: (body.content ?? []).filter((block) => block.type === "text").map((block) => block.text).join(""), ...usageCounts(body.usage) };
   }
   const response = await fetch(`${config.baseUrl.replace(/\/chat\/completions$/, "")}/chat/completions`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${config.apiKey}` },
-    body: JSON.stringify({ model: config.model, max_tokens: maxTokens, temperature: 0, messages: [{ role: "system", content: system }, { role: "user", content: user }] })
+    body: JSON.stringify({
+      model: config.model,
+      ...(usesMaxCompletionTokens(config.model) ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
+      ...(omitsTemperature(config.model) ? {} : { temperature: 0 }),
+      messages: [{ role: "system", content: system }, { role: "user", content: user }]
+    })
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`${config.model} ${response.status}: ${JSON.stringify(body).slice(0, 300)}`);
+  return { text: body.choices?.[0]?.message?.content ?? "", ...usageCounts(body.usage) };
+}
+
+// inputTokens stays the uncached/cache-miss count so existing pricing still reads it.
+function usageCounts(raw) {
+  const buckets = tokenBuckets(raw) ?? { cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 };
   return {
-    text: body.choices?.[0]?.message?.content ?? "",
-    // OpenAI prompt_tokens includes cache hits; inputTokens here excludes them, as Anthropic's does.
-    inputTokens: (body.usage?.prompt_tokens ?? 0) - (body.usage?.prompt_tokens_details?.cached_tokens ?? 0),
-    outputTokens: body.usage?.completion_tokens ?? 0,
-    cachedInputTokens: body.usage?.prompt_tokens_details?.cached_tokens ?? 0
+    inputTokens: buckets.cacheWriteTokens,
+    outputTokens: buckets.outputTokens,
+    cachedInputTokens: buckets.cacheReadTokens,
+    cacheWriteTokens: buckets.cacheWriteTokens,
+    cacheReadTokens: buckets.cacheReadTokens,
+    ...(buckets.cacheCreationTokens !== undefined ? { cacheCreationTokens: buckets.cacheCreationTokens } : {})
   };
 }
 
@@ -108,7 +122,12 @@ export function createLlm({ config, cachePath, concurrency = 6, maxTokens = 2048
   const cache = cachePath && existsSync(cachePath) ? JSON.parse(readFileSync(cachePath, "utf8")) : {};
   const used = new Set();
   // inputTokens excludes cache hits; perCall keeps each call's tokens so long-context pricing tiers apply per call.
-  const usage = { model: config?.model ?? null, calls: 0, cacheHits: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, perCall: [], latencyMs: [] };
+  const usage = {
+    model: config?.model ?? null, calls: 0, cacheHits: 0,
+    inputTokens: 0, outputTokens: 0, cachedInputTokens: 0,
+    cacheWriteTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0,
+    perCall: [], latencyMs: []
+  };
   const limit = createLimiter(concurrency);
 
   async function complete(kind, system, payload) {
@@ -123,12 +142,25 @@ export function createLlm({ config, cachePath, concurrency = 6, maxTokens = 2048
         const startedAt = performance.now();
         try {
           const result = await callOnce(config, system, user, maxTokens);
+          const latencyMs = performance.now() - startedAt;
           usage.calls += 1;
-          usage.latencyMs.push(performance.now() - startedAt);
+          usage.latencyMs.push(latencyMs);
           usage.inputTokens += result.inputTokens;
           usage.outputTokens += result.outputTokens;
           usage.cachedInputTokens += result.cachedInputTokens;
-          usage.perCall.push({ inputTokens: result.inputTokens, cachedInputTokens: result.cachedInputTokens, outputTokens: result.outputTokens });
+          usage.cacheWriteTokens += result.cacheWriteTokens;
+          usage.cacheReadTokens += result.cacheReadTokens;
+          usage.cacheCreationTokens += result.cacheCreationTokens ?? 0;
+          usage.perCall.push({
+            at: new Date().toISOString(),
+            inputTokens: result.inputTokens,
+            cachedInputTokens: result.cachedInputTokens,
+            cacheWriteTokens: result.cacheWriteTokens,
+            cacheReadTokens: result.cacheReadTokens,
+            outputTokens: result.outputTokens,
+            ...(result.cacheCreationTokens !== undefined ? { cacheCreationTokens: result.cacheCreationTokens } : {}),
+            latencyMs
+          });
           cache[key] = { kind, model: config.model, promptHash: sha256(system), text: result.text };
           return result.text;
         } catch (error) {

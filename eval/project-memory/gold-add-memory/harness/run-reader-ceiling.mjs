@@ -18,7 +18,7 @@ const ds = loadDataset();
 const gold = loadGold();
 const readerConfig = resolveModelConfig("MEMMY_EVAL_READER");
 if (!readerConfig) { console.error("reader not configured: set MEMMY_EVAL_READER_PROVIDER / _MODEL / _BASE_URL / _API_KEY"); process.exit(2); }
-const readerLlm = createLlm({ config: readerConfig, cachePath: join(RUNS_DIR, "reader-cache.json") });
+const readerLlm = createLlm({ config: readerConfig, cachePath: process.env.MEMMY_EVAL_READER_CACHE ?? join(RUNS_DIR, "reader-cache.json") });
 const reader = createReader(readerLlm);
 
 const run = buildOracleRun(ds, gold);

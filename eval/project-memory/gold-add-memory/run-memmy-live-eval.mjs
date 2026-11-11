@@ -70,7 +70,7 @@ if (!checksOnly) {
     console.error("reader not configured: set MEMMY_EVAL_READER_PROVIDER / _MODEL / _BASE_URL / _API_KEY");
     process.exit(2);
   }
-  readerLlm = createLlm({ config: readerConfig, cachePath: join(RUNS_DIR, "reader-cache.json") });
+  readerLlm = createLlm({ config: readerConfig, cachePath: process.env.MEMMY_EVAL_READER_CACHE ?? join(RUNS_DIR, "reader-cache.json") });
   reader = createReader(readerLlm);
 }
 const names = displayNames(ds);

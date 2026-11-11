@@ -13,6 +13,7 @@ import { createJudge } from "./judge.mjs";
 import { createLlm } from "./llm.mjs";
 import { loadGold } from "./load-eval-set.mjs";
 import { buildOracleRun, oracleTopics } from "./oracle.mjs";
+import { classifyOperation, costUsd, tokenBuckets } from "./metrics.mjs";
 import { efficiency, scoreRun } from "./run-pipeline-eval.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -220,7 +221,9 @@ const usageLines = [
 ];
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-12, `${a} != ${b}`);
 
-test("R1-3: efficiency covers every metrics.md row on a new-runner run with a usage file", () => {
+const zeroStage = { llmCalls: 0, cacheWriteTokens: 0, cacheReadTokens: 0, outputTokens: 0, totalCostUsd: 0, latencyMs: { n: 0, p50: 0, p95: 0 } };
+
+test("R1-3: efficiency covers add, search, and answer on a new-runner run with a usage file", () => {
   const e = efficiency(newRun, { judgeUsage: null, sutUsage: { path: "mem", lines: usageLines, unparsed: 0 }, pricing });
   assert.equal(e.add.requests, 2);
   assert.equal(e.add.pollingRequests, 3);
@@ -229,26 +232,33 @@ test("R1-3: efficiency covers every metrics.md row on a new-runner run with a us
   assert.equal(e.add.wallclockMs, 5_000);
   assert.equal(e.search.wallclockMs, 300);
   assert.equal(e.add.llmCalls, 2);
+  assert.equal(e.add.cacheWriteTokens, 3_200);
+  assert.equal(e.add.cacheReadTokens, 800);
+  assert.equal(e.add.outputTokens, 400);
   assert.equal(e.sutUsage.outsideRun, 1);
   assert.equal(e.sutUsage.callsDuringSearchRequests, 0);
-  assert.equal(e.add.avgInputTokens, 2_000);
-  assert.equal(e.add.avgOutputTokens, 200);
   // (200 * 0.1 + 800 * 0.01 + 100 * 0.5 + 3000 * 0.1 + 300 * 0.5) / 1e6
   close(e.add.totalCostUsd, 528 / 1e6);
-  close(e.add.avgCostUsd, 264 / 1e6);
-  assert.deepEqual([e.add.latencyMs.p50, e.add.latencyMs.p95], [3, 3.9]);
+  assert.deepEqual([e.add.requestLatencyMs.p50, e.add.requestLatencyMs.p95], [3, 3.9]);
+  assert.deepEqual([e.add.latencyMs.p50, e.add.latencyMs.p95], [300, 390]);
   assert.deepEqual({ n: e.add.task.n, p50: e.add.task.p50, mean: e.add.task.mean }, { n: 2, p50: 400, mean: 400 });
-  assert.equal(e.search.llmCalls, 0);
-  assert.equal(e.search.totalCostUsd, 0);
-  assert.equal(e.search.avgCostUsd, 0);
-  assert.equal(e.search.avgInputTokens, null);
-  assert.ok(e.search.reasons.avgInputTokens && e.search.reasons.avgOutputTokens);
-  close(e.reader.costUsd, (1_000 * 0.1 + 100 * 0.5) / 1e6);
+  assert.equal(e.add.other.llmCalls, 2);
+  for (const bucket of [e.add.extract, e.add.assign, e.add.judge]) assert.deepEqual(bucket, zeroStage);
+  for (const field of ["llmCalls", "cacheWriteTokens", "cacheReadTokens", "outputTokens", "totalCostUsd"]) assert.equal(e.search[field], 0);
+  assert.deepEqual(e.search.latencyMs, zeroStage.latencyMs);
+  assert.equal(e.search.reasons, undefined);
+  close(e.answer.totalCostUsd, (1_000 * 0.1 + 100 * 0.5) / 1e6);
+  assert.equal(e.answer.cacheWriteTokens, 1_000);
+  assert.equal(e.answer.llmCalls, 1);
+  assert.equal(e.judge.llmCalls, null);
+  assert.match(e.judge.note, /not part of add, search, or answer/);
+  assert.match(e.notes, /not part of add, search, or answer/);
+  assert.equal(e.reader, undefined);
 });
 
 test("R1-3: without a usage file, SUT fields are null with a reason; unpriced models are null with a reason", () => {
   const e = efficiency(newRun, { judgeUsage: null, sutUsage: null, pricing });
-  for (const block of [e.add, e.search]) for (const field of ["llmCalls", "avgOutputTokens", "avgCostUsd", "totalCostUsd"]) { assert.equal(block[field], null); assert.ok(block.reasons[field], field); }
+  for (const block of [e.add, e.search]) for (const field of ["llmCalls", "cacheWriteTokens", "outputTokens", "totalCostUsd"]) { assert.equal(block[field], null); assert.ok(block.reasons[field], field); }
   const unpriced = efficiency({ ...newRun, sut: { model: "deepseek-x" } }, { judgeUsage: null, sutUsage: { path: "mem", lines: usageLines.map((l) => ({ ...l, model: "deepseek-x" })), unparsed: 0 }, pricing });
   assert.equal(unpriced.add.totalCostUsd, null);
   assert.match(unpriced.add.reasons.totalCostUsd, /deepseek-x/);
@@ -266,6 +276,53 @@ test("R1-3: an old-runner run (no phases, no task timing) reports null + reason 
   assert.equal(e.search.requests, 2);
   assert.ok(e.search.reasons.requests);
   assert.equal(e.sutUsage.callsDuringSearchRequests, null);
+  assert.equal(e.add.llmCalls, null);
+  assert.match(e.add.reasons.llmCalls, /cannot be split/);
+});
+
+test("add calls split by operation, and a chat call inside a search request is search", () => {
+  const lines = [
+    { at: new Date(t0 + 1_100).toISOString(), status: 200, latencyMs: 100, model: "claude-haiku-5-5", operation: "extract", usage: { prompt_tokens: 100, completion_tokens: 10 } },
+    { at: new Date(t0 + 3_100).toISOString(), status: 200, latencyMs: 100, model: "claude-haiku-5-5", operation: "assign", usage: { prompt_cache_hit_tokens: 40, prompt_cache_miss_tokens: 60, completion_tokens: 10 } },
+    { at: new Date(t0 + 3_200).toISOString(), status: 200, latencyMs: 100, model: "claude-haiku-5-5", operation: "judge", usage: { input_tokens: 70, cache_read_input_tokens: 20, cache_creation_input_tokens: 5, output_tokens: 10 } },
+    { at: new Date(t0 + 10_002).toISOString(), path: "/v1/chat/completions", status: 200, latencyMs: 50, model: "claude-haiku-5-5", operation: "extract", usage: { prompt_tokens: 10, completion_tokens: 1 } },
+    { at: new Date(t0 + 10_004).toISOString(), path: "/v1/embeddings", status: 200, latencyMs: 5, model: "embed", usage: { prompt_tokens: 999, completion_tokens: 0 } }
+  ];
+  const e = efficiency(newRun, { judgeUsage: { model: "gpt-6-luna", calls: 0 }, sutUsage: { path: "mem", lines, unparsed: 0 }, pricing });
+  assert.equal(e.add.llmCalls, 3);
+  assert.equal(e.add.extract.llmCalls, 1);
+  assert.equal(e.add.extract.cacheWriteTokens, 100);
+  assert.equal(e.add.assign.cacheReadTokens, 40);
+  assert.equal(e.add.assign.cacheWriteTokens, 60);
+  assert.equal(e.add.judge.cacheWriteTokens, 75);
+  assert.equal(e.add.judge.cacheReadTokens, 20);
+  assert.equal(e.add.other.llmCalls, 0);
+  assert.equal(e.search.llmCalls, 1);
+  assert.equal(e.search.cacheWriteTokens, 10);
+  assert.equal(e.search.outputTokens, 1);
+  assert.equal(e.sutUsage.nonChat, 1);
+  assert.equal(e.sutUsage.callsDuringSearchRequests, 1);
+  assert.deepEqual(e.judge, { ...zeroStage, note: "judge is not part of add, search, or answer" });
+  assert.equal(e.add.totalCostUsd > 0 && e.search.totalCostUsd > 0, true);
+});
+
+test("token buckets and operation labels do not keep prompt text", () => {
+  assert.deepEqual(tokenBuckets({ prompt_cache_hit_tokens: 2, prompt_cache_miss_tokens: 3, cache_creation_input_tokens: 4, completion_tokens: 5 }), { cacheReadTokens: 2, cacheWriteTokens: 3, cacheCreationTokens: 4, outputTokens: 5 });
+  assert.equal(classifyOperation({ messages: [{ role: "system", content: "version pm-assign-v0.2.0" }, { role: "user", content: "pm-extract-v0.2.2" }] }), "assign");
+  assert.equal(classifyOperation({ messages: [{ content: [{ type: "text", text: "pm-judge-v0.3.0" }] }] }), "judge");
+  assert.equal(classifyOperation({ messages: [{ content: "hello" }] }), "other");
+});
+
+test("deepseek-flash peak and off-peak rates, and the gpt-6-luna price", () => {
+  const million = { cacheWriteTokens: 1_000_000, cacheReadTokens: 0, outputTokens: 0 };
+  close(costUsd({ model: "deepseek-flash", at: "2026-11-05T00:30:00.000Z", ...million }, pricing), 0.15);
+  close(costUsd({ model: "deepseek-flash", at: "2026-11-05T02:00:00.000Z", ...million }, pricing), 0.3);
+  close(costUsd({ model: "deepseek-flash", at: "2026-11-07T02:00:00.000Z", ...million }, pricing), 0.15);
+  close(costUsd({ model: "deepseek-v4.1-flash-1017", at: "2026-11-05T00:30:00.000Z", cacheWriteTokens: 1_000_000, cacheReadTokens: 1_000_000, outputTokens: 1_000_000 }, pricing), 0.753);
+  assert.equal(costUsd({ model: "deepseek-flash", ...million }, pricing), null);
+  close(costUsd({ model: "gpt-6-luna", inputTokens: 1_000, cachedInputTokens: 1_000, outputTokens: 1_000 }, pricing), 0.00061);
+  close(costUsd({ model: "gpt-6-luna", inputTokens: 1_000_000, cachedInputTokens: 1_000_000, outputTokens: 1_000_000 }, pricing), 0.97);
+  close(costUsd({ model: "gpt-6-luna", inputTokens: 0, cachedInputTokens: 0, cacheCreationTokens: 1_000, outputTokens: 0 }, pricing), 0.000125);
 });
 
 let failed = 0;

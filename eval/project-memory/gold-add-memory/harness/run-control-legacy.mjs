@@ -30,7 +30,7 @@ const endpoint = (process.env.MEMMY_EVAL_ENDPOINT ?? "http://127.0.0.1:18961").r
 const token = process.env.MEMMY_EVAL_TOKEN;
 const readerConfig = resolveModelConfig("MEMMY_EVAL_READER");
 if (!readerConfig) { console.error("reader not configured: set MEMMY_EVAL_READER_PROVIDER / _MODEL / _BASE_URL / _API_KEY"); process.exit(2); }
-const readerLlm = createLlm({ config: readerConfig, cachePath: join(RUNS_DIR, "reader-cache.json") });
+const readerLlm = createLlm({ config: readerConfig, cachePath: process.env.MEMMY_EVAL_READER_CACHE ?? join(RUNS_DIR, "reader-cache.json") });
 const reader = createReader(readerLlm);
 const names = displayNames(ds);
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
