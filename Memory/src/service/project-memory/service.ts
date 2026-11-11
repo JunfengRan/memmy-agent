@@ -158,7 +158,7 @@ export class ProjectMemoryService {
 
   async search(input: SearchInput): Promise<SearchOutput> {
     await this.validateScope(input.spaceIds, input.domains ?? [], false);
-    return searchProjectMemory(input, { store: this.store, local: this.local });
+    return searchProjectMemory(input, { store: this.store, local: this.local, llm: this.deps.llm });
   }
 
   async listTopics(spaceId: string, page: number, size: number, relatedId?: string): Promise<{ topics: TopicSnapshot[]; total: number }> {

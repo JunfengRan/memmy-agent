@@ -52,6 +52,11 @@ export interface OrganizeResult {
   deferred: Array<{ text: string; reason: string }>;
 }
 
+/** The session the router already chose. Extraction may not open a different topic. */
+export type LockedTopic =
+  | { mode: "new"; title: string; summary: string }
+  | { mode: "existing"; topicId: string };
+
 export interface OrganizeInput {
   instructions: string | null;
   domains: DomainRecord[];
@@ -60,6 +65,7 @@ export interface OrganizeInput {
   context: RawTurnRecord[];
   candidates: TopicSnapshot[];
   conflictsShown: Set<string>;
+  lockedTopic?: LockedTopic;
 }
 
 export class ModelOutputError extends Error {
@@ -129,7 +135,14 @@ export function buildOrganizeMessages(input: OrganizeInput): Array<{ role: "syst
     })),
     conflicts_shown: [...input.conflictsShown].filter((id) =>
       input.candidates.some((topic) => topic.decisions.some((decision) => decision.id === id && decision.conflicts.length > 0))
-    )
+    ),
+    ...(input.lockedTopic
+      ? {
+          locked_session: input.lockedTopic.mode === "existing"
+            ? { mode: "existing", topic_id: input.lockedTopic.topicId }
+            : { mode: "new", title: input.lockedTopic.title, summary: input.lockedTopic.summary }
+        }
+      : {})
   };
   return [
     { role: "system", content: ORGANIZE_SYSTEM_PROMPT },
@@ -192,7 +205,9 @@ export function parseOrganizeOutput(raw: Json, input: OrganizeInput): OrganizeRe
     const topicId = asString(topic?.topic_id);
     const newRef = asString(topic?.new_topic);
     let target: DraftTarget;
-    if (topicId && candidates.has(topicId)) target = { topicId };
+    if (input.lockedTopic?.mode === "existing") target = { topicId: input.lockedTopic.topicId };
+    else if (input.lockedTopic?.mode === "new") target = { newTopicRef: "session" };
+    else if (topicId && candidates.has(topicId)) target = { topicId };
     else if (!topicId && newRef && newTopics.has(newRef)) target = { newTopicRef: newRef };
     else {
       deferred.push({ text: content, reason: topicId ? "unknown_topic" : "ambiguous_topic" });
@@ -255,6 +270,23 @@ export function parseOrganizeOutput(raw: Json, input: OrganizeInput): OrganizeRe
       ...(summary ? { topicSummary: clampText(summary, PROJECT_MEMORY_LIMITS.topicSummary) } : {}),
       ...(description ? { topicDescription: clampText(description, PROJECT_MEMORY_LIMITS.topicDescription) } : {})
     });
+  }
+
+  if (input.lockedTopic?.mode === "new") {
+    const modelTopic = [...newTopics.values()][0];
+    const title = modelTopic?.topicName || clampText(input.lockedTopic.title, PROJECT_MEMORY_LIMITS.topicName) || "新会话";
+    newTopics.clear();
+    newTopics.set("session", {
+      topicName: title,
+      topicSummary: modelTopic?.topicSummary || clampText(input.lockedTopic.summary, PROJECT_MEMORY_LIMITS.topicSummary),
+      topicDescription: modelTopic?.topicDescription ?? ""
+    });
+    topicUpdates.clear();
+  } else if (input.lockedTopic?.mode === "existing") {
+    newTopics.clear();
+    for (const id of [...topicUpdates.keys()]) {
+      if (id !== input.lockedTopic.topicId) topicUpdates.delete(id);
+    }
   }
 
   return {

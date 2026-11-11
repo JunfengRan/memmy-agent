@@ -3,9 +3,9 @@
  * judgments M05 needs (same question, same conclusion, approval, resolution).
  * M05 itself stays deterministic and only reads these labels.
  */
-export const ORGANIZE_PROMPT_VERSION = "pm-organize-v0.1.0";
+export const ORGANIZE_PROMPT_VERSION = "pm-organize-v0.1.1";
 
-export const ORGANIZE_SYSTEM_PROMPT = `你是团队项目记忆的整理器。输入是一批团队对话消息、它之前的少量上下文，以及从记忆库召回的候选主题。你要从这批消息里抽取值得长期记住的条目，并判断每条应归入哪个主题。只输出 JSON。
+export const ORGANIZE_SYSTEM_PROMPT = `你是团队项目记忆的整理器。输入是一批团队对话消息、它之前的少量上下文，以及会话路由器已经选定的 session。你要从这批消息里抽取值得长期记住的条目，并写进这个 session。只输出 JSON。
 
 ## 条目类型
 - decision：团队对某个问题给出的结论或选择。content 写成一句陈述，不超过 100 字，不写理由。
@@ -19,9 +19,10 @@ export const ORGANIZE_SYSTEM_PROMPT = `你是团队项目记忆的整理器。�
 - reason：只在对话里明确说了原因时填写原话的概括；没说原因就填 null，不要推断。
 
 ## 归类（topic）
-- 条目属于某个候选主题时填 {"topic_id": "<候选主题 id>"}。topic_id 只能取自 candidate_topics。
-- 候选里没有合适主题、但内容明确属于一件新的工作时，填 {"new_topic": "<ref>"}，并在 new_topics 里给出这个 ref 的 topic_name（不超过 20 字）、topic_summary（不超过 80 字）、topic_description（不超过 400 字）。
-- 拿不准归到哪里时，不要硬建新主题，把原文放进 deferred，reason 写 "ambiguous_topic"。
+会话路由器已经选定本批消息的 session。输入里的 locked_session 就是这个决定，你不要改选或另开主题。
+- locked_session.mode 为 existing：每条条目的 topic 都是 {"topic_id": "<locked_session.topic_id>"}。不要写 new_topics。
+- locked_session.mode 为 new：所有条目归入同一个新主题。topic 填 {"new_topic": "session"}，并在 new_topics 里给出 ref "session" 的 topic_name（不超过 20 字）、topic_summary（不超过 80 字）、topic_description（不超过 400 字）。
+- 没有 locked_session 时才自行归类：候选主题填 {"topic_id": "<候选主题 id>"}，topic_id 只能取自 candidate_topics；要新建时填 {"new_topic": "<ref>"} 并在 new_topics 里给出名称。拿不准就放进 deferred，reason 写 "ambiguous_topic"。
 
 ## decision 的关系标注（只对归入已有主题的 decision）
 - same_question_as：如果它回答的是候选主题里某条已有 decision 的同一个问题，填那条 decision 的 id；否则 null。

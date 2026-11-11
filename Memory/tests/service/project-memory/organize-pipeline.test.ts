@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { SqliteProjectMemoryStore } from "../../../src/service/project-memory/store/sqlite/sqlite-store.js";
-import { call, createProjectMemoryHarness, drain, emptyReply, setupSpace, stubModel, type OrganizePayload } from "./helpers.js";
+import { call, createProjectMemoryHarness, drain, emptyReply, routeAcceptsNewSessions, setupSpace, stubModel, type OrganizePayload } from "./helpers.js";
 
 const harness = createProjectMemoryHarness();
 afterEach(() => harness.cleanup());
@@ -135,16 +135,38 @@ describe("project memory organize pipeline", () => {
     const decision = listed.data.topic_detail_list[0].decisions[0];
     expect(decision.conflicts.map((item: { user_ids: string[] }) => item.user_ids)).toEqual([["user_x"], ["user_b"]]);  });
 
-  it("defers drafts it cannot place instead of creating a conservative new topic", async () => {
+  it("places an organizer draft on the session the router accepted", async () => {
     stubModel(() => ({
       ...emptyReply(),
-      drafts: [{ kind: "decision", content: "推送失败后指数退避重试三次。", message_idx: 0, user_ids: ["user_a"], topic: { topic_id: "topic_does_not_exist" } }]
+      drafts: [{ kind: "decision", content: "推送失败后指数退避重试三次。", message_idx: 0, user_ids: ["user_a"], topic: { topic_id: "topic_does_not_exist" } }],
+      new_topics: [{ ref: "n1", topic_name: "推送服务重试", topic_summary: "推送失败后的重试策略", topic_description: "" }]
     }));
     const { service } = harness.createService();
     await setupSpace(service, "space_a");
     const taskId = await add(service, { user_id: "user_a", conversation_id: "c1", space_ids: ["space_a"], messages: [message("user_a", "2026-10-29 10:00:00", "推送失败就指数退避重试三次。")] });
     await drain(service);
 
+    const status = await call(service, "get/status", { task_id: taskId });
+    expect(status.data).toMatchObject({ status: "completed", memory_views: { added: 1, project: { deferred_count: 0 } } });
+    const listed = await call(service, "get/memory", { space_id: "space_a" });
+    expect(listed.data.total).toBe(1);
+    expect(listed.data.topic_detail_list[0]).toMatchObject({
+      topic_name: "推送服务重试",
+      decisions: [expect.objectContaining({ content: "推送失败后指数退避重试三次。" })]
+    });
+  });
+
+  it("does not organize a turn the router ignores", async () => {
+    const stub = stubModel(() => { throw new Error("organize should not run"); }, {
+      route: () => ({ kind: "ignore", reason: "闲聊" })
+    });
+    const { service } = harness.createService();
+    await setupSpace(service, "space_a");
+    const taskId = await add(service, { user_id: "user_a", conversation_id: "c1", space_ids: ["space_a"], messages: [message("user_a", "2026-10-29 10:00:00", "今天天气不错。")] });
+    await drain(service);
+
+    expect(stub.routeCalls).toHaveLength(1);
+    expect(stub.organizeCalls).toHaveLength(0);
     const status = await call(service, "get/status", { task_id: taskId });
     expect(status.data).toMatchObject({ status: "completed", memory_views: { added: 0, project: { memory_ids: [], deferred_count: 1 } } });
     expect((await call(service, "get/memory", { space_id: "space_a" })).data.total).toBe(0);
@@ -179,16 +201,15 @@ describe("project memory organize pipeline", () => {
     expect((await call(service, "get/memory", { space_id: "space_b" })).data.total).toBe(1);
   });
 
-  it("shows topics another writer created to the model on the retry after TOPIC_SET_CHANGED", async () => {
+  it("shows a topic another writer created to the router on the retry after TOPIC_SET_CHANGED", async () => {
     let concurrentStore: SqliteProjectMemoryStore | null = null;
     let concurrentTopicId: string | null = null;
-    // Eleven topics that match the batch lexically, so a topic created concurrently with
-    // unrelated wording would rank outside topic_k=10 on recall alone.
+    // Eleven earlier sessions, then a topic committed while this batch is being organized.
     const seedTexts = Array.from({ length: 11 }, (_, index) => `推送通道 ${index} 失败后重试。`);
-    const stub = stubModel((payload, index) => {
+    const stub = stubModel(async (payload, index) => {
       if (index <= seedTexts.length) return newTopicReply(payload, seedTexts[index - 1]!);
       if (index === seedTexts.length + 1) {
-        void concurrentStore!.commitChangeSet({
+        await concurrentStore!.commitChangeSet({
           spaceId: "space_a",
           taskId: "other",
           sourceBatchId: "other",
@@ -206,10 +227,11 @@ describe("project memory organize pipeline", () => {
             timelineAppend: [],
             sourcesAppend: []
           }]
-        }, { acceptedAt: new Date().toISOString() }).then(() => { concurrentTopicId = "topic_concurrent"; });
+        }, { acceptedAt: new Date().toISOString() });
+        concurrentTopicId = "topic_concurrent";
       }
       return newTopicReply(payload, "推送失败后改为重试五次。");
-    });
+    }, { route: routeAcceptsNewSessions });
     const { service, db } = harness.createService();
     concurrentStore = new SqliteProjectMemoryStore({ db: db.db });
     await setupSpace(service, "space_a");
@@ -222,9 +244,9 @@ describe("project memory organize pipeline", () => {
 
     expect(concurrentTopicId).toBe("topic_concurrent");
     expect((await call(service, "get/status", { task_id: taskId })).data.status).toBe("completed");
-    const retry = stub.organizeCalls.at(-1)!;
     expect(stub.organizeCalls).toHaveLength(seedTexts.length + 2);
-    expect(retry.candidate_topics.map((topic) => topic.topic_id)).toContain("topic_concurrent");
+    const retry = stub.routeCalls.filter((call) => call.route === "write").at(-1)!;
+    expect(retry.sessions.map((session) => session.topic_id)).toContain("topic_concurrent");
   });
 
   it("keeps a non-author's different conclusion in conflicts even when the model names the author", async () => {

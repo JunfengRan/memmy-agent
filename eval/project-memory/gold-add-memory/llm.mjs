@@ -83,7 +83,12 @@ async function callOnce(config, system, user, maxTokens) {
   const response = await fetch(`${config.baseUrl.replace(/\/chat\/completions$/, "")}/chat/completions`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${config.apiKey}` },
-    body: JSON.stringify({ model: config.model, max_tokens: maxTokens, temperature: 0, messages: [{ role: "system", content: system }, { role: "user", content: user }] })
+    body: JSON.stringify({
+      model: config.model,
+      max_tokens: maxTokens,
+      ...(omitsTemperature(config.model) ? {} : { temperature: 0 }),
+      messages: [{ role: "system", content: system }, { role: "user", content: user }]
+    })
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`${config.model} ${response.status}: ${JSON.stringify(body).slice(0, 300)}`);

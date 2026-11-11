@@ -6,7 +6,8 @@ import { PROJECT_MEMORY_LIMITS } from "../contract/limits.js";
 import type { CommitResult, RawTurnRecord, TaskError, TopicSnapshot } from "../contract/types.js";
 import { mergeDrafts } from "../merge/merge.js";
 import { resolveNewTopicDomain } from "../organize/collect.js";
-import { organizeBatch, type OrganizeResult } from "../organize/organizer.js";
+import { organizeBatch, type LockedTopic, type OrganizeResult } from "../organize/organizer.js";
+import { loadSessionCards, routeWrite } from "../route/router.js";
 import type { ProjectLocalState, SpaceOutcome } from "../store/sqlite/local-state.js";
 import type { ProjectMemoryStore } from "../store/store.js";
 
@@ -98,20 +99,43 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
   const names = new Map<string, string>();
   for (const turn of [...context, ...turns]) if (turn.roleId && turn.roleName) names.set(turn.roleId, turn.roleName);
   const newTopicDomain = resolveNewTopicDomain(payload.domains, domains.map((item) => item.domain));
-  const idempotencyKey = `${payload.spaceId}:${payload.conversationId ?? internalConversation}:${batchHash(turns)}`;
+  const conversationKey = payload.conversationId ?? internalConversation;
+  const idempotencyKey = `${payload.spaceId}:${conversationKey}:${batchHash(turns)}`;
   const recallDomains = payload.domains.length > 0 ? payload.domains : undefined;
 
   let organized: OrganizeResult | null = null;
   let candidates: TopicSnapshot[] = [];
   let topicSeq: Record<string, number> = {};
   const unavailable = new Set<string>();
-  // Topics another writer created since our last recall (v3 §2.3.1). They must reach the
-  // model on the next attempt even when lexical recall would rank them outside topic_k.
-  const mustConsider = new Set<string>();
   let lastConflict: CommitResult | null = null;
 
   for (let attempt = 1; attempt <= PROJECT_MEMORY_LIMITS.commitAttempts; attempt += 1) {
     if (!organized) {
+      const sessions = await loadSessionCards(store, [payload.spaceId], recallDomains);
+      if (!llm.isConfigured()) fail("organize", "MODEL_NOT_CONFIGURED");
+      let routed;
+      try {
+        routed = await routeWrite(llm, { instructions: space.instructions, messages: turns, context, sessions });
+      } catch (error) {
+        log.warn("model.failed", { taskId: payload.taskId, ...memoryErrorFields(error) });
+        fail("organize", "MODEL_CALL_FAILED", error instanceof Error ? error.message : String(error));
+      }
+      log.info("route.decided", {
+        taskId: payload.taskId,
+        spaceId: payload.spaceId,
+        kind: routed.kind,
+        topicId: "topicId" in routed ? routed.topicId : undefined
+      });
+      if (routed.kind === "ignore" || routed.kind === "stop") {
+        const text = turns.filter((turn) => turn.role === "user").map((turn) => turn.content).join("\n") || turns[0]!.content;
+        local.appendDeferred({
+          conversationId: conversationKey,
+          spaceId: payload.spaceId,
+          taskId: payload.taskId,
+          segments: [{ text, reason: routed.reason }]
+        });
+        return { status: "completed", memoryIds: [], added: 0, updated: 0, deferredCount: 1 };
+      }
       const recall = await store.recall({
         spaceIds: [payload.spaceId],
         domains: recallDomains,
@@ -122,9 +146,10 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
         entryK: 0
       });
       topicSeq = recall.topicSeq;
-      const recalled = recall.results[0]?.topics.map((topic) => topic.topicId) ?? [];
-      candidates = await store.getTopicsFull(payload.spaceId, [...new Set([...mustConsider, ...recalled])]);
-      if (!llm.isConfigured()) fail("organize", "MODEL_NOT_CONFIGURED");
+      const lockedTopic: LockedTopic = routed.kind === "attach"
+        ? { mode: "existing", topicId: routed.topicId }
+        : { mode: "new", title: routed.title, summary: routed.summary };
+      candidates = routed.kind === "attach" ? await store.getTopicsFull(payload.spaceId, [routed.topicId]) : [];
       try {
         organized = await organizeBatch(llm, {
           instructions: space.instructions,
@@ -133,7 +158,8 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
           messages: turns,
           context,
           candidates,
-          conflictsShown
+          conflictsShown,
+          lockedTopic
         });
       } catch (error) {
         log.warn("model.failed", { taskId: payload.taskId, ...memoryErrorFields(error) });
@@ -156,7 +182,6 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
       conflictsShown,
       displayName: (userId) => names.get(userId) ?? local.roleName(userId) ?? userId
     }, unavailable);
-    const conversationKey = payload.conversationId ?? internalConversation;
     if (!merged.changeSet) {
       local.appendDeferred({ conversationId: conversationKey, spaceId: payload.spaceId, taskId: payload.taskId, segments: merged.deferred });
       return { status: "completed", memoryIds: [], added: 0, updated: 0, deferredCount: merged.deferred.length };
@@ -181,7 +206,7 @@ async function organizeSpace(payload: OrganizeJobPayload, deps: OrganizeJobDeps,
       case "VERSION_CONFLICT":
         break;
       case "TOPIC_SET_CHANGED":
-        for (const topicId of result.newTopicIds) mustConsider.add(topicId);
+        // The next attempt routes again, so a topic created since the last list is visible.
         organized = null;
         break;
       case "TOPIC_NOT_FOUND":

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { call, createProjectMemoryHarness, drain, emptyReply, setupSpace, stubModel, type OrganizePayload } from "./helpers.js";
+import { call, createProjectMemoryHarness, drain, emptyReply, routeAcceptsNewSessions, setupSpace, stubModel, type OrganizePayload } from "./helpers.js";
 
 const harness = createProjectMemoryHarness();
 afterEach(() => harness.cleanup());
@@ -20,8 +20,8 @@ function topicPerBatch(payload: OrganizePayload): Record<string, unknown> {
   };
 }
 
-async function seed(embeddings: "ok" | "fail") {
-  const stub = stubModel(topicPerBatch, { embeddings });
+async function seed(embeddings: "ok" | "fail", route = routeAcceptsNewSessions) {
+  const stub = stubModel(topicPerBatch, { embeddings, route });
   const { service, db } = harness.createService();
   await setupSpace(service, "space_a");
   for (const [index, topic] of TOPICS.entries()) {
@@ -88,12 +88,22 @@ describe("project memory search", () => {
     expect((await search(service, { memory_limit_number: 26 })).code).toBe(40001);
   });
 
-  it("falls back to lexical recall and reports it when embeddings are unavailable", async () => {
+  it("returns the sessions the router names, including when embeddings were not stored", async () => {
     const { service } = await seed("fail");
     const result = await search(service);
     expect(result.code).toBe(0);
-    expect(result.data.degraded).toEqual(["vector"]);
+    expect(result.data.degraded).toBeUndefined();
     expect(result.data.topic_detail_list[0].topic_name).toBe("推送服务重试");
     expect((await search(service)).data).toEqual(result.data);
+  });
+
+  it("answers from the sessions the router selects and from no others", async () => {
+    const { service } = await seed("ok", (payload) => {
+      if (payload.route === "write") return { kind: "accept", title: "新会话", summary: "新会话" };
+      const logs = payload.sessions.find((session) => session.topic_name === "日志采样");
+      return { kind: "retrieve", topic_ids: logs ? [logs.topic_id] : [] };
+    });
+    const result = await search(service);
+    expect(result.data.topic_detail_list.map((topic: { topic_name: string }) => topic.topic_name)).toEqual(["日志采样"]);
   });
 });

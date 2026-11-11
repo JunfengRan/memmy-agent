@@ -4,6 +4,7 @@ import { vi } from "vitest";
 import { DEFAULT_MEMMY_CONFIG, MemoryDb, MemoryService } from "../../../src/index.js";
 import { errorEnvelope, type OpenMemEnvelope } from "../../../src/service/project-memory/api.js";
 import { ProjectMemoryError } from "../../../src/service/project-memory/contract/errors.js";
+import { tokenOverlap, uniqueTokens } from "../../../src/service/project-memory/text.js";
 import { byokRuntimeConfig, createMemoryServiceFixture, runWorkerRounds } from "../../fixtures/memory-service-fixture.js";
 
 export type OrganizePayload = {
@@ -20,11 +21,45 @@ export type OrganizePayload = {
   request_domains: string[];
 };
 
-export type OrganizeReply = (payload: OrganizePayload, call: number) => Record<string, unknown>;
+export type OrganizeReply = (payload: OrganizePayload, call: number) => Record<string, unknown> | Promise<Record<string, unknown>>;
+
+export type RouteStubPayload = {
+  route: "write" | "retrieve";
+  sessions: Array<{ topic_id: string; topic_name: string; topic_summary: string; decisions?: string[] }>;
+  messages?: Array<{ content: string }>;
+  query?: string;
+};
+
+export type RouteReply = (payload: RouteStubPayload) => Record<string, unknown>;
 
 export interface ModelStub {
   organizeCalls: OrganizePayload[];
+  routeCalls: RouteStubPayload[];
   embeddingCalls: number;
+}
+
+function sessionCard(session: RouteStubPayload["sessions"][number]): string {
+  return [session.topic_name, session.topic_summary, ...(session.decisions ?? [])].join("\n");
+}
+
+/** Test double for the router. One existing session is attached; otherwise a new session is accepted. Retrieve keeps sessions that share a token with the question, most overlap first. */
+export function defaultRouteDecision(payload: RouteStubPayload): Record<string, unknown> {
+  if (payload.route === "retrieve") {
+    const tokens = uniqueTokens(payload.query ?? "");
+    const ranked = [...payload.sessions].sort((left, right) =>
+      tokenOverlap(tokens, sessionCard(right)) - tokenOverlap(tokens, sessionCard(left)) || left.topic_id.localeCompare(right.topic_id));
+    const picked = ranked.filter((session) => tokenOverlap(tokens, sessionCard(session)) > 0);
+    return { kind: "retrieve", topic_ids: picked.map((session) => session.topic_id) };
+  }
+  if (payload.sessions.length === 1) return { kind: "attach", topic_id: payload.sessions[0]!.topic_id };
+  const text = (payload.messages ?? []).map((message) => message.content).join("");
+  return { kind: "accept", title: [...text].slice(0, 12).join("") || "新会话", summary: [...text].slice(0, 40).join("") };
+}
+
+/** Write path always opens a new session. Retrieve stays on the default overlap ranking. */
+export function routeAcceptsNewSessions(payload: RouteStubPayload): Record<string, unknown> {
+  if (payload.route === "write") return { kind: "accept", title: "新会话", summary: "新会话" };
+  return defaultRouteDecision(payload);
 }
 
 /** Deterministic bag-of-hashes vector so similar text lands close together. */
@@ -43,8 +78,8 @@ function json(body: unknown, status = 200): Response {
 }
 
 /** Stubs the chat and embedding endpoints the summary model and embedder call (see memory-service-fixture). */
-export function stubModel(reply: OrganizeReply, options: { embeddings?: "ok" | "fail" } = {}): ModelStub {
-  const stub: ModelStub = { organizeCalls: [], embeddingCalls: 0 };
+export function stubModel(reply: OrganizeReply, options: { embeddings?: "ok" | "fail"; route?: RouteReply } = {}): ModelStub {
+  const stub: ModelStub = { organizeCalls: [], routeCalls: [], embeddingCalls: 0 };
   vi.stubGlobal("fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/api/app/byok-token-usage/events")) return json({ ok: true });
@@ -56,9 +91,17 @@ export function stubModel(reply: OrganizeReply, options: { embeddings?: "ok" | "
       return json({ data: inputs.map((item, index) => ({ index, embedding: fakeVector(item) })), usage: { prompt_tokens: 1, total_tokens: 1 } });
     }
     const messages = body.messages as Array<{ role: string; content: string }>;
-    const payload = JSON.parse(messages.find((message) => message.role === "user")!.content) as OrganizePayload;
+    const payload = JSON.parse(messages.find((message) => message.role === "user")!.content) as OrganizePayload & RouteStubPayload;
+    if (payload.route === "write" || payload.route === "retrieve") {
+      stub.routeCalls.push(payload);
+      const output = (options.route ?? defaultRouteDecision)(payload);
+      return json({
+        choices: [{ message: { content: JSON.stringify(output) }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 }
+      });
+    }
     stub.organizeCalls.push(payload);
-    const output = reply(payload, stub.organizeCalls.length);
+    const output = await reply(payload, stub.organizeCalls.length);
     return json({
       choices: [{ message: { content: JSON.stringify(output) }, finish_reason: "stop" }],
       usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 }
