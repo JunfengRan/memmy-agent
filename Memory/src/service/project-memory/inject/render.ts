@@ -99,6 +99,13 @@ function dated(time: string, members: string, reason?: string | null): string {
 }
 
 function compareTime(left: string, right: string): number {
+  // Zoned ISO times compare as instants. Legacy display-only values without a
+  // zone retain lexical order rather than depending on the host timezone.
+  const zoned = /(?:Z|[+-]\d{2}:?\d{2})$/i;
+  if (zoned.test(left) && zoned.test(right)) {
+    const delta = Date.parse(left) - Date.parse(right);
+    if (Number.isFinite(delta)) return delta;
+  }
   return left < right ? -1 : left > right ? 1 : 0;
 }
 

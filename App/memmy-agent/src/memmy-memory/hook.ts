@@ -198,7 +198,7 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
       this.rememberUnavailableL3(sessionKey);
       this.warnMemoryUnavailable(sessionKey, "recall", error);
     }
-    await this.loadProjectSession(sessionKey);
+    await this.loadProjectSession(sessionKey, turn);
   }
 
   override async sessionStart(ctx: AgentHookContext): Promise<void> {
@@ -899,7 +899,7 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
     return stringOrUndefined(ctx?.spec?.sessionKey) ?? stringOrUndefined(ctx?.sessionKey) ?? stringOrUndefined(ctx?.session?.key) ?? null;
   }
 
-  private async loadProjectSession(sessionKey: string): Promise<void> {
+  private async loadProjectSession(sessionKey: string, turn: InteractiveTurn): Promise<void> {
     const spaces = this.projectSpaceIds();
     if (spaces.length === 0) {
       this.projectSessionText.delete(sessionKey);
@@ -907,20 +907,26 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
     }
     if (typeof this.client.post !== "function") return;
     try {
-      const groups = [];
-      for (const spaceId of spaces) {
-        const payload = await this.client.post("/api/openmem/v1/get/memory", {
-          space_id: spaceId,
-          page: 1,
-          size: 8,
-        }, { timeoutMs: 2000 });
-        groups.push({ spaceName: spaceId, topics: projectPayloadView(payload).topics });
-      }
-      this.projectSessionText.set(sessionKey, renderSessionInjection({
-        spaceName: groups.map((group) => group.spaceName).join("、"),
-        sourceHint: "需要原始对话时，用 memmy-project 读取来源任务。",
-        groups,
-      }));
+      await this.withTurnDeadline(turn, "project-index", async (signal) => {
+        const groups = [];
+        for (const spaceId of spaces) {
+          signal.throwIfAborted();
+          this.assertCurrentTurn(turn);
+          const payload = await this.client.post("/api/openmem/v1/get/memory", {
+            space_id: spaceId,
+            page: 1,
+            size: 8,
+          }, { timeoutMs: 2000, signal });
+          groups.push({ spaceName: spaceId, topics: projectPayloadView(payload).topics });
+        }
+        signal.throwIfAborted();
+        this.assertCurrentTurn(turn);
+        this.projectSessionText.set(sessionKey, renderSessionInjection({
+          spaceName: groups.map((group) => group.spaceName).join("、"),
+          sourceHint: "需要原始对话时，用 memmy-project 读取来源任务。",
+          groups,
+        }));
+      });
     } catch {
       // Keep the previous guide. A failed lookup must not block the prompt.
     }
@@ -932,26 +938,26 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
     if (spaces.length === 0 || !userId || !turn.userText.trim()) return;
     if (typeof this.client.post !== "function") return;
     if (performance.now() >= turn.deadline || turn.finished || !this.isCurrentTurn(turn)) return;
-    let conversationId = turn.sessionId || this.sessionIdBySessionKey.get(turn.sessionKey) || "";
-    if (!conversationId) {
-      try {
-        conversationId = await this.ensureSession(ctx, turn.sessionKey, turn.generation);
-      } catch {
-        return;
-      }
-    }
-    if (!conversationId || !this.isCurrentTurn(turn)) return;
     try {
-      const payload = await this.client.post("/api/openmem/v1/search/memory", {
-        user_id: userId,
-        space_ids: [...spaces],
-        query: turn.userText,
-        include_memory_view: ["project"],
-        conversation_id: conversationId,
-      }, { timeoutMs: 2000, signal: turn.controller.signal });
-      const view = projectPayloadView(payload);
-      const rendered = renderTurnMemories({ kind: "turn", topics: view.topics, degraded: view.degraded });
-      if (rendered) this.prependProjectTurn(messages, rendered);
+      await this.withTurnDeadline(turn, "project-recall", async (signal) => {
+        const conversationId = turn.sessionId || this.sessionIdBySessionKey.get(turn.sessionKey)
+          || await this.ensureSession(ctx, turn.sessionKey, turn.generation);
+        signal.throwIfAborted();
+        this.assertCurrentTurn(turn);
+        if (!conversationId) return;
+        const payload = await this.client.post("/api/openmem/v1/search/memory", {
+          user_id: userId,
+          space_ids: [...spaces],
+          query: turn.userText,
+          include_memory_view: ["project"],
+          conversation_id: conversationId,
+        }, { timeoutMs: 2000, signal });
+        signal.throwIfAborted();
+        this.assertCurrentTurn(turn);
+        const view = projectPayloadView(payload);
+        const rendered = renderTurnMemories({ kind: "turn", topics: view.topics, degraded: view.degraded });
+        if (rendered) this.prependProjectTurn(messages, rendered);
+      });
     } catch {
       // Do not block the turn.
     }
