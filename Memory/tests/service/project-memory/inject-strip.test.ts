@@ -27,6 +27,20 @@ describe("stripInjectedText", () => {
     expect(stripInjectedContext("前文<memos_context>旧</memos_context>后文")).toBe("前文后文");
   });
 
+  it("removes complete nested blocks without leaking their outer tail", () => {
+    for (const tag of ["memos_context", "project_index"]) {
+      const text = `before<${tag}>outer<${tag}>inner</${tag}>old conclusion</${tag}>after`;
+      expect(stripInjectedText(text)).toEqual({ text: "beforeafter", blocks: 1, unclosedBlocks: 0 });
+      const copied = stripInjectedMessage({ content: text, tool_calls: [{ name: "read", arguments: text }] });
+      expect(copied.message.content).toBe("beforeafter");
+      expect(copied.message.tool_calls[0]!.arguments).toBe("beforeafter");
+    }
+    expect(stripInjectedText("before<memos_context>unclosed<project_index>old</project_index>after"))
+      .toEqual({ text: "before<memos_context>unclosedafter", blocks: 1, unclosedBlocks: 1 });
+    expect(stripInjectedText("<memos_context>outer<project_index>index</project_index>end</memos_context>"))
+      .toEqual({ text: "", blocks: 1, unclosedBlocks: 0 });
+  });
+
   it("strips string tool-call arguments and keeps the surrounding message", () => {
     const stripped = stripInjectedMessage({
       role: "assistant",

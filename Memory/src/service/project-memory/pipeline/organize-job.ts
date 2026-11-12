@@ -24,6 +24,7 @@ import {
 } from "../organize/organizer.js";
 import type { PendingDeferred, ProjectLocalState, SpaceOutcome, TaskDetails } from "../store/sqlite/local-state.js";
 import type { ProjectMemoryStore } from "../store/store.js";
+import { timeMs } from "../time.js";
 
 const log = createMemoryLogger("project-memory.organize");
 
@@ -155,7 +156,8 @@ function taskDetails(
 }
 
 function chronological(turns: RawTurnRecord[]): RawTurnRecord[] {
-  return [...turns].sort((left, right) => left.chatTime < right.chatTime ? -1 : left.chatTime > right.chatTime ? 1 : left.turnId < right.turnId ? -1 : 1);
+  return [...turns].sort((left, right) => timeMs(left.chatTime) - timeMs(right.chatTime)
+    || (left.turnId < right.turnId ? -1 : left.turnId > right.turnId ? 1 : 0));
 }
 
 /**

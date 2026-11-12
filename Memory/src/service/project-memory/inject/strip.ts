@@ -11,32 +11,39 @@ export interface StrippedInjection {
   unclosedBlocks: number;
 }
 
-const CLOSED_MEMOS = /<memos_context\b[^>]*>[\s\S]*?<\/memos_context>/gi;
-const CLOSED_INDEX = /<project_index\b[^>]*>[\s\S]*?<\/project_index>/gi;
 const UNCLOSED = /<\/?(?:memos_context|project_index)\b/gi;
 
-function stripTag(text: string, pattern: RegExp): { text: string; blocks: number } {
-  pattern.lastIndex = 0;
-  let blocks = 0;
-  const next = text.replace(pattern, () => {
-    blocks += 1;
-    return "";
-  });
-  pattern.lastIndex = 0;
-  return { text: next, blocks };
-}
-
 function stripClosed(text: string): { text: string; blocks: number } {
-  let blocks = 0;
-  let current = text;
-  for (;;) {
-    const memos = stripTag(current, CLOSED_MEMOS);
-    const index = stripTag(memos.text, CLOSED_INDEX);
-    const removed = memos.blocks + index.blocks;
-    if (removed === 0) return { text: current, blocks };
-    blocks += removed;
-    current = index.text;
+  // Match balanced spans before removing anything. A non-greedy block regexp
+  // stops at an inner closing tag and leaks the rest of a closed outer block.
+  const tags = /<(memos_context|project_index)\b[^>]*>|<\/(memos_context|project_index)>/gi;
+  const stacks = new Map<string, number[]>();
+  const spans: Array<{ start: number; end: number }> = [];
+  for (const match of text.matchAll(tags)) {
+    const name = (match[1] ?? match[2])!.toLowerCase();
+    const stack = stacks.get(name) ?? [];
+    stacks.set(name, stack);
+    if (match[1]) stack.push(match.index);
+    else {
+      const start = stack.pop();
+      if (start !== undefined) spans.push({ start, end: match.index + match[0].length });
+    }
   }
+  spans.sort((left, right) => left.start - right.start || right.end - left.end);
+  const removed: typeof spans = [];
+  for (const span of spans) {
+    const prior = removed.at(-1);
+    if (prior && span.start < prior.end) prior.end = Math.max(prior.end, span.end);
+    else removed.push({ ...span });
+  }
+  let end = 0;
+  const kept: string[] = [];
+  for (const span of removed) {
+    kept.push(text.slice(end, span.start));
+    end = span.end;
+  }
+  kept.push(text.slice(end));
+  return { text: kept.join(""), blocks: removed.length };
 }
 
 function partText(part: unknown): string {

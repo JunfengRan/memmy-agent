@@ -344,7 +344,13 @@ export async function handleOpenMemRequest(service: ProjectMemoryService, reques
   if (route === null) return null;
   const topicMatch = /^get\/memory\/([^/]+)$/.exec(route);
   if (topicMatch && (request.method === "GET" || request.method === "POST")) {
-    const topic = await service.getTopic(decodeURIComponent(topicMatch[1]!));
+    let topicId: string;
+    try {
+      topicId = decodeURIComponent(topicMatch[1]!);
+    } catch {
+      throw invalidParams("memory_id must have valid URI encoding", { field: "memory_id" });
+    }
+    const topic = await service.getTopic(topicId);
     return ok({ topic_detail_list: [topicDetail(topic)] });
   }
   if (request.method !== "POST") return null;

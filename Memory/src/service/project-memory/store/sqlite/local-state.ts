@@ -283,7 +283,7 @@ export class ProjectLocalState {
       `SELECT t.* FROM pm_raw_turns t
        JOIN pm_task_turns l ON l.turn_id = t.turn_id
        WHERE l.task_id = ?
-       ORDER BY t.chat_time, t.rowid`
+       ORDER BY julianday(t.chat_time), t.rowid`
     ).all(taskId) as TurnRow[]).map(turnFromRow);
   }
 
@@ -291,9 +291,9 @@ export class ProjectLocalState {
   contextTurns(conversationId: string, taskId: string, before: string, limit: number): RawTurnRecord[] {
     const rows = this.db.prepare(
       `SELECT * FROM pm_raw_turns
-       WHERE conversation_id = ? AND chat_time <= ?
+       WHERE conversation_id = ? AND julianday(chat_time) <= julianday(?)
          AND turn_id NOT IN (SELECT turn_id FROM pm_task_turns WHERE task_id = ?)
-       ORDER BY chat_time DESC, rowid DESC
+       ORDER BY julianday(chat_time) DESC, rowid DESC
        LIMIT ?`
     ).all(conversationId, before, taskId, limit) as TurnRow[];
     return rows.map(turnFromRow).reverse();
@@ -304,7 +304,7 @@ export class ProjectLocalState {
     const value = this.db.prepare(
       `SELECT role_name FROM pm_raw_turns
        WHERE role_id = ? AND role_name IS NOT NULL
-       ORDER BY chat_time DESC, rowid DESC
+       ORDER BY julianday(chat_time) DESC, rowid DESC
        LIMIT 1`
     ).pluck().get(roleId);
     return typeof value === "string" ? value : null;

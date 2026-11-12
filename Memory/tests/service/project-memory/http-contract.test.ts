@@ -123,6 +123,17 @@ describe("openmem HTTP contract", () => {
     expect(inUse.body).toMatchObject({ code: 40903, message: "DOMAIN_IN_USE" });
   });
 
+  it("rejects malformed encoded topic ids as input errors for GET and POST", async () => {
+    const { get, post } = await startServer();
+    for (const malformed of ["%", "%E0%A4%A", "%FF"]) {
+      for (const result of [await get(`get/memory/${malformed}`), await post(`get/memory/${malformed}`, {})]) {
+        expect(result.status).toBe(400);
+        expect(result.body).toMatchObject({ code: 40001, message: "INVALID_PARAMS" });
+      }
+    }
+    expect((await get("get/memory/topic%5Fmissing")).status).toBe(404);
+  });
+
   it("maps errors to the v3 envelope and HTTP status", async () => {
     stubStages(combinedStages(() => emptyReply()));
     const { post } = await startServer();

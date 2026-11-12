@@ -40,6 +40,9 @@ unchanged during migration so failures remain searchable with `rg` and Vitest
 | Project memory | Rank fusion             | `project-memory/fuse.test.ts`          | `project memory rank fusion`                      | cross-path RRF, relativity, MMR cap                                        | unit        |
 | Project memory | Tool disclosure         | `project-memory/inject-tool.test.ts`   | `project memory tool binding`                     | tool fields, host binding, kind=tool wrapper                               | unit        |
 
+| Project memory | Offset chronology | `project-memory/local-time.test.ts` | `project local turn chronology` | turn/context/name ordering by instant | unit |
+| Project memory | Vector freshness | `project-memory/vector-index.test.ts` | `project vector index freshness` | invalidation, late async writes, model changes and deletion | integration |
+
 ## Find and run tests
 
 Run these commands from the `Memory` package directory:

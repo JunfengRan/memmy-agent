@@ -229,6 +229,25 @@ describe("project memory task resubmit", () => {
     expect(failed!.batch_key).toBe(`${completed!.batch_key}#${first}`);
   });
 
+  it("can fail twice and resubmit again without duplicating the completed write", async () => {
+    stubStages(combinedStages(() => { throw new Error("model down"); }));
+    const { service } = harness.createService();
+    await setupSpace(service, "space_a");
+    const body = { conversation_id: "retry_twice", space_ids: ["space_a"], messages: [message("推送重试三次", "2026-10-29 10:00:00")] };
+    const first = await add(service, body);
+    await drain(service);
+    const second = await add(service, body);
+    await drain(service);
+    stubStages(combinedStages(() => decisionReply("推送重试三次。")));
+    const third = await add(service, body);
+    await drain(service);
+    expect(new Set([first, second, third]).size).toBe(3);
+    for (const id of [first, second]) expect((await call(service, "get/status", { task_id: id })).data.status).toBe("failed");
+    expect((await call(service, "get/status", { task_id: third })).data.status).toBe("completed");
+    expect(await add(service, body)).toBe(third);
+    expect((await call(service, "get/memory", { space_id: "space_a" })).data.total).toBe(1);
+  });
+
   it("records each conflict kind and writes the batch after the injector stops", async () => {
     const { service, db } = harness.createService();
     const side = new SqliteProjectMemoryStore({ db: db.db, now: () => new Date() });

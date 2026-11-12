@@ -476,7 +476,8 @@ export class SqliteProjectMemoryStore implements ProjectMemoryStore {
 
   async indexTopics(topicIds: string[]): Promise<void> {
     const model = this.embeddingModel();
-    if (!model || !this.embedder || topicIds.length === 0) return;
+    const embedder = this.embedder;
+    if (!model || !embedder || topicIds.length === 0) return;
     const topics = this.readTopics(topicIds);
     const pending = topics
       .map((topic) => ({ topic, text: topicEmbeddingText(topic) }))
@@ -488,16 +489,18 @@ export class SqliteProjectMemoryStore implements ProjectMemoryStore {
     if (pending.length === 0) return;
     let vectors: number[][];
     try {
-      vectors = await this.embedder.embed(pending.map((item) => item.text), "document");
+      vectors = await embedder.embed(pending.map((item) => item.text), "document");
     } catch (error) {
       log.warn("index.embedding_failed", { topics: pending.length, ...memoryErrorFields(error) });
       return;
     }
     this.db.transaction(() => {
+      if (this.embeddingModel() !== model) return;
       pending.forEach((item, index) => {
         const vector = vectors[index];
         if (!vector || vector.length === 0) return;
-        if (!this.topicRows([item.topic.topicId])[0]) return;
+        const [current] = this.readTopics([item.topic.topicId]);
+        if (!current || sha(`${model}\u0000${topicEmbeddingText(current)}`) !== item.hash) return;
         this.deleteVector(item.topic.topicId);
         const info = this.db.prepare(
           `INSERT INTO pm_topic_vectors (topic_id, embedding_model, embedding_dim, source_hash, updated_at) VALUES (?, ?, ?, ?, ?)`
@@ -907,6 +910,11 @@ export class SqliteProjectMemoryStore implements ProjectMemoryStore {
     const [row] = this.topicRows([topicId]);
     if (!row) return;
     const topic = this.readTopic(row);
+    // Invalidate in the same transaction as the content write. If L05 fails,
+    // recall must not use a vector for the previous version of this topic.
+    const vector = this.db.prepare(`SELECT embedding_model, source_hash FROM pm_topic_vectors WHERE topic_id = ?`).get(topicId) as
+      { embedding_model: string; source_hash: string } | undefined;
+    if (vector && vector.source_hash !== sha(`${vector.embedding_model}\u0000${topicEmbeddingText(topic)}`)) this.deleteVector(topicId);
     const text = [
       topic.topicName,
       topic.topicSummary,
