@@ -73,6 +73,8 @@ export function buildJudgeMessages(input: JudgeInput): Array<{ role: "system" | 
     topics: input.topics.map((topic) => ({
       topic_id: topic.topicId,
       domain: topic.domain,
+      topic_summary: topic.topicSummary,
+      topic_description: topic.topicDescription,
       decisions: topic.decisions.map((decision) => ({
         id: decision.id,
         content: decision.content,

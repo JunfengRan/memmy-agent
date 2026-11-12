@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { PROJECT_MEMORY_LIMITS } from "../../../src/service/project-memory/contract/limits.js";
 import type { RecallRequest } from "../../../src/service/project-memory/contract/types.js";
 import { unionCandidates } from "../../../src/service/project-memory/organize/candidates.js";
+import { buildJudgeMessages } from "../../../src/service/project-memory/merge/judge.js";
 import { SqliteProjectMemoryStore } from "../../../src/service/project-memory/store/sqlite/sqlite-store.js";
 import { call, combinedStages, createProjectMemoryHarness, drain, emptyReply, setupSpace, stubStages, type OrganizePayload } from "./helpers.js";
 
@@ -47,6 +48,18 @@ describe("merge candidate union", () => {
 });
 
 describe("project memory organize stages", () => {
+  it("gives M05 the current summary and description that it is responsible for updating", () => {
+    const messages = buildJudgeMessages({ drafts: [], conflictsShown: new Set(), stateHints: [], topics: [{
+      topicId: "topic_retry", spaceId: "space_a", domain: "工程", topicName: "推送",
+      topicSummary: "推送失败的重试策略", topicDescription: "发送失败最多重试三次。",
+      decisions: [], experiences: [], timeline: [], sources: [], revision: 1,
+      createTime: "2026-11-12T00:00:00Z", updateTime: "2026-11-12T00:00:00Z"
+    }] });
+    expect(JSON.parse(messages[1]!.content).topics[0]).toMatchObject({
+      topic_summary: "推送失败的重试策略", topic_description: "发送失败最多重试三次。"
+    });
+  });
+
   it("strips closed injection blocks before M02 and counts them on the task details", async () => {
     const stub = stubStages(combinedStages(() => emptyReply()));
     const { service, db } = harness.createService();

@@ -3,13 +3,13 @@
  * experience change, informed, and summary/description rewrite.
  * The rewrite step lives in this call (ADR-0007); applying ops stays deterministic.
  */
-export const JUDGE_PROMPT_VERSION = "pm-judge-v0.3.0";
+export const JUDGE_PROMPT_VERSION = "pm-judge-v0.3.1";
 
 export const JUDGE_SYSTEM_PROMPT = `提示词版本：${JUDGE_PROMPT_VERSION}
 
 你是团队项目记忆的比对器。草稿已经归入既有主题。你要判断每条草稿和该主题里的哪条决策或经验是同一件事，并在现状变化时改写主题的摘要或描述。不要改归属，不要新建主题。只输出 JSON。
 
-你看到的是草稿和 signals，以及主题里已经写好的决策和经验，不是原始消息。
+你看到的是草稿和 signals，以及主题当前的 topic_summary、topic_description、决策和经验，不是原始消息。
 
 ## 决策
 同一问题：两条结论针对同一件待定的事，且不能同时成立。可以同时成立就不是同一问题，same_question_as 填 null。
@@ -28,6 +28,7 @@ informed_decision_ids：conflicts_shown 里的 decision，如果草稿或 signal
 
 ## 摘要和描述
 对本批有草稿归入的主题，如果范围或目标变了，改写 topic_summary（不超过 80 字，不写进展）。如果做法、进展或后续计划变了，改写 topic_description（不超过 400 字，不保留已经失效的计划）。用 state_hints 和草稿作线索。没变化就不要列出该主题。
+将变化与输入中的当前摘要、描述逐项比对。现行结论作者已修改做法时，描述中对应的旧做法也要更新；只是其他成员提出不同结论、尚未被认可时，不把该分歧写成已确定的做法。
 
 ## 输出格式
 {
