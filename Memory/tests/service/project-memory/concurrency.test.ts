@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryDb, type MemoryService } from "../../../src/index.js";
+import { Repositories } from "../../../src/storage/repositories.js";
 import { ASSIGN_PROMPT_VERSION } from "../../../src/service/project-memory/prompts/assign.js";
 import type { ChangeSet, TopicChange } from "../../../src/service/project-memory/contract/types.js";
 import { SqliteProjectMemoryStore } from "../../../src/service/project-memory/store/sqlite/sqlite-store.js";
@@ -61,6 +62,28 @@ function changeSet(key: string, topics: TopicChange[]): ChangeSet {
 }
 
 const accepted = { acceptedAt: "2026-11-01T00:00:10.000Z" };
+
+describe("project worker retry order", () => {
+  it("requeues a failed head before its successor instead of permanently blocking the Space", async () => {
+    const { service, db } = harness.createService();
+    await setupSpace(service, "space_a");
+    for (const [index, content] of ["推送重试三次", "推送重试五次"].entries()) {
+      await add(service, { conversation_id: "retry_order", space_ids: ["space_a"],
+        messages: [message(content, `2026-11-12T10:0${index}:00+08:00`, "a", "成员A")] });
+    }
+    const runtime = new Repositories(db.db).runtime;
+    const lease = () => runtime.leaseQueuedJobs(10, 60, undefined, false, ["project_memory_organize"]);
+    const [head] = lease();
+    expect(head?.scopeSeq).toBe(1);
+    expect(runtime.failJob(head!.id, "transient runtime failure")?.status).toBe("failed");
+    expect(lease()).toHaveLength(0); // Pending retry must not be overtaken.
+    expect(runtime.requeueFailedJobs().map((item) => item.after.id)).toContain(head!.id);
+    const [retried] = lease();
+    expect(retried?.id).toBe(head!.id);
+    runtime.completeJob(retried!.id);
+    expect(lease().map((job) => job.scopeSeq)).toEqual([2]);
+  });
+});
 
 function fingerprint(database: MemoryDb) {
   return {
