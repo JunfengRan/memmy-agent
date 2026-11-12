@@ -2,7 +2,9 @@
 
 这里放项目记忆 `add_message` / `search_memory` 的开发规范、计划和过程记录。规格本身在 `design-docs/standard/`（钉钉文档的本地镜像，不进 git）。
 
-先读 [项目记忆为什么难](algorithm-handoff.html)，理解基座与失败链路；再读 [Jev 与 Super Agent 实验](routing-experiments.html)，区分默认实现和实验。接入细节见 ONBOARDING / DEVELOPMENT，指标以 metrics 为准。
+Agent 开工先按仓库 [AGENTS.md](../../AGENTS.md) 的初始化顺序：协作协议 → 相关工作项全部交接与评审 → DEVELOPMENT → 规格快照、现行规格与 ADR → 对齐表和待决问题 → 代码与验证。先检查分支、工作区及规格 SHA；本次审计记录见 [20261112-project-memory-audit](../../.agents/work/20261112-project-memory-audit/item.md)。
+
+面向人的背景阅读可从 [项目记忆为什么难](algorithm-handoff.html) 开始，再读 [Jev 与 Super Agent 实验](routing-experiments.html)。两篇介绍不是规格或当前验收结论，接入细节见 ONBOARDING / DEVELOPMENT，指标以 metrics 为准。
 
 ## 文档
 

@@ -4,6 +4,12 @@
 
 算法与失败样例见 [交接稿](algorithm-handoff.html)，实验名称与分支差异见 [实验说明](routing-experiments.html)。这里描述当前代码；ADR 中的初始版本号不必等于当前提示词版本。
 
+## 开工顺序
+
+先检查分支与工作区，读 `.agents/README.md`、`protocol.md` 及相关工作项全部交接与评审；再读本规范、spec-snapshots、现行 standard 对应章节、ADR、spec-alignment 与 open-questions。规格 SHA 不一致时先走 pm-spec-sync。面向人的背景文档不替代初始化必读项；默认关闭实验、未开发条目与待定项不自动进入修补范围。
+
+评审先写 review，修补阶段切换为 developer。引用的修复代码提交后再写 handoff；未经独立 reviewer 复核不标 approved。
+
 ## 模块布局
 
 按 v3 §1.3 的模块编号组织，v3 §5.4.1 的 `project-memory-core/` 在本仓库对应 `Memory/src/service/project-memory/`。

@@ -87,6 +87,8 @@
 
 **原始输出**：`eval/project-memory/runs/20261112-audit-smoke/report.json`、`20261112-audit-smoke-v031/report.json` 及同目录缓存、SQLite（均忽略）。临时驱动在首个目录 smoke.mts；第二次输出目录带 v031。数据集 v2.1 校验 errors=[]，评分器 selftest 22/22；检索 self-check 为 3 topics、2 rounds、q03、same JSON，均无聊天调用。
 
+补充复现边界：冒烟使用评测 `createLlm` 适配 LlmClient，调用真实 M02/M04/M05 提示词和项目门面，但不覆盖生产 HTTP 模型传输或 worker 租约；任务由驱动直接交给 processOrganizeJob。独立评委只检查当前/历史和描述的一致性，不是标准回答评分。
+
 ### R-20261111-01
 
 **元数据**

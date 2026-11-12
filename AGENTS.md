@@ -6,6 +6,10 @@
 
 本项目由不同应用里的多个 Agent 以 designer / developer / reviewer 角色接力完成，彼此只通过仓库文件交接。**开工前先读 [.agents/README.md](.agents/README.md)**，按 [.agents/protocol.md](.agents/protocol.md) 在 `.agents/work/<id>/` 读写交接记录：developer 用 `agent-handoff` 技能交给 reviewer 或下一个 developer，reviewer 用 `agent-review` 技能给出 MUST / SHOULD / NIT 意见，designer 通过架构文档、ADR 或 `design-NN.md` 裁决。
 
+### 初始化顺序
+
+Agent 进入项目记忆任务时，先读协作协议与相关工作项全部交接、评审，再读 `docs/project-memory/DEVELOPMENT.md`、规格快照、`standard/` 对应章节、ADR、对齐表和待决问题，最后检查代码与验证命令。背景交接稿和实验介绍不能代替这些入口。先确认当前分支、工作区和规格 SHA；按已开发范围审计时，不把 todo 或待裁决设计自动转成开发任务。评审与修补分阶段记录身份，不自行把未经独立复核的修补标为 approved。
+
 ## 全仓约定
 
 - 改完代码先跑相关检查：`npm --prefix Memory run typecheck`，再用 `npx vitest run <path>` 跑受影响的测试。全量测试是 `npm test`。

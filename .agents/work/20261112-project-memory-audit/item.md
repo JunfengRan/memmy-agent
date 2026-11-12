@@ -1,7 +1,7 @@
 ---
 id: 20261112-project-memory-audit
-status: in-progress
-owner: developer / Codex
+status: ready-for-review
+owner: reviewer / 待独立复核
 roadmap: PM-05～PM-23 已开发部分复核
 branch: dev-project-memory-add-search-dev
 updated: 2026-11-12
@@ -21,10 +21,10 @@ updated: 2026-11-12
 
 - [x] 评审意见均有源码位置、依据及验证方法；待决项明确排除。
 - [x] 实质缺陷有先失败后通过的回归用例。
-- [ ] Memory 与 Memmy agent typecheck、受影响测试通过，记录实际结果。
-- [ ] 文档阅读顺序、实现状态与限制有当前证据。
+- [x] Memory 与 Memmy agent typecheck、受影响测试通过，记录实际结果。
+- [x] 文档阅读顺序、实现状态与限制有当前证据。
 - [ ] 修复提交并普通 push 到 origin 指定分支，核对远端 SHA。
-- [ ] 提交 developer 交接，待独立 reviewer 复核，不自行标 approved。
+- [x] 提交 developer 交接，待独立 reviewer 复核，不自行标 approved。
 
 ## 状态记录
 
@@ -32,3 +32,4 @@ updated: 2026-11-12
 | --- | --- | --- | --- |
 | 2026-11-12 | changes-requested | reviewer / Codex（GPT-6） | review-01.md，基线 5e4d0920 |
 | 2026-11-12 | in-progress | developer / Codex（GPT-6） | finding-01.md：在线冒烟追加 M05 输入修补；开始逐项回应 |
+| 2026-11-12 | ready-for-review | developer / Codex（GPT-6） | handoff-01.md，代码 head 460f4f94；提交推送结果另附 delivery 记录 |
