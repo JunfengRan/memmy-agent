@@ -23,7 +23,7 @@ updated: 2026-11-12
 - [x] 实质缺陷有先失败后通过的回归用例。
 - [x] Memory 与 Memmy agent typecheck、受影响测试通过，记录实际结果。
 - [x] 文档阅读顺序、实现状态与限制有当前证据。
-- [ ] 修复提交并普通 push 到 origin 指定分支，核对远端 SHA。
+- [x] 修复提交并普通 push 到 origin 指定分支，核对远端 SHA（be7be60b，见 delivery-01.md；交付记录自身随后普通推送）。
 - [x] 提交 developer 交接，待独立 reviewer 复核，不自行标 approved。
 
 ## 状态记录
@@ -33,3 +33,4 @@ updated: 2026-11-12
 | 2026-11-12 | changes-requested | reviewer / Codex（GPT-6） | review-01.md，基线 5e4d0920 |
 | 2026-11-12 | in-progress | developer / Codex（GPT-6） | finding-01.md：在线冒烟追加 M05 输入修补；开始逐项回应 |
 | 2026-11-12 | ready-for-review | developer / Codex（GPT-6） | handoff-01.md，代码 head 460f4f94；提交推送结果另附 delivery 记录 |
+| 2026-11-12 | ready-for-review | developer / Codex（GPT-6） | delivery-01.md：origin 已核对 be7be60b，等待独立 reviewer |
