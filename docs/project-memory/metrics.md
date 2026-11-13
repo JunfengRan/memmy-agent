@@ -269,7 +269,7 @@
 
 ## R-20261113-experiment-offline
 
-2026-11-13，`codex/jev-superagent-consolidated`。基座 `a32c5fd0`，独立路由 merge `c97aac68`，旧实验历史保留 merge `261b6b84`；本记录对应后续 harness/材料整理提交，运行时存在未提交的整理改动。模型与评委均未调用，产品提示词和默认开关未改。
+2026-11-13，`feat/jev-superagent`。基座 `a32c5fd0`，独立路由 merge `c97aac68`，旧实验历史保留 merge `261b6b84`；本记录对应后续 harness/材料整理提交，运行时存在未提交的整理改动。模型与评委均未调用，产品提示词和默认开关未改。
 
 这是离线完整性与复现检查，不加入端到端效果总表。数据集 v2.1 与远端基座一致，v2 使用 history/v2。原始词法报告在忽略目录 `eval/project-memory/runs/2026-11-13-jev-topic-v2.1/`、`...-v2/`，会话词法输出在 `eval/session-router/runs/ablation/`。
 

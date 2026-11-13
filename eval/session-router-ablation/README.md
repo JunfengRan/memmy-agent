@@ -1,6 +1,6 @@
 # 会话归属消融：基线 / Jev / Super Agent / Jev + Super Agent
 
-历史实验日期 2026-11-09；2026-11-13 已整理到 `codex/jev-superagent-consolidated`。`results/` 保留当时的预测、分数、summary.json 与 dataset.json。统一脚本在 `eval/session-router/run-ablation.ts`，本目录的同名脚本为兼容入口；路由器已合入，能够直接运行。新生成物统一写入忽略的 `eval/session-router/runs/ablation/`。
+历史实验日期 2026-11-09；2026-11-13 已整理到 `feat/jev-superagent`。`results/` 保留当时的预测、分数、summary.json 与 dataset.json。统一脚本在 `eval/session-router/run-ablation.ts`，本目录的同名脚本为兼容入口；路由器已合入，能够直接运行。新生成物统一写入忽略的 `eval/session-router/runs/ablation/`。
 
 ## 实验设定
 

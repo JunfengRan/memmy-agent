@@ -3,7 +3,7 @@ id: 20261113-experiment-consolidation
 status: ready-for-review
 owner: reviewer / 待独立复核
 roadmap: 无（实验整理）
-branch: codex/jev-superagent-consolidated
+branch: feat/jev-superagent
 updated: 2026-11-13
 ---
 
@@ -42,3 +42,4 @@ updated: 2026-11-13
 | --- | --- | --- | --- |
 | 2026-11-13 | in-progress | developer / Codex | 从 origin/a32c5fd0 建隔离分支整理 |
 | 2026-11-13 | ready-for-review | developer / Codex | handoff-01.md，交付 559f342a；等待独立评审 |
+| 2026-11-13 | ready-for-review | developer / Codex | 用户要求改名为 feat/jev-superagent 并清理分支；见 delivery-01.md |

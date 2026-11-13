@@ -108,4 +108,4 @@
 
 ### 2026-11-13 实验分支整理
 
-`codex/jev-superagent-consolidated` 基于 `a32c5fd0` 合入独立路由实验，保留旧 session-as-topic 的提交历史及隔离恢复入口；v2.1 数据与基座一致。专项 harness 支持 v2/v2.1，未重跑在线评测，未改变 PM 条目状态。见 [整理说明](experiment-consolidation.md) 与 [工作项](../../.agents/work/20261113-experiment-consolidation/item.md)，等待独立评审。
+`feat/jev-superagent` 基于 `a32c5fd0` 合入独立路由实验，保留旧 session-as-topic 的提交历史及隔离恢复入口；v2.1 数据与基座一致。专项 harness 支持 v2/v2.1，未重跑在线评测，未改变 PM 条目状态。见 [整理说明](experiment-consolidation.md) 与 [工作项](../../.agents/work/20261113-experiment-consolidation/item.md)，等待独立评审。

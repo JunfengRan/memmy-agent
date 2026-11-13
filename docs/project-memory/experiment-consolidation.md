@@ -2,7 +2,7 @@
 
 ## 交付分支
 
-统一入口为 `codex/jev-superagent-consolidated`，worktree 为 `.worktrees/jev-superagent-consolidated/`。原有两个分支与 worktree 保留，未改写或删除。主检出没有切分支。
+统一入口为 `feat/jev-superagent`，worktree 为 `.worktrees/jev-superagent/`。2026-11-13 按用户后续要求，将整合分支改名；两个源实验分支已删除，其原 worktree 保留为 detached HEAD。源提交均在整合分支历史内，隔离恢复命令不依赖源分支名称。主检出没有切分支。
 
 | 来源 | 固定提交 | 整理方式 |
 | --- | --- | --- |

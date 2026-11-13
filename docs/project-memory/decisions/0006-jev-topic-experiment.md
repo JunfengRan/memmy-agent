@@ -38,4 +38,4 @@ v3 的默认检索仍要求同样输入得到同样输出，模型调用只出�
 
 ## 整理说明（2026-11-13）
 
-选择题与独立会话路由汇总到 `codex/jev-superagent-consolidated`，未改变本 ADR 的默认关闭决定。旧同编号 session-topic ADR 仅在归档快照内有效。专项脚本已适配 v2/v2.1，详见 [整理说明](../experiment-consolidation.md)。
+选择题与独立会话路由汇总到 `feat/jev-superagent`，未改变本 ADR 的默认关闭决定。旧同编号 session-topic ADR 仅在归档快照内有效。专项脚本已适配 v2/v2.1，详见 [整理说明](../experiment-consolidation.md)。

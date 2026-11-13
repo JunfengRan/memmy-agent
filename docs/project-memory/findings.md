@@ -103,7 +103,7 @@ v2 的 0.826 和 v2.1 的这三行逐题对不上：数据集、题数、阅读�
 
 这是实验之后的建议，还没有写进 v3，也没有在当前代码里做。真要做，需要单独定两层的 id 怎么对应、整理模型什么时候跑、人改了粗 topic 之后细 topic 跟不跟随。
 
-下面这张表是同一种取舍的一次测量，测的是会话路由，不是产品 add。材料在 `eval/session-router-ablation/README.md`（2026-11-09，分支 `feat/superagent-session-router`）。该实现已合入 `codex/jev-superagent-consolidated`；脚本在整合分支可直接跑，历史证据位于 `eval/session-router-ablation/results/`。新的输出写忽略目录，不覆盖历史结果。
+下面这张表是同一种取舍的一次测量，测的是会话路由，不是产品 add。材料在 `eval/session-router-ablation/README.md`（2026-11-09，分支 `feat/superagent-session-router`）。该实现已合入 `feat/jev-superagent`；脚本在整合分支可直接跑，历史证据位于 `eval/session-router-ablation/results/`。新的输出写忽略目录，不覆盖历史结果。
 
 数据集是 23 条消息、6 个 Cursor 会话，按轮转交错。金标是「这条消息来自哪个原始会话」。同一个原始会话里可以有互不相关的请求，所以金标不是「同一件事」。模型格子各跑 3 次，表里是均值，括号是最小到最大。词法基线是确定的，只跑 1 次。数据集里没有停止类消息，所以没测 `stop`。
 
