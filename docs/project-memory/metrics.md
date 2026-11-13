@@ -276,3 +276,5 @@
 - 迁移：分别从原开发分支的 schema v10 源码、release 的 schema v15 源码创建独立数据库，再由本分支升级到 v16；合成已有记忆内容保留，两者 foreign_key_check 均为空。
 - 验证界限：这是本机组件和传输闭环，未打包/安装 Electron 应用，未验证真实在线模型效果或跨成员云端共享。截图、浏览器日志、迁移脚本与数据库都在忽略的 runs 下。
 - 指标：add 的 F1/stateExact/主题分组与重复率、search Recall@K/entryHit、回答 answers.llm/rubric/Token F1 均不适用（单条确定性接线样例）；成本与 tokens 不适用（未用在线模型），P95 不适用（未采集统计样本）；上述集成断言全部通过，不并入质量总表。
+
+同日独立评审修补后，在 `32b789ec` 上重建临时数据库并重跑同一真实 HTTP/Chrome 场景：1 completed / 1 topic，A 召回 true、B false，关闭后 A false，pageerror=0，历史重放未重复投递，来源按钮收到 websocket:source。确定性桩与非质量评测边界不变。

@@ -1,7 +1,7 @@
 ---
 id: 20261113-project-memory-desktop
-status: ready-for-review
-owner: reviewer / 待独立复核
+status: done
+owner: developer / 已收尾
 roadmap: PM-28
 branch: dev-project-memory-add-search
 updated: 2026-11-13
@@ -41,3 +41,7 @@ standard SHA 与 spec-snapshots 一致；用户已确认本机闭环、项目内
 2026-11-13：独立 reviewer / Codex 完成 review-01：2 MUST、2 SHOULD；交 developer 修补后复核。
 
 2026-11-13：developer / Codex 提交 32b789ec，handoff-02 回应 R1-1～R1-4，重新交独立 reviewer。
+
+2026-11-13：独立 reviewer / Codex 完成 review-02：R1-1/R1-2 MUST 与 R1-3 SHOULD 已关闭，R1-4 接受本轮暂留并登记规模边界；本工作项 approved，交 developer 收尾。
+
+2026-11-13：独立 reviewer 在 review-02 批准 32b789ec；developer 收尾为 done。R1-4 大历史规模读取性能边界保留；不代表旧审计获批。
