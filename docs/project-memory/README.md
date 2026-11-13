@@ -10,6 +10,7 @@ Agent 开工先按仓库 [AGENTS.md](../../AGENTS.md) 的初始化顺序：协�
 
 | 文件 | 内容 | 什么时候改 |
 | --- | --- | --- |
+| [local-host-integration.md](local-host-integration.md) | 本机 Memmy / Codex 接入、Add / Search 的模型与算法、来源验证及使用边界 | 宿主接入或实现说明变化时 |
 | [findings.md](findings.md) | 开发过程中的发现，给同事和汇报用。不是规格 | 有新的评测结论或设计建议时 |
 | [algorithm-handoff.html](algorithm-handoff.html) | 算法背景、贯穿示例、topic 粒度、9 道 RCA、接口接入与运行 B 完整附录 | 实现或证据变化时；生成脚本仅更新标记内附录 |
 | [routing-experiments.html](routing-experiments.html) | Jev 思路、Super Agent 路由、两个实验工作区与 Add/Search 接法 | 实验快照或结论变化时 |
