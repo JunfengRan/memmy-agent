@@ -1,7 +1,7 @@
 ---
 id: 20261113-project-memory-desktop
-status: ready-for-review
-owner: reviewer / 待独立复核
+status: changes-requested
+owner: developer / Codex
 roadmap: PM-28
 branch: dev-project-memory-add-search
 updated: 2026-11-13
@@ -37,3 +37,5 @@ standard SHA 与 spec-snapshots 一致；用户已确认本机闭环、项目内
 ## 状态记录
 
 2026-11-13：developer / Codex 完成合并基线、应用接入、类型与回归、独立 HTTP/浏览器冒烟；准备交独立 reviewer。此前审计复核状态不变。
+
+2026-11-13：独立 reviewer / Codex 完成 review-01：2 MUST、2 SHOULD；交 developer 修补后复核。
