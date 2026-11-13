@@ -1,7 +1,7 @@
 ---
 id: 20261113-restore-release-ui
-status: changes-requested
-owner: developer / Codex
+status: ready-for-review
+owner: reviewer / 待复核
 branch: dev-project-memory-add-search
 updated: 2026-11-13
 ---
@@ -15,3 +15,5 @@ updated: 2026-11-13
 既有 20261113-project-memory-desktop 的记录保留，以本次修正替代其中新增 UI 与默认关闭的体验决定；核心算法、已修补租约/重试/隔离不回退。
 
 2026-11-13：独立 reviewer / Codex 完成 review-01：1 MUST（协助 transport 漏上传锁），前端恢复与自动绑定边界通过复核，交 developer 修补。
+
+2026-11-13：developer 修复 R1-1，共用锁定 transport（56e37160），交 handoff-02 复核。
