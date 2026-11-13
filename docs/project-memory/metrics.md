@@ -287,3 +287,7 @@
 - 项目记忆验证：独立临时数据库，工程推送重试的合成轮次，不取金标领域。真实 DeepSeek M02/M04 分别成功（约 1215/1390 ms），后端无需 UI 开关自动绑定本机项目，1 个整理任务 completed，1 个主题，新会话检索命中“五次”。本例为新主题，没有 M05 调用；无 embedding，检索为词法降级。原始输出在忽略的 runs/20261113-restore-ui/。
 - 前端：浏览器读取当前真实开发版，页面无 pageerror，上一轮独立记忆弹窗/开关已移除。恢复 release 的原有页面与样式，只保留已有控件的本地/上传锁定接线；未重新设计交互。
 - 指标：add F1/stateExact/主题分组、search Recall@K/entryHit、回答 answers.llm/rubric/Token F1、统计 P95 均不适用（单条接线验证，非质量评测）；无评委或回答评分，无付费 benchmark；本次真实模型调用只证明配置和整理/召回链路可用，不能外推质量提升。
+
+## R-20261113-03：真实 Codex / Memmy 双端本机联通
+
+代码 b7cb8c56。用户本机 chat 既有Space，DeepSeek沿用现有配置，本地Xenova embedding。两个原生宿主各写一条独立验证约定，后台真实整理完成；Memmy→Codex新会话每轮项目注入命中，Codex→Memmy新会话项目索引和search_project_memory工具命中。来源会话/主题与via记录已核对；ledger/catalog项目检索不含chat验证约定；重复native轮次返回同journal。无金标灌库，不是质量benchmark。首次后台积压/embedding缓存故障及个人召回超时的边界见工作项validation-01；早期仅L1命中不计项目成功。

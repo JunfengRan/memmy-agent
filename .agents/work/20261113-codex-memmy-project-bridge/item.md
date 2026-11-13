@@ -1,6 +1,6 @@
 ---
 id: 20261113-codex-memmy-project-bridge
-status: in-progress
+status: ready-for-review
 owner: developer / Codex
 roadmap: PM-30
 branch: dev-project-memory-add-search
@@ -19,9 +19,9 @@ v3 §2.2.1–2.2.2、§3.1–3.4；ADR-0011。本次用户明确授权扩展 Cod
 
 ## 验收标准
 
-- [ ] chat 双端绑定同一 Space，跨项目/关闭后不召回或写入。
-- [ ] Codex 原生完成轮次入队，真实整理后 Memmy 新会话回答。
-- [ ] Memmy 原生完成轮次入队，真实整理后 Codex 新会话回答。
+- [x] chat 双端绑定同一 Space，跨项目/关闭后不召回或写入。
+- [x] Codex 原生完成轮次入队，真实整理后 Memmy 新会话回答。
+- [x] Memmy 原生完成轮次入队，真实整理后 Codex 新会话回答。
 - [ ] 重复 Stop 幂等，失败/取消轮次不写入；独立 reviewer 复核。
 
 ## 状态记录
@@ -29,3 +29,5 @@ v3 §2.2.1–2.2.2、§3.1–3.4；ADR-0011。本次用户明确授权扩展 Cod
 | 日期 | 状态 | 由谁 | 文件 |
 | --- | --- | --- | --- |
 | 2026-11-13 | in-progress | developer / Codex | item.md |
+
+| 2026-11-13 | ready-for-review | developer / Codex | handoff-01.md、validation-01.md |
