@@ -1,7 +1,7 @@
 ---
 id: 20261113-project-memory-desktop
-status: in-progress
-owner: developer / Codex
+status: ready-for-review
+owner: reviewer / 待独立复核
 roadmap: PM-28
 branch: dev-project-memory-add-search
 updated: 2026-11-13
