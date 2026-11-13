@@ -35,6 +35,7 @@ describe("memmy CLI command map", () => {
     expect(help).toContain("Supported agents:");
     expect(help).toContain("Default URL:");
     expect(help).toContain("project search <query>");
+    expect(help).not.toContain("rollback-panel");
   });
 
   it("prints the CLI version", async () => {
@@ -484,13 +485,13 @@ describe("memmy CLI command map", () => {
     expect(requests[0]?.headers["x-memmy-user-id"]).toBe("user_explicit");
   });
 
-  it("rejects unknown commands", async () => {
+  it.each([["unknown-command"], ["db", "rollback-panel"]])("rejects unregistered command %s", async (...words) => {
     await expect(
       runCommand({
-        argv: ["unknown-command", "--url", baseUrl],
+        argv: [...words, "--url", baseUrl],
         fetch: mockFetch([])
       })
-    ).rejects.toThrow("unknown command: unknown-command");
+    ).rejects.toThrow(`unknown command: ${words.join(" ")}`);
   });
 
   it("does not keep old recall commands", async () => {

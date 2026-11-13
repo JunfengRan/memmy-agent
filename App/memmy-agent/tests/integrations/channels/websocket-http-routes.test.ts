@@ -635,6 +635,64 @@ describe("WebSocket HTTP route helpers", () => {
     });
   });
 
+  it("moves a deleted shared project's sessions to the local project on the same folder", async ({ task }) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `memmy-ws-reassign-${task.id}-`));
+    tmpDirs.push(root);
+    const workspace = path.join(root, "workspace");
+    fs.mkdirSync(workspace, { recursive: true });
+    const projectStore = new ProjectStore({ filePath: path.join(root, "projects.json") });
+    // One folder, two projects: a local project and the shared project's carrier.
+    const local = projectStore.add(workspace, "existing", "本地项目");
+    const carrier = projectStore.add(workspace, "existing", "协作项目", { allowShared: true });
+
+    const manager = new SessionManager(root);
+    for (const [key, projectId] of [["websocket:shared-1", carrier.id], ["websocket:local-1", local.id]] as const) {
+      const session = new Session({ key });
+      session.metadata.webui = true;
+      session.metadata.webuiProjectId = projectId;
+      session.metadata.webuiWorkspaceCwd = fs.realpathSync(workspace);
+      session.addMessage("user", "hi");
+      manager.save(session);
+    }
+
+    const channel = makeChannel({ projectStore, sessionManager: manager, workspacePath: workspace });
+    const moved = await channel.dispatchHttp(localConnection, {
+      method: "POST",
+      path: "/api/sessions/reassign-project",
+      headers: withApiToken(channel),
+      body: JSON.stringify({ fromProjectId: carrier.id, toProjectId: local.id })
+    });
+
+    expect(moved?.status).toBe(200);
+    expect(responseJson(moved!)).toMatchObject({ moved: 1 });
+    // The shared project's session now belongs to the local project, and the local one is untouched.
+    expect((manager.get("websocket:shared-1") as Session).metadata.webuiProjectId).toBe(local.id);
+    expect((manager.get("websocket:local-1") as Session).metadata.webuiProjectId).toBe(local.id);
+  });
+
+  it("refuses to move sessions to a project on a different folder", async ({ task }) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `memmy-ws-reassign-deny-${task.id}-`));
+    tmpDirs.push(root);
+    const one = path.join(root, "one");
+    const two = path.join(root, "two");
+    fs.mkdirSync(one, { recursive: true });
+    fs.mkdirSync(two, { recursive: true });
+    const projectStore = new ProjectStore({ filePath: path.join(root, "projects.json") });
+    const from = projectStore.add(one, "existing", "one");
+    const to = projectStore.add(two, "existing", "two");
+
+    const channel = makeChannel({ projectStore, sessionManager: new SessionManager(root), workspacePath: one });
+    const response = await channel.dispatchHttp(localConnection, {
+      method: "POST",
+      path: "/api/sessions/reassign-project",
+      headers: withApiToken(channel),
+      body: JSON.stringify({ fromProjectId: from.id, toProjectId: to.id })
+    });
+
+    // A session records the folder it ran in, so it cannot move to a project elsewhere.
+    expect(response?.status).toBe(400);
+  });
+
   it("serves bootstrap, session listing, and session messages behind API tokens", async ({ task }) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), `memmy-ws-http-${task.id}-`));
     tmpDirs.push(root);
@@ -1009,6 +1067,16 @@ describe("WebSocket HTTP route helpers", () => {
     expect(listing.status).toBe(200);
     const keys = new Set(((await listing.json()) as any).sessions.map((session: any) => session.key));
     expect(keys).toEqual(new Set(["websocket:alpha", "websocket:beta"]));
+  });
+
+  it("returns an empty session list without synthesizing a phantom WebUI chat", async () => {
+    const manager = seedMany(tmpRoot(), ["cli:direct", "slack:C123", "lark:oc_abc"]);
+    const channel = makeChannel({ sessionManager: manager });
+    const port = await startChannel(channel);
+    const listing = await fetch(`http://127.0.0.1:${port}/api/sessions`, { headers: await authHeaders(port) });
+    expect(listing.status).toBe(200);
+    const body = await listing.json() as { sessions: unknown[] };
+    expect(body.sessions).toEqual([]);
   });
 
   it("uses session message timestamps for WebUI thread messages when transcripts omit time", () => {

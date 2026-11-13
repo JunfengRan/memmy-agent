@@ -75,12 +75,12 @@ describe("project worker retry order", () => {
     const lease = () => runtime.leaseQueuedJobs(10, 60, undefined, false, ["project_memory_organize"]);
     const [head] = lease();
     expect(head?.scopeSeq).toBe(1);
-    expect(runtime.failJob(head!.id, "transient runtime failure")?.status).toBe("failed");
+    expect(runtime.failJob(head!.id, "transient runtime failure", undefined, false, head)?.status).toBe("failed");
     expect(lease()).toHaveLength(0); // Pending retry must not be overtaken.
     expect(runtime.requeueFailedJobs().map((item) => item.after.id)).toContain(head!.id);
     const [retried] = lease();
     expect(retried?.id).toBe(head!.id);
-    runtime.completeJob(retried!.id);
+    runtime.completeJob(retried!.id, undefined, retried);
     expect(lease().map((job) => job.scopeSeq)).toEqual([2]);
   });
 });

@@ -643,7 +643,7 @@ describe("HomePage", () => {
     const source = readFileSync(homePageSourcePath, "utf8");
     const styles = readFileSync(stylesSourcePath, "utf8");
 
-    expect(source).toContain('${isComposerSingleLine ? "agent-composer-input--single " : ""}agent-composer-input--conversation block w-full pl-4 py-3 text-sm resize-none focus:outline-none rounded-card-lg bg-background-paper placeholder:text-text-ink/40');
+    expect(source).toContain('${isComposerSingleLine ? "agent-composer-input--single " : ""}agent-composer-input--conversation block w-full pl-4 py-3 text-sm rounded-card-lg bg-background-paper');
     expect(source).not.toContain("agent-composer-input--command-selected");
     expect(styles).not.toContain("padding-left: 86px;");
     expect(source).toContain('className="relative agent-composer-shell agent-composer-shell--expanded rounded-card-lg"');
@@ -712,12 +712,12 @@ describe("HomePage", () => {
 
     const shell = window.document.createElement("div");
     shell.className = "agent-composer-shell agent-composer-shell--expanded";
-    const textarea = window.document.createElement("textarea");
-    textarea.className = "agent-composer-input--conversation";
-    shell.append(textarea);
+    const editor = window.document.createElement("textarea");
+    editor.className = "agent-composer-input--conversation";
+    shell.append(editor);
     window.document.body.append(shell);
 
-    expect(window.getComputedStyle(textarea).paddingRight).toBe("16px");
+    expect(window.getComputedStyle(editor).paddingRight).toBe("16px");
   });
 
   it("keeps the single-line conversation composer on a 76px field with the first line 12px from the top", () => {
@@ -730,13 +730,13 @@ describe("HomePage", () => {
     composer.className = "agent-conversation-composer";
     const shell = window.document.createElement("div");
     shell.className = "agent-composer-shell agent-composer-shell--expanded";
-    const textarea = window.document.createElement("textarea");
-    textarea.className = "agent-composer-input--single agent-composer-input--conversation py-3 text-sm";
-    shell.append(textarea);
+    const editor = window.document.createElement("textarea");
+    editor.className = "agent-composer-input--single agent-composer-input--conversation py-3 text-sm";
+    shell.append(editor);
     composer.append(shell);
     window.document.body.append(composer);
 
-    const computed = window.getComputedStyle(textarea);
+    const computed = window.getComputedStyle(editor);
     expect(computed.height).toBe("76px");
     expect(computed.fontSize).toBe("15px");
     expect(computed.lineHeight).toBe("26.25px");
@@ -751,7 +751,7 @@ describe("HomePage", () => {
     expect(source).toContain("useLayoutEffect(() => {\n    if (!inputRef.current) {\n      return;\n    }\n    resizeComposerInput(inputRef.current);\n  }, [input, hasActiveConversation]);");
   });
 
-  it("applies the composer single-line treatment only while the textarea is one line", () => {
+  it("applies the composer single-line treatment only while the input is one line", () => {
     vi.stubGlobal("window", {
       getComputedStyle: () => ({
         lineHeight: "24px",
@@ -760,7 +760,7 @@ describe("HomePage", () => {
       })
     });
 
-    const element = { clientHeight: 48, scrollHeight: 48 } as HTMLTextAreaElement;
+    const element = { clientHeight: 48, scrollHeight: 48 } as HTMLElement;
     expect(isSingleLineComposerInput(element)).toBe(true);
 
     Object.defineProperty(element, "scrollHeight", { value: 76 });
@@ -2028,7 +2028,7 @@ describe("HomePage", () => {
     expect(dataTransferHasAttachmentFiles(null)).toBe(false);
   });
 
-  it("wires pasted attachments into both composer textareas", () => {
+  it("wires pasted attachments into both composer inputs", () => {
     const source = readFileSync(homePageSourcePath, "utf8");
 
     expect(source).toContain("function handleComposerPaste(event: ClipboardEvent<HTMLTextAreaElement>)");

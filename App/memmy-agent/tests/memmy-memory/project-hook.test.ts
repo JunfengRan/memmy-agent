@@ -52,7 +52,7 @@ describe("bound project hook", () => {
     expect(client.post).toHaveBeenCalledWith("/api/openmem/v1/search/memory", expect.objectContaining({
       user_id: "a", space_ids: ["space_a"], conversation_id: "conversation_a", include_memory_view: ["project"]
     }), expect.anything());
-    expect(ctx.messages?.[0].content).toContain('kind="turn"');
+    expect(JSON.stringify(ctx.messages?.[0].content)).toContain("memos_context");
   });
 
   it.each(["empty", "degraded", "failure"])("continues on %s project results", async (kind) => {
@@ -63,7 +63,7 @@ describe("bound project hook", () => {
     });
     const ctx = context();
     await expect(hook.beforeRun(ctx)).resolves.toBeUndefined();
-    const content = String(ctx.messages?.[0].content);
+    const content = JSON.stringify(ctx.messages?.[0].content);
     expect(content.includes("<memos_context")).toBe(kind === "degraded");
     if (kind === "degraded") expect(content).toContain("召回降级");
   });
