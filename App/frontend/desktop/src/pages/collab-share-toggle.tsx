@@ -11,6 +11,7 @@ import { shareIntentFor, setShareIntent } from "../app/collab-share-intent.js";
 import { useTranslation } from "../i18n/use-translation.js";
 
 export type CollabShareToggleProps = {
+  uploadLocked?: boolean;
   collab: CollabClient | null;
   /** 云端项目 id。 */
   projectId: string;
@@ -24,7 +25,7 @@ export type CollabShareToggleProps = {
 
 export function CollabShareToggle(props: CollabShareToggleProps) {
   const { t } = useTranslation();
-  const { collab, projectId, conversationId, draftScopeKey, onError } = props;
+  const { collab, projectId, conversationId, draftScopeKey, onError, uploadLocked = false } = props;
   /** 会话存在后，会话 id 本身就是这张草稿的 scope key。 */
   const scopeKey = conversationId ?? draftScopeKey;
   const [shared, setShared] = useState(() => shareIntentFor(scopeKey));
@@ -33,6 +34,7 @@ export function CollabShareToggle(props: CollabShareToggleProps) {
 
   // 已有任务读一次本机记录；刚发完第一条消息时，草稿里的选择还在 store 里，先按它显示。
   useEffect(() => {
+    if (uploadLocked) { setShared(false); setLoaded(true); return; }
     setShared(shareIntentFor(scopeKey));
     if (!conversationId) {
       setLoaded(true);
@@ -57,10 +59,10 @@ export function CollabShareToggle(props: CollabShareToggleProps) {
     return () => {
       cancelled = true;
     };
-  }, [collab, conversationId, projectId, scopeKey]);
+  }, [collab, conversationId, projectId, scopeKey, uploadLocked]);
 
   const toggle = useCallback(async () => {
-    if (saving) return;
+    if (uploadLocked || saving) return;
     const next = !shared;
     if (!conversationId) {
       setShareIntent(scopeKey, next);
@@ -82,7 +84,7 @@ export function CollabShareToggle(props: CollabShareToggleProps) {
     } finally {
       setSaving(false);
     }
-  }, [collab, conversationId, onError, projectId, saving, scopeKey, shared]);
+  }, [collab, conversationId, onError, projectId, saving, scopeKey, shared, uploadLocked]);
 
   const label = shared ? t("collab.share.shared") : t("collab.share.label");
   const hint = shared
@@ -95,10 +97,10 @@ export function CollabShareToggle(props: CollabShareToggleProps) {
     <button
       type="button"
       role="switch"
-      aria-checked={shared}
+      aria-checked={uploadLocked ? false : shared}
       aria-label={label}
-      title={hint}
-      disabled={saving || (Boolean(conversationId) && !loaded)}
+      title={uploadLocked ? t("collab.share.localOnlyHint") : hint}
+      disabled={uploadLocked || saving || (Boolean(conversationId) && !loaded)}
       onClick={() => void toggle()}
       className={`composer-share-chip${shared ? " composer-share-chip--on" : ""}`}
     >

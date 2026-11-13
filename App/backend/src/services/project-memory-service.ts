@@ -49,6 +49,7 @@ export function parseDesktopMemorySession(source: string): DesktopMemorySession 
 }
 
 export interface ProjectMemoryServiceOptions {
+  autoEnableProjects?: boolean;
   memmyConfigPath: string; memoryClient: MemoryClient; getUserId: () => string;
   readInstructions: (directory: string) => Promise<string>;
   filePath?: string; projectsFile?: string; sessionsDir?: string; now?: () => Date;
@@ -135,7 +136,11 @@ export function createDesktopProjectMemoryService(options: ProjectMemoryServiceO
       state.jobs[id] = { id, projectId: session.projectId, conversationId: session.conversationId, title: session.title, messages: turn.messages, userId: options.getUserId(), taskId: null, status: "pending", error: null, deliveryLease: null };
     }
   }
-  async function tick() {
+  async function tick(): Promise<void> {
+    if (options.autoEnableProjects) {
+      const bindings = (await load()).projects;
+      for (const owner of await projects()) if (!bindings[owner.id]) await service.configure(owner.id, true);
+    }
     const updates = await mutate(async state => {
       lastError = null;
       const updates: Array<{ id: string; spaceId: string; instructions: string; name: string }> = [];
@@ -196,9 +201,9 @@ export function createDesktopProjectMemoryService(options: ProjectMemoryServiceO
       await save(true);
     }
   }
-  return {
+  const service = {
     async view(id: string): Promise<ProjectMemoryView> { await project(id); const state = await load(); return { binding: state.projects[id] ?? null, jobs: Object.values(state.jobs).filter(job => job.projectId === id).map(({ messages: _messages, userId: _userId, projectId: _projectId, deliveryLease: _deliveryLease, ...job }) => job), error: lastError }; },
-    async configure(id: string, enabled: boolean) {
+    async configure(id: string, enabled: boolean): Promise<ProjectMemoryView> {
       const owner = await project(id);
       let createdSpace: string | null = null;
       try { await mutate(async state => {
@@ -242,5 +247,6 @@ export function createDesktopProjectMemoryService(options: ProjectMemoryServiceO
     start() { if (timer) return; const run = () => { if (activeTick) return; activeTick = tick().catch(error => { lastError = error instanceof Error ? error.message : String(error); }).finally(() => { activeTick = null; }); }; timer = setInterval(run, 3_000); timer.unref(); run(); },
     async stop() { if (timer) clearInterval(timer); timer = undefined; await activeTick; await queue; }
   };
+  return service;
 }
 export type DesktopProjectMemoryService = ReturnType<typeof createDesktopProjectMemoryService>;

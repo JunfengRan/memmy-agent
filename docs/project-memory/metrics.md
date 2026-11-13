@@ -278,3 +278,12 @@
 - 指标：add 的 F1/stateExact/主题分组与重复率、search Recall@K/entryHit、回答 answers.llm/rubric/Token F1 均不适用（单条确定性接线样例）；成本与 tokens 不适用（未用在线模型），P95 不适用（未采集统计样本）；上述集成断言全部通过，不并入质量总表。
 
 同日独立评审修补后，在 `32b789ec` 上重建临时数据库并重跑同一真实 HTTP/Chrome 场景：1 completed / 1 topic，A 召回 true、B false，关闭后 A false，pageerror=0，历史重放未重复投递，来源按钮收到 websocket:source。确定性桩与非质量评测边界不变。
+
+## R-20261113-02：恢复原前端与 DeepSeek 真实模型接线冒烟
+
+- 日期：2026-11-13；工作项 20261113-restore-release-ui，代码基线 7b7f450e，工作区为恢复前端/云端上传锁定/后端自动绑定的改动，交付 commit 见该工作项交接。
+- 模型配置：用户指定 ~/.deepseek.env 中的 deepseek-v4.1-flash-1017 已通过 Memmy 正式模型目录接口保存为 Agent、记忆摘要与记忆演化默认模型；旧模型保留。实际 Memory health 显示 summary/evolution 已加载该模型，embedding 为本机模型，存储保持 local。
+- 实际网络验证：模型目录连接测试成功；独立真实 chat completion 为 HTTP 200、有效回答，返回模型标识 deepseek-v4-1-flash-261017，prompt 34 tokens、completion 2 tokens。没有保存密钥或配置正文到仓库。
+- 项目记忆验证：独立临时数据库，工程推送重试的合成轮次，不取金标领域。真实 DeepSeek M02/M04 分别成功（约 1215/1390 ms），后端无需 UI 开关自动绑定本机项目，1 个整理任务 completed，1 个主题，新会话检索命中“五次”。本例为新主题，没有 M05 调用；无 embedding，检索为词法降级。原始输出在忽略的 runs/20261113-restore-ui/。
+- 前端：浏览器读取当前真实开发版，页面无 pageerror，上一轮独立记忆弹窗/开关已移除。恢复 release 的原有页面与样式，只保留已有控件的本地/上传锁定接线；未重新设计交互。
+- 指标：add F1/stateExact/主题分组、search Recall@K/entryHit、回答 answers.llm/rubric/Token F1、统计 P95 均不适用（单条接线验证，非质量评测）；无评委或回答评分，无付费 benchmark；本次真实模型调用只证明配置和整理/召回链路可用，不能外推质量提升。

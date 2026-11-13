@@ -1,4 +1,4 @@
-import { ProjectMemoryPanel, ProjectMemorySetting } from "./project-memory-panel.js";
+import { PROJECT_CLOUD_UPLOAD_ENABLED } from "@memmy/local-api-contracts";
 import { AtSign, BookOpen, ChevronDown, ChevronRight, Cloud, Folder, Inbox, Layers, LifeBuoy, Link2, ListChecks, MessageSquarePlus, MoreHorizontal, PanelRight, PanelRightClose, Pencil, Plug, RefreshCw, Search, Settings, Trash2, User, UserPlus, Users, X } from "lucide-react";
 import { memo, useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -536,7 +536,6 @@ const CollabBoard = memo(function CollabBoard(props: {
   /** Choosing which of the project's own Memmy sessions members may read. */
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [memoryOpen, setMemoryOpen] = useState(false);
   /** 看板右侧的项目配置：指令等项目的配置项在这里查看与编辑，与侧栏无关。 */
   const [configOpen, setConfigOpen] = useState(true);
   /** 用户手动收起或展开后，不再随宽度自动开关。换项目时清掉。 */
@@ -1516,7 +1515,6 @@ const CollabBoard = memo(function CollabBoard(props: {
                       <PanelRight size={15} aria-hidden="true" />
                     </Button>
                   )}
-                  <Button size="sm" variant="ghost" onClick={() => setMemoryOpen(true)}>{language.startsWith("en") ? "Project memory" : "项目记忆"}</Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -2051,18 +2049,14 @@ const CollabBoard = memo(function CollabBoard(props: {
           onAdded={(count) => showToast(t("collab.knowledge.added", { count: String(count) }))}
         />
       ) : null}
-      {project && memoryOpen ? <ProjectMemoryPanel key={project.id} projectId={project.id} projectName={project.name} onClose={() => setMemoryOpen(false)} sourceKeys={localTasks.map(task => task.sessionKey)} onOpenSource={key => {
-        if (!dispatch || !localTasks.some(task => task.sessionKey === key)) return;
-        setMemoryOpen(false);
-        void openAgentTaskInChat({ memmyAgent: clients?.memmyAgent, dispatch, task: { sessionKey: key } });
-      }} /> : null}
       {project ? (
         <ProjectBoardSettingsDialog
           open={settingsOpen}
           project={project}
           shared={shared}
           collab={collab}
-          shareAvailable={collabEnabled}
+          localOnly={!PROJECT_CLOUD_UPLOAD_ENABLED}
+          shareAvailable={collabEnabled && PROJECT_CLOUD_UPLOAD_ENABLED}
           onClose={() => setSettingsOpen(false)}
           onShared={() => {
             // The board re-reads its own list once sharing exists.
@@ -2777,6 +2771,7 @@ export function ProjectBoardSettingsDialog(props: {
   collab: CollabClient | null;
   /** API Key 模式没有云端账号：共享这一组只说清原因，不给开关。 */
   shareAvailable: boolean;
+  localOnly?: boolean;
   onClose: () => void;
   onShared: () => void;
   onUnshared: () => void;
@@ -2991,7 +2986,7 @@ export function ProjectBoardSettingsDialog(props: {
           <div className={styles.settingsCardRow}>
             <div className={styles.settingsCardText}>
               <span className={styles.settingsCardRowTitle}>{t("collab.create.share")}</span>
-              <span className={styles.settingsCardRowDesc}>{t("collab.settings.shareByokHint")}</span>
+              <span className={styles.settingsCardRowDesc}>{t(props.localOnly ? "collab.share.localOnlyHint" : "collab.settings.shareByokHint")}</span>
             </div>
           </div>
         ) : sharedId ? (
@@ -3039,7 +3034,6 @@ export function ProjectBoardSettingsDialog(props: {
         <CollabAssistProjectSettings client={props.collab} projectId={sharedId} />
       ) : null}
 
-      <ProjectMemorySetting key={props.project.id} projectId={props.project.id} />
       <section className={styles.settingsCard}>
         <div className={styles.settingsCardHead}>
           <span className={styles.settingsCardChip}><Folder size={14} aria-hidden="true" /></span>

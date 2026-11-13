@@ -1,3 +1,4 @@
+import { PROJECT_CLOUD_UPLOAD_ENABLED } from "@memmy/local-api-contracts";
 import { ComposerHighlightedTextarea } from "./composer-highlighted-textarea.js";
 import { useQuestionDockLayout } from "./use-question-dock-layout.js";
 import { PluginCapabilityLabelsContext } from "./plugin-tool-activity.js";
@@ -1125,6 +1126,7 @@ export function HomePage() {
   }, [composerLocalProjectId, collabProjects]);
   const shareToggle = sharedOnlineProject && collabClient ? (
     <CollabShareToggle
+      uploadLocked={!PROJECT_CLOUD_UPLOAD_ENABLED}
       collab={collabClient}
       projectId={sharedOnlineProject.id}
       conversationId={state.agent.currentChatId}
@@ -2231,7 +2233,7 @@ export function HomePage() {
           ));
           // 新建任务时打开了「共享给成员」：会话一建立就共享，之后以本机记录为准。
           // 即使随后的发送失败，也只是共享了一条空任务，不影响别的任务。
-          if (takeShareIntent(sendScopeKey)) {
+          if (takeShareIntent(sendScopeKey) && PROJECT_CLOUD_UPLOAD_ENABLED) {
             const online = (getCollabProjectsSnapshot().projects ?? [])
               .find((project) => project.localProjectId === composerLocalProjectId) ?? null;
             if (online && collabClient) {

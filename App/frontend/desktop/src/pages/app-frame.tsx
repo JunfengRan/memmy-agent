@@ -1,3 +1,4 @@
+import { PROJECT_CLOUD_UPLOAD_ENABLED } from "@memmy/local-api-contracts";
 import { usePluginUpdateAvailable, PluginUpdateDot } from "./plugin-update-indicator.js";
 import { BookOpen, LayoutPanelLeft } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode } from "react";
@@ -2118,7 +2119,7 @@ export function AppFrame(props: AppFrameProps) {
       <CollabCreateProjectDialog
         open={createProjectOpen}
         // API Key 模式不连接云端：新建弹窗里不出现「与成员共享」，项目就只建在本机。
-        shareAvailable={collabEnabled}
+        shareAvailable={collabEnabled && PROJECT_CLOUD_UPLOAD_ENABLED}
         defaultShare={createProjectShare}
         onClose={() => setCreateProjectOpen(false)}
         onCreated={(localProjectId) => {

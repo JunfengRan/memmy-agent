@@ -215,31 +215,13 @@ describe("project board", () => {
     expect(mocks.listSessions).not.toHaveBeenCalled();
   });
 
-  it("asks which of the project's own sessions to sync after sharing starts", async () => {
+  it("keeps the original project settings local with cloud upload locked", async () => {
     await renderBoard();
-
-    // Sharing lives in the project settings (右侧是项目配置), so the sessions tab carries no reminder button.
     await act(async () => iconButton("项目设置").click());
-    // The settings row uses a switch, not a checkbox.
-    await act(async () => document.querySelector<HTMLElement>(".modal-body [role='switch']")!.click());
-    await flush();
-
-    expect(mocks.createProject).toHaveBeenCalledWith(PROJECT.name, PROJECT.rootPath);
-    expect(mocks.bindLocalProject).toHaveBeenCalledWith(CLOUD_PROJECT.id, PROJECT.id);
-    // The project already has sessions, so the person picks which of them members may read.
-    expect(document.body.textContent).toContain("选择要同步的任务");
-    expect(mocks.listProjectTasks).toHaveBeenCalledWith(CLOUD_PROJECT.id);
-    // The request is one-shot: the board consumed it when it opened the picker.
-    expect(getCollabProjectsSnapshot().taskPickerFor).toBeNull();
-
-    // Unchecking a session keeps it on this computer, which is what the saved selection says.
-    const rows = Array.from(document.querySelectorAll<HTMLElement>("li"));
-    const second = rows.find((row) => row.textContent?.includes("另一条会话"));
-    expect(second, "会话行应已渲染").toBeTruthy();
-    await act(async () => second!.click());
-    await act(async () => button("确定").click());
-    await flush();
-
-    expect(mocks.saveProjectTasks).toHaveBeenCalledWith(CLOUD_PROJECT.id, ["conv-1"]);
+    expect(document.body.textContent).toContain("当前使用本地项目，上传云端暂未开放。");
+    expect(document.querySelector(".modal-body [role='switch']")).toBeNull();
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.bindLocalProject).not.toHaveBeenCalled();
+    expect(mocks.saveProjectTasks).not.toHaveBeenCalled();
   });
 });

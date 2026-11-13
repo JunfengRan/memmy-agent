@@ -29,6 +29,17 @@ function fixture() {
   return { openMem, options, instructions, service: createDesktopProjectMemoryService(options) };
 }
 describe("local desktop project memory", () => {
+  it("automatically binds existing and new local projects without adding frontend controls", async () => {
+    const { options, openMem } = fixture();
+    const service = createDesktopProjectMemoryService({ ...options, autoEnableProjects: true });
+    await service.tick();
+    expect((await service.view(a)).binding!.enabled).toBe(true);
+    await service.tick();
+    expect(openMem.mock.calls.filter(([route]) => route === "create/space")).toHaveLength(2);
+    await writeFile(join(root, "sessions/websocket_chat-one.jsonl"), file());
+    await service.tick();
+    expect((await service.view(a)).jobs[0]!.status).toBe("completed");
+  });
   it("serializes concurrent enables across service instances and preserves binding across disable/restart", async () => {
     const { openMem, options, service } = fixture();
     const peer = createDesktopProjectMemoryService(options);

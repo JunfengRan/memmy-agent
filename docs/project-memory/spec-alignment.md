@@ -2,6 +2,10 @@
 
 对齐版本见 [spec-snapshots.md](spec-snapshots.md)。状态：`未开始` / `v0.1 简化` / `已对齐` / `待重新对齐`（规格变化后由 `pm-spec-sync` 标记）/ `偏离`（必须链接 ADR 或 open-questions）。
 
+## 当前应用接入边界（2026-11-13 用户纠正）
+
+按 [ADR-0011](decisions/0011-preserve-release-ui-local-default.md) 恢复 release 原有前端，不再新增项目记忆弹窗/开关。Backend 自动为未绑定的本机项目接入 Space；原项目/任务入口及 Agent 的按会话召回保留。云端上传由 UI 与 Backend transport 双层锁定。以下 ADR-0010 的独立面板描述是上一轮交付背景，已由本段替代；核心投递/隔离/配置恢复重试继续有效。工作项：20261113-restore-release-ui。
+
 ## 桌面接入补充（2026-11-13）
 
 依据 [ADR-0010](decisions/0010-desktop-local-project-binding.md) 接入 release/v1.2.7 的项目看板。Backend 通过现有 OpenMem 接口创建 Space、投递已保存轮次、读取主题和整理状态；Frontend 提供开关、历史导入与主题详情；Agent 按会话的本机项目 ID 绑定 Space，索引、自动检索和工具共用绑定，桌面独立任务不继承全局空间。Q-32 的 CLI 规则保留，应用显式绑定以 ADR-0010 补充。

@@ -349,6 +349,7 @@ export function createBackendServices(options: CreateBackendServicesOptions): Ba
   const projectInstructions = createProjectInstructionsService({ memmyConfigPath: options.memmyConfigPath ?? join(homedir(), ".memmy", "config.yaml") });
   const collabInstructions = createCollabInstructionsService({ memmyConfigPath: options.memmyConfigPath ?? join(homedir(), ".memmy", "config.yaml") });
   const projectMemory = createDesktopProjectMemoryService({
+    autoEnableProjects: true,
     memmyConfigPath: options.memmyConfigPath ?? join(homedir(), ".memmy", "config.yaml"),
     memoryClient: options.memoryClient, getUserId: resolveMemoryUserId,
     readInstructions: async directory => {

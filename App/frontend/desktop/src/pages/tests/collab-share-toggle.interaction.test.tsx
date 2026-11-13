@@ -58,6 +58,15 @@ describe("CollabShareToggle", () => {
     return button!;
   }
 
+  it("locks cloud upload off without reading or changing a shared task", async () => {
+    const collab = client();
+    const button = await render({ collab, projectId: "cloud-1", conversationId: "chat-1", draftScopeKey: "chat-1", onError: vi.fn(), uploadLocked: true });
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute("aria-checked")).toBe("false");
+    await act(async () => button.click());
+    expect(collab.taskSharing).not.toHaveBeenCalled();
+    expect(collab.setTaskSharing).not.toHaveBeenCalled();
+  });
   it("shows the state this computer recorded and turns sharing on", async () => {
     const collab = client();
     const button = await render({

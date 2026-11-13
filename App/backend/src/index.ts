@@ -1,3 +1,4 @@
+import { PROJECT_CLOUD_UPLOAD_ENABLED } from "@memmy/local-api-contracts";
 /** Src module. */
 import { RuntimeConfigSchema, type AccountChannel, type AppSettingsDto, type LastLaunchMode, type RuntimeConfig } from "@memmy/local-api-contracts";
 import { randomBytes } from "node:crypto";
@@ -321,6 +322,7 @@ export async function createLocalBackend(options: CreateLocalBackendOptions): Pr
         console.warn(`Installing memmy-project at startup did not complete: ${error instanceof Error ? error.message : String(error)}`);
       });
     const collab = createCollabService({
+      allowCloudWrites: PROJECT_CLOUD_UPLOAD_ENABLED,
       cloudBaseUrl: cloudConfig.baseUrl,
       getAccount: getCollabAccount,
       userMode,

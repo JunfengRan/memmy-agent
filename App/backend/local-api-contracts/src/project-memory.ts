@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** This integration uses local project memory; cloud upload stays locked. */
+export const PROJECT_CLOUD_UPLOAD_ENABLED = false;
+
 export const PROJECT_MEMORY_BINDINGS_FILE = "project-memory-bindings.json";
 export const ProjectMemoryBindingSchema = z.object({
   spaceId: z.string().min(1), enabled: z.boolean(), enabledAt: z.string().datetime(),

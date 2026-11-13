@@ -132,6 +132,8 @@ export interface CollabAccount {
 }
 
 export interface CollabServiceOptions {
+  /** This local-memory integration may read existing shared records but never upload changes. */
+  allowCloudWrites?: boolean;
   cloudBaseUrl: string;
   getAccount: () => CollabAccount | null;
   /** Reads this machine's agent sessions, in this process; null when they cannot be read here. */
@@ -757,10 +759,13 @@ function accountRequiredMessage(options: Pick<CollabServiceOptions, "userMode">)
 }
 
 export function createCollabCloudRequest(
-  options: Pick<CollabServiceOptions, "cloudBaseUrl" | "getAccount" | "fetcher" | "userMode">
+  options: Pick<CollabServiceOptions, "cloudBaseUrl" | "getAccount" | "fetcher" | "userMode" | "allowCloudWrites">
 ): CollabCloudRequest {
   const fetcher = options.fetcher ?? globalThis.fetch;
   return async (path, init = {}) => {
+    if (options.allowCloudWrites === false && (init.method ?? "GET").toUpperCase() !== "GET") {
+      throw new CollabError("forbidden", "当前使用本地项目，上传云端暂未开放。");
+    }
     const account = options.getAccount();
     if (!account) {
       throw new CollabError("unauthorized", accountRequiredMessage(options));
