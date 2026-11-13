@@ -1,3 +1,5 @@
+import { setImmediate as yieldToIO } from "node:timers/promises";
+import type { SeededChannelScores } from "../../algorithm/plugin-algorithms.js";
 import type {
   RetrievalQueryExtract,
   RetrievalResult
@@ -69,7 +71,8 @@ import { mergeRetrievalResults, normalizeQueryRewriteQueries } from "../retrieva
 import {
   normalizeRetrievalExtractKeywords
 } from "../turn/turn-normalization.js";
-import { IndexedCandidatePool } from "./indexed-candidate-pool.js";
+import { IndexedCandidatePool, type RecallRouteDiagnostic } from "./indexed-candidate-pool.js";
+import { deduplicateCrossAccountMemoryCandidates, sameRecallContent } from "./cross-account-candidate-dedup.js";
 import { filterL1TraceSpanRecallHits } from "./l1-trace-span-filter.js";
 
 type InternalMemorySearchRequest = MemorySearchRequest & {
@@ -1816,6 +1819,7 @@ export function emptyInjectedContext(): InjectedContext {
 
 interface RetrievalDependencies {
   repos: Repositories;
+  writeTransaction?: <T>(operation: () => T) => Promise<T>;
   readonly config: MemmyConfig;
   readonly llm: LlmClient;
   readonly skillLlm: LlmClient;
@@ -1835,6 +1839,14 @@ interface RetrievalDependencies {
   memoryHasImportPipeline(memory: MemoryRow): boolean;
   namespaceIdFromContext(context: RuntimeNamespace): string;
   withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T>;
+}
+
+interface SearchMemoryOutput {
+  vectorDegraded?: boolean;
+  retrieval: RetrievalResult;
+  memories: MemoryRow[];
+  diagnostics?: RecallRouteDiagnostic[];
+  refill?: (missing: number) => Promise<SearchMemoryOutput>;
 }
 
 export class RetrievalService {
@@ -1931,9 +1943,12 @@ export class RetrievalService {
       ? requestedSemanticLayers.filter((layer) => layer !== "L1")
       : requestedSemanticLayers;
     const searchAt = Date.now();
+    const userMemoryRecallEnabled = this.deps.config.algorithm.enableUserMemoryRecall === true;
+    // Capture uses these candidates to confirm or correct existing User Memory,
+    // even when it must not be returned to an agent.
     const includeUserMemory = !onboardingFirstReportHit && semanticLayers.includes("L1");
     const userMemoryCount = includeUserMemory
-      ? this.deps.repos.userMemories.listActive(context.userId).length
+      ? this.deps.repos.userMemories.countActive(context.userId)
       : 0;
     const candidateCount = onboardingFirstReportHit
       ? 1
@@ -1965,7 +1980,7 @@ export class RetrievalService {
     const agentLaneLimit = includeUserMemory
       ? parallelMemoryLaneLimit(retrievalLimit)
       : retrievalLimit;
-    const retrievalOutput = onboardingFirstReportHit && onboardingFirstReportMemory
+    let retrievalOutput: SearchMemoryOutput = onboardingFirstReportHit && onboardingFirstReportMemory
       ? {
           retrieval: directRetrievalResult(onboardingFirstReportHit),
           memories: [onboardingFirstReportMemory]
@@ -1974,7 +1989,8 @@ export class RetrievalService {
       ? this.retrieveTimeFilteredTraceMemories({
           timeFilter,
           tags: request.tags,
-          limit: retrievalLimit
+          limit: retrievalLimit,
+          preferredUserId: context.userId
         })
       : await this.retrieveSearchMemories({
           userId: context.userId,
@@ -1990,23 +2006,22 @@ export class RetrievalService {
           targetSkillId: request.targetSkillId,
           currentAgentId: context.namespace.source
         });
-    const memories = retrievalOutput.memories.filter((memory) =>
-      !memoryUsesStalePolicy(memory, stalePolicyIds)
-    );
-    const allowedMemoryIds = new Set(memories.map((memory) => memory.id));
-    const allowedEpisodeIds = new Set(memories.flatMap((memory) => {
-      const episodeId = traceMetaFromMemory(memory)?.episodeId;
-      return episodeId ? [episodeId] : [];
-    }));
-    const retrieval = {
-      ...retrievalOutput.retrieval,
-      hits: retrievalOutput.retrieval.hits.filter((hit) =>
-        allowedMemoryIds.has(hit.id) ||
-        allowedEpisodeIds.has(hit.id) ||
-        (hit.memberMemoryIds ?? []).some((id) => allowedMemoryIds.has(id)) ||
-        (hit.members ?? []).some((member) => allowedMemoryIds.has(member.id))
-      )
+    const prepare = (output: SearchMemoryOutput) => {
+      const memories = output.memories.filter(memory => !memoryUsesStalePolicy(memory, stalePolicyIds));
+      const allowedMemoryIds = new Set(memories.map(memory => memory.id));
+      const allowedEpisodeIds = new Set(memories.flatMap(memory => {
+        const episodeId = traceMetaFromMemory(memory)?.episodeId;
+        return episodeId ? [episodeId] : [];
+      }));
+      const retrieval = {...output.retrieval, hits: output.retrieval.hits.filter(hit =>
+        allowedMemoryIds.has(hit.id) || allowedEpisodeIds.has(hit.id) ||
+        (hit.memberMemoryIds ?? []).some(id => allowedMemoryIds.has(id)) ||
+        (hit.members ?? []).some(member => allowedMemoryIds.has(member.id))
+      )};
+      return {memories, retrieval};
     };
+    let {memories, retrieval} = prepare(retrievalOutput);
+    const userMemoryBudget = {deadlineAt: Date.now() + 5_000, rows: 0};
     const userMemoryOutput = includeUserMemory && !timeFilter
       ? await this.retrieveUserMemories({
           userId: context.userId,
@@ -2014,13 +2029,44 @@ export class RetrievalService {
           queryVectorText,
           queryExtract,
           limit: retrievalLimit,
+          budget: userMemoryBudget,
           excludeSourceTurnIds: recentRawTurnIds
         })
-      : { hits: [] as RecallHit[], memories: [] as UserMemoryRecord[] };
-    const agentHits = onboardingFirstReportHit || timeFilter
-      ? retrieval.hits
-      : filterL1TraceSpanRecallHits(retrieval.hits, memories);
-    const merged = mergeSameTurnRecallHits(agentHits, memories, userMemoryOutput.hits);
+      : { hits: [] as RecallHit[], memories: [] as UserMemoryRecord[], diagnostics: [] as RecallRouteDiagnostic[] };
+    const merge = () => {
+      const agentHits = onboardingFirstReportHit || timeFilter
+        ? retrieval.hits : filterL1TraceSpanRecallHits(retrieval.hits, memories);
+      const users = userMemoryRecallEnabled ? userMemoryOutput.hits : [];
+      const result = mergeSameTurnRecallHits(agentHits, memories, users);
+      return {result, duplicateLoss: agentHits.length + users.length - result.hits.length};
+    };
+    let mergedState = merge();
+    const refillStatuses: string[] = [];
+    for (let round=0; round<8 && mergedState.result.hits.length < retrievalLimit && mergedState.duplicateLoss > 0 && retrievalOutput.refill; round++) {
+      const previousOutput = retrievalOutput;
+      const prior = mergedState.result.hits.length;
+      const priorCandidates = retrievalOutput.memories.map(memory => memory.id).sort().join("\0");
+      const priorHits = retrievalOutput.retrieval.hits.map(hit => hit.id).join("\0");
+      retrievalOutput = await retrievalOutput.refill(retrievalLimit - prior);
+      ({memories, retrieval} = prepare(retrievalOutput));
+      mergedState=merge();
+      if (mergedState.result.hits.length < prior) {
+        refillStatuses.push(...(retrievalOutput.diagnostics ?? []).map(route => `recall_refill:${route.channel}:${route.stopReason}`));
+        retrievalOutput=previousOutput;
+        ({memories,retrieval}=prepare(retrievalOutput));
+        mergedState=merge();
+        refillStatuses.push("recall_refill:no_progress");
+        break;
+      }
+      if (mergedState.result.hits.length <= prior &&
+        retrievalOutput.memories.map(memory => memory.id).sort().join("\0") === priorCandidates &&
+        retrievalOutput.retrieval.hits.map(hit => hit.id).join("\0") === priorHits) {
+        refillStatuses.push("recall_refill:no_progress"); break;
+      }
+    }
+    if (mergedState.result.hits.length < retrievalLimit && mergedState.duplicateLoss > 0 &&
+      !refillStatuses.includes("recall_refill:no_progress")) refillStatuses.push("recall_refill:work_budget_limited");
+    let merged = mergedState.result;
     const rerankAt = Date.now();
     const filteredHits = onboardingFirstReportHit
       ? { hits: retrieval.hits, status: ["first_report_handoff:latest_only"] }
@@ -2031,9 +2077,66 @@ export class RetrievalService {
     // reach it. Pair it with the recorded status to tell a filter that returned
     // early on too few candidates from one that ranked them.
     const llmFilterMs = onboardingFirstReportHit || timeFilter ? undefined : Date.now() - rerankAt;
-    const hits = onboardingFirstReportHit || timeFilter
+    let hits = onboardingFirstReportHit || timeFilter
       ? filteredHits.hits
       : mmrRecallHits(filteredHits.hits, retrievalLimit, tuning.mmrLambda);
+    // Model filtering can yield to a delete/edit. Never inject the pre-await body after it changes.
+    const expectedMemories = new Map(memories.map(memory => [memory.id, memory]));
+    const currentMemories = new Map(this.deps.repos.memories.getMany(memories.map(memory => memory.id))
+      .map(memory => [memory.id, memory]));
+    const expectedUsers = new Map(userMemoryOutput.memories.map(memory => [memory.id, memory]));
+    const currentUsers = new Map(this.deps.repos.userMemories.getMany([...expectedUsers.keys()])
+      .map(memory => [memory.id, memory]));
+    const unchanged = (id: string): boolean => {
+      const prior = expectedMemories.get(id);
+      if (prior) {
+        const current=currentMemories.get(id);
+        return Boolean(current && (current.status === "activated" || current.status === "resolving") &&
+          JSON.stringify([current.userId,current.memoryValue,current.properties,current.info,current.tags,current.version]) ===
+          JSON.stringify([prior.userId,prior.memoryValue,prior.properties,prior.info,prior.tags,prior.version]));
+      }
+      const user=expectedUsers.get(id);
+      return !user || Boolean(currentUsers.get(id)?.status === "active" && JSON.stringify(currentUsers.get(id)) === JSON.stringify(user));
+    };
+    const beforeRevalidation = hits.length;
+    const validHit = (hit: RecallHit) => [hit.id, ...(hit.memberMemoryIds ?? [])].every(unchanged);
+    const concurrentChangeDropped = hits.filter(hit => !validHit(hit)).length;
+    let verifiedHits = concurrentChangeDropped > 0 && !onboardingFirstReportHit && !timeFilter
+      ? mmrRecallHits(filteredHits.hits.filter(validHit), retrievalLimit, tuning.mmrLambda)
+      : hits.filter(validHit);
+    if (concurrentChangeDropped > 0) refillStatuses.push("recall_refill:concurrent_change");
+    // With model filtering disabled, fresh query results can replenish invalidated rows.
+    // With it enabled, only the already approved reserve above may supply replacements.
+    if (concurrentChangeDropped > 0 && !this.deps.config.algorithm.retrieval.llmFilterEnabled && !onboardingFirstReportHit && !timeFilter) {
+      for (let round = 0; round < 8 && verifiedHits.length < retrievalLimit; round++) {
+        const prior = verifiedHits.map(hit => hit.id).join("\0");
+        const priorCandidates = memories.map(memory => `${memory.id}:${memory.version}`).join("\0");
+        if (retrievalOutput.refill) {
+          retrievalOutput = await retrievalOutput.refill(retrievalLimit - verifiedHits.length);
+          ({memories, retrieval} = prepare(retrievalOutput));
+        }
+        if (userMemoryRecallEnabled && includeUserMemory && Date.now() < userMemoryBudget.deadlineAt) {
+          Object.assign(userMemoryOutput, await this.retrieveUserMemories({userId: context.userId,
+            query: retrievalQuery, queryVectorText, queryExtract, limit: retrievalLimit,
+            excludeSourceTurnIds: recentRawTurnIds, budget: userMemoryBudget}));
+        }
+        expectedMemories.clear(); currentMemories.clear();
+        for (const memory of memories) expectedMemories.set(memory.id, memory);
+        for (const memory of this.deps.repos.memories.getMany([...expectedMemories.keys()])) currentMemories.set(memory.id, memory);
+        expectedUsers.clear(); currentUsers.clear();
+        for (const memory of userMemoryOutput.memories) expectedUsers.set(memory.id, memory);
+        for (const memory of this.deps.repos.userMemories.getMany([...expectedUsers.keys()])) currentUsers.set(memory.id, memory);
+        mergedState = merge(); merged = mergedState.result;
+        filteredHits.hits = merged.hits;
+        verifiedHits = mmrRecallHits(filteredHits.hits.filter(validHit), retrievalLimit, tuning.mmrLambda);
+        if (verifiedHits.length < retrievalLimit && prior === verifiedHits.map(hit => hit.id).join("\0") &&
+          priorCandidates === memories.map(memory => `${memory.id}:${memory.version}`).join("\0")) {
+          refillStatuses.push("recall_refill:no_progress"); break;
+        }
+        if (round === 7 && verifiedHits.length < retrievalLimit) refillStatuses.push("recall_refill:work_budget_limited");
+      }
+    }
+    hits=verifiedHits;
     const contextPacket = timeFilter
       ? buildTimeFilteredInjectedContext(
           memories.filter((memory) => hits.some((hit) => hit.id === memory.id)),
@@ -2058,7 +2161,7 @@ export class RetrievalService {
       .map((memory) => memory.id);
     const candidateMemoryIds = uniq([
       ...memories.map((memory) => memory.id),
-      ...userMemoryCandidateIds
+      ...(userMemoryRecallEnabled ? userMemoryCandidateIds : [])
     ]);
     const sourceMemoryIds = contextPacket.sourceMemoryIds;
     const hitIds = new Set(hits.flatMap((hit) => hit.memberMemoryIds ?? [hit.id]));
@@ -2073,7 +2176,7 @@ export class RetrievalService {
           memoryLayer: memory.memoryLayer,
           reason: "rank_threshold" as const
         })),
-      ...userMemoryOutput.memories
+      ...(userMemoryRecallEnabled ? userMemoryOutput.memories : [])
         .filter((memory) => !hitIds.has(memory.id))
         .slice(0, 50)
         .map((memory) => ({
@@ -2096,7 +2199,7 @@ export class RetrievalService {
           ...(hit.members ? { members } : {})
         }];
       });
-      this.deps.repos.runtime.insertRecallEvent({
+      const persistRecall = () => this.deps.repos.runtime.insertRecallEvent({
         id: recallEventId,
         namespaceId: this.deps.namespaceIdFromContext(context.namespace),
         sessionId: request.sessionId,
@@ -2126,6 +2229,8 @@ export class RetrievalService {
         },
         createdAt: nowIso()
       });
+      if (this.deps.writeTransaction) await this.deps.writeTransaction(persistRecall);
+      else persistRecall();
     }
 
     const response = {
@@ -2143,6 +2248,10 @@ export class RetrievalService {
       },
       status: uniq([
         ...filteredHits.status,
+        ...(!userMemoryRecallEnabled ? ["user_memory_recall:disabled"] : []),
+        ...refillStatuses,
+        ...userMemoryOutput.diagnostics.map(route => `recall_refill:user_memory:${route.channel}:${route.stopReason}:${route.uniqueCandidates}:${route.rounds}`),
+        ...(retrievalOutput.diagnostics ?? []).map(route => `recall_refill:${route.channel}:${route.stopReason}:${route.uniqueCandidates}:${route.rounds}`),
         ...(dynamicCurrentQuery ? ["dynamic_current:refresh_required"] : []),
         ...(stalePolicyIds.size > 0 ? ["policy:revalidation_required"] : []),
         ...(!this.deps.memoryAddEnabled() ? ["memory_add:disabled:no_recall_log"] : [])
@@ -2151,7 +2260,7 @@ export class RetrievalService {
       serverTime: nowIso()
     };
     if (shouldRecordEvent) {
-      const keptIds = new Set(hits.map((hit) => hit.id));
+      const filteredIds = new Set(filteredHits.hits.map(hit => hit.id));
       const logMemoryById = new Map(memories.map((memory) => [memory.id, memory]));
       const toSearchCandidateLog = (hit: RecallHit): Record<string, unknown> => {
         const memory = logMemoryById.get(hit.id);
@@ -2174,16 +2283,22 @@ export class RetrievalService {
       }, {
         candidates: merged.hits.map(toSearchCandidateLog),
         filtered: hits.map(toSearchCandidateLog),
-        droppedByLlm: merged.hits.filter((hit) => !keptIds.has(hit.id)).map(toSearchCandidateLog),
+        droppedByLlm: merged.hits.filter((hit) => !filteredIds.has(hit.id)).map(toSearchCandidateLog),
         stats: {
           raw: candidateMemoryIds.length,
+          refill: retrievalOutput.diagnostics ?? [],
+          mergedUniqueBeforeFilter: merged.hits.length,
+          mmrDropped: filteredHits.hits.length - beforeRevalidation,
+          contextBudgetDropped: contextPacket.droppedDueToBudget.length,
+          injectedCount: hits.filter(hit => (hit.memberMemoryIds ?? [hit.id]).some(id => sourceMemoryIds.includes(id))).length,
+          concurrentChangeDropped,
           ranked: merged.hits.length,
           droppedByThreshold: retrieval.debug.droppedByThreshold,
           topRelevance: retrieval.debug.topRelevance,
           llmFilter: {
             outcome: filteredHits.status.length > 0 ? filteredHits.status.join(",") : "kept",
-            kept: hits.length,
-            dropped: Math.max(0, merged.hits.length - hits.length),
+            kept: filteredHits.hits.length,
+            dropped: Math.max(0, merged.hits.length - filteredHits.hits.length),
             ...(llmFilterMs === undefined ? {} : { durationMs: llmFilterMs })
           },
           finalReturned: hits.length
@@ -2198,6 +2313,7 @@ export class RetrievalService {
     timeFilter: RetrievalTimeFilter;
     tags?: string[];
     limit: number;
+    preferredUserId: string;
   }): { retrieval: RetrievalResult; memories: MemoryRow[] } {
     const filter: MemoryFilter = {
       memoryLayer: "L1",
@@ -2207,10 +2323,15 @@ export class RetrievalService {
       ...(input.tags?.length ? { tags: input.tags } : {})
     };
     const candidateCount = this.deps.repos.memories.count(filter);
-    const candidates = this.deps.repos.memories
+    const loadedCandidates = this.deps.repos.memories
       .list(filter, candidateCount)
       .filter((memory) => this.isMemoryReadyForRetrieval(memory))
-      .filter((memory) => kindFromMemory(memory) === "observed_activity" || Boolean(traceMetaFromMemory(memory)?.summary.trim()));
+.filter((memory) => kindFromMemory(memory) === "observed_activity" || Boolean(traceMetaFromMemory(memory)?.summary.trim()));
+    const candidates = deduplicateCrossAccountMemoryCandidates({
+      memories: loadedCandidates,
+      repos: this.deps.repos,
+      preferredUserId: input.preferredUserId
+    }).memories;
     const selected = [...candidates]
       .sort(compareTimeFilteredTraceRecency)
       .slice(0, Math.max(0, input.limit))
@@ -2240,6 +2361,100 @@ export class RetrievalService {
     };
   }
 
+  /**
+   * Candidate recall for project-memory paths ① and ②.
+   * Reuses the existing retrieval lanes and skips query rewrite, LLM filtering,
+   * MMR, token budgeting, and recall-event writes. Recency inside the agent lane
+   * is anchored to the newest candidate time.
+   */
+  async recallCandidates(input: {
+    userId: string;
+    query: string;
+    limit: number;
+    includeUserMemory?: boolean;
+    layers?: Array<"L1" | "Skill">;
+    contextBudget?: number;
+  }): Promise<{
+    candidates: Array<{
+      id: string;
+      layer: "UserMemory" | "L1" | "Skill";
+      content: string;
+      score: number;
+      updatedAt: string;
+    }>;
+    vectorDegraded: boolean;
+  }> {
+    // M10 owns the token budget. Accepting the field here keeps callers from
+    // routing this entry through the old injected-context trim.
+    void input.contextBudget;
+    if (!this.deps.memorySearchEnabled()) {
+      throw new Error("memory search is disabled");
+    }
+    const limit = Math.max(0, input.limit);
+    const layers = input.layers ?? [];
+    const candidates: Array<{
+      id: string;
+      layer: "UserMemory" | "L1" | "Skill";
+      content: string;
+      score: number;
+      updatedAt: string;
+    }> = [];
+    let vectorDegraded = false;
+
+    if (input.includeUserMemory) {
+      const user = await this.retrieveUserMemories({
+        userId: input.userId,
+        query: input.query,
+        queryVectorText: input.query,
+        queryExtract: null,
+        limit
+      });
+      if (user.vectorDegraded) vectorDegraded = true;
+      for (const hit of user.hits) {
+        if (hit.memoryLayer !== "UserMemory") continue;
+        candidates.push({
+          id: hit.id,
+          layer: "UserMemory",
+          content: hit.snippet,
+          score: hit.score,
+          updatedAt: hit.updatedAt ?? hit.createdAt ?? ""
+        });
+      }
+    }
+
+    if (layers.length > 0) {
+      const agent = await this.retrieveSearchMemories({
+        userId: input.userId,
+        projectId: null,
+        query: input.query,
+        queryVectorText: input.query,
+        queryExtract: null,
+        layers,
+        limit,
+        mode: "search",
+        rewrite: false,
+        mmr: false,
+        recencyAnchor: "newest"
+      });
+      if (agent.vectorDegraded) vectorDegraded = true;
+      const updatedAtById = new Map(agent.memories.map((memory) => [memory.id, memory.updatedAt]));
+      const allowed = new Set(layers);
+      for (const hit of agent.retrieval.hits) {
+        if (hit.memoryLayer !== "L1" && hit.memoryLayer !== "Skill") continue;
+        if (!allowed.has(hit.memoryLayer)) continue;
+        candidates.push({
+          id: hit.id,
+          layer: hit.memoryLayer,
+          content: hit.snippet,
+          score: hit.score,
+          updatedAt: updatedAtById.get(hit.id) ?? hit.updatedAt ?? ""
+        });
+      }
+    }
+
+    return { candidates, vectorDegraded };
+  }
+
   private async retrieveUserMemories(input: {
     userId: string;
     query: string;
@@ -2247,54 +2462,111 @@ export class RetrievalService {
     queryExtract: RetrievalQueryExtract | null;
     limit: number;
     excludeSourceTurnIds?: ReadonlySet<string>;
-  }): Promise<{ hits: RecallHit[]; memories: UserMemoryRecord[] }> {
-    if (input.limit <= 0) return { hits: [], memories: [] };
+    budget?: {deadlineAt: number; rows: number};
+  }): Promise<{ hits: RecallHit[]; memories: UserMemoryRecord[]; diagnostics: RecallRouteDiagnostic[]; vectorDegraded?: boolean }> {
+    const diagnostics: RecallRouteDiagnostic[] = [];
+    if (input.limit <= 0) return { hits: [], memories: [], diagnostics };
     const compiled = compileRetrievalQuery(input.query, input.queryExtract, {
       domain: this.retrievalTuningConfig().domain
     });
-    const active = this.deps.repos.userMemories.listActive(input.userId);
-    if (active.length === 0) return { hits: [], memories: [] };
-    const excludedCount = active.filter((memory) =>
-      input.excludeSourceTurnIds?.has(memory.sourceTurnId)
-    ).length;
-    const routeLimit = input.limit + excludedCount;
-    const queryVector = active.some((memory) => memory.embedding?.length)
-      ? await this.queryVector(input.queryVectorText)
-      : undefined;
-    const routeHits = [
-      ...this.deps.repos.userMemories.searchFtsIds(
-        input.userId,
-        compiled.ftsMatch,
-        routeLimit
-      ),
-      ...this.deps.repos.userMemories.searchPatternIds(
-        input.userId,
-        compiled.patternTerms,
-        routeLimit
-      ),
-      ...(queryVector
-        ? this.deps.repos.userMemories.searchVectorIds(input.userId, queryVector, routeLimit)
-        : [])
-    ];
+    const repo = this.deps.repos.userMemories;
+    const needsVector = repo.hasRecallVectors(input.userId);
+    const queryVector = needsVector ? await this.queryVector(input.queryVectorText) : undefined;
+    const vectorDegraded = Boolean(needsVector && !queryVector?.length);
+    const candidates = new Map<string, UserMemoryRecord>();
     const bestScoreById = new Map<string, number>();
-    for (const hit of routeHits) {
-      bestScoreById.set(hit.id, Math.max(bestScoreById.get(hit.id) ?? 0, hit.score));
+    const budget = input.budget ?? {deadlineAt: Date.now() + 5_000, rows: 0};
+    for (const channel of ["fts", "pattern", "vec"] as const) {
+      if ((channel === "fts" && !compiled.ftsMatch) || (channel === "pattern" && !compiled.patternTerms.length) ||
+        (channel === "vec" && !queryVector?.length)) continue;
+      const started = Date.now();
+      const diagnostic: RecallRouteDiagnostic = {channel, rounds: 0, rawHits: 0, duplicateHits: 0,
+        unknownIdentityCount: 0, metadataRows: 0, uniqueCandidates: 0, stopReason: "scope_exhausted"};
+      diagnostics.push(diagnostic);
+      const excluded = new Set<string>();
+      const expressions = new Map<string, {sourceTurnId: string; content: string; memoryTypes: string[]}>();
+      const accepted = new Map<string, {memory: UserMemoryRecord; score: number}>();
+      // Recent turns remain maintenance evidence for confirmation/correction, even
+      // though they must not consume injectable recall quota. Keep that old contract.
+      if (input.excludeSourceTurnIds?.size && budget.rows < 10_000 && Date.now() < budget.deadlineAt) {
+        const cap = Math.min(input.limit, 256, 10_000 - budget.rows);
+        const options = {includedSourceTurnIds: [...input.excludeSourceTurnIds], strict: true,
+          windowLimit: Math.min(2000, 10_000 - budget.rows),
+          onWindow: (ids: string[]) => { budget.rows += ids.length; }};
+        try {
+          const hits = channel === "fts" ? repo.searchFtsIds(input.userId, compiled.ftsMatch, cap, options)
+            : channel === "pattern" ? repo.searchPatternIds(input.userId, compiled.patternTerms, cap, options)
+            : repo.searchVectorIds(input.userId, queryVector!, cap, undefined, options);
+          if (channel !== "vec") budget.rows += hits.length;
+          for (const memory of repo.getMany(hits.map(hit => hit.id))) if (memory.status === "active") {
+            candidates.set(memory.id, memory);
+            const score = hits.find(hit => hit.id === memory.id)?.score ?? 0;
+            bestScoreById.set(memory.id, Math.max(bestScoreById.get(memory.id) ?? 0, score));
+          }
+        } catch {
+          diagnostics.push({...diagnostic, channel: `${channel}:maintenance`, stopReason: "error"});
+        }
+      }
+      for (let round = 0; round < 128; round++) {
+        if (Date.now() >= budget.deadlineAt) { diagnostic.stopReason = "deadline"; break; }
+        if (budget.rows >= 10_000) { diagnostic.stopReason = "work_budget_limited"; break; }
+        const take = Math.max(1, Math.min(256, input.limit, 10_000 - budget.rows));
+        let window: string[] | undefined;
+        let hasMore = false;
+        const options = {excludedIds: [...excluded], excludedExpressions: [...expressions.values()],
+          excludedSourceTurnIds: [...(input.excludeSourceTurnIds ?? [])], strict: true, windowLimit: Math.min(2000, 10_000 - budget.rows),
+          onWindow: (ids: string[], more: boolean) => { window = ids; hasMore = more; }};
+        let batch;
+        try {
+          batch = channel === "fts" ? repo.searchFtsIds(input.userId, compiled.ftsMatch, take + 1, options)
+            : channel === "pattern" ? repo.searchPatternIds(input.userId, compiled.patternTerms, take + 1, options)
+            : repo.searchVectorIds(input.userId, queryVector!, take, undefined, options);
+        } catch { diagnostic.stopReason = "error"; break; }
+        diagnostic.rounds++;
+        if (!window) hasMore = batch.length > take;
+        else if (batch.length >= take && window.length > take) hasMore = true;
+        // A full ranked batch can leave lower scoring hits inside this same window.
+        // Only discard the entire window after all of its positive hits were returned.
+        const scanned = window && batch.length < take ? window : batch.slice(0, take).map(hit => hit.id);
+        budget.rows += window?.length ?? scanned.length;
+        diagnostic.rawHits += batch.slice(0, take).length;
+        diagnostic.metadataRows += window?.length ?? 0;
+        const before = excluded.size;
+        const hitRows = new Map(repo.getMany(batch.slice(0, take).map(hit => hit.id)).map(memory => [memory.id, memory]));
+        for (const hit of batch.slice(0, take)) {
+          const memory = hitRows.get(hit.id);
+          if (!memory || memory.status !== "active" || input.excludeSourceTurnIds?.has(memory.sourceTurnId)) continue;
+          const expression = {sourceTurnId: memory.sourceTurnId, content: memory.content, memoryTypes: [...memory.memoryTypes].sort()};
+          const key = memory.sourceTurnId ? JSON.stringify(expression) : `id:${memory.id}`;
+          if (accepted.has(key)) { diagnostic.duplicateHits++; continue; }
+          accepted.set(key, {memory, score: channel === "vec" ? hit.score : 1 / (accepted.size + 1)});
+          if (memory.sourceTurnId) expressions.set(key, expression);
+        }
+        for (const id of scanned) excluded.add(id);
+        if (accepted.size >= input.limit) { diagnostic.stopReason = "target_met"; break; }
+        if (!hasMore) { diagnostic.stopReason = "scope_exhausted"; break; }
+        if (excluded.size === before) { diagnostic.stopReason = "no_progress"; break; }
+        if (round === 127) diagnostic.stopReason = "work_budget_limited";
+        else await yieldToIO();
+      }
+      diagnostic.uniqueCandidates = accepted.size;
+      diagnostic.durationMs = Date.now() - started;
+      for (const {memory, score} of accepted.values()) {
+        candidates.set(memory.id, memory);
+        bestScoreById.set(memory.id, Math.max(bestScoreById.get(memory.id) ?? 0, score));
+      }
     }
-    const memories = this.deps.repos.userMemories.getMany([...bestScoreById.keys()])
-      .sort((left, right) =>
-        (bestScoreById.get(right.id) ?? 0) - (bestScoreById.get(left.id) ?? 0) ||
-        right.updatedAt.localeCompare(left.updatedAt)
-      )
-      .slice(0, routeLimit);
-    const injectableMemories = memories
-      .filter((memory) => !input.excludeSourceTurnIds?.has(memory.sourceTurnId))
-      .slice(0, input.limit);
-    return {
-      memories,
-      hits: injectableMemories.map((memory) =>
-        userMemoryRecallHit(memory, bestScoreById.get(memory.id) ?? 0)
-      )
-    };
+    const memories = [...candidates.values()].sort((left, right) =>
+      (bestScoreById.get(right.id) ?? 0) - (bestScoreById.get(left.id) ?? 0) ||
+      right.updatedAt.localeCompare(left.updatedAt) || left.id.localeCompare(right.id));
+    const seen = new Set<string>();
+    const injectable = memories.filter(memory => {
+      if (input.excludeSourceTurnIds?.has(memory.sourceTurnId)) return false;
+      const key = memory.sourceTurnId ? JSON.stringify([memory.sourceTurnId, memory.content, [...memory.memoryTypes].sort()]) : `id:${memory.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    }).slice(0, input.limit);
+    return {memories, vectorDegraded, hits: injectable.map(memory => userMemoryRecallHit(memory, bestScoreById.get(memory.id) ?? 0)), diagnostics};
   }
 
   private async retrieveSearchMemories(input: {
@@ -2310,84 +2582,92 @@ export class RetrievalService {
     excludeTraceRawTurnIds?: ReadonlySet<string>;
     targetSkillId?: string;
     currentAgentId?: string;
-  }): Promise<{ retrieval: RetrievalResult; memories: MemoryRow[] }> {
-    if (input.limit <= 0 || input.layers.length === 0) {
-      return { retrieval: emptyRetrievalResult(), memories: [] };
-    }
-    const runQuery = async (
-      query: string,
-      queryVectorText: string,
-      queryExtract: RetrievalQueryExtract | null
-    ): Promise<{ retrieval: RetrievalResult; memories: MemoryRow[] }> => {
-      const config = this.retrievalTuningConfig();
-      const compiledQuery = compileRetrievalQuery(query, queryExtract, {
-        domain: config.domain
-      });
+    rewrite?: boolean;
+    mmr?: boolean;
+    recencyAnchor?: "newest";
+  }): Promise<SearchMemoryOutput> {
+    if (input.limit <= 0 || input.layers.length === 0) return {retrieval: emptyRetrievalResult(), memories: []};
+    const config = this.retrievalTuningConfig();
+    const queries = input.rewrite !== false && this.deps.queryRewriteEnabled() ? await this.planQueryRewrite(input.query) : [input.query];
+    const planned = queries.length ? queries : [input.query];
+    const vectors = new Map<string, Promise<number[] | undefined>>();
+    let deadlineAt: number | undefined;
+    const usage = {rows: 0, metadataRows: 0};
+    let expansion = 0;
+    const runQuery = async (query: string, extra: number): Promise<SearchMemoryOutput> => {
+      const original = query === input.query;
+      const queryVectorText = original ? input.queryVectorText : query;
+      const queryExtract = original ? input.queryExtract : null;
+      const tuning = {...config, tier2TopK: config.tier2TopK + extra};
+      const compiledQuery = compileRetrievalQuery(query, queryExtract, {domain: config.domain});
       const hasVectorCandidates = this.candidatePool.hasRetrievalVectorCandidates({
-        userId: input.userId,
-        layers: input.layers,
-        tags: input.tags,
-        projectId: input.projectId
+        userId: input.userId, layers: input.layers, tags: input.tags, projectId: input.projectId
       });
-      const queryVector = hasVectorCandidates ? await this.queryVector(queryVectorText) : undefined;
+      if (hasVectorCandidates && !vectors.has(queryVectorText)) vectors.set(queryVectorText, this.queryVector(queryVectorText));
+      const queryVector = hasVectorCandidates ? await vectors.get(queryVectorText) : undefined;
+      deadlineAt ??= Date.now() + 5_000;
       const candidatePool = await this.candidatePool.indexedRetrievalCandidatePool({
-        userId: input.userId,
-        compiledQuery,
-        queryVector,
-        layers: input.layers,
-        projectId: input.projectId,
-        tags: input.tags,
-        targetSkillId: input.targetSkillId,
-        currentAgentId: input.currentAgentId,
-        config
+        userId: input.userId, compiledQuery, queryVector, layers: input.layers,
+        projectId: input.projectId, tags: input.tags, targetSkillId: input.targetSkillId,
+        currentAgentId: input.currentAgentId, excludeTraceRawTurnIds: input.excludeTraceRawTurnIds,
+        budget: {deadlineAt, usage}, config: tuning
       });
       const memories = candidatePool.memories;
-      if (memories.length === 0) {
-        return { retrieval: emptyRetrievalResult(), memories };
-      }
+      return {memories, vectorDegraded: Boolean(hasVectorCandidates && !queryVector?.length), diagnostics: candidatePool.diagnostics,
+        retrieval: memories.length ? retrievePluginMemories({
+          query, queryVector, queryExtract, memories, layers: input.layers,
+          limit: input.limit + extra, mode: input.mode,
+          excludeTraceRawTurnIds: input.excludeTraceRawTurnIds, targetSkillId: input.targetSkillId,
+          channelScoresByMemory: candidatePool.channelScoresByMemory, config: tuning,
+          ...(input.mmr === false ? { mmr: false } : {}),
+          ...(input.recencyAnchor === "newest" ? { now: this.newestCandidateMs(memories) } : {})
+        }) : emptyRetrievalResult()};
+    };
+    const run = async (): Promise<SearchMemoryOutput> => {
+      const outputs = await Promise.all(planned.map(query => runQuery(query, expansion)));
+      const allMemories = uniqMemories(outputs.flatMap(output => output.memories));
+      const scores = new Map<string, SeededChannelScores>();
+      for (const output of outputs) for (const hit of output.retrieval.hits) scores.set(hit.id, {fts: hit.score});
+      const hitIds = new Set(outputs.flatMap(output => output.retrieval.hits.map(hit => hit.id)));
+      const dedup = deduplicateCrossAccountMemoryCandidates({memories: allMemories.filter(memory => hitIds.has(memory.id)), repos: this.deps.repos, channelScoresByMemory: scores});
+      const memoryById = new Map(allMemories.map(memory => [memory.id, memory]));
+      const hitById = new Map(outputs.flatMap(output => output.retrieval.hits).map(hit => [hit.id, hit]));
+      const retrievals = outputs.map(output => {
+        const seen = new Set<string>();
+        const hits = output.retrieval.hits.flatMap(hit => {
+          const id = dedup.memoryIdByMemoryId.get(hit.id) ?? hit.id;
+          if (seen.has(id)) return [];
+          if (id !== hit.id && (!memoryById.has(id) || !memoryById.has(hit.id) ||
+            !sameRecallContent(memoryById.get(id)!, memoryById.get(hit.id)!))) return [];
+          seen.add(id);
+          return [{...(hitById.get(id) ?? hit), score: hit.score}];
+        });
+        return {...output.retrieval, hits};
+      });
       return {
-        memories,
-        retrieval: retrievePluginMemories({
-          query,
-          queryVector,
-          queryExtract,
-          memories,
-          layers: input.layers,
-          limit: input.limit,
-          mode: input.mode,
-          excludeTraceRawTurnIds: input.excludeTraceRawTurnIds,
-          targetSkillId: input.targetSkillId,
-          channelScoresByMemory: candidatePool.channelScoresByMemory,
-          config
-        })
+        retrieval: outputs.length === 1 ? retrievals[0]! : mergeRetrievalResults(retrievals, input.limit + expansion, QUERY_REWRITE_RRF_CONSTANT, QUERY_REWRITE_PER_QUERY_MIN_KEEP),
+        memories: uniqMemories([...dedup.memories, ...allMemories.filter(memory => !dedup.memoryIdByMemoryId.has(memory.id))]),
+        diagnostics: outputs.flatMap(output => output.diagnostics ?? []),
+        vectorDegraded: outputs.some(output => output.vectorDegraded),
+        refill: Date.now() < (deadlineAt ?? Infinity) && expansion < 200 ? async missing => {expansion += Math.max(1, missing); return run();} : undefined
       };
     };
+    return run();
+  }
 
-    if (!this.deps.queryRewriteEnabled()) {
-      return runQuery(input.query, input.queryVectorText, input.queryExtract);
+  /** Newest stored candidate time. Ranking uses this instead of the wall clock. */
+  private newestCandidateMs(memories: readonly MemoryRow[]): number {
+    let newest = Number.NEGATIVE_INFINITY;
+    for (const memory of memories) {
+      const trace = memory.properties?.internal_info?.trace;
+      const traceTs = trace && typeof trace === "object" ? (trace as { ts?: unknown }).ts : undefined;
+      if (typeof traceTs === "number" && Number.isFinite(traceTs)) newest = Math.max(newest, traceTs);
+      for (const value of [memory.updatedAt, memory.createdAt, memory.timeline]) {
+        const parsed = Date.parse(value);
+        if (Number.isFinite(parsed)) newest = Math.max(newest, parsed);
+      }
     }
-
-    const queries = await this.planQueryRewrite(input.query);
-    if (queries.length <= 1) {
-      const query = queries[0] ?? input.query;
-      return runQuery(
-        query,
-        query === input.query ? input.queryVectorText : query,
-        query === input.query ? input.queryExtract : null
-      );
-    }
-
-    const outputs = await Promise.all(queries.map((query) =>
-      runQuery(
-        query,
-        query === input.query ? input.queryVectorText : query,
-        query === input.query ? input.queryExtract : null
-      )
-    ));
-    return {
-      retrieval: mergeRetrievalResults(outputs.map((output) => output.retrieval), input.limit, QUERY_REWRITE_RRF_CONSTANT, QUERY_REWRITE_PER_QUERY_MIN_KEEP),
-      memories: uniqMemories(outputs.flatMap((output) => output.memories))
-    };
+    return Number.isFinite(newest) ? newest : 0;
   }
 
   private async filterRecallHits(query: string, hits: RecallHit[]): Promise<{

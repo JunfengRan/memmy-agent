@@ -1,0 +1,11 @@
+---
+description: 多 Agent 协作规范：designer / developer / reviewer 通过 .agents/ 交接
+alwaysApply: true
+---
+
+本项目由多个应用里的多个 Agent 接力完成，彼此只通过仓库文件交接。开工前必须读 `.agents/README.md` 并遵守其中的规则；交接细节见 `.agents/protocol.md`，模板在 `.agents/templates/`，交接记录在 `.agents/work/<id>/`。
+
+- developer：交付或交接前用 `agent-handoff` 技能（`.cursor/skills/agent-handoff`）写 `handoff-NN.md`，代码先提交，验证结果如实填写，逐条回应上一轮 review 的 MUST。
+- reviewer：用 `agent-review` 技能写 `review-NN.md`，亲自复核验证，意见分 MUST / SHOULD / NIT / QUESTION，有未关闭的 MUST 不能 approved。
+- designer：通过架构文档、ADR、open-questions 答复或 `design-NN.md` 传递决定。
+- 只追加新编号文件，不修改别人的交接文件；唯一可改的是 `item.md` 的状态字段。

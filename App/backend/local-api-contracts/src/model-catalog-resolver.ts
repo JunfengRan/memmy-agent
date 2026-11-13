@@ -9,8 +9,11 @@ export interface RuntimeCatalogEndpoint {
     apiBase: string;
     protocol: ModelEndpointProtocol;
     apiKey?: string;
+    /** False keeps credentials and request options local to this endpoint. */
+    inheritProviderDefaults?: boolean;
     extraHeaders?: Record<string, string>;
     extraBody?: Record<string, unknown>;
+    region?: string;
 }
 
 export const BUILTIN_LOCAL_EMBEDDING_ASSIGNMENT_ID = "memmy-builtin-local-embedding";
@@ -30,6 +33,7 @@ export interface RuntimeCatalogPreset {
     source: ModelSource;
     ownerAccountId?: string;
     capabilities: ModelCapability[];
+    inputModalities?: readonly ("text" | "image" | "video")[];
 }
 
 export interface RuntimeModelAssignment {
@@ -74,6 +78,7 @@ export interface ActualModelContext {
     ownerAccountId: string | null;
     capability: ModelCapability;
     capabilities: readonly ModelCapability[];
+    inputModalities?: readonly ("text" | "image" | "video")[];
 }
 
 export interface ResolvedProviderSnapshot {
@@ -118,7 +123,8 @@ const CAPABILITIES = new Set<ModelCapability>([
 const PROTOCOLS = new Set<ModelEndpointProtocol>([
     "openai-chat-completions", "openai-responses", "anthropic-messages",
     "gemini-generate-content", "openai-embeddings", "dashscope-input-audio-chat",
-    "openai-images", "dashscope-multimodal-generation", "memmy-account"
+    "openai-images", "dashscope-multimodal-generation", "memmy-account",
+    "bedrock-converse"
 ]);
 
 /** Resolves one immutable current-catalog model assignment without guessing another preset or endpoint. */
@@ -151,10 +157,12 @@ export function resolveAssignedModel(input: ResolveAssignedModelInput): ModelSel
     }
     if (!providerOwnerMatches(preset, provider, input.activeAccountId)) return UNAVAILABLE;
 
+    const inherited = endpoint.inheritProviderDefaults === false ? {} : provider;
+    const apiKey = endpoint.apiKey ?? inherited.apiKey;
     let extraBody: Readonly<Record<string, unknown>>;
     try {
         extraBody = deepFreeze(structuredClone({
-            ...(provider.extraBody ?? {}),
+            ...(inherited.extraBody ?? {}),
             ...(endpoint.extraBody ?? {})
         }));
     } catch {
@@ -171,19 +179,20 @@ export function resolveAssignedModel(input: ResolveAssignedModelInput): ModelSel
         source: preset.source,
         ownerAccountId: preset.ownerAccountId ?? null,
         capability: input.capability,
-        capabilities
+        capabilities,
+        ...(preset.inputModalities ? { inputModalities: Object.freeze([...preset.inputModalities]) } : {})
     });
     const providerSnapshot = Object.freeze({
         provider: preset.provider,
         endpointId: preset.endpoint,
         protocol: endpoint.protocol,
         apiBase: endpoint.apiBase,
-        ...(endpoint.apiKey ?? provider.apiKey
-            ? { apiKey: endpoint.apiKey ?? provider.apiKey }
+        ...(apiKey
+            ? { apiKey }
             : {}),
         ...(provider.ownerAccountId ? { ownerAccountId: provider.ownerAccountId } : {}),
         extraHeaders: Object.freeze({
-            ...(provider.extraHeaders ?? {}),
+            ...(inherited.extraHeaders ?? {}),
             ...(endpoint.extraHeaders ?? {})
         }),
         extraBody
@@ -301,7 +310,12 @@ function isRuntimePreset(value: unknown): value is RuntimeCatalogPreset {
         && value.capabilities.length > 0
         && value.capabilities.every((capability): capability is ModelCapability => (
             typeof capability === "string" && CAPABILITIES.has(capability as ModelCapability)
-        ));
+        ))
+        && (value.inputModalities === undefined
+            || (Array.isArray(value.inputModalities)
+                && value.inputModalities.every((modality) => (
+                    modality === "text" || modality === "image" || modality === "video"
+                ))));
 }
 
 function isRuntimeProvider(value: unknown): value is RuntimeCatalogProvider {
@@ -319,8 +333,10 @@ function isRuntimeEndpoint(value: unknown): value is RuntimeCatalogEndpoint {
         && typeof value.protocol === "string"
         && PROTOCOLS.has(value.protocol as ModelEndpointProtocol)
         && (value.apiKey === undefined || typeof value.apiKey === "string")
+        && (value.inheritProviderDefaults === undefined || typeof value.inheritProviderDefaults === "boolean")
         && validStringRecord(value.extraHeaders)
-        && validUnknownRecord(value.extraBody);
+        && validUnknownRecord(value.extraBody)
+        && (value.region === undefined || typeof value.region === "string");
 }
 
 function protocolSupportsCapability(
@@ -332,12 +348,15 @@ function protocolSupportsCapability(
         return protocol === "openai-chat-completions"
             || protocol === "openai-responses"
             || protocol === "anthropic-messages"
-            || protocol === "gemini-generate-content";
+            || protocol === "gemini-generate-content"
+            || protocol === "bedrock-converse";
     }
     if (capability === "memory_summary" || capability === "memory_evolution") {
         return protocol === "openai-chat-completions"
+            || protocol === "openai-responses"
             || protocol === "anthropic-messages"
-            || protocol === "gemini-generate-content";
+            || protocol === "gemini-generate-content"
+            || protocol === "bedrock-converse";
     }
     if (capability === "embedding") return protocol === "openai-embeddings";
     if (capability === "asr") return protocol === "dashscope-input-audio-chat";
@@ -345,13 +364,13 @@ function protocolSupportsCapability(
 }
 
 function validStringRecord(value: unknown): boolean {
-    return value === undefined || (
+    return value === undefined || value === null || (
         isRecord(value) && Object.values(value).every((entry) => typeof entry === "string")
     );
 }
 
 function validUnknownRecord(value: unknown): boolean {
-    return value === undefined || isRecord(value);
+    return value === undefined || value === null || isRecord(value);
 }
 
 function isHttpUrl(value: unknown): value is string {

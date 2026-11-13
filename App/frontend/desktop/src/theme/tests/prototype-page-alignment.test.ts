@@ -36,10 +36,10 @@ describe("prototype page structure alignment", () => {
     expect(source("pages/app-frame.tsx")).toContain("LayoutList");
     expect(source("pages/app-frame.tsx")).not.toContain('icon: "+"');
     expect(source("pages/app-frame.tsx")).not.toContain('icon: "M"');
-    expect(source("pages/home-page.tsx")).toContain("app-frame-page-content home-empty-screen flex flex-col items-center justify-center h-full");
+    expect(source("pages/home-page.tsx")).toContain("app-frame-page-content home-empty-screen h-full");
     expect(source("styles.css")).toContain(".home-empty-screen");
-    expect(source("styles.css")).toContain("padding-bottom: 8%;");
-    expect(source("pages/home-page.tsx")).toContain("text-center mb-8");
+    expect(source("styles.css")).toContain("grid-template-rows: minmax(min-content, 1fr) auto minmax(min-content, 1fr)");
+    expect(source("pages/home-page.tsx")).toContain("home-empty-brand text-center");
     expect(source("pages/home-page.tsx")).toContain("home-empty-brand-mascot flex justify-center");
     expect(source("pages/home-page.tsx")).toContain("text-2xl font-bold text-text-ink");
     expect(source("pages/home-page.tsx")).toContain("home-empty-column");
@@ -54,7 +54,7 @@ describe("prototype page structure alignment", () => {
     expect(source("pages/home-page.tsx")).toContain("agent-conversation-column space-y-3");
     expect(source("pages/home-page.tsx")).toContain("relative agent-composer-shell");
     expect(source("pages/home-page.tsx")).not.toContain("relative overflow-hidden agent-composer-shell rounded-card-lg");
-    expect(source("pages/home-page.tsx")).toContain('${isComposerSingleLine ? "agent-composer-input--single " : ""}agent-composer-input--conversation block w-full pl-4 py-3 text-sm resize-none focus:outline-none rounded-card-lg bg-background-paper placeholder:text-text-ink/40');
+    expect(source("pages/home-page.tsx")).toContain('${isComposerSingleLine ? "agent-composer-input--single " : ""}agent-composer-input--conversation block w-full pl-4 py-3 text-sm rounded-card-lg bg-background-paper');
     expect(source("pages/home-page.tsx")).not.toContain("agent-composer-input--command-selected");
     expect(source("pages/home-page.tsx")).toContain('<div className="agent-conversation-content agent-conversation-content--composer agent-conversation-column">');
     expect(source("pages/home-page.tsx")).toContain('className="relative agent-composer-shell agent-composer-shell--expanded rounded-card-lg"');
@@ -63,9 +63,9 @@ describe("prototype page structure alignment", () => {
 
   it("aligns utility pages with their prototype counterparts", () => {
     expect(source("pages/api-key-page.tsx")).toContain("min-h-screen bg-canvas-oat px-4 pt-4 pb-8 relative overflow-hidden");
-    expect(source("pages/tools-page.tsx")).toContain("app-frame-page-content h-full overflow-y-auto py-6");
-    expect(source("pages/tools-page.tsx")).toContain("tools-icon-grid");
-    expect(source("styles.css")).toContain("grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));");
+    expect(source("pages/tools-page.tsx")).toContain("app-frame-page-content h-full overflow-y-auto tools-page-content");
+    expect(source("pages/connection-catalog-section.tsx")).toContain("plugin-marketplace-grid");
+    expect(source("pages/plugin-tools-layout.css")).toContain("grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));");
     expect(source("styles.css")).toContain("gap: 8px;");
     expect(source("styles.css")).toContain("gap: 12px;");
     expect(source("styles.css")).not.toContain("aspect-ratio: 1 / 1");

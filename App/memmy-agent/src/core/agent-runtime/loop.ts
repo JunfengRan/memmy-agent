@@ -1,6 +1,11 @@
+import { computerUseRequestContext } from "./computer-use-request-context.js";
+import { agentTaskActivity } from "./task-activity.js";
+import { OUTPUT_FEEDBACK_KEY, OutputDelivery, clearOutputDelivery, DELIVERY_NOT_CONFIRMED, hasOutputObligations } from "./tools/output-location.js";
+import { requestTiming } from "../../utils/request-timing.js";
 import { initializeDesktopScreenCapture } from '../../tools/computer-use/desktop-screen-capture.js';
 import { closeNativeSurfacesForTurn, registerComputerUseTurnInterrupt } from '../../tools/computer-use/surface-preview.js';
 import fs from "node:fs";
+import type { MemmyMemoryReplaySnapshot } from "../../memmy-memory/protocol.js";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import {
@@ -14,7 +19,7 @@ import {
 import { CommandContext, CommandRouter } from "../../command/router.js";
 import { registerBuiltinCommands } from "../../command/builtin.js";
 import { Config, ModelPresetConfig } from "../../config/schema.js";
-import { getWorkspacePath } from "../../config/paths.js";
+import { getWorkspacePath, getWorkspaceStatePath } from "../../config/paths.js";
 import { CONTEXT_SAFETY_BUFFER_TOKENS } from "../../token-budget.js";
 import { CronService } from "../../cron/service.js";
 import { makeProvider } from "../../providers/factory.js";
@@ -26,6 +31,7 @@ import {
   type ModelSelectionInput,
   type ResolvedModelSelection,
 } from "../../providers/model-catalog.js";
+import { getModelThinkingConfig } from "@memmy/local-api-contracts";
 import type { ProviderErrorCategory } from "../../providers/provider-error-classifier.js";
 
 type UserFacingModelErrorCategory = ProviderErrorCategory | "model_failed";
@@ -108,6 +114,9 @@ import { ToolLoader } from "./tools/loader.js";
 import { RequestContext, ToolContext } from "./tools/context.js";
 import { ExecSessionManager } from "./tools/exec-session.js";
 import { MessageTool, type MessageSendCallback } from "./tools/message.js";
+import { TaskPlanRuntime } from "./task-plan-runtime.js";
+import { createTaskPlanContinuation } from "./task-plan-continuation.js";
+import { createArtifactDeliveryContinuation } from "./artifact-delivery-continuation.js";
 import { FileStateStore } from "./tools/file-state.js";
 import { connectMissingServers, handleRuntimeControl, reloadLock, runtimeLines as mcpRuntimeLines, sessionExtra as mcpSessionExtra } from "./tools/mcp.js";
 import { BrowserSessionManager, type BrowserScope } from "./tools/browser.js";
@@ -120,11 +129,15 @@ import {
   type TokenCompactionStatus,
 } from "./memory.js";
 import { AgentHook, AgentHookContext, CompositeAgentHook } from "./hook.js";
+import { loadExternalAgentHooks } from "./external-hook-loader.js";
 import { SubagentManager } from "./subagent.js";
 import { AutoCompact } from "./autocompact.js";
 import { configuredModelPresets, defaultSelectionSignature, makePresetSnapshotLoader, normalizePresetName } from "./model-presets.js";
 import { installMemmyMemory, type MemmyMemoryIntegration } from "../../memmy-memory/index.js";
 import { createKnowledgeHook } from "../../knowledge/register.js";
+import { createProjectInstructionsHook } from "../../project-instructions/index.js";
+import { createCollabInstructionsHook } from "../../collab-instructions/index.js";
+import { createAssistRequestHook } from "../../assist-request/index.js";
 import { createByokTokenUsageRecorder, installByokTokenUsage } from "../../integrations/byok-token-usage/index.js";
 import {
   SessionDagQueueManager,
@@ -356,6 +369,7 @@ type AgentLoopInit = {
   providerRetryMode?: string;
   toolHintMaxLength?: number;
   maxToolResultChars?: number;
+  toolResultCompressionEnabled?: boolean;
   maxMessages?: number;
   unifiedSession?: boolean;
   timezone?: string | null;
@@ -464,36 +478,6 @@ function turnMetadata(turnId: string | null | undefined): Record<string, string>
   return turnId ? { turnId, turn_id: turnId } : {};
 }
 
-function computerUseRequestContext(message: InboundMessage, turnId?: string | null): {
-  messageId: string | null; metadata: Record<string, any>;
-} {
-  const rawId = message.metadata?.message_id ?? message.metadata?.messageId;
-  const nativeId = typeof rawId === 'string' && rawId.trim() && rawId.length <= 512
-    ? rawId.trim() : typeof rawId === 'number' && Number.isSafeInteger(rawId) && rawId > 0 ? String(rawId) : null;
-  // GUI source is supplied by the accepted channel boundary, not envelope
-  // metadata. Recover an older durable GUI request's validated UUID, retaining
-  // its original identity rather than substituting a generated execution turn.
-  const source = message.turnSource;
-  const guiSource = message.channel === 'websocket' && source?.channel === 'websocket'
-    && (source.kind === 'gui' || source.kind === 'tui');
-  const requestId = message.metadata?.client_request_id;
-  const messageId = nativeId ?? (guiSource && typeof requestId === 'string'
-    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId) ? requestId : null);
-  let reason = 'interactive-user-message';
-  if (message.internal || message.role !== 'user') reason = 'internal-message';
-  else if (['system', 'cron'].includes(message.channel)
-    || ['subagent', 'goal-runtime', 'system', 'cron'].includes(message.senderId.toLowerCase())) reason = 'background-source';
-  else if (message.channel === 'websocket' && !guiSource) reason = 'gui-source-unverified';
-  else if (message.metadata?.computerUseInteractive === false) reason = 'background-context';
-  else if (!messageId) reason = 'user-message-id-missing';
-  return { messageId, metadata: { ...message.metadata,
-    ...(source ? { turn_source: source } : {}), ...turnMetadata(turnId),
-    ...(messageId ? { message_id: messageId } : {}),
-    computerUseInteractive: reason === 'interactive-user-message',
-    computerUseInteractiveReason: reason,
-  } };
-}
-
 function restoredComputerUseMetadata(metadata: Record<string, any>): Record<string, any> {
   // Older durable records lost role and refusals. Keep task scheduling intact,
   // but require a fresh user message before granting native access from them.
@@ -577,13 +561,13 @@ export function hasReportedInOutUsage(
 
 class AsyncMutex {
   private locked = false;
-  private waiters: Array<{ priority: number; resume: () => void }> = [];
+  private waiters: Array<{ priority: number; key?: string; resume: () => void }> = [];
 
-  async runExclusive<T>(fn: () => Promise<T>, priority = Date.now()): Promise<T> {
+  async runExclusive<T>(fn: () => Promise<T>, priority = Date.now(), key?: string): Promise<T> {
     if (this.locked) {
       await new Promise<void>((resume) => {
         const index = this.waiters.findIndex((waiter) => waiter.priority > priority);
-        const waiter = { priority, resume };
+        const waiter = { priority, key, resume };
         if (index < 0) this.waiters.push(waiter);
         else this.waiters.splice(index, 0, waiter);
       });
@@ -597,6 +581,15 @@ class AsyncMutex {
       if (next) next.resume();
       else this.locked = false;
     }
+  }
+
+  reorderWaiters(orderedKeys: readonly string[]): void {
+    const rank = new Map(orderedKeys.map((key, index) => [key, index]));
+    const indices = this.waiters.flatMap((waiter, index) =>
+      waiter.key && rank.has(waiter.key) ? [index] : []);
+    const reordered = indices.map((index) => this.waiters[index]!)
+      .sort((left, right) => rank.get(left.key!)! - rank.get(right.key!)!);
+    indices.forEach((index, position) => { this.waiters[index] = reordered[position]!; });
   }
 }
 
@@ -632,6 +625,11 @@ export type QueueSnapshotDescriptor = {
 
 export type RemoveQueuedMessageResult = {
   outcome: "removed" | "already_dequeued" | "missing";
+  revision: number;
+};
+
+export type ReorderQueuedMessageResult = {
+  outcome: "reordered" | "stale" | "unsupported";
   revision: number;
 };
 
@@ -739,6 +737,27 @@ export class SessionWorkspaceError extends Error {
   }
 }
 
+function thinkingFieldsFromMetadata(metadata: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  return {
+    ...(typeof metadata?.thinking_enabled === "boolean" ? { thinking_enabled: metadata.thinking_enabled } : {}),
+    ...(typeof metadata?.thinking_level === "string" ? { thinking_level: metadata.thinking_level } : {}),
+  };
+}
+
+export function reasoningEffortFromTurnMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+  model: string | null | undefined,
+): string | undefined {
+  if (typeof metadata?.thinking_enabled !== "boolean") return undefined;
+  const config = metadata.model_provider === "custom" ? null : getModelThinkingConfig(model);
+  const enabled = config && !config.switchable ? true : metadata.thinking_enabled;
+  if (!enabled) return "none";
+  if (typeof metadata.thinking_level === "string" && metadata.thinking_level.trim()) {
+    return metadata.thinking_level;
+  }
+  return "medium";
+}
+
 export class AgentLoop {
   bus: MessageBus;
   config: Config;
@@ -775,13 +794,18 @@ export class AgentLoop {
   providerRetryMode: string;
   toolHintMaxLength: number;
   maxToolResultChars: number;
+  toolResultCompressionEnabled: boolean;
   maxMessages: number;
   unifiedSession: boolean;
   backgroundTasks: Array<Promise<any>> = [];
   extraHooks: AgentHook[] = [];
+  private externalHooks: AgentHook[] = [];
+  private externalHooksLoadPromise: Promise<void> | null = null;
+  private externalHooksShutdownPromise: Promise<void> | null = null;
   startTime: number;
   lastUsageBySession: Map<string, Record<string, number>>;
   goalRuntime: GoalRuntime;
+  taskPlanRuntime: TaskPlanRuntime;
   scheduledGoalSessions: Map<string, { goalId: string; updatedAt: string }>;
   activeTasks: Map<string, any[]>;
   pendingQueues: Map<string, AsyncQueue<InboundMessage>>;
@@ -854,6 +878,13 @@ export class AgentLoop {
     const defaults = this.config.agents.defaults;
     this.workspace = path.resolve(getWorkspacePath(init.workspace ?? defaults.workspace ?? process.cwd()));
     this.extraHooks.unshift(createKnowledgeHook());
+    // 协作项目的指令走自己的文件与段落，与本机项目指令互不覆盖。
+    // 先登记、后执行：下面的本机项目指令钩子会插在它前面先跑，协作段才能按 after 定位到本机段之后。
+    this.extraHooks.unshift(createCollabInstructionsHook());
+    // 成员协助：结果的写法交给模型、不出现在任务里。会话在下面才建好，钩子每一轮按需读取。
+    this.extraHooks.push(createAssistRequestHook(() => this.sessions));
+    // 项目里新建的 Memmy 任务都要遵循该项目的项目指令，像项目级的 AGENTS.md 一样带在系统提示词里。
+    this.extraHooks.unshift(createProjectInstructionsHook());
     this.memmyMemoryIntegration = installMemmyMemory(this.config, {
       workspace: this.workspace,
       hooks: this.extraHooks,
@@ -867,8 +898,9 @@ export class AgentLoop {
     this.providerRetryMode = init.providerRetryMode ?? defaults.providerRetryMode;
     this.toolHintMaxLength = init.toolHintMaxLength ?? defaults.toolHintMaxLength;
     this.maxToolResultChars = init.maxToolResultChars ?? defaults.maxToolResultChars;
+    this.toolResultCompressionEnabled = init.toolResultCompressionEnabled ?? defaults.toolResultCompressionEnabled;
     const requestedMaxMessages = init.maxMessages ?? defaults.maxMessages;
-    const normalizedMaxMessages = requestedMaxMessages > 0 ? requestedMaxMessages : 120;
+    const normalizedMaxMessages = requestedMaxMessages > 0 ? requestedMaxMessages : 80;
     this.maxMessages = normalizedMaxMessages;
     this.defaultModelPreset = new ModelPresetConfig({
       endpoint: "default",
@@ -884,8 +916,9 @@ export class AgentLoop {
     const rawPresets = init.modelPresets ?? this.config.modelPresets;
     this.modelPresets = Object.fromEntries(Object.entries(rawPresets).map(([name, preset]) => [name, preset instanceof ModelPresetConfig ? preset : new ModelPresetConfig(preset)]));
     this.unifiedSession = init.unifiedSession ?? defaults.unifiedSession;
+    const stateWorkspace = getWorkspaceStatePath(this.workspace);
     this.sessions = init.sessionManager ?? new SessionManager(
-      init.sessionDir ?? path.join(this.workspace, "sessions"),
+      init.sessionDir ?? path.join(stateWorkspace, "sessions"),
       { legacyWebuiWorkspaceCwd: this.workspace },
     );
     this.goalRuntime = new GoalRuntime({
@@ -895,6 +928,7 @@ export class AgentLoop {
       scheduleGoalWork: (sessionKey, goal) => this.scheduleGoalWork(sessionKey, goal),
       invalidateGoalWork: (sessionKey) => this.scheduledGoalSessions.delete(sessionKey),
     });
+    this.taskPlanRuntime = new TaskPlanRuntime({ sessions: this.sessions, bus: this.bus });
     this.projectStore = init.projectStore ?? null;
     this.guiTranscriptMirror = init.guiTranscriptMirror ?? null;
     const terminalControlRoot = this.sessions.root
@@ -902,7 +936,7 @@ export class AgentLoop {
       ?? path.join(this.workspace, "sessions");
     this.terminalTurnLock = new TerminalSessionTurnLock(terminalControlRoot);
     this.terminalRunControl = new TerminalRunControl(terminalControlRoot);
-    this.cronService = init.cronService ?? new CronService(path.join(this.workspace, "cron", "jobs.json"));
+    this.cronService = init.cronService ?? new CronService(path.join(stateWorkspace, "cron", "jobs.json"));
     this.sessionDagQueue = init.sessionDagQueue ?? this.createSessionDagQueue();
     this.execSessionManager = new ExecSessionManager();
     this.fileStateStore = new FileStateStore();
@@ -925,6 +959,7 @@ export class AgentLoop {
       maxIterations: this.maxIterations,
       maxConcurrent: defaults.maxConcurrentSubagents,
       maxToolResultChars: this.maxToolResultChars,
+      toolResultCompressionEnabled: this.toolResultCompressionEnabled,
       llmWallTimeoutForSession: (sessionKey) => runnerWallLlmTimeoutS(this.sessions, sessionKey),
       lifecycleHook: () => this.lifecycleHook(),
       computerUseTools: () => [...this.tools].map(([, tool]) => tool)
@@ -958,6 +993,7 @@ export class AgentLoop {
     this.autoCompact = new AutoCompact(this.sessions, this.consolidator, init.sessionTtlMinutes ?? defaults.sessionTtlMinutes);
     this.dream = this.fileMemoryEnabled
       ? new Dream({
+          toolResultCompressionEnabled: this.toolResultCompressionEnabled,
           store: this.context.memory,
           provider: this.provider,
           model: this.model ?? "",
@@ -1064,6 +1100,7 @@ export class AgentLoop {
       fileStateStore: this.fileStateStore,
       browserSessionManager: this.browserSessionManager,
       goalRuntime: this.goalRuntime,
+      taskPlanRuntime: this.taskPlanRuntime,
       readonlySkillRoots,
       timezone: this.context.timezone || this.config.agents.defaults.timezone || "UTC",
       runtimeState: this,
@@ -1080,11 +1117,15 @@ export class AgentLoop {
       messageSendCallback = null,
       readonlySkillRoots,
       modelSelection = null,
+      sessionKey = null,
+      hostProjectId = null,
     }: {
       includeConnectedMcp?: boolean;
       messageSendCallback?: MessageSendCallback | null;
       readonlySkillRoots?: readonly string[];
       modelSelection?: ResolvedModelSelection | null;
+      sessionKey?: string | null;
+      hostProjectId?: string | null;
     } = {},
   ): ToolRegistryInstance {
     this.refreshToolsSnapshot();
@@ -1094,6 +1135,8 @@ export class AgentLoop {
       messageSendCallback,
       modelSelection ?? null,
     );
+    toolCtx.sessionKey = sessionKey;
+    toolCtx.metadata.webuiProjectId = hostProjectId;
     const registry = new ToolLoader({ workspace: this.workspace, ctx: toolCtx }).loadRegistry(toolCtx);
     if (includeConnectedMcp) this.copyConnectedMcpTools(registry);
     this.registerHookTools(toolCtx, phase, registry);
@@ -1123,7 +1166,7 @@ export class AgentLoop {
   }
 
   private projectReadonlySkillRoots(): readonly string[] {
-    const roots = [path.join(this.workspace, "skills"), BUILTIN_SKILLS_DIR]
+    const roots = [path.join(getWorkspaceStatePath(this.workspace), "skills"), BUILTIN_SKILLS_DIR]
       .flatMap((root) => {
         try {
           return fs.statSync(root).isDirectory() ? [fs.realpathSync(root)] : [];
@@ -1203,7 +1246,7 @@ export class AgentLoop {
   private reportStartupStage(stage: string, startedAt: number): void {
     if (process.env.MEMMY_DESKTOP_MANAGED_GATEWAY !== "1") return;
     try {
-      console.info(`[agent-startup] ${JSON.stringify({ stage, elapsedMs: Date.now() - startedAt })}`);
+      console.info("[agent-startup] " + JSON.stringify({ stage, elapsedMs: Date.now() - startedAt }));
     } catch { /* Diagnostics cannot interrupt startup. */ }
   }
 
@@ -1217,6 +1260,8 @@ export class AgentLoop {
       if (!this.messageLoopReady) this.reportStartupStage(stage, startedAt);
     };
     const initialization = (async () => {
+      await this.ensureExternalHooksLoaded();
+      reportStage("external-hooks-ready");
       await initializeDesktopScreenCapture();
       reportStage("screen-capture-ready");
       await this.connectMcp();
@@ -1241,11 +1286,36 @@ export class AgentLoop {
   async closeRuntimeTools(): Promise<void> {
     this.messageLoopReady = false;
     this.runtimeToolsClosed = true;
-    // A failed attempt may still have opened some resources; clean those up too.
-    await this.runtimeToolsInitialization?.catch(() => undefined);
-    await this.browserSessionManager.close();
-    await this.closeMcp();
-    await this.memmyMemoryIntegration.dispose?.();
+    try {
+      // A failed attempt may still have opened some resources; clean those up too.
+      await this.runtimeToolsInitialization?.catch(() => undefined);
+      await this.browserSessionManager.close();
+      await this.closeMcp();
+      await this.memmyMemoryIntegration.dispose?.();
+    } finally {
+      await this.shutdownExternalHooks();
+    }
+  }
+
+  private ensureExternalHooksLoaded(): Promise<void> {
+    this.externalHooksLoadPromise ??= loadExternalAgentHooks(this.config.agentHooks)
+      .then((hooks) => {
+        this.externalHooks = hooks;
+        this.extraHooks.push(...hooks);
+      })
+      .catch((error) => {
+        console.error("Unable to initialize external agent hooks:", error);
+      });
+    return this.externalHooksLoadPromise;
+  }
+
+  private shutdownExternalHooks(): Promise<void> {
+    this.externalHooksShutdownPromise ??= new CompositeAgentHook(this.externalHooks)
+      .shutdown()
+      .catch((error) => {
+        console.error("Unable to shut down external agent hooks:", error);
+      });
+    return this.externalHooksShutdownPromise;
   }
 
   async closeBrowserSession(
@@ -1410,11 +1480,15 @@ export class AgentLoop {
     });
   }
 
-  registerHookTools(toolCtx: ToolContext, phase: string, registry: ToolRegistryInstance = this.tools): void {
+  registerHookTools(
+    toolCtx: ToolContext,
+    phase: string,
+    registry: ToolRegistryInstance = this.tools,
+  ): void {
     this.lifecycleHook().onRegisterTools({
       registry,
       toolContext: toolCtx,
-      workspace: this.workspace,
+      workspace: toolCtx.workspace ?? this.workspace,
       metadata: { phase },
     });
   }
@@ -1425,6 +1499,9 @@ export class AgentLoop {
         session,
         sessionKey,
         reason,
+        workspace: typeof session.metadata?.[WEBUI_WORKSPACE_CWD_METADATA_KEY] === "string"
+          ? session.metadata[WEBUI_WORKSPACE_CWD_METADATA_KEY]
+          : this.workspace,
         metadata: { lifecycle: "session" },
       }),
     );
@@ -1436,6 +1513,9 @@ export class AgentLoop {
         session,
         sessionKey,
         reason,
+        workspace: typeof session?.metadata?.[WEBUI_WORKSPACE_CWD_METADATA_KEY] === "string"
+          ? session.metadata[WEBUI_WORKSPACE_CWD_METADATA_KEY]
+          : this.workspace,
         metadata: { lifecycle: "session" },
       }),
     );
@@ -2128,6 +2208,45 @@ export class AgentLoop {
     return this.getQueueSnapshot(sessionKey);
   }
 
+  async reorderQueuedWebuiMessages(
+    sessionKey: string,
+    orderedIds: readonly string[],
+    expectedRevision: number,
+  ): Promise<ReorderQueuedMessageResult> {
+    return this.queueMutationLockFor(sessionKey).runExclusive(async () => {
+      const revision = this.queueRevision(sessionKey);
+      const slots = (this.turnSlots.get(sessionKey) ?? []).filter((slot) =>
+        slot.state === "queued" && slot.announcedToWebui && isSharedQueueMessage(slot.root));
+      const inbox = this.goalRuntime.inbox(sessionKey).filter((entry) =>
+        entry.turnId === null && this.queueDescriptorFromInboxEntry(sessionKey, entry) !== null);
+      const currentIds = [
+        ...slots.map((slot) => String(slot.root.metadata.client_request_id)),
+        ...inbox.map((entry) => String(entry.metadata.client_request_id)),
+      ];
+      if (revision !== expectedRevision || orderedIds.length < 2
+        || orderedIds.length !== currentIds.length
+        || new Set(orderedIds).size !== orderedIds.length
+        || orderedIds.some((id) => !currentIds.includes(id))) {
+        return { outcome: "stale" as const, revision };
+      }
+      if (slots.length && inbox.length) return { outcome: "unsupported" as const, revision };
+      const originalTimes = [...slots.map((slot) => Date.parse(String(slot.root.metadata.queued_at))),
+        ...inbox.map((entry) => Date.parse(String(entry.metadata.queued_at)))];
+      const first = Math.min(...originalTimes.filter(Number.isFinite));
+      const queuedAtById = new Map(orderedIds.map((id, index) =>
+        [id, new Date(first + index).toISOString()]));
+      if (slots.length) {
+        for (const slot of slots) {
+          slot.root.metadata.queued_at = queuedAtById.get(String(slot.root.metadata.client_request_id))!;
+        }
+        this.lockFor(sessionKey).reorderWaiters(orderedIds);
+      } else {
+        await this.goalRuntime.reorderInboxEntries(sessionKey, orderedIds, queuedAtById);
+      }
+      return { outcome: "reordered" as const, revision: this.advanceQueueRevision(sessionKey) };
+    });
+  }
+
   async removeQueuedMessage(
     sessionKey: string,
     clientRequestId: string,
@@ -2374,7 +2493,11 @@ export class AgentLoop {
   }
 
   syncSubagentRuntimeLimits(): void {
-    if (this.subagents) (this.subagents as any).maxIterations = this.maxIterations;
+    if (this.subagents) {
+      this.subagents.maxIterations = this.maxIterations;
+      this.subagents.toolResultCompressionEnabled = this.toolResultCompressionEnabled;
+    }
+    if (this.dream) this.dream.toolResultCompressionEnabled = this.toolResultCompressionEnabled;
   }
 
   buildModelPresetSnapshot(name: string): Record<string, any> {
@@ -2637,6 +2760,12 @@ export class AgentLoop {
     if (waits.length) await Promise.allSettled(waits);
     const subagents = this.subagents as any;
     const subCancelled = subagents?.cancelBySession ? await subagents.cancelBySession(key) : subagents?.cancel_by_session ? await subagents.cancel_by_session(key) : 0;
+    // Stopping also ends an unfinished file task, unless a retained task is still running it.
+    const session = this.sessions.get(key);
+    if (!retained.length && hasOutputObligations(session?.metadata)) {
+      clearOutputDelivery(session!.metadata);
+      this.sessions.save(session!);
+    }
     return cancelled + Number(subCancelled || 0);
   }
 
@@ -2699,6 +2828,8 @@ export class AgentLoop {
     return {
       role: "user",
       content: this.context.buildUserContent(content, media),
+      ...(msg.internal || msg.channel === "system" || msg.senderId === "subagent"
+        ? { internal_context: "runtime_notification" } : {}),
       ...(clientRequestId
         ? { client_request_id: clientRequestId }
         : {}),
@@ -2941,6 +3072,7 @@ export class AgentLoop {
     if (!content.trim()) return false;
     ctx.session!.addMessage("user", content, {
       internal_context: "goal_continuation",
+      turn_id: ctx.turnId,
       ...(sharedTurnSource(ctx.msg) ? { turn_source: sharedTurnSource(ctx.msg) } : {}),
     });
     this.sessions.save(ctx.session!, { fsync: true });
@@ -3400,6 +3532,7 @@ export class AgentLoop {
   ): void {
     let lastAssistantIdx: number | null = null;
     for (const message of messages.slice(skip)) {
+      if (message[OUTPUT_FEEDBACK_KEY]) continue;
       const entry = { ...message };
       delete entry.webui_queue_steer_origin;
       const role = entry.role;
@@ -3407,9 +3540,9 @@ export class AgentLoop {
       if (role === "assistant" && !content && !entry.tool_calls?.length) continue;
       if (role === "tool") {
         const maxChars = resolveToolResultMaxChars(entry.name, this.maxToolResultChars, SESSION_TOOL_RESULT_MAX_CHARS_BY_NAME);
-        if (typeof content === "string" && content.length > maxChars) entry.content = truncateText(content, maxChars);
+        if (this.toolResultCompressionEnabled && typeof content === "string" && content.length > maxChars) entry.content = truncateText(content, maxChars);
         else if (Array.isArray(content)) {
-          const filtered = this.sanitizePersistedBlocks(content, { shouldTruncateText: true, maxTextChars: maxChars });
+          const filtered = this.sanitizePersistedBlocks(content, { shouldTruncateText: this.toolResultCompressionEnabled, maxTextChars: maxChars });
           if (!filtered.length) continue;
           entry.content = filtered;
         }
@@ -3683,6 +3816,7 @@ export class AgentLoop {
       midTurnContext = null,
       consolidator = null,
       onTokenCompactionEvent = null,
+      outputUserText = null,
     }: {
       onProgress?: any;
       onStream?: any;
@@ -3707,6 +3841,8 @@ export class AgentLoop {
       midTurnContext?: MidTurnContextDescriptor | null;
       consolidator?: Consolidator | null;
       onTokenCompactionEvent?: TokenCompactionEventCallback | null;
+      /** The live user message of this turn; null for system, subagent and internal turns. */
+      outputUserText?: string | null;
     } = {},
   ): Promise<AgentLoopResult> {
     if (!modelSelection) this.refreshProviderSnapshot();
@@ -3716,10 +3852,34 @@ export class AgentLoop {
     const activeContextWindowTokens = modelSelection?.snapshot.contextWindowTokens
       ?? this.contextWindowTokens;
     const activeTools = tools ?? this.tools;
+    const deliveryMessageTool = activeTools.get("message");
+    let heldDeliveryStream = "";
+    const deliveryAwareStream = onStream ? async (delta: string) => {
+      if (deliveryMessageTool instanceof MessageTool && deliveryMessageTool.hasPendingPluginFiles()) {
+        heldDeliveryStream += delta;
+      } else {
+        if (heldDeliveryStream) {
+          await onStream(heldDeliveryStream);
+          heldDeliveryStream = "";
+        }
+        await onStream(delta);
+      }
+    } : null;
+    const deliveryAwareStreamEnd = onStream || onStreamEnd ? async (options: { resuming?: boolean } = {}) => {
+      if (heldDeliveryStream) {
+        if (!options.resuming) await onStream?.(heldDeliveryStream);
+        heldDeliveryStream = "";
+      }
+      await onStreamEnd?.(options);
+    } : null;
+    const deliveryContinuation = createArtifactDeliveryContinuation(() => {
+      const messageTool = activeTools.get("message");
+      return messageTool instanceof MessageTool ? messageTool.turnDeliveredMediaPaths() : [];
+    });
     const checkpointSession = session;
     const checkpoint = checkpointSession ? (payload: Record<string, any>) => this.setRuntimeCheckpoint(checkpointSession, payload) : null;
     const activeSessionKey = session?.key ?? sessionKey ?? null;
-    const loopHook = new AgentProgressHook(onProgress, onStream, onStreamEnd, {
+    const loopHook = new AgentProgressHook(onProgress, deliveryAwareStream, deliveryAwareStreamEnd, {
       channel: channel ?? "cli",
       chatId: chatId ?? "direct",
       messageId: messageId ?? null,
@@ -3740,9 +3900,29 @@ export class AgentLoop {
       },
     });
     const hook = this.extraHooks.length ? new CompositeAgentHook([loopHook, ...this.extraHooks]) : loopHook;
+    const taskPlanContinuation = createTaskPlanContinuation(() => activeSessionKey
+      ? this.taskPlanRuntime.get(activeSessionKey) : null);
+    const requestIndex = initialMessages.length - 1;
+    const originalRequestContent = structuredClone(initialMessages[requestIndex]?.content);
+    const turnMemory: { snapshot: MemmyMemoryReplaySnapshot | null } = { snapshot: null };
+    const deliveryKey = session?.key ?? null;
+    // Subagents keep using this after the turn ends: always the session's current metadata.
+    const outputLocation = new OutputDelivery(deliveryKey ? {
+      metadata: () => (this.sessions.get(deliveryKey) ?? session!).metadata,
+      save: () => {
+        const current = this.sessions.get(deliveryKey);
+        if (current) this.sessions.save(current);
+      },
+    } : {}, sessionWorkspace, outputUserText);
     const result = await this.runner.run(
       new AgentRunSpec({
         messages: initialMessages,
+        finalResponseContinuation: (response) => taskPlanContinuation(response) ?? deliveryContinuation(response),
+        privateSkillRefs: session?.metadata?.privatePluginSkillRefs,
+        onPrivateSkillRefsChanged: session ? (refs) => {
+          session.metadata.privatePluginSkillRefs = refs;
+          this.sessions.save(session);
+        } : undefined,
         provider: activeProvider,
         tools: activeTools,
         model: activeModel,
@@ -3750,17 +3930,21 @@ export class AgentLoop {
         maxIterationsFinalPrompt: renderTemplate("agent/max-iterations-final-response.md", { strip: true }),
         maxTokens: activeProvider?.generation?.maxTokens ?? this.config.agents.defaults.maxTokens,
         temperature: activeProvider?.generation?.temperature ?? this.config.agents.defaults.temperature,
-        reasoningEffort: activeProvider?.generation?.reasoningEffort ?? this.config.agents.defaults.reasoningEffort,
+        reasoningEffort: reasoningEffortFromTurnMetadata(metadata, activeModel)
+          ?? activeProvider?.generation?.reasoningEffort
+          ?? this.config.agents.defaults.reasoningEffort,
         maxToolResultChars: this.maxToolResultChars,
+        toolResultCompressionEnabled: this.toolResultCompressionEnabled,
         toolResultMaxCharsByName: SESSION_TOOL_RESULT_MAX_CHARS_BY_NAME,
         workspace: sessionWorkspace,
+        outputLocation,
         sessionKey: activeSessionKey,
         hostProjectId,
         contextWindowTokens: activeContextWindowTokens,
         contextBlockLimit: this.contextBlockLimit,
         providerRetryMode: this.providerRetryMode,
         progressCallback: onProgress,
-        streamProgressDeltas: Boolean(onStream),
+        streamProgressDeltas: Boolean(deliveryAwareStream),
         retryWaitCallback: onRetryWait,
         checkpointCallback: checkpoint,
         llmTimeoutS: runnerWallLlmTimeoutS(this.sessions, activeSessionKey, {
@@ -3772,6 +3956,7 @@ export class AgentLoop {
         hook,
         concurrentTools: true,
         injectionCallback: ({ limit = 3 } = {}) => this.drainPendingQueue(pendingQueue, limit, session?.key ?? sessionKey, msg => {
+          if (!msg.internal && msg.channel !== "system") outputLocation.addUserText(msg.content);
           const request = computerUseRequestContext(msg, turnId);
           // A real user steer replaces the blocked/approved message scope.
           // Automatic subagent notices never confer a new user authorization.
@@ -3780,6 +3965,18 @@ export class AgentLoop {
         }),
         internalTurnContext,
         actualModelContext: modelSelection ? persistedModelSelection(modelSelection) : null,
+        memoryContextCallback: (ownerTurnId, content) => {
+          turnMemory.snapshot = {
+            turnId: ownerTurnId,
+            // Preserve the existing rule that saved images become path placeholders.
+            content: this.sanitizePersistedBlocks(structuredClone(content)),
+          };
+          const owner = session?.messages.findLast((message) => message.role === "user" && message.turn_id === ownerTurnId);
+          if (owner) {
+            owner.memmy_memory = structuredClone(turnMemory.snapshot);
+            this.sessions.save(session!);
+          }
+        },
         onMaxFinalizationStarting,
         currentTurnMessageStartIndex: midTurnContext?.transcriptStartIndex ?? null,
         beforeFollowupModelRequest: midTurnContext && session && consolidator
@@ -3793,6 +3990,13 @@ export class AgentLoop {
           : null,
       }),
     );
+    // Normal turns were persisted early; system turns are saved by their existing saveTurn path.
+    const request = result.messages?.[requestIndex];
+    if (turnMemory.snapshot && request?.role === "user") {
+      request.memmy_memory = turnMemory.snapshot;
+      request.turn_id = turnMemory.snapshot.turnId;
+      request.content = originalRequestContent;
+    }
     const rawUsage = result.usage ?? result.response?.usage;
     const usage = normalizeUsageRecord(rawUsage);
     if (activeSessionKey) {
@@ -3853,7 +4057,7 @@ export class AgentLoop {
       ? errorCategory ?? "model_failed"
       : null;
     const messageTool = (tools ?? this.tools).get("message");
-    if (messageTool instanceof MessageTool && messageTool.sentInTurn) {
+    if (messageTool instanceof MessageTool && messageTool.sentInTurn && !finalContent?.startsWith(DELIVERY_NOT_CONFIRMED)) {
       if (stopReason !== "maxIterations" && (!hadInjections || stopReason === "emptyFinalResponse")) return null;
     }
     return new OutboundMessage({
@@ -3917,6 +4121,7 @@ export class AgentLoop {
             model_provider: modelSelection.provider,
             model: modelSelection.model,
             model_selection: modelSelectionWire(modelSelection),
+            ...thinkingFieldsFromMetadata(msg.metadata),
           }
         : { ...(msg.metadata ?? {}) },
       sessionKey: ctx.sessionKey,
@@ -3941,6 +4146,7 @@ export class AgentLoop {
     }
     ctx.session.metadata.modelPreset = modelSelection.preset;
     ctx.session.metadata.modelSelection = persistedModelSelection(modelSelection);
+    Object.assign(ctx.session.metadata, thinkingFieldsFromMetadata(msg.metadata));
     const projectedBinding = this.guiTranscriptMirror?.prepareSession(
       msg,
       ctx.session,
@@ -4042,13 +4248,17 @@ export class AgentLoop {
       const hasReservedInbox = this.goalRuntime.inbox(ctx.sessionKey)
         .some((entry) => entry.turnId === ctx.turnId);
       if (goal || hasReservedInbox) {
+        const request = computerUseRequestContext(ctx.msg);
+        const turnSource = sharedTurnSource(ctx.msg);
         const persisted = await this.goalRuntime.persistGoalUserTurn(
           ctx.sessionKey,
           ctx.turnId,
           {
             channel: ctx.msg.channel,
             chatId: ctx.msg.chatId,
-            ...(sharedTurnSource(ctx.msg) ? { source: sharedTurnSource(ctx.msg)! } : {}),
+            ...(turnSource ? { source: turnSource } : {}),
+            ...(turnSource && request.messageId && request.metadata.computerUseInteractive === true
+              ? { computerUseMessageId: request.messageId } : {}),
           },
           (session, entry) => {
             const source = entry
@@ -4065,12 +4275,13 @@ export class AgentLoop {
                   turnSource: parseTurnSource(entry.metadata.turn_source),
                 })
               : ctx.msg;
-            this.appendUserMessage(source, session, {}, entry?.receivedAt);
+            this.appendUserMessage(source, session, { turn_id: ctx.turnId }, entry?.receivedAt);
           },
         );
         ctx.userPersistedEarly = Boolean(persisted.entry || ctx.msg.content.trim() || ctx.msg.media.length);
       } else {
-        ctx.userPersistedEarly = this.persistUserMessageEarly(ctx.msg, ctx.session!);
+        ctx.userPersistedEarly = this.persistUserMessageEarly(ctx.msg, ctx.session!, { turn_id: ctx.turnId });
+        requestTiming("agent.user_persisted");
       }
     }
     if (ctx.userPersistedEarly && !internalGoal) {
@@ -4093,6 +4304,7 @@ export class AgentLoop {
     if (revalidated.cwd !== sessionWorkspace || revalidated.projectId !== ctx.sessionProjectId) {
       throw new SessionWorkspaceError("workspace_conflict");
     }
+    requestTiming("agent.prompt_hooks_start");
     await this.lifecycleHook().beforeBuildSystemPrompt(new AgentHookContext({
       session: ctx.session,
       sessionKey: ctx.sessionKey,
@@ -4100,6 +4312,7 @@ export class AgentLoop {
       spec: { hostProjectId: ctx.sessionProjectId, workspace: sessionWorkspace, turnId: ctx.turnId, abortSignal: ctx.abortSignal },
       metadata: { lifecycle: "system_prompt" },
     }));
+    requestTiming("agent.prompt_hooks_end");
     const compactionOptions: {
       replayMaxMessages: number | null;
       notifyOnLockWait?: boolean;
@@ -4125,12 +4338,16 @@ export class AgentLoop {
       };
       compactionOptions.onCompactionEvent = ctx.onTokenCompactionEvent;
     }
+    requestTiming("agent.compaction_start");
     await (ctx.consolidator ?? this.consolidator).maybeConsolidateByTokens(
       ctx.session!,
       compactionOptions,
     );
+    requestTiming("agent.compaction_end");
     await initializeDesktopScreenCapture();
+    requestTiming("agent.screen_capture_ready");
     ctx.tools = this.createToolRegistry("turn", sessionWorkspace, {
+      sessionKey: ctx.sessionKey, hostProjectId: ctx.sessionProjectId,
       includeConnectedMcp: true,
       messageSendCallback: ctx.messageSendCallback,
       ...(this.usesExternalSessionWorkspace(ctx.sessionProjectId, sessionWorkspace)
@@ -4138,7 +4355,7 @@ export class AgentLoop {
         : {}),
       modelSelection: ctx.modelSelection,
     });
-    const toolRequest = computerUseRequestContext(ctx.msg, ctx.turnId);
+    const toolRequest = computerUseRequestContext(ctx.msg, ctx.turnId, this.goalRuntime, ctx.sessionKey);
     this.setToolContext(
       ctx.msg.channel,
       ctx.msg.chatId,
@@ -4237,6 +4454,7 @@ export class AgentLoop {
   }
 
   async stateRun(ctx: TurnContext): Promise<string> {
+    requestTiming("agent.prepared");
     if (ctx.slot?.state === "running") ctx.slot.acceptingSteer = true;
     const settleSlot = (): void => {
       if (!ctx.slot || ctx.slot.state === "closed") return;
@@ -4257,6 +4475,7 @@ export class AgentLoop {
       failedProvider,
       failedModel,
     ] = await this.runAgentLoop(ctx.initialMessages, {
+      outputUserText: ctx.msg.internal || ctx.msg.channel === "system" || ctx.msg.metadata?.injectedEvent ? null : ctx.msg.content,
       onProgress: ctx.onProgress,
       onStream: ctx.onStream,
       onStreamEnd: ctx.onStreamEnd,
@@ -4264,7 +4483,7 @@ export class AgentLoop {
       session: ctx.session,
       channel: ctx.msg.channel,
       chatId: ctx.msg.chatId,
-      ...computerUseRequestContext(ctx.msg, ctx.turnId),
+      ...computerUseRequestContext(ctx.msg, ctx.turnId, this.goalRuntime, ctx.sessionKey),
       sessionKey: ctx.sessionKey,
       pendingQueue: ctx.pendingQueue,
       abortSignal: ctx.abortSignal,
@@ -4509,6 +4728,7 @@ export class AgentLoop {
             model_provider: modelSelection.provider,
             model: modelSelection.model,
             model_selection: modelSelectionWire(modelSelection),
+            ...thinkingFieldsFromMetadata(msg.metadata),
           }
         : { ...(msg.metadata ?? {}) },
       sessionKey: key,
@@ -4522,6 +4742,7 @@ export class AgentLoop {
     let session = existingSession ?? await this.getOrCreateSession(key);
     session.metadata.modelPreset = modelSelection.preset;
     session.metadata.modelSelection = persistedModelSelection(modelSelection);
+    Object.assign(session.metadata, thinkingFieldsFromMetadata(msg.metadata));
     const sessionBinding = this.resolveSessionWorkspace(
       msg,
       session,
@@ -4549,6 +4770,7 @@ export class AgentLoop {
       "system-turn",
       sessionWorkspace,
       {
+        sessionKey: key, hostProjectId: sessionBinding.projectId,
         includeConnectedMcp: true,
         ...(this.usesExternalSessionWorkspace(sessionBinding.projectId, sessionWorkspace)
           ? { readonlySkillRoots: this.projectReadonlySkillRoots() }
@@ -4728,6 +4950,14 @@ export class AgentLoop {
   async processMessageInternal(
     message: InboundMessage,
     sessionKey?: string,
+    options: Parameters<AgentLoop["processMessageTurn"]>[2] = {},
+  ): Promise<OutboundMessage | null> {
+    return agentTaskActivity.run(() => this.processMessageTurn(message, sessionKey, options));
+  }
+
+  private async processMessageTurn(
+    message: InboundMessage,
+    sessionKey?: string,
     {
       onProgress,
       onStream,
@@ -4871,6 +5101,8 @@ export class AgentLoop {
               this.clearPendingUserTurn(session);
               this.clearRuntimeCheckpoint(session);
             }
+            // An explicit cancel ends the file task; it is not reported as undelivered later.
+            clearOutputDelivery(session.metadata);
             this.sessions.save(session, { fsync: sessionKey.startsWith("cli:") });
           }
         }
@@ -5396,7 +5628,7 @@ export class AgentLoop {
           }
           return;
         }
-      }, queuedAt);
+      }, queuedAt, String(initialSlot.root.metadata?.client_request_id ?? ""));
     } finally {
       await this.cleanupOwnedSlots(
         sessionKey,
@@ -5723,7 +5955,9 @@ export class AgentLoop {
     const pendingMarker = new AsyncQueue<InboundMessage>();
     this.pendingQueues.set(key, pendingMarker);
     try {
+      requestTiming("agent.tools_start");
       await this.initializeRuntimeTools();
+      requestTiming("agent.tools_ready");
       const msg = new InboundMessage({
         channel,
         chatId,

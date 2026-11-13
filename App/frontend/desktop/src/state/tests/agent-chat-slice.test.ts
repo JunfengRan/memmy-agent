@@ -7,6 +7,7 @@ import {
   buildAgentTasks,
   defaultAgentSidebarState,
   initialAgentState,
+  NEW_TASK_MODEL_SCOPE_KEY,
   selectedModelPresetForScope,
   type AgentState,
   updateSidebarStateForTask
@@ -358,6 +359,69 @@ describe("agent chat slice", () => {
       clientRequestId: "queue-steer",
       status: "queued"
     });
+  });
+
+  it("keeps generated assistant text visible when a queued steer interrupts the draft", () => {
+    const item = {
+      ...queuedWire("queue-steer-visible", "调整主题", "2026-08-10T12:00:00.000Z"),
+      queue_surface: "chat_composer" as const
+    };
+    let state = agentReducer(initialAgentState, {
+      type: "agent/wsEvent",
+      event: { event: "ready", chat_id: "chat-1" }
+    });
+    state = agentReducer(state, {
+      type: "agent/wsEvent",
+      event: {
+        event: "run_status",
+        chat_id: "chat-1",
+        status: "running",
+        started_at: 1_780_732_800,
+        turn_id: "turn-visible"
+      }
+    });
+    state = agentReducer(state, {
+      type: "agent/wsEvent",
+      event: { event: "user", chat_id: "chat-1", turn_id: "turn-visible", text: "开始" }
+    });
+    state = agentReducer(state, {
+      type: "agent/wsEvent",
+      event: { event: "delta", chat_id: "chat-1", turn_id: "turn-visible", text: "更早的过程说明" }
+    });
+    state = agentReducer(state, {
+      type: "agent/wsEvent",
+      event: { event: "stream_end", chat_id: "chat-1", turn_id: "turn-visible", text: "更早的过程说明", resuming: true }
+    });
+    state = agentReducer(state, {
+      type: "agent/wsEvent",
+      event: { event: "delta", chat_id: "chat-1", turn_id: "turn-visible", text: "已经生成的内容" }
+    });
+    state = agentReducer(state, {
+      type: "agent/wsEvent",
+      event: { event: "stream_end", chat_id: "chat-1", turn_id: "turn-visible", text: "已经生成的内容", resuming: true }
+    });
+    state = agentReducer(state, {
+      type: "agent/wsEvent",
+      event: { event: "message_queued", chat_id: "chat-1", client_request_id: "queue-steer-visible", item }
+    });
+    state = agentReducer(state, {
+      type: "agent/wsEvent",
+      event: {
+        event: "message_dequeued",
+        chat_id: "chat-1",
+        client_request_id: "queue-steer-visible",
+        turn_admission: "steer",
+        turn_id: "turn-visible",
+        item: { ...item, turn_admission: "steer", turn_id: "turn-visible" }
+      }
+    });
+
+    expect(state.messages.find((message) => message.content === "已经生成的内容")).toMatchObject({
+      role: "assistant",
+      isStreaming: false
+    });
+    expect(state.messages.find((message) => message.content === "已经生成的内容")?.kind).toBeUndefined();
+    expect(state.messages.find((message) => message.content === "更早的过程说明")?.kind).toBe("narration");
   });
 
   it("tracks active Turn source without guessing GUI for legacy snapshots", () => {
@@ -2937,6 +3001,8 @@ describe("agent chat slice", () => {
           { url: "/api/media/sig/deck", name: "deck.pptx" },
           { url: "/api/media/sig/image", name: "result.png" },
           { url: "/api/media/sig/clip", name: "clip.mp4" },
+          { url: "/api/media/sig/audio", name: "interview.mp3", kind: "audio" },
+          { url: "/api/media/sig/old-recording", name: "录音-2026-10-27T10-13-53-172Z.webm", kind: "video" },
           { url: "/api/media/sig/explicit", name: "archive.bin", kind: "file", path: "/Users/yuan/archive.bin" }
         ]
       }
@@ -2948,6 +3014,8 @@ describe("agent chat slice", () => {
         { kind: "file", url: "/api/media/sig/deck", name: "deck.pptx" },
         { kind: "image", url: "/api/media/sig/image", name: "result.png" },
         { kind: "video", url: "/api/media/sig/clip", name: "clip.mp4" },
+        { kind: "audio", url: "/api/media/sig/audio", name: "interview.mp3" },
+        { kind: "audio", url: "/api/media/sig/old-recording", name: "录音-2026-10-27T10-13-53-172Z.webm" },
         { kind: "file", url: "/api/media/sig/explicit", name: "archive.bin", path: "/Users/yuan/archive.bin" }
       ]
     });
@@ -5067,6 +5135,31 @@ describe("agent chat slice", () => {
     expect(state.blankDraftActive).toBe(false);
   });
 
+  it("keeps a plugin-only conversation selected across an empty canonical snapshot", () => {
+    let state = agentReducer(initialAgentState, { type: "agent/newChatRequested" });
+    state = agentReducer(state, {
+      type: "agent/pluginConversationStarted",
+      chatId: "chat-plugin",
+      title: "诊断指引",
+      target: { kind: "standalone" },
+      createdAt: "2026-11-04T12:00:00.000Z"
+    });
+
+    expect(state.currentChatId).toBe("chat-plugin");
+    expect(state.messages).toEqual([]);
+    expect(state.tasks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ chatId: "chat-plugin", title: "诊断指引" })
+    ]));
+
+    state = agentReducer(state, {
+      type: "agent/sessionSnapshotApplied",
+      snapshot: { sessions: [], projects: [], projectRegistryState: "ready", sidebarState: state.sidebarState }
+    });
+
+    expect(state.currentChatId).toBe("chat-plugin");
+    expect(state.blankDraftActive).toBe(false);
+  });
+
   it("switching from running chat to idle chat clears active isSending without stopping the old chat", () => {
     let state = agentReducer(initialAgentState, { type: "agent/sessionsLoaded", sessions });
     state = agentReducer(state, { type: "agent/wsEvent", event: { event: "ready", chat_id: "chat-1" } });
@@ -5715,6 +5808,42 @@ describe("agent chat slice", () => {
     expect(state.runStartedAtByChatId["chat-1"]).toBe(4_000);
     expect(state.activeTurnIdByChatId["chat-1"]).toBe("turn-new");
     expect(state.isSending).toBe(true);
+  });
+
+  it("思考开关与档位按 session scope 写入，并在 sessions 加载时恢复", () => {
+    let state = agentReducer(initialAgentState, {
+      type: "agent/thinkingToggled",
+      scopeKey: "chat-1",
+      enabled: false
+    });
+    state = agentReducer(state, {
+      type: "agent/thinkingLevelChanged",
+      scopeKey: "chat-1",
+      level: "low"
+    });
+    state = agentReducer(state, {
+      type: "agent/thinkingToggled",
+      scopeKey: NEW_TASK_MODEL_SCOPE_KEY,
+      enabled: true
+    });
+
+    expect(state.thinkingStateByScope["chat-1"]).toEqual({ enabled: false, level: "low" });
+    expect(state.thinkingStateByScope[NEW_TASK_MODEL_SCOPE_KEY]).toEqual({ enabled: true });
+
+    state = agentReducer(state, {
+      type: "agent/sessionsLoaded",
+      sessions: [
+        {
+          ...sessions[0]!,
+          thinking_enabled: true,
+          thinking_level: "high"
+        }
+      ]
+    });
+
+    expect(state.thinkingStateByScope["chat-1"]).toEqual({ enabled: true, level: "high" });
+    expect(state.thinkingStateByScope[NEW_TASK_MODEL_SCOPE_KEY]).toEqual({ enabled: true });
+    expect(state.thinkingStateByScope["chat-2"]).toBeUndefined();
   });
 });
 

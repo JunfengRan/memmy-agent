@@ -14,6 +14,15 @@ import type { LlmClient, LlmCompletionOptions, LlmMessage, ModelStatus } from ".
 
 const logger = createMemoryLogger("llm");
 
+interface OpenAiResponsesResponse {
+  status?: string;
+  output?: Array<{
+    type?: string;
+    content?: Array<{ type?: string; text?: string }>;
+  }>;
+  usage?: Record<string, unknown>;
+}
+
 interface OpenAiChatResponse {
   choices?: Array<{
     message?: {
@@ -156,7 +165,7 @@ class HttpLlmClient implements LlmClient {
     logger.debug("request.started", fields);
     try {
       const requestMessages = this.options.modelRole === "memory_summary"
-        ? constrainSummaryMessages(messages, callOptions.maxTokens!, fields)
+        ? constrainSummaryMessages(messages, callOptions.maxTokens!, fields, options.inputTokenBudget)
         : messages;
       const result = await this.completeOnce(requestMessages, callOptions);
       this.lastOkAt = new Date().toISOString();
@@ -312,6 +321,8 @@ class HttpLlmClient implements LlmClient {
     switch (this.config.provider) {
       case "openai_compatible":
         return this.completeOpenAiCompatible(messages, options);
+      case "openai_responses":
+        return this.completeOpenAiResponses(messages, options);
       case "gemini":
         return this.completeGemini(messages, options);
       case "anthropic":
@@ -407,6 +418,46 @@ class HttpLlmClient implements LlmClient {
     }
     this.recordTokenUsage(response, options);
     return { text, finishReason: normalizeFinishReason(choice?.finish_reason) };
+  }
+
+  private async completeOpenAiResponses(messages: LlmMessage[], options: LlmCompletionOptions): Promise<LlmCallResult> {
+    const base = trimTrailingSlash(this.config.endpoint || "https://api.openai.com/v1");
+    const url = base.endsWith("/responses") ? base : `${base}/responses`;
+    const maxOutputTokens = Math.max(1, options.maxTokens ?? this.config.maxTokens ?? 1);
+    const response = await postJsonWithRetry<OpenAiResponsesResponse>({
+      actualModelContext: this.config.actualModelContext,
+      provider: "openai_responses",
+      operation: options.operation,
+      model: this.config.model,
+      url,
+      headers: {
+        ...bearer(this.config.apiKey),
+        ...(this.config.extraHeaders ?? {})
+      },
+      timeoutMs: options.timeoutMs ?? this.config.timeoutMs,
+      maxRetries: options.maxRetries ?? this.config.maxRetries,
+      body: {
+        model: this.config.model,
+        input: messages.map((message) => ({ role: message.role, content: message.content })),
+        max_output_tokens: maxOutputTokens,
+        store: false,
+        stream: false,
+        temperature: options.temperature ?? this.config.temperature,
+        ...(options.jsonMode ? { text: { format: { type: "json_object" } } } : {}),
+        ...(this.config.extraBody ?? {})
+      }
+    });
+    const text = (response.output ?? [])
+      .filter((item) => item.type === "message")
+      .flatMap((item) => item.content ?? [])
+      .filter((part) => part.type === "output_text" || typeof part.text === "string")
+      .map((part) => part.text ?? "")
+      .join("");
+    if (!text.trim()) {
+      throw new Error("openai_responses response missing output text");
+    }
+    this.recordTokenUsage(response, options);
+    return { text, finishReason: responsesFinishReason(response.status) };
   }
 
   private async completeGemini(messages: LlmMessage[], options: LlmCompletionOptions): Promise<LlmCallResult> {
@@ -637,14 +688,15 @@ function requiresTextResponseFormat(error: unknown): boolean {
 function constrainSummaryMessages(
   messages: LlmMessage[],
   outputTokens: number,
-  fields: Record<string, unknown>
+  fields: Record<string, unknown>,
+  inputTokenBudget?: number
 ): LlmMessage[] {
   summaryEncoder ??= get_encoding("cl100k_base");
   const encoded = messages.map((message) => summaryEncoder!.encode(message.content, [], []));
   const inputTokens = encoded.reduce((total, tokens) => total + tokens.length, 0);
   // cl100k_base is an estimate for compatible providers. The margin also
   // reserves space for their chat template and special tokens.
-  const budget = Math.min(
+  const budget = inputTokenBudget ?? Math.min(
     SUMMARY_INPUT_TOKEN_BUDGET,
     SUMMARY_CONTEXT_TOKEN_LIMIT - outputTokens - SUMMARY_CONTEXT_SAFETY_MARGIN
   );
@@ -696,6 +748,23 @@ function truncateSummaryContent(tokens: Uint32Array, budget: number, markerToken
     keep = Math.max(0, keep - Math.max(1, length - budget));
   }
 }
+
+// Callers that fit their own input to a token budget count and cut with the
+// same encoder and marker as the summary client, so the client keeps it intact.
+export function countSummaryTokens(text: string): number {
+  summaryEncoder ??= get_encoding("cl100k_base");
+  return summaryEncoder.encode(text, [], []).length;
+}
+
+export function truncateSummaryTextMiddle(text: string, budget: number): string {
+  summaryEncoder ??= get_encoding("cl100k_base");
+  const tokens = summaryEncoder.encode(text, [], []);
+  if (tokens.length <= budget) return text;
+  const markerTokens = summaryEncoder.encode(SUMMARY_INPUT_TRUNCATION_MARKER, [], []).length + 2;
+  return truncateSummaryContent(tokens, budget, markerTokens);
+}
+
+export const SUMMARY_TRUNCATION_MARKER = SUMMARY_INPUT_TRUNCATION_MARKER.trim();
 
 function decodeSummaryTokens(tokens: Uint32Array): string {
   const bytes = summaryEncoder!.decode(tokens);
@@ -969,6 +1038,7 @@ function isAnthropicAlwaysThinkingModel(model: string): boolean {
 function isAnthropicFixedTemperatureModel(model: string): boolean {
   const slug = modelSlug(model);
   return isAnthropicAlwaysThinkingModel(model) ||
+    /claude-(?:opus|sonnet|haiku)-5(?:[.-]|$)/.test(slug) ||
     /claude-sonnet-5(?:[.-]|$)/.test(slug) ||
     slug.includes("opus-4-7") ||
     slug.includes("opus-4.7") ||
@@ -1111,6 +1181,13 @@ function doubleMaxTokens(value: number | undefined, limit = Number.MAX_SAFE_INTE
   if (value === undefined || !Number.isFinite(value) || value <= 0) return undefined;
   const expanded = Math.min(limit, Math.max(1, Math.floor(value)) * 2);
   return expanded > value ? expanded : undefined;
+}
+
+function responsesFinishReason(status: string | undefined): LlmCallResult["finishReason"] {
+  if (status === "completed") return "stop";
+  if (status === "incomplete") return "length";
+  if (status === "failed" || status === "cancelled") return "other";
+  return normalizeFinishReason(status);
 }
 
 function normalizeFinishReason(value: string | undefined): LlmCallResult["finishReason"] {

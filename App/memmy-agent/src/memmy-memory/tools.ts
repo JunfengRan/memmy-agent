@@ -19,6 +19,7 @@ import {
   renderMemmyContextPacket,
 } from "./protocol.js";
 import type { MemmyMemoryClient } from "./client.js";
+import { renderDomainInvalidError, renderToolResult } from "./project-inject.js";
 import type { JsonRecord, MemmyMemoryToolRuntime } from "./types.js";
 
 type ToolSpec = {
@@ -37,6 +38,26 @@ const searchShape = {
   query: { type: "string" },
   sessionId: { type: "string" },
   layers: { type: "array", items: { type: "string", enum: ["L1", "L2", "L3", "Skill"] } }
+};
+
+/** Field names duplicated from Memory `PROJECT_MEMORY_TOOL_FIELDS`. Do not import that package. */
+export const SEARCH_PROJECT_MEMORY_FIELDS = ["query", "domains"] as const;
+
+export const SEARCH_PROJECT_MEMORY_PARAMETERS: JsonRecord = {
+  query: { type: "string", description: "The project question, as a sentence or a few keywords." },
+  domains: {
+    type: "array",
+    items: { type: "string" },
+    description: "Optional registered domains. Omit to search every domain in the bound spaces."
+  }
+};
+
+const searchProjectMemorySpec: ToolSpec = {
+  name: "search_project_memory",
+  description: "Search bound project memory for decisions, experiences, and progress. Use when the question is about this project.",
+  parameters: objectSchema(SEARCH_PROJECT_MEMORY_PARAMETERS, ["query"]),
+  readOnly: true,
+  execute: async (client, params, runtime, sessionKey) => client.searchProjectMemory(projectSearchBody(params, runtime, sessionKey)),
 };
 
 export const MEMOS_MEMORY_TOOL_SPECS: ToolSpec[] = [
@@ -94,6 +115,9 @@ export class MemmyMemoryTool extends Tool {
 
   async execute(params: JsonRecord = {}): Promise<string> {
     const sessionKey = this.requestContext.get()?.sessionKey ?? null;
+    const turnId = this.runtime.currentTurnId(sessionKey) ?? "unscoped";
+    const currentUserRequest = this.runtime.currentUserText(sessionKey)
+      ?? (typeof params.query === "string" ? params.query : "");
     const context = this.runtime.memoryAnalyticsContext?.(sessionKey) ?? {};
     const entrypoint =
       context.entrypoint === MEMORY_ANALYTICS_ENTRYPOINTS.desktop
@@ -103,9 +127,9 @@ export class MemmyMemoryTool extends Tool {
     if (!op) {
       try {
         const result = await this.spec.execute(this.client, params, this.runtime, sessionKey);
-        return formatMemmyToolResult(this.spec.name, result, params, this.runtime, sessionKey);
+        return formatMemmyToolResult(this.spec.name, result, currentUserRequest, turnId);
       } catch (error) {
-        return `Error: ${error instanceof Error ? error.message : String(error)}`;
+        return projectToolError(this.spec.name, error);
       }
     }
 
@@ -120,7 +144,7 @@ export class MemmyMemoryTool extends Tool {
         success: true,
         hit_count: op.hitCount(result),
       });
-      return formatMemmyToolResult(this.spec.name, result, params, this.runtime, sessionKey);
+      return formatMemmyToolResult(this.spec.name, result, currentUserRequest, turnId);
     } catch (error) {
       this.runtime.trackMemoryAnalytics?.(op.failed, {
         ...base,
@@ -128,7 +152,7 @@ export class MemmyMemoryTool extends Tool {
         success: false,
         error_code: errorCodeFromUnknown(error),
       });
-      return `Error: ${error instanceof Error ? error.message : String(error)}`;
+      return projectToolError(this.spec.name, error);
     }
   }
 }
@@ -189,11 +213,15 @@ function toolOpBaseParams(
   });
 }
 
-export function registerMemmyMemoryTools(registry: any, client: MemmyMemoryClient, runtime: MemmyMemoryToolRuntime): void {
+export function registerMemmyMemoryTools(registry: any, client: MemmyMemoryClient, runtime: MemmyMemoryToolRuntime, sessionKey?: string | null): void {
   for (const spec of MEMOS_MEMORY_TOOL_SPECS) {
     if (typeof registry?.has === "function" && registry.has(spec.name)) continue;
     registry.register(new MemmyMemoryTool(spec, client, runtime));
   }
+  const spaces = runtime.projectSpaceIds?.(sessionKey) ?? [];
+  if (spaces.length === 0) return;
+  if (typeof registry?.has === "function" && registry.has(searchProjectMemorySpec.name)) return;
+  registry.register(new MemmyMemoryTool(searchProjectMemorySpec, client, runtime));
 }
 
 function withRuntimeDefaults(params: JsonRecord, runtime: MemmyMemoryToolRuntime, sessionKey: string | null): JsonRecord {
@@ -205,6 +233,25 @@ function withRuntimeDefaults(params: JsonRecord, runtime: MemmyMemoryToolRuntime
   body.episodeId = runtimeValue(body.episodeId, runtime.currentEpisodeId(sessionKey) ?? undefined);
   body.turnId = runtimeValue(body.turnId, runtime.currentTurnId(sessionKey) ?? undefined);
   return compact(body);
+}
+
+function projectSearchBody(params: JsonRecord, runtime: MemmyMemoryToolRuntime, sessionKey: string | null): JsonRecord {
+  const spaces = runtime.projectSpaceIds?.(sessionKey) ?? [];
+  if (spaces.length === 0) throw new Error("This session has no project space.");
+  const userId = runtime.requestEnvelope(sessionKey).namespace?.userId;
+  if (typeof userId !== "string" || !userId.trim()) throw new Error("user_id is required");
+  const conversationId = runtime.projectConversationId?.(sessionKey) ?? runtime.currentSessionId(sessionKey);
+  const body: JsonRecord = {
+    user_id: userId.trim(),
+    space_ids: [...spaces],
+    query: typeof params.query === "string" ? params.query : "",
+    include_memory_view: ["project"],
+    memory_limit_number: 3,
+    recall_via: "tool"
+  };
+  if (conversationId) body.conversation_id = conversationId;
+  if (params.domains !== undefined) body.domains = params.domains;
+  return body;
 }
 
 function withSearchRuntimeDefaults(params: JsonRecord, runtime: MemmyMemoryToolRuntime, sessionKey: string | null): JsonRecord {
@@ -231,21 +278,26 @@ function compact<T extends JsonRecord>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== null && item !== "")) as T;
 }
 
+function projectToolError(toolName: string, error: unknown): string {
+  if (toolName === "search_project_memory") {
+    const rendered = renderDomainInvalidError(error);
+    if (rendered) return rendered;
+  }
+  return `Error: ${error instanceof Error ? error.message : String(error)}`;
+}
+
 function formatMemmyToolResult(
   toolName: string,
   result: any,
-  params: JsonRecord,
-  runtime: MemmyMemoryToolRuntime,
-  sessionKey: string | null,
+  currentUserRequest: string,
+  turnId: string,
 ): string {
-  const currentUserRequest = runtime.currentUserText(sessionKey)
-    ?? (typeof params.query === "string" ? params.query : "")
-    ?? "";
+  if (toolName === "search_project_memory") return renderToolResult(result);
   if (toolName === "memmy_memory_search") {
-    return renderMemmyContextPacket(markdownFromSearchResult(result), "tool_search", currentUserRequest);
+    return renderMemmyContextPacket(markdownFromSearchResult(result), "tool_search", currentUserRequest, turnId);
   }
   if (toolName === "memmy_memory_get") {
-    return renderMemmyContextPacket(markdownFromMemoryDetail(result), "tool_get", currentUserRequest);
+    return renderMemmyContextPacket(markdownFromMemoryDetail(result), "tool_get", currentUserRequest, turnId);
   }
   return extractCurrentUserRequestText(JSON.stringify(result, null, 2));
 }

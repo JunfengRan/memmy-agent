@@ -465,7 +465,7 @@ describe("memmy-agent client", () => {
     expect(paths).toEqual(["/webui/bootstrap"]);
   });
 
-  it("lists slash commands with bearer token, camelCase mapping, goal exposure, and control-command filtering", async () => {
+  it("lists all server-supported slash commands with bearer token and camelCase mapping", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
       if (url.pathname === "/webui/bootstrap") {
@@ -495,9 +495,18 @@ describe("memmy-agent client", () => {
     const client = createMemmyAgentClient({ baseUrl: "http://127.0.0.1:18980", clientId: "frontend-test", fetchFn: fetchMock as typeof fetch });
 
     await expect(client.listSlashCommands()).resolves.toEqual([
+      { command: "/stop", title: "Stop", description: "Stop turn", icon: "square", argHint: "" },
+      { command: "/restart", title: "Restart", description: "Restart agent", icon: "rotate-cw", argHint: "" },
+      { command: "/dream", title: "Dream", description: "Run Dream", icon: "sparkles", argHint: "" },
+      { command: "/dream-log", title: "Dream log", description: "Show Dream log", icon: "book-open", argHint: "" },
+      { command: "/dream-restore", title: "Dream restore", description: "Restore Dream", icon: "undo-2", argHint: "" },
+      { command: "/history", title: "History", description: "Show history", icon: "history", argHint: "[n]" },
       { command: "/goal", title: "Goal", description: "Start goal", icon: "activity", argHint: "<goal>" },
+      { command: "/pairing", title: "Pairing", description: "Manage pairing", icon: "shield", argHint: "" },
+      { command: "/help", title: "Help", description: "Show help", icon: "circle-help", argHint: "" },
       { command: "/status", title: "Status", description: "Show status", icon: "activity", argHint: "" },
-      { command: "/new", title: "New", description: "New chat", icon: "square-pen", argHint: "" }
+      { command: "/new", title: "New", description: "New chat", icon: "square-pen", argHint: "" },
+      { command: "/model", title: "Model", description: "Switch model", icon: "brain", argHint: "[preset]" }
     ]);
   });
 
@@ -741,6 +750,20 @@ describe("memmy-agent client", () => {
       "/api/webui/artifacts/reveal",
       "/api/webui/artifacts/open"
     ]);
+  });
+
+  it("renews recording playback without a chat session", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/webui/bootstrap") return json(bootstrap);
+      expect(url.pathname).toBe("/api/webui/recordings/resolve");
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body))).toEqual({ path: "/workspace/recordings/interview.webm" });
+      return json({ media_url: "/api/media/ws/signed/audio" });
+    });
+    const client = createMemmyAgentClient({ baseUrl: "http://127.0.0.1:18980", clientId: "frontend-test", fetchFn: fetchMock as typeof fetch });
+    await expect(client.resolveRecording("/workspace/recordings/interview.webm"))
+      .resolves.toBe("http://127.0.0.1:18980/api/media/ws/signed/audio");
   });
 
   it("uploads agent attachments as multipart and normalizes returned signed URLs", async () => {
@@ -2124,6 +2147,27 @@ describe("memmy-agent client", () => {
       revision: 8
     });
     await expect(removal).resolves.toEqual({ outcome: "already_dequeued", revision: 8 });
+  });
+
+  it("sends the full queue order with the current revision", async () => {
+    const sockets: FakeSocket[] = [];
+    const client = createMemmyAgentClient({
+      baseUrl: "https://agent.local:18980",
+      clientId: "frontend-test",
+      fetchFn: vi.fn(async () => json(bootstrap)) as typeof fetch,
+      webSocketFactory: (url) => {
+        const socket = new FakeSocket(url);
+        sockets.push(socket);
+        return socket;
+      }
+    });
+    const connection = await connectReady(client, sockets);
+    const orderedIds = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"];
+    connection.reorderQueuedMessages("chat-reorder", orderedIds, 7, 1);
+    expect(JSON.parse(sockets[0]!.sent.at(-1)!)).toMatchObject({
+      type: "queue_reorder", chat_id: "chat-reorder", ordered_ids: orderedIds,
+      expected_revision: 7, request_id: expect.any(String),
+    });
   });
 
   it("sends one queue-steer control and terminates the original queued attempt", async () => {

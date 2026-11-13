@@ -45,7 +45,7 @@ import {
   getConfigPath,
 } from "../../config/loader.js";
 import { Config } from "../../config/schema.js";
-import { getCliHistoryPath, getDataDir, getWorkspacePath } from "../../config/paths.js";
+import { getCliHistoryPath, getDataDir, getWorkspacePath, getWorkspaceStatePath } from "../../config/paths.js";
 import { CronService } from "../../cron/service.js";
 import { CronJob, CronPayload } from "../../cron/types.js";
 import { HeartbeatService } from "../../heartbeat/service.js";
@@ -270,8 +270,9 @@ export function modelDisplay(config: Config): [string, string] {
 
 export function syncRuntimeWorkspaceTemplates(config: Config): string {
   const workspacePath = getWorkspacePath(config.agents.defaults.workspace);
-  fs.mkdirSync(workspacePath, { recursive: true });
-  syncWorkspaceTemplates(workspacePath, CLI_TEMPLATES_DIR, {
+  const statePath = getWorkspaceStatePath(workspacePath);
+  fs.mkdirSync(statePath, { recursive: true });
+  syncWorkspaceTemplates(statePath, CLI_TEMPLATES_DIR, {
     fileMemoryEnabled: config.fileMemory.enabled,
   });
   return workspacePath;
@@ -596,7 +597,7 @@ export async function main(argv: string[] = process.argv): Promise<void> {
     .description("Start the OpenAI-compatible API server.")
     .option("-p, --port <port>", "API server port")
     .option("-H, --host <host>", "Bind address")
-    .option("-t, --timeout <seconds>", "Per-request timeout")
+    .option("-t, --timeout <seconds>", "Deprecated; agent turns have no total time limit")
     .option("-w, --workspace <dir>", "Workspace directory")
     .option("-c, --config <path>", "Path to config file")
     .option("-v, --verbose", "Enable verbose runtime logs", false)
@@ -895,6 +896,10 @@ async function writeNodeResponse(res: http.ServerResponse, response: Response): 
     return;
   }
   const nodeStream = Readable.fromWeb(response.body as any);
+  // A silent tool may run for a long time. Expose admission before the first delta.
+  res.flushHeaders();
+  nodeStream.on("error", () => res.destroy());
+  res.once("close", () => nodeStream.destroy());
   nodeStream.pipe(res);
 }
 
@@ -1208,6 +1213,9 @@ export async function gateway({
     removeQueuedWebuiMessage: (sessionKey, clientRequestId) => (
       loop.removeQueuedWebuiMessage(sessionKey, clientRequestId)
     ),
+    reorderQueuedWebuiMessages: (sessionKey, orderedIds, expectedRevision) => (
+      loop.reorderQueuedWebuiMessages(sessionKey, orderedIds, expectedRevision)
+    ),
     steerQueuedWebuiMessage: (sessionKey, clientRequestId, expectedTurnId) => (
       loop.steerQueuedWebuiMessage(sessionKey, clientRequestId, expectedTurnId)
     ),
@@ -1253,6 +1261,7 @@ export async function gateway({
         llmRuntime: (preset) => loop.llmRuntime(preset),
         scheduleBackground: (promise) => loop.scheduleBackground(promise),
         tokenUsageRecorder: createByokTokenUsageRecorder(loaded),
+        readMediaText: (filePath) => webuiChannel.readWebuiTitleText(filePath),
       }),
     );
     if (webuiChannel.guiSessionProjection && loop.sessions instanceof SessionManager) {

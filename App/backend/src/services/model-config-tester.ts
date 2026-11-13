@@ -2,8 +2,7 @@
 import type {
   ModelConfigTestInput,
   ModelConfigTestResult,
-  ModelEndpointProtocol,
-  ModelProvider
+  ModelEndpointProtocol
 } from "@memmy/local-api-contracts";
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -13,7 +12,7 @@ export interface ModelConfigTester {
   test(input: ResolvedModelConfigTestInput): Promise<ModelConfigTestResult>;
 }
 
-type ResolvedModelConfigTestInput = ModelConfigTestInput & { apiKey: string };
+export type ResolvedModelConfigTestInput = ModelConfigTestInput & { apiKey: string; extraHeaders?: Record<string, string> };
 
 export interface CreateHttpModelConfigTesterOptions {
   fetch?: FetchLike;
@@ -52,11 +51,11 @@ export function createHttpModelConfigTester(options: CreateHttpModelConfigTester
           signal: AbortSignal.timeout(timeoutMs)
         });
         if (!response.ok) {
-          const errorMessage = redactSecret(await readErrorMessage(response), input.apiKey);
+          const errorMessage = redactProbeSecrets(await readErrorMessage(response), input);
           return result(
             false,
             response.status === 404
-              ? appendBaseUrlGuidance(errorMessage, input.provider)
+              ? appendBaseUrlGuidance(errorMessage, input.protocol)
               : errorMessage,
             now
           );
@@ -65,16 +64,16 @@ export function createHttpModelConfigTester(options: CreateHttpModelConfigTester
         const body = await readJsonSafely(response);
         const providerError = extractErrorMessage(body);
         if (providerError) {
-          return result(false, redactSecret(providerError, input.apiKey), now);
+          return result(false, redactProbeSecrets(providerError, input), now);
         }
         if (!probe.isValidBody(body)) {
-          return result(false, appendBaseUrlGuidance(INVALID_SUCCESS_BODY_MESSAGE, input.provider), now);
+          return result(false, appendBaseUrlGuidance(INVALID_SUCCESS_BODY_MESSAGE, input.protocol), now);
         }
 
         const modelListed = probe.listedModels(body).some((model) => model === input.modelId);
         return result(true, SUCCESS_MESSAGE, now, modelListed);
       } catch (error) {
-        return result(false, redactSecret(normalizeThrownError(error), input.apiKey), now);
+        return result(false, redactProbeSecrets(normalizeThrownError(error), input), now);
       }
     }
   };
@@ -84,10 +83,10 @@ function listProbe(input: ResolvedModelConfigTestInput): ListProbe | null {
   if (input.protocol === "anthropic-messages") {
     return {
       url: versionedModelsUrl(input.apiBase, "v1"),
-      headers: {
-        "x-api-key": input.apiKey,
+      headers: probeHeaders({
+        ...(input.apiKey ? { "x-api-key": input.apiKey } : {}),
         "anthropic-version": ANTHROPIC_VERSION
-      },
+      }, input.extraHeaders),
       isValidBody: isAnthropicModelsBody,
       listedModels: anthropicModelIds
     };
@@ -95,7 +94,7 @@ function listProbe(input: ResolvedModelConfigTestInput): ListProbe | null {
   if (input.protocol === "gemini-generate-content") {
     return {
       url: versionedModelsUrl(input.apiBase, "v1beta"),
-      headers: { "x-goog-api-key": input.apiKey },
+      headers: probeHeaders(input.apiKey ? { "x-goog-api-key": input.apiKey } : {}, input.extraHeaders),
       isValidBody: isGoogleModelsBody,
       listedModels: googleModelIds
     };
@@ -103,12 +102,26 @@ function listProbe(input: ResolvedModelConfigTestInput): ListProbe | null {
   if (supportsOpenAiModelList(input.protocol)) {
     return {
       url: resourceUrl(input.apiBase, "models"),
-      headers: { Authorization: `Bearer ${input.apiKey}` },
+      headers: probeHeaders(input.apiKey ? { Authorization: `Bearer ${input.apiKey}` } : {}, input.extraHeaders),
       isValidBody: isOpenAiModelsBody,
       listedModels: openAiModelIds
     };
   }
   return null;
+}
+
+function probeHeaders(defaults: Record<string, string>, extra: Record<string, string> = {}): Record<string, string> {
+  const headers = { ...defaults };
+  for (const [key, value] of Object.entries(extra)) {
+    for (const existing of Object.keys(headers)) if (existing.toLowerCase() === key.toLowerCase()) delete headers[existing];
+    headers[key] = value;
+  }
+  return headers;
+}
+
+function redactProbeSecrets(message: string, input: ResolvedModelConfigTestInput): string {
+  for (const secret of [input.apiKey, ...Object.values(input.extraHeaders ?? {})]) message = redactSecret(message, secret);
+  return message;
 }
 
 function supportsOpenAiModelList(protocol: ModelEndpointProtocol): boolean {
@@ -156,16 +169,24 @@ function resourceUrl(apiBase: string, resource: string): string {
   return `${apiBase.replace(/\/+$/u, "")}/${resource}`;
 }
 
-function baseUrlGuidance(provider: ModelProvider): string {
-  if (provider === "anthropic") {
+function baseUrlGuidance(protocol: ModelEndpointProtocol): string {
+  if (protocol === "anthropic-messages") {
     return "Anthropic API 地址通常不包含 /v1，例如 https://api.anthropic.com";
   }
-  if (provider === "google") return "";
-  return "OpenAI 兼容 API 地址通常以 /v1 结尾，例如 https://api.openai.com/v1";
+  if (protocol === "gemini-generate-content") return "";
+  if (
+    protocol === "openai-chat-completions"
+    || protocol === "openai-responses"
+    || protocol === "openai-embeddings"
+    || protocol === "openai-images"
+  ) {
+    return "OpenAI 兼容 API 地址通常以 /v1 结尾，例如 https://api.openai.com/v1";
+  }
+  return "";
 }
 
-function appendBaseUrlGuidance(message: string, provider: ModelProvider): string {
-  const hint = baseUrlGuidance(provider);
+function appendBaseUrlGuidance(message: string, protocol: ModelEndpointProtocol): string {
+  const hint = baseUrlGuidance(protocol);
   if (!hint) return message;
   return `${message.replace(/[。\.\s]+$/u, "")}。${hint}`;
 }

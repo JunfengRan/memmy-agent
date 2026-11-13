@@ -10,7 +10,8 @@ Rules:
 - Check service availability with `memmy-memory health` when Memory state is unknown.
 - Open or resume a session at the beginning of a task with `memmy-memory session open`.
 - Use `memmy-memory turn start` before answering when prior memory may help.
-- Use `memmy-memory search` for direct lookup outside the turn lifecycle.
+- Use `memmy-memory search` for personal memory outside the turn lifecycle.
+- Use `memmy-memory project search` for questions about this project's decisions, experiences, or progress. It does not search personal memory. Without a bound project space it exits and does not search.
 - Use `memmy-memory turn complete` after the final answer when the interaction should be persisted.
 - Use `memmy-memory add` only for durable facts, preferences, decisions, or reusable procedures.
 - Use `memmy-memory get` only with ids returned by search, add, turn completion, or raw panel output.

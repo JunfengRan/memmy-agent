@@ -28,6 +28,7 @@ export type {
 export type {
   OpenMemAddFeedbackRequest,
   OpenMemAddMessageRequest,
+  OpenMemSearchMemoryRequest,
   OpenMemCloudClientOptions,
   OpenMemFetch,
   OpenMemMessage

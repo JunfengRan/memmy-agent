@@ -1,0 +1,232 @@
+{
+  "cell": "jev-ds",
+  "run": 1,
+  "protocol": "jev",
+  "model": "deepseek-v4.1-flash-1017",
+  "saPromptVersion": "2026-11-06.1",
+  "calls": 23,
+  "wallMs": 87873,
+  "score": {
+    "turns": 23,
+    "bcubedP": 0.6318840579710144,
+    "bcubedR": 0.5652173913043478,
+    "bcubedF1": 0.5966943888830403,
+    "crossProjectMerges": 3,
+    "sessions": 6,
+    "dropped": 2,
+    "lenientAccuracy": 0.2608695652173913,
+    "continuationAttach": 0.35294117647058826,
+    "continuations": 17,
+    "attachPrecision": 0.4,
+    "attaches": 15
+  },
+  "preds": [
+    {
+      "id": "t01",
+      "gold": "memmy-agent:97cf4aac",
+      "project": "memmy-agent",
+      "kind": "accept",
+      "sessionId": "s1",
+      "reason": "new",
+      "attempts": 1
+    },
+    {
+      "id": "t02",
+      "gold": "MemOS:015583eb",
+      "project": "MemOS",
+      "kind": "accept",
+      "sessionId": "s2",
+      "reason": "new",
+      "attempts": 1
+    },
+    {
+      "id": "t03",
+      "gold": "hindsight:73fe86ec",
+      "project": "hindsight",
+      "kind": "accept",
+      "sessionId": "s3",
+      "reason": "new",
+      "attempts": 1
+    },
+    {
+      "id": "t04",
+      "gold": "TencentDB:71c36740",
+      "project": "TencentDB",
+      "kind": "ignore",
+      "sessionId": null,
+      "reason": "none",
+      "attempts": 1
+    },
+    {
+      "id": "t05",
+      "gold": "Hy-Memory:209a462f",
+      "project": "Hy-Memory",
+      "kind": "attach",
+      "sessionId": "s1",
+      "reason": "choice",
+      "attempts": 1
+    },
+    {
+      "id": "t06",
+      "gold": "weekly:dc6b879b",
+      "project": "weekly",
+      "kind": "ignore",
+      "sessionId": null,
+      "reason": "none",
+      "attempts": 1
+    },
+    {
+      "id": "t07",
+      "gold": "memmy-agent:97cf4aac",
+      "project": "memmy-agent",
+      "kind": "attach",
+      "sessionId": "s1",
+      "reason": "choice",
+      "attempts": 1
+    },
+    {
+      "id": "t08",
+      "gold": "MemOS:015583eb",
+      "project": "MemOS",
+      "kind": "attach",
+      "sessionId": "s2",
+      "reason": "choice",
+      "attempts": 1
+    },
+    {
+      "id": "t09",
+      "gold": "hindsight:73fe86ec",
+      "project": "hindsight",
+      "kind": "attach",
+      "sessionId": "s3",
+      "reason": "choice",
+      "attempts": 1
+    },
+    {
+      "id": "t10",
+      "gold": "TencentDB:71c36740",
+      "project": "TencentDB",
+      "kind": "attach",
+      "sessionId": "s3",
+      "reason": "choice",
+      "attempts": 1
+    },
+    {
+      "id": "t11",
+      "gold": "Hy-Memory:209a462f",
+      "project": "Hy-Memory",
+      "kind": "accept",
+      "sessionId": "s4",
+      "reason": "new",
+      "attempts": 1
+    },
+    {
+      "id": "t12",
+      "gold": "weekly:dc6b879b",
+      "project": "weekly",
+      "kind": "accept",
+      "sessionId": "s5",
+      "reason": "new",
+      "attempts": 1
+    },
+    {
+      "id": "t13",
+      "gold": "memmy-agent:97cf4aac",
+      "project": "memmy-agent",
+      "kind": "attach",
+      "sessionId": "s1",
+      "reason": "choice",
+      "attempts": 1
+    },
+    {
+      "id": "t14",
+      "gold": "MemOS:015583eb",
+      "project": "MemOS",
+      "kind": "attach",
+      "sessionId": "s2",
+      "reason": "choice",
+      "attempts": 1
+    },
+    {
+      "id": "t15",
+      "gold": "hindsight:73fe86ec",
+      "project": "hindsight",
+      "kind": "attach",
+      "sessionId": "s1",
+      "reason": "choice",
+      "attempts": 1
+    },
+    {
+      "id": "t16",
+      "gold": "TencentDB:71c36740",
+      "project": "TencentDB",
+      "kind": "attach",
+      "sessionId": "s3",
+      "reason": "choice",
+      "attempts": 1
+    },
+    {
+      "id": "t17",
+      "gold": "Hy-Memory:209a462f",
+      "project": "Hy-Memory",
+      "kind": "attach",
+      "sessionId": "s2",
+      "reason": "choice",
+      "attempts": 1
+    },
+    {
+      "id": "t18",
+      "gold": "weekly:dc6b879b",
+      "project": "weekly",
+      "kind": "attach",
+      "sessionId": "s5",
+      "reason": "choice",
+      "attempts": 1
+    },
+    {
+      "id": "t19",
+      "gold": "memmy-agent:97cf4aac",
+      "project": "memmy-agent",
+      "kind": "attach",
+      "sessionId": "s2",
+      "reason": "choice",
+      "attempts": 1
+    },
+    {
+      "id": "t20",
+      "gold": "hindsight:73fe86ec",
+      "project": "hindsight",
+      "kind": "attach",
+      "sessionId": "s1",
+      "reason": "choice",
+      "attempts": 1
+    },
+    {
+      "id": "t21",
+      "gold": "TencentDB:71c36740",
+      "project": "TencentDB",
+      "kind": "accept",
+      "sessionId": "s6",
+      "reason": "new",
+      "attempts": 1
+    },
+    {
+      "id": "t22",
+      "gold": "Hy-Memory:209a462f",
+      "project": "Hy-Memory",
+      "kind": "attach",
+      "sessionId": "s4",
+      "reason": "choice",
+      "attempts": 1
+    },
+    {
+      "id": "t23",
+      "gold": "weekly:dc6b879b",
+      "project": "weekly",
+      "kind": "attach",
+      "sessionId": "s5",
+      "reason": "choice",
+      "attempts": 1
+    }
+  ]
+}

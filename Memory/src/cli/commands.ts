@@ -11,7 +11,7 @@ import {
   type JsonObject,
   type ParsedArgs
 } from "./args.js";
-import { sendRequest, type CliRequest, type CliRequestOptions } from "./http.js";
+import { CliResponseError, sendRequest, type CliRequest, type CliRequestOptions } from "./http.js";
 import { renderCliOutput } from "./render/index.js";
 import {
   initMemoryCli,
@@ -20,6 +20,9 @@ import {
   type MemoryCliSetupOptions
 } from "./setup.js";
 import { DEFAULT_MEMORY_URL, loadCliMemoryConfig } from "./config.js";
+import { renderToolResult } from "../service/project-memory/inject/render.js";
+import { bindProjectToolRequest } from "../service/project-memory/inject/tool.js";
+import { requestLocalProjectMemory } from "../agent-source/integration/workspace-bridge/project-memory.js";
 import { PROJECT_VERSION } from "./project-version.js";
 import {
   currentInstalledRuntime,
@@ -80,6 +83,15 @@ export async function runCommand(context: CommandContext): Promise<unknown> {
     throw new Error("service requires start, stop, status, or repair-launcher");
   }
 
+  if (words[0] === "db" && words[1] === "repair-relations") {
+    const path = requireValue("db", optionString(options, "db"));
+    const {MemoryDb} = await import("../storage/db.js");
+    const {repairMemoryRelations} = await import("../storage/memory-relations.js");
+    const db = new MemoryDb({path});
+    try { return {ok:true, path, ...repairMemoryRelations(db.db, optionString(options,"after") ?? "", 100)}; }
+    finally { db.close(); }
+  }
+
   if (words[0] === "raw") {
     return runRaw(words.slice(1), parsed, requestOptions(parsed, context.fetch));
   }
@@ -89,12 +101,40 @@ export async function runCommand(context: CommandContext): Promise<unknown> {
   }
 
   const getVerbose = words[0] === "get" && optionBoolean(options, "verbose") === true;
-  const request = withSource(await mapTopLevelCommand(words, parsed), parsed);
-  const result = await executeRequest(request, requestOptions(parsed, context.fetch));
-  if (words[0] === "get" && !getVerbose) {
-    return compactMemoryGetOutput(result) ?? result;
+  const projectSearch = words[0] === "project" && words[1] === "search";
+  const projectRaw = projectSearch && optionBoolean(options, "raw") === true;
+  if (projectSearch && projectSpaceIds(parsed).length === 0) {
+    const query = requireValue("query", optionString(options, "query") ?? words[2]);
+    const result = await requestLocalProjectMemory("recall", {
+      workspace: optionString(options, "cwd") ?? process.cwd(), query,
+      conversationId: optionString(options, "session-id"),
+      recallVia: "tool",
+      ...(stringArrayOption(parsed, "domains") ? { domains: stringArrayOption(parsed, "domains") } : {}),
+      ...(positiveIntegerOption(parsed, "limit") !== undefined ? { memoryLimit: positiveIntegerOption(parsed, "limit") } : {})
+    }, { configPath: loadCliMemoryConfig(optionString(options, "config")).path, fetch: context.fetch });
+    if (result.bound !== true) throw new Error("This session has no project space.");
+    return projectRaw ? result.data : renderToolResult(result.data);
   }
-  return result;
+  const request = withSource(await mapTopLevelCommand(words, parsed), parsed);
+  try {
+    const result = await executeRequest(request, requestOptions(parsed, context.fetch));
+    if (words[0] === "get" && !getVerbose) {
+      return compactMemoryGetOutput(result) ?? result;
+    }
+    if (projectSearch && !projectRaw) return renderToolResult(result);
+    return result;
+  } catch (error) {
+    if (projectSearch && error instanceof CliResponseError && isDomainInvalid(error.payload)) {
+      return projectRaw ? error.payload : renderToolResult(error.payload);
+    }
+    throw error;
+  }
+}
+
+function isDomainInvalid(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  const record = payload as Record<string, unknown>;
+  return record.message === "DOMAIN_INVALID" || record.code === 40002;
 }
 
 export function formatOutput(value: unknown): string {
@@ -121,6 +161,8 @@ async function mapTopLevelCommand(words: string[], parsed: ParsedArgs): Promise<
       return turnsRequest(words[1], words.slice(2), parsed);
     case "search":
       return buildMemorySearchRequest(words.slice(1), parsed);
+    case "project":
+      return projectSearchRequest(words.slice(1), parsed);
     case "add":
       return addMemoryRequest(words.slice(1), parsed);
     case "get":
@@ -199,6 +241,51 @@ async function turnsRequest(action: string | undefined, args: string[], parsed: 
   }
 }
 
+function projectSearchRequest(args: string[], parsed: ParsedArgs): CliRequest {
+  if (args[0] !== "search") throw new Error(`unknown command: project ${args.join(" ")}`.trim());
+  const spaceIds = projectSpaceIds(parsed);
+  if (spaceIds.length === 0) throw new Error("This session has no project space.");
+  const query = optionString(parsed.options, "query") ?? args[1];
+  const userId = userIdOption(parsed) ?? loadCliMemoryConfig(optionString(parsed.options, "config")).config.userId;
+  if (!userId) throw new Error("user_id is required");
+  const domains = stringArrayOption(parsed, "domains");
+  const limit = positiveIntegerOption(parsed, "limit");
+  const sessionId = optionString(parsed.options, "session-id");
+  return {
+    method: "POST",
+    path: "/api/openmem/v1/search/memory",
+    body: bindProjectToolRequest(
+      {
+        query: requireValue("query", query),
+        ...(domains && domains.length > 0 ? { domains } : {})
+      },
+      {
+        userId,
+        spaceIds,
+        ...(sessionId ? { conversationId: sessionId } : {}),
+        ...(limit !== undefined ? { memoryLimit: limit } : {})
+      }
+    )
+  };
+}
+
+function projectSpaceIds(parsed: ParsedArgs): string[] {
+  const fromFlags = optionValues(parsed.options, "space-id").map((id) => id.trim()).filter(Boolean);
+  if (fromFlags.length > 0) return uniqueStrings(fromFlags);
+  return uniqueStrings(splitList(process.env.MEMMY_PROJECT_SPACE_IDS));
+}
+
+function splitList(value: string | undefined): string[] {
+  if (!value) return [];
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const result: string[] = [];
+  for (const value of values) if (!result.includes(value)) result.push(value);
+  return result;
+}
+
 async function buildMemorySearchRequest(args: string[], parsed: ParsedArgs): Promise<CliRequest> {
   const query = optionString(parsed.options, "query") ?? args[0];
   return {
@@ -272,7 +359,7 @@ async function serveMemory(parsed: ParsedArgs): Promise<unknown> {
     "",
     "Examples:",
     "  memmy-memory health --url <memory-service-url>",
-    "  memmy-memory search \"project decisions\" --url <memory-service-url>"
+    "  memmy-memory search \"earlier preference\" --url <memory-service-url>"
   ].join("\n");
 }
 
@@ -602,6 +689,7 @@ function helpText(): string {
     "  install [--service-only]     Install and start the standalone Memory service",
     "  upgrade [--version <ver>]    Upgrade Memory and installed agent adapters",
     "  stop                         Stop the background Memory service",
+    "  db repair-relations --db PATH [--after ID]  Repair one batch of declared historical relations",
     "  service start|stop|status    Control the installed user service",
     "  service repair-launcher     Repair a legacy Windows task without starting it",
     "  serve                        Explain how to connect to an external Memory service",
@@ -611,7 +699,8 @@ function helpText(): string {
     "  session close <sessionId>    Close a session",
     "  turn start                   Start a memory-aware turn",
     "  turn complete <turnId>       Complete a turn and persist the result",
-    "  search <query>               Search memories",
+    "  search <query>               Search personal memories",
+    "  project search <query>      Search project memory in bound spaces",
     "  add <content>                Add a memory manually",
     "  get <id>                     Read one memory by id",
     "  delete <id>                  Delete one memory by id",
@@ -629,8 +718,11 @@ function helpText(): string {
     "Memory examples:",
     `  ${CLI_NAME} health`,
     `  ${CLI_NAME} session open --workspace-path "$PWD"`,
-    `  ${CLI_NAME} search "project decisions"`,
-    `  ${CLI_NAME} search "project decisions" --verbose`,
+    `  ${CLI_NAME} search "earlier preference"`,
+    `  ${CLI_NAME} search "earlier preference" --verbose`,
+    `  ${CLI_NAME} project search "retry policy" --cwd /path/to/project`,
+    `  ${CLI_NAME} project search "retry policy" --space-id <space-id> --session-id <session-id>`,
+    `  ${CLI_NAME} project search "retry policy" --raw`,
     `  ${CLI_NAME} add "this project stores memory locally in sqlite" --layer L1`,
     `  ${CLI_NAME} get mem_123`,
     `  ${CLI_NAME} get mem_123 --verbose`,

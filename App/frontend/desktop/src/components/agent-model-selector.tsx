@@ -4,14 +4,16 @@ import { useTranslation } from "../i18n/use-translation.js";
 import { agentActions, appActions } from "../state/app-actions.js";
 import { useAppState } from "../state/app-state.js";
 import {
-  getTaskModelCandidates,
   createModelWorkspace,
+  getTaskModelCandidates,
   resolveModelSelection,
+  resolveThinkingConfigForModel,
   type ModelWorkspaceMode
 } from "../state/model-workspace.js";
 import {
   settingsTabHash
 } from "../pages/settings-nav.js";
+import { AgentThinkingControl } from "./agent-thinking-control.js";
 import { ModelProviderLogo } from "./model-provider-logo.js";
 import { Select, type SelectOption } from "./Select.js";
 
@@ -26,6 +28,10 @@ export interface AgentModelSelectorProps {
    * still tracked separately in Agent state.
    */
   onDefaultModelSelected?: (candidateId: string) => void;
+  /** When set, the selector stays on the official model and cannot be opened. */
+  locked?: boolean;
+  lockReason?: string;
+  forcedPresetId?: string | null;
 }
 
 /** Per-chat catalog preset picker. Selection lives in Agent state, never browser storage. */
@@ -36,13 +42,16 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
   const candidates = getTaskModelCandidates(workspace, props.mode);
   const committedSelection = state.agent.committedModelSelectionByScope[props.scopeKey];
   const pendingPreset = state.agent.pendingPresetByScope[props.scopeKey];
-  const selectedPreset = pendingPreset
+  const selectedPreset = props.forcedPresetId
+    ?? pendingPreset
     ?? committedSelection?.presetId
     ?? null;
   const resolved = resolveModelSelection(workspace, props.mode, selectedPreset, {
-    allowUnassignedSelected: pendingPreset == null && Boolean(committedSelection)
+    allowUnassignedSelected: pendingPreset == null && !props.forcedPresetId && Boolean(committedSelection)
   });
   const hasNoModels = candidates.length === 0 && !resolved.candidate;
+  const locked = Boolean(props.locked);
+  const lockReason = props.lockReason ?? t("home.modelSelector.pluginLocked");
 
   const optionForCandidate = (candidate: (typeof candidates)[number]): SelectOption => ({
         value: candidate.id,
@@ -97,8 +106,14 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
     dispatch(appActions.navigate("/settings"));
   }
 
+  const thinkingConfig = resolveThinkingConfigForModel(workspace, resolved.candidate);
+
   return (
-    <div className="agent-model-selector" data-model-selector-scope={props.scopeKey}>
+    <div
+      className={`agent-model-selector${locked ? " agent-model-selector--locked" : ""}`}
+      data-model-selector-scope={props.scopeKey}
+      title={locked ? lockReason : undefined}
+    >
       <Select
         label={t("home.modelSelector.label")}
         labelClassName="sr-only"
@@ -108,11 +123,21 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
           : t("home.modelSelector.empty")}
         options={options}
         onValueChange={selectModel}
-        disabled={props.disabled}
+        disabled={props.disabled || locked}
+        title={locked ? lockReason : undefined}
         className="select-control--compact select-control--subtle agent-model-selector__control"
         buttonClassName="agent-model-selector__button"
         menuClassName="agent-model-selector__menu"
-        menuFooter={({ close }) => (
+        optionAside={(option) => (
+          option.value === resolved.candidateId && thinkingConfig
+            ? <AgentThinkingControl
+                scopeKey={props.scopeKey}
+                thinkingConfig={thinkingConfig}
+                disabled={props.disabled}
+              />
+            : null
+        )}
+        menuFooter={locked ? undefined : ({ close }) => (
           <div className="agent-model-selector__footer">
             <button
               type="button"

@@ -1,5 +1,9 @@
+import { createDesktopProjectMemoryService, type DesktopProjectMemoryService } from "./project-memory-service.js";
+import { createPluginSkillContentService, type PluginSkillContentService } from "./plugin-skill-content-service.js";
 import type { AccountChannel } from "@memmy/local-api-contracts";
-import { dirname, join } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { resolveCloudClientConfig, resolvePluginRegistryBaseUrl } from "../config/service-urls.js";
 import type { AppStateStore } from "../infrastructure/app-state-store/index.js";
 import { type MemmyConfigWriter } from "../infrastructure/memmy-config/index.js";
 import type { ScanPreferencesStore } from "../infrastructure/memmy-config/agent-access.js";
@@ -8,12 +12,23 @@ import {
   createBuiltinOnboardingInsightSamplers,
   createSourceRegistryOnboardingConversationWindowReader
 } from "../adapters/outbound/agent-source/onboarding-insight-samplers.js";
-import type { SourceRegistry } from "../adapters/outbound/agent-source/source-registry.js";
+import type { SourceRegistry } from "@memmy/agent-source-readers/adapters/source-registry";
 import { createHttpMemmyAgentAdminClient } from "../adapters/outbound/memmy-agent-admin-client/http-memmy-agent-admin-client.js";
 import type { MemmyAgentAdminClient } from "../adapters/outbound/memmy-agent-admin-client/index.js";
 import type { SkillTargetRegistry } from "../adapters/outbound/skill-writer/target-registry.js";
 import type { CloudClient } from "../adapters/outbound/cloud-client/index.js";
 import type { MemoryClient } from "../adapters/outbound/memory-client/index.js";
+import {
+  createCommandPluginAdapter,
+  createHttpPluginAdapter,
+  createMcpPluginAdapter,
+  createPluginRuntimeHost,
+  PluginAdapterRegistry,
+  type PluginHostServiceInvoker
+} from "../adapters/outbound/plugin-runtime/index.js";
+import { createPluginArtifactManager, type PluginArtifactManager } from "../adapters/outbound/plugin-artifact/index.js";
+import { createPluginSkillManager } from "../adapters/outbound/plugin-skill/index.js";
+import type { PluginRegistry } from "../adapters/outbound/plugin-registry/index.js";
 import type { PermissionManager } from "../permission/index.js";
 import {
   createAgentSourceLifecycleAnalytics,
@@ -28,6 +43,7 @@ import { createBuiltinSkillTargetRegistry } from "./builtin-skill-target-registr
 import { createAppConfigService, type AppConfigService } from "./app-config-service.js";
 import { createAccountService, type AccountService } from "./account-service.js";
 import { createAsrService, type AsrService } from "./asr-service.js";
+import { createAsrStreamService, type AsrStreamService } from "./asr-stream-service.js";
 import { createTokenQuotaService, type TokenQuotaService } from "./token-quota-service.js";
 import {
   createByokTokenUsageService,
@@ -57,7 +73,24 @@ import {
   createSkillDistributionService,
   type SkillDistributionService
 } from "./skill-distribution-service.js";
+import { readCollabAgentAccess } from "./collab-agent-access.js";
 import { createTurnService, type TurnService } from "./turn-service.js";
+import {
+  createProjectInstructionsService,
+  type ProjectInstructionsService
+} from "./project-instructions-service.js";
+import {
+  createCollabInstructionsService,
+  type CollabInstructionsService
+} from "./collab-instructions-service.js";
+import { createPluginService, type PluginRuntimeHost, type PluginService } from "./plugin-service.js";
+import { createPluginLocalArtifactService } from "./plugin-local-artifact-service.js";
+import { createPluginModelInferenceService } from "./plugin-model-inference-service.js";
+import { entitledPluginIds, reconcileEntitledPlugins } from "./plugin-entitlement-reconcile-service.js";
+import { createPluginAsrService } from "./plugin-asr-service.js";
+import { createPluginAssetKeyService } from "./plugin-asset-key-service.js";
+import { createPluginHostServiceRouter } from "./plugin-host-service-router.js";
+import { resolvePluginModelSelection } from "./plugin-model-policy.js";
 
 export interface BackendServices {
   memoryClient: MemoryClient;
@@ -82,8 +115,20 @@ export interface BackendServices {
   byokTokenUsage: ByokTokenUsageService;
   /** Asr. */
   asr: AsrService;
+  /** Live ASR stream relay to the Cloud. */
+  asrStream: AsrStreamService;
   /** Token quota. */
   tokenQuota: TokenQuotaService;
+  /** 本机项目的项目指令：按文件夹归属，只属于这台电脑。 */
+  projectInstructions: ProjectInstructionsService;
+  projectMemory?: DesktopProjectMemoryService;
+  /** 协作项目指令的本机缓存：按云端项目 id 归属，只读于任务注入。 */
+  collabInstructions: CollabInstructionsService;
+  /** Third-party plugins. */
+  plugins: PluginService;
+  /** 给其他 Agent 写技能的入口：协作项目的 `memmy-project` 由授权状态决定装与不装。 */
+  skillDistribution: SkillDistributionService;
+  pluginSkillContent?: PluginSkillContentService;
 }
 
 export interface CreateBackendServicesOptions {
@@ -93,11 +138,21 @@ export interface CreateBackendServicesOptions {
   cloudClient: CloudClient;
   permissionManager: PermissionManager;
   bootstrapScenario?: BootstrapScenario;
+  timeZone?: string;
   sourceRegistry?: SourceRegistry;
   ingestionService?: IngestionService;
   skillDistributionService?: SkillDistributionService;
   skillTargetRegistry?: SkillTargetRegistry;
   progressBus?: ProgressBus;
+  pluginRegistry?: PluginRegistry;
+  pluginArtifactManager?: PluginArtifactManager;
+  /** Canonical resource roots trusted to provide immutable bundled plugin archives. */
+  trustedBundledPluginRoots?: readonly string[];
+  pluginRuntimeHost?: PluginRuntimeHost;
+  /** Optional Host-service dispatcher, primarily for embedding and tests. */
+  pluginHostServices?: PluginHostServiceInvoker;
+  /** Exact hosts local command plugins may request. Defaults to MEMMY_COMMAND_PLUGIN_NETWORK_ALLOWLIST. */
+  commandPluginNetworkAllowlist?: readonly string[];
   /** Memmy config writer. */
   memmyConfigWriter?: MemmyConfigWriter;
   /** Memmy config path. */
@@ -111,8 +166,128 @@ export interface CreateBackendServicesOptions {
   scanPreferencesStore?: ScanPreferencesStore;
 }
 
+/** Exact network surface required by the first-party literature-review Providers. */
+export const DEFAULT_COMMAND_PLUGIN_NETWORK_ALLOWLIST = [
+  "export.arxiv.org",
+  "arxiv.org",
+  "eutils.ncbi.nlm.nih.gov",
+  "pmc.ncbi.nlm.nih.gov",
+  "api.openalex.org",
+  "api.crossref.org"
+] as const;
+
 export function createBackendServices(options: CreateBackendServicesOptions): BackendServices {
   const progressBus = options.progressBus ?? createProgressBus();
+  const memmyConfigWriter = options.memmyConfigWriter ?? createUnavailableMemmyConfigWriter();
+  const accountSessionRepository = options.appStateStore.repositories.accountSession;
+  const pluginRepository = options.appStateStore.repositories.plugins;
+  const isEntitlementGranted = (entitlement: string) => accountSessionRepository.getEntitlements().includes(entitlement);
+  /** Lets the plugin registry gate entitlement-restricted releases and downloads. */
+  const pluginRegistryAuthHeaders = (): Record<string, string> => {
+    const cloudUuid = accountSessionRepository.getCloudUuid();
+    return cloudUuid ? { authorization: `Bearer ${cloudUuid}` } : {};
+  };
+  const asrService = createAsrService({
+    bootstrapRepository: options.appStateStore.repositories.bootstrap,
+    accountSessionRepository: options.appStateStore.repositories.accountSession,
+    memmyConfigWriter,
+    cloudClient: options.cloudClient
+  });
+  const asrStreamService = createAsrStreamService({
+    bootstrapRepository: options.appStateStore.repositories.bootstrap,
+    accountSessionRepository: options.appStateStore.repositories.accountSession,
+    cloudBaseUrl: resolveCloudClientConfig(process.env).baseUrl
+  });
+  const agentWorkspace = resolveAgentWorkspace(process.env);
+  const uploadedMediaRoot = join(resolveAgentDataRoot(process.env), "media");
+  // Plugins may read user-provided inputs anywhere in the default workspace,
+  // including recordings and future Host-owned input folders. Writes remain
+  // confined to plugin-data and the artifact-host publishing service.
+  const pluginFileInputRoots = [uploadedMediaRoot, agentWorkspace];
+  // ASR only needs audio upload locations; do not let it turn an arbitrary
+  // workspace file into a base64 cloud request merely because it has a path.
+  const pluginAudioRoots = [uploadedMediaRoot, join(agentWorkspace, "recordings")];
+  const pluginSkillContent = createPluginSkillContentService({
+    baseUrl: resolvePluginRegistryBaseUrl(process.env) ?? resolveCloudClientConfig(process.env).baseUrl,
+    getPlugin: (id) => plugins.list().find(plugin => plugin.id === id) ?? null,
+    authHeaders: pluginRegistryAuthHeaders
+  });
+  const pluginModelInference = createPluginModelInferenceService({
+    resolveModel: (pluginId, requestedPreset) => resolvePluginModelSelection({
+      accountOnly: pluginRepository.get(pluginId)?.manifest.modelPolicy?.requiredSource === "account",
+      userMode: options.appStateStore.repositories.bootstrap.getAppSettings().userMode,
+      account: accountSessionRepository.get(),
+      requestedPreset,
+      resolveAssignedModel: memmyConfigWriter.resolveAssignedModel
+    }),
+    embeddingInference: options.memoryClient.embeddingInference
+      ? (input, inferenceOptions) => options.memoryClient.embeddingInference!(input, inferenceOptions)
+      : undefined
+  });
+  const pluginHostServices = options.pluginHostServices ?? createPluginHostServiceRouter([
+    { services: ["model-inference", "embedding-inference"], invoker: pluginModelInference },
+    { services: ["asset-key"], invoker: createPluginAssetKeyService({
+      baseUrl: resolveCloudClientConfig(process.env).baseUrl,
+      getPlugin: (id) => pluginRepository.get(id),
+      authHeaders: pluginRegistryAuthHeaders,
+      isEntitlementGranted
+    }) },
+    {
+      services: ["asr"],
+      invoker: createPluginAsrService({ asr: asrService, audioRoots: pluginAudioRoots })
+    }
+  ]);
+  const memmyAgentAdminClient =
+    options.memmyAgentAdminClient ??
+    createHttpMemmyAgentAdminClient({ bootstrapSecret: options.memmyAgentAdminBootstrapSecret });
+  const pluginRuntimeHost = options.pluginRuntimeHost ?? createPluginRuntimeHost(new PluginAdapterRegistry([
+    createMcpPluginAdapter(),
+    createHttpPluginAdapter(),
+    createCommandPluginAdapter({
+      allowedNetworkHosts: options.commandPluginNetworkAllowlist ?? resolveCommandPluginNetworkAllowlist(process.env),
+      fileInputRoots: pluginFileInputRoots,
+      pluginDataRoot: join(dirname(options.appStateStore.databasePath), "plugin-data"),
+      hostServices: pluginHostServices,
+      isEntitlementGranted
+    })
+  ]));
+  const plugins = createPluginService({
+    repository: pluginRepository,
+    hasActiveAgentTasks: async signal => {
+      if (!memmyAgentAdminClient.hasActiveTasks) throw new Error("Agent task activity is unavailable; update the runtime and retry");
+      return memmyAgentAdminClient.hasActiveTasks(signal);
+    },
+    secretStore: options.appStateStore.secretStore,
+    registry: options.pluginRegistry ?? unavailablePluginRegistry,
+    runtimeHost: pluginRuntimeHost,
+    artifactManager: options.pluginArtifactManager ?? createPluginArtifactManager({
+      installRoot: join(dirname(options.appStateStore.databasePath), "plugins"),
+      trustedLocalRoots: options.trustedBundledPluginRoots,
+      authOrigin: resolvePluginRegistryBaseUrl(process.env),
+      authHeaders: pluginRegistryAuthHeaders
+    }),
+    onSkillContentInvalidated: (id) => pluginSkillContent.clear(id),
+    skillManager: createPluginSkillManager({ skillsRoot: join(resolveAgentWorkspace(process.env), "skills") }),
+    localArtifactService: createPluginLocalArtifactService({
+      pluginDataRoot: join(dirname(options.appStateStore.databasePath), "plugin-data"),
+      resolveWorkspace: async (conversationId) => {
+        try {
+          return await memmyAgentAdminClient.getSessionWorkspace?.(conversationId) ?? null;
+        } catch {
+          // Non-WebUI invocations do not have a conversation workspace to publish into.
+          return null;
+        }
+      }
+    }),
+    isAuthenticated: () => accountSessionRepository.get().authenticated,
+    isEntitlementGranted,
+    catalogPluginIds: () => entitledPluginIds(accountSessionRepository.getEntitlements())
+  });
+  const pluginToolSignature = () => JSON.stringify(plugins.list()
+    .filter((plugin) => plugin.state === "active" && plugin.eligibility?.canUse !== false)
+    .map((plugin) => [plugin.id, plugin.version, plugin.manifest.capabilities])
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
+  let publishedPluginTools = pluginToolSignature();
   const sourceRegistry =
     options.sourceRegistry ??
     createBuiltinAgentSourceRegistry();
@@ -122,13 +297,10 @@ export function createBackendServices(options: CreateBackendServicesOptions): Ba
   const skillDistributionService =
     options.skillDistributionService ??
     createSkillDistributionService({
-      targetRegistry: skillTargetRegistry
+      targetRegistry: skillTargetRegistry,
+      // 协作项目单独授权：没授权时启动也不写 `memmy-project`，关掉的 Agent 同样跳过。
+      projectSkillPermission: () => readCollabAgentAccess()
     });
-  const memmyAgentAdminClient =
-    options.memmyAgentAdminClient ??
-    createHttpMemmyAgentAdminClient({ bootstrapSecret: options.memmyAgentAdminBootstrapSecret });
-  const memmyConfigWriter = options.memmyConfigWriter ?? createUnavailableMemmyConfigWriter();
-  const accountSessionRepository = options.appStateStore.repositories.accountSession;
   const resolveAnalyticsUserId = () => {
     const session = accountSessionRepository.get();
     if (!session.authenticated) return null;
@@ -168,18 +340,29 @@ export function createBackendServices(options: CreateBackendServicesOptions): Ba
       getUserMode: resolveAnalyticsUserMode,
     }),
     memoryAddAnalytics,
-    scanStoreDirectory: join(dirname(options.appStateStore.databasePath), "agent-source-scans"),
   });
   const toolConnectionAnalytics = createToolConnectionAnalytics({
     getUserId: resolveAnalyticsUserId,
     getUserMode: resolveAnalyticsUserMode,
   });
 
+  const projectInstructions = createProjectInstructionsService({ memmyConfigPath: options.memmyConfigPath ?? join(homedir(), ".memmy", "config.yaml") });
+  const collabInstructions = createCollabInstructionsService({ memmyConfigPath: options.memmyConfigPath ?? join(homedir(), ".memmy", "config.yaml") });
+  const projectMemory = createDesktopProjectMemoryService({
+    autoEnableProjects: true,
+    memmyConfigPath: options.memmyConfigPath ?? join(homedir(), ".memmy", "config.yaml"),
+    memoryClient: options.memoryClient, getUserId: resolveMemoryUserId,
+    readInstructions: async directory => {
+      const shared = await collabInstructions.forQuery({ sourceId: "memmy", groupId: directory, directory });
+      return shared?.text ?? (await projectInstructions.read(directory)).text;
+    }
+  });
   return {
     memoryClient: options.memoryClient,
     agentAdapterRegistry: options.agentAdapterRegistry,
     bootstrap: createBootstrapService({
       ...options,
+      getMemoryUserId: resolveMemoryUserId,
       scanPreferencesStore: options.scanPreferencesStore
     }),
     appConfig: createAppConfigService({
@@ -196,7 +379,29 @@ export function createBackendServices(options: CreateBackendServicesOptions): Ba
       bootstrapRepository: options.appStateStore.repositories.bootstrap,
       memmyConfigWriter: options.memmyConfigWriter,
       memoryClient: options.memoryClient,
-      accountChannel: options.accountChannel
+      accountChannel: options.accountChannel,
+      onAccountGrantsRefreshed: async () => {
+        pluginSkillContent.clear();
+        const failures = await reconcileEntitledPlugins({
+          plugins,
+          userUninstalledIds: new Set(pluginRepository.listUserUninstalledIds()),
+          entitlements: accountSessionRepository.getEntitlements()
+        });
+        for (const failure of failures) {
+          console.warn(`Entitled plugin reconciliation failed for ${failure.pluginId}: ${failure.message}`);
+        }
+        // Reconciliation bypasses management routes; retry publishing changes after a failed reload.
+        const nextPluginTools = pluginToolSignature();
+        if (nextPluginTools !== publishedPluginTools) {
+          try {
+            const result = await memmyAgentAdminClient.reloadMcpConfig();
+            if (result.ok) publishedPluginTools = nextPluginTools;
+            else console.warn(`Agent plugin tools refresh did not complete: ${result.message}`);
+          } catch (error) {
+            console.warn(`Agent plugin tool reload unavailable: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
+      }
     }),
     integrations: createIntegrationService({
       cloudClient: options.cloudClient,
@@ -216,6 +421,7 @@ export function createBackendServices(options: CreateBackendServicesOptions): Ba
     agentSourceAutoInject: createAgentSourceAutoInjectService({
       agentSources,
       permissionManager: options.permissionManager,
+      isAutoInjectSuppressed: (sourceId) => options.appStateStore.repositories.agentSources.isAutoInjectSuppressed(sourceId),
       getScanPreferences: () => options.scanPreferencesStore?.getScanPreferences()
         ?? options.appStateStore.repositories.bootstrap.getScanPreferences()
     }),
@@ -240,6 +446,7 @@ export function createBackendServices(options: CreateBackendServicesOptions): Ba
       memoryClient: options.memoryClient
     }),
     memoryDetail: createMemoryDetailService({
+      getUserId: resolveMemoryUserId,
       memoryClient: options.memoryClient
     }),
     panel: createPanelService({
@@ -251,23 +458,48 @@ export function createBackendServices(options: CreateBackendServicesOptions): Ba
       bootstrapRepository: options.appStateStore.repositories.bootstrap,
       memoryClient: options.memoryClient
     }),
-    asr: createAsrService({
-      bootstrapRepository: options.appStateStore.repositories.bootstrap,
-      accountSessionRepository: options.appStateStore.repositories.accountSession,
-      memmyConfigWriter,
-      cloudClient: options.cloudClient
-    }),
+    asr: asrService,
+    asrStream: asrStreamService,
     tokenQuota: createTokenQuotaService({
       cloudClient: options.cloudClient,
       accountSessionRepository: options.appStateStore.repositories.accountSession
-    })
+    }),
+    projectInstructions,
+    collabInstructions,
+    projectMemory,
+    plugins,
+    pluginSkillContent,
+    skillDistribution: skillDistributionService
   };
+}
+
+export function resolveCommandPluginNetworkAllowlist(env: NodeJS.ProcessEnv): string[] {
+  const configured = env.MEMMY_COMMAND_PLUGIN_NETWORK_ALLOWLIST?.trim();
+  if (!configured) return [...DEFAULT_COMMAND_PLUGIN_NETWORK_ALLOWLIST];
+  return configured
+    .split(",")
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function resolveAgentWorkspace(env: NodeJS.ProcessEnv): string {
+  const configured = env.MEMMY_AGENT_WORKSPACE?.trim() || "~/.memmy/workspace";
+  if (configured === "~") return homedir();
+  if (configured.startsWith("~/")) return resolve(homedir(), configured.slice(2));
+  return resolve(configured);
+}
+
+function resolveAgentDataRoot(env: NodeJS.ProcessEnv): string {
+  const configured = env.MEMMY_AGENT_DATA_DIR?.trim() || "~/.memmy";
+  if (configured === "~") return homedir();
+  if (configured.startsWith("~/")) return resolve(homedir(), configured.slice(2));
+  return resolve(configured);
 }
 
 export { createBootstrapService };
 export type { BootstrapScenario, BootstrapService };
 
-function createCatalogAgentTaskModelResolver(
+export function createCatalogAgentTaskModelResolver(
   appStateStore: AppStateStore,
   memmyConfigWriter: MemmyConfigWriter
 ): OnboardingInsightAgentTaskModelResolver {
@@ -315,3 +547,9 @@ function createUnavailableMemmyConfigWriter(): MemmyConfigWriter {
     patchMcpServerConfig: async () => unavailable()
   };
 }
+
+const unavailablePluginRegistry: PluginRegistry = {
+  async resolve() {
+    throw Object.assign(new Error("Plugin registry is not configured"), { code: "plugin_unavailable" });
+  }
+};

@@ -15,6 +15,13 @@ export interface CliRequest {
   body?: unknown;
 }
 
+export class CliResponseError extends Error {
+  constructor(message: string, readonly status: number, readonly payload: unknown) {
+    super(message);
+    this.name = "CliResponseError";
+  }
+}
+
 export async function sendRequest(request: CliRequest, options: CliRequestOptions = {}): Promise<unknown> {
   const fetchImpl = options.fetch ?? fetch;
   const baseUrl = resolveBaseUrl(options);
@@ -50,7 +57,7 @@ export async function sendRequest(request: CliRequest, options: CliRequestOption
 
   if (!response.ok) {
     const message = errorMessage(payload) ?? `HTTP ${response.status}`;
-    throw new Error(message);
+    throw new CliResponseError(message, response.status, payload);
   }
 
   return payload;
@@ -58,9 +65,7 @@ export async function sendRequest(request: CliRequest, options: CliRequestOption
 
 export function withApiPrefix(path: string): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
-  if (normalized.startsWith("/api/v1/") || normalized === "/api/v1") {
-    return normalized;
-  }
+  if (normalized === "/api" || normalized.startsWith("/api/")) return normalized;
   return `/api/v1${normalized}`;
 }
 
@@ -88,9 +93,21 @@ function errorMessage(payload: unknown): string | undefined {
       const message = (error as Record<string, unknown>).message;
       if (typeof message === "string") return message;
     }
+    if (record.message === "DOMAIN_INVALID") return domainInvalidMessage(record);
   }
   if (typeof payload === "string" && payload.trim()) {
     return payload;
   }
   return undefined;
+}
+
+function domainInvalidMessage(record: Record<string, unknown>): string {
+  const data = record.data && typeof record.data === "object" && !Array.isArray(record.data)
+    ? record.data as Record<string, unknown>
+    : {};
+  const detail = typeof data.detail === "string" && data.detail.trim() ? data.detail.trim() : "DOMAIN_INVALID";
+  const domains = Array.isArray(data.domains)
+    ? data.domains.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+  return domains.length > 0 ? `${detail}\ndomains: ${domains.join(", ")}` : detail;
 }

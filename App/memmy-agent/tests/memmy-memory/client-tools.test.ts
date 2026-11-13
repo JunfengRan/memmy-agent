@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_MEMOS_MEMORY_TIMEOUT_MS, MemmyMemoryClient, MemmyMemoryHttpError } from "../../src/memmy-memory/client.js";
-import { MEMOS_MEMORY_TOOL_SPECS, registerMemmyMemoryTools } from "../../src/memmy-memory/tools.js";
+import { MEMOS_MEMORY_TOOL_SPECS, SEARCH_PROJECT_MEMORY_FIELDS, SEARCH_PROJECT_MEMORY_PARAMETERS, registerMemmyMemoryTools } from "../../src/memmy-memory/tools.js";
 import type { MemmyMemoryToolRuntime } from "../../src/memmy-memory/types.js";
 import { RequestContext } from "../../src/core/agent-runtime/tools/context.js";
 import { ToolRegistry } from "../../src/core/agent-runtime/tools/registry.js";
@@ -254,12 +254,13 @@ describe("memmy memory tools", () => {
 
     expect(registry.has("memmy_memory_search")).toBe(true);
     expect(registry.has("memmy_memory_get")).toBe(true);
-    expect(searchResult).toContain('<memmy_memory_context source="tool_search">');
+    expect(registry.has("search_project_memory")).toBe(false);
+    expect(searchResult).toContain('<memmy_memory_context source="tool_search" turn_id="turn-1">');
     expect(searchResult).toContain("No relevant Memmy memories found.");
-    expect(searchResult).toContain("<current_user_request>\nSummarize the current README\n</current_user_request>");
-    expect(getResult).toContain('<memmy_memory_context source="tool_get">');
+    expect(searchResult).toContain('<current_user_request turn_id="turn-1">\nSummarize the current README\n</current_user_request>');
+    expect(getResult).toContain('<memmy_memory_context source="tool_get" turn_id="turn-1">');
     expect(getResult).toContain("/api/v1/memory/trace_123");
-    expect(getResult).toContain("<current_user_request>\nSummarize the current README\n</current_user_request>");
+    expect(getResult).toContain('<current_user_request turn_id="turn-1">\nSummarize the current README\n</current_user_request>');
     const body = JSON.parse(String(calls[0].init.body));
     expect(body).toMatchObject({
       query: "previous task",
@@ -335,7 +336,7 @@ describe("memmy memory tools", () => {
 
     const getResult = await registry.get("memmy_memory_get")!.execute({ id: "trace_123" });
 
-    expect(getResult).toContain('<memmy_memory_context source="tool_get">');
+    expect(getResult).toContain('<memmy_memory_context source="tool_get" turn_id="turn-1">');
     expect(getResult).toContain("User:\ncheck memory");
     expect(getResult).toContain("Assistant:\n16 GB");
     expect(getResult).not.toContain("Summary:");
@@ -576,5 +577,76 @@ describe("memmy memory tools", () => {
       success: false,
       error_code: "http_500",
     });
+  });
+
+  it("keeps search_project_memory fields to query and domains", () => {
+    expect(Object.keys(SEARCH_PROJECT_MEMORY_PARAMETERS)).toEqual([...SEARCH_PROJECT_MEMORY_FIELDS]);
+  });
+
+  it("registers search_project_memory only when spaces are bound and posts recall_via tool", async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    const client = new MemmyMemoryClient(
+      { baseUrl: "http://memory.test", timeoutMs: 1000 },
+      vi.fn(async (url, init) => {
+        calls.push({ url: String(url), init: init ?? {} });
+        return response({
+          code: 0,
+          message: "ok",
+          data: { topic_detail_list: [{ id: "topic_1" }] }
+        });
+      }) as any,
+    );
+    const unbound = new ToolRegistry();
+    registerMemmyMemoryTools(unbound, client, {
+      requestEnvelope: () => ({ namespace: { source: "memmy-agent", profileId: "default", userId: "host-user" } }),
+      currentSessionId: () => "conv_host",
+      currentEpisodeId: () => null,
+      currentTurnId: () => null,
+      currentUserText: () => "how did we store it",
+    });
+    expect(unbound.has("search_project_memory")).toBe(false);
+
+    const bound = new ToolRegistry();
+    registerMemmyMemoryTools(bound, client, {
+      requestEnvelope: () => ({ namespace: { source: "memmy-agent", profileId: "default", userId: "host-user" } }),
+      currentSessionId: () => "conv_host",
+      currentEpisodeId: () => null,
+      currentTurnId: () => null,
+      currentUserText: () => "how did we store it",
+      projectSpaceIds: () => ["space_host"],
+    });
+    expect(bound.has("search_project_memory")).toBe(true);
+    setRegistryContext(bound, new RequestContext({ sessionKey: "cli:direct" }));
+
+    const result = await bound.get("search_project_memory")!.execute({
+      query: "how did we store it",
+      domains: ["代码开发"],
+      user_id: "model-user",
+      space_ids: ["model-space"],
+      conversation_id: "model-conv",
+      memory_limit_number: 9,
+      recall_via: "turn_start",
+      include_memory_view: ["user_memory"],
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe("http://memory.test/api/openmem/v1/search/memory");
+    expect(calls.some((call) => call.url.includes("/turns/start"))).toBe(false);
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({
+      user_id: "host-user",
+      space_ids: ["space_host"],
+      query: "how did we store it",
+      include_memory_view: ["project"],
+      memory_limit_number: 3,
+      recall_via: "tool",
+      conversation_id: "conv_host",
+      domains: ["代码开发"],
+    });
+    expect(result.startsWith('<memos_context v="1" kind="tool">')).toBe(true);
+    expect(result).toContain("topic_1");
+    expect(result).toContain("<memories>");
+    expect(result).not.toContain("topic_detail_list");
+    expect(result).not.toContain("model-user");
+    expect(result).not.toContain("model-space");
   });
 });

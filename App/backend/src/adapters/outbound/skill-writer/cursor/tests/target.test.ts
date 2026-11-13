@@ -223,6 +223,7 @@ describe("cursor skill target", () => {
       expect(skillFile).toContain("# Memmy Memory");
       expect(skillFile).toContain("A Memmy Memory Hook or plugin is installed for this agent.");
       expect(skillFile).toContain('memmy-memory search "query text" --source cursor');
+      expect(skillFile).toContain('memmy-memory project search "query text" --source cursor --session-id "$SESSION_ID"');
       expect(skillFile).not.toContain("memmy-memory add");
       const resumeSkillFile = readFileSync(join(rootDirectory, "skills", "memmy-resume", "SKILL.md"), "utf8");
       expect(resumeSkillFile).toContain("name: memmy-resume");

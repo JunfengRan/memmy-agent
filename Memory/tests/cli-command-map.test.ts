@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../src/cli/commands.js";
+import { withApiPrefix } from "../src/cli/http.js";
 import { PROJECT_VERSION } from "../src/cli/project-version.js";
 
 interface CapturedRequest {
@@ -33,6 +34,8 @@ describe("memmy CLI command map", () => {
     expect(help).toContain("--health-check-timeout-ms");
     expect(help).toContain("Supported agents:");
     expect(help).toContain("Default URL:");
+    expect(help).toContain("project search <query>");
+    expect(help).not.toContain("rollback-panel");
   });
 
   it("prints the CLI version", async () => {
@@ -482,13 +485,13 @@ describe("memmy CLI command map", () => {
     expect(requests[0]?.headers["x-memmy-user-id"]).toBe("user_explicit");
   });
 
-  it("rejects unknown commands", async () => {
+  it.each([["unknown-command"], ["db", "rollback-panel"]])("rejects unregistered command %s", async (...words) => {
     await expect(
       runCommand({
-        argv: ["unknown-command", "--url", baseUrl],
+        argv: [...words, "--url", baseUrl],
         fetch: mockFetch([])
       })
-    ).rejects.toThrow("unknown command: unknown-command");
+    ).rejects.toThrow(`unknown command: ${words.join(" ")}`);
   });
 
   it("does not keep old recall commands", async () => {
@@ -528,6 +531,167 @@ describe("memmy CLI command map", () => {
         fetch: mockFetch([])
       })
     ).rejects.toThrow("unknown command: memory subagent complete");
+  });
+
+  it("leaves paths that already start with /api/ unprefixed", () => {
+    expect(withApiPrefix("/api/openmem/v1/search/memory")).toBe("/api/openmem/v1/search/memory");
+    expect(withApiPrefix("/api/v1/health")).toBe("/api/v1/health");
+    expect(withApiPrefix("/memory/search")).toBe("/api/v1/memory/search");
+    expect(withApiPrefix("health")).toBe("/api/v1/health");
+  });
+
+  it("maps project search to openmem search with recall_via tool", async () => {
+    const previous = process.env.MEMMY_PROJECT_SPACE_IDS;
+    process.env.MEMMY_PROJECT_SPACE_IDS = "space_env";
+    try {
+      const { requests } = await runMappedCommand([
+        "project", "search", "retry policy",
+        "--space-id", "space_a",
+        "--space-id", "space_b",
+        "--session-id", "se_123",
+        "--domains", "代码开发,运维",
+        "--limit", "5",
+        "--user-id", "user_cli"
+      ]);
+      expect(requests).toHaveLength(1);
+      const url = new URL(requests[0]!.url);
+      expect(url.pathname).toBe("/api/openmem/v1/search/memory");
+      expect(requests[0]?.body).toEqual({
+        user_id: "user_cli",
+        space_ids: ["space_a", "space_b"],
+        query: "retry policy",
+        include_memory_view: ["project"],
+        memory_limit_number: 5,
+        recall_via: "tool",
+        conversation_id: "se_123",
+        domains: ["代码开发", "运维"]
+      });
+      expect(url.pathname).not.toBe("/api/v1/memory/search");
+    } finally {
+      restoreSpaceEnv(previous);
+    }
+  });
+
+  it("uses MEMMY_PROJECT_SPACE_IDS when no --space-id is passed", async () => {
+    const previous = process.env.MEMMY_PROJECT_SPACE_IDS;
+    process.env.MEMMY_PROJECT_SPACE_IDS = "space_env, space_env_2";
+    try {
+      const { requests } = await runMappedCommand([
+        "project", "search", "retry policy",
+        "--user-id", "user_cli"
+      ]);
+      expect(requests[0]?.body).toMatchObject({
+        space_ids: ["space_env", "space_env_2"],
+        recall_via: "tool",
+        memory_limit_number: 3
+      });
+    } finally {
+      restoreSpaceEnv(previous);
+    }
+  });
+
+  it("resolves the cwd through the local backend without calling personal search", async () => {
+    const previous = process.env.MEMMY_PROJECT_SPACE_IDS;
+    delete process.env.MEMMY_PROJECT_SPACE_IDS;
+    const root = mkdtempSync(join(tmpdir(), "memmy-cli-project-")); roots.push(root);
+    const configPath = join(root, "config.yaml");
+    writeFileSync(configPath, "{}");
+    writeFileSync(join(root, "runtime.json"), JSON.stringify({baseUrl:"http://127.0.0.1:12345",localToken:"fixture-token"}));
+    try {
+      const requests: CapturedRequest[] = [];
+      await expect(runCommand({
+        argv: ["project", "search", "retry policy", "--config", configPath, "--cwd", "/projects/other"],
+        fetch: mockFetch(requests)
+      })).rejects.toThrow(/no project space/);
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.url).toBe("http://127.0.0.1:12345/api/project-memory/recall");
+      expect(requests[0]?.body).toEqual({workspace:"/projects/other",query:"retry policy",recallVia:"tool"});
+    } finally { restoreSpaceEnv(previous); }
+  });
+
+  it("prints rendered project search text and keeps JSON behind --raw", async () => {
+    const payload = {
+      code: 0,
+      message: "ok",
+      data: {
+        topic_detail_list: [{ id: "topic_1", topic_name: "重试", topic_summary: "三次" }],
+        degraded: ["vector"],
+        user_memory: [{ content: "user-secret-fact" }]
+      }
+    };
+    const rendered = await runCommand({
+      argv: ["project", "search", "retry policy", "--space-id", "space_a", "--user-id", "user_cli", "--url", baseUrl],
+      fetch: mockFetchResponse(payload)
+    });
+    expect(typeof rendered).toBe("string");
+    expect(rendered).toContain('kind="tool"');
+    expect(rendered).toContain("重试");
+    expect(rendered).toContain("本次检索有部分召回降级，结果可能不全；需要时换个说法再查一次。");
+    expect(rendered).not.toContain("user-secret-fact");
+    expect(rendered).not.toContain("topic_detail_list");
+
+    const raw = await runCommand({
+      argv: ["project", "search", "retry policy", "--space-id", "space_a", "--user-id", "user_cli", "--raw", "--url", baseUrl],
+      fetch: mockFetchResponse(payload)
+    });
+    expect(raw).toEqual(payload);
+  });
+
+  it("lists unregistered and available domains inside the tool tag when project search returns DOMAIN_INVALID", async () => {
+    const requests: CapturedRequest[] = [];
+    const payload = {
+      code: 40002,
+      message: "DOMAIN_INVALID",
+      data: {
+        detail: "domains are not registered in every space",
+        domains: ["运维"],
+        available_domains: ["代码开发"]
+      }
+    };
+    const rendered = await runCommand({
+      argv: [
+        "project", "search", "retry policy",
+        "--space-id", "space_a",
+        "--user-id", "user_cli",
+        "--domains", "运维",
+        "--url", baseUrl
+      ],
+      fetch: (async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        const body = typeof init?.body === "string" && init.body ? JSON.parse(init.body) as unknown : undefined;
+        requests.push({
+          method: init?.method ?? "GET",
+          url,
+          headers: Object.fromEntries(new Headers(init?.headers).entries()),
+          body
+        });
+        return new Response(JSON.stringify(payload), {
+          status: 400,
+          headers: { "content-type": "application/json" }
+        });
+      }) as typeof fetch
+    });
+    expect(requests).toHaveLength(1);
+    expect(new URL(requests[0]!.url).pathname).toBe("/api/openmem/v1/search/memory");
+    expect(rendered).toContain('kind="tool"');
+    expect(rendered).toContain("未登记的领域：运维");
+    expect(rendered).toContain("可用领域：代码开发");
+
+    const raw = await runCommand({
+      argv: [
+        "project", "search", "retry policy",
+        "--space-id", "space_a",
+        "--user-id", "user_cli",
+        "--domains", "运维",
+        "--raw",
+        "--url", baseUrl
+      ],
+      fetch: (async () => new Response(JSON.stringify(payload), {
+        status: 400,
+        headers: { "content-type": "application/json" }
+      })) as typeof fetch
+    });
+    expect(raw).toEqual(payload);
   });
 
   it("does not register auth helper commands", async () => {
@@ -577,6 +741,11 @@ function mockFetchResponse(payload: unknown): typeof fetch {
       "content-type": "application/json"
     }
   })) as typeof fetch;
+}
+
+function restoreSpaceEnv(previous: string | undefined): void {
+  if (previous === undefined) delete process.env.MEMMY_PROJECT_SPACE_IDS;
+  else process.env.MEMMY_PROJECT_SPACE_IDS = previous;
 }
 
 function querySubset(url: URL, expected: Record<string, string>): Record<string, string> {

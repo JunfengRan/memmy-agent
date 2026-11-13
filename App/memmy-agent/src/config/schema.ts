@@ -98,7 +98,8 @@ export type ModelEndpointProtocol =
   | "dashscope-input-audio-chat"
   | "openai-images"
   | "dashscope-multimodal-generation"
-  | "memmy-account";
+  | "memmy-account"
+  | "bedrock-converse";
 
 const MODEL_CAPABILITIES = ["agent", "memory_summary", "memory_evolution", "embedding", "asr", "image_generation"] as const;
 const TEXT_GENERATION_CAPABILITIES: ReadonlySet<ModelCapability> = new Set([
@@ -107,7 +108,7 @@ const TEXT_GENERATION_CAPABILITIES: ReadonlySet<ModelCapability> = new Set([
 const ENDPOINT_PROTOCOLS = [
   "openai-chat-completions", "openai-responses", "anthropic-messages", "gemini-generate-content",
   "openai-embeddings", "dashscope-input-audio-chat", "openai-images",
-  "dashscope-multimodal-generation", "memmy-account",
+  "dashscope-multimodal-generation", "memmy-account", "bedrock-converse",
 ] as const;
 
 export class Base {
@@ -235,6 +236,7 @@ export class ModelPresetConfig extends Base {
   contextWindowTokens = DEFAULT_CONTEXT_WINDOW_TOKENS;
   temperature = 0.7;
   reasoningEffort: string | null = null;
+  inputModalities: readonly string[] | null = null;
 
   constructor(init: Dict) {
     super(init);
@@ -263,6 +265,9 @@ export class ModelPresetConfig extends Base {
     );
     this.temperature = pick(init, ["temperature"], 0.7);
     this.reasoningEffort = pick(init, ["reasoningEffort"], null);
+    this.inputModalities = Array.isArray(init.inputModalities)
+      ? Object.freeze([...init.inputModalities.filter((item: unknown) => typeof item === "string")])
+      : null;
     if (this.source === "account" && !optionalString(this.ownerAccountId)) {
       throw new ValueError("account modelPreset ownerAccountId is required");
     }
@@ -283,6 +288,7 @@ export class ModelPresetConfig extends Base {
     return omitUndefined({
       ...this,
       ownerAccountId: this.ownerAccountId ?? undefined,
+      inputModalities: this.inputModalities ?? undefined,
     });
   }
 }
@@ -373,6 +379,7 @@ export class AgentDefaults extends Base {
   maxToolIterations = 200;
   maxConcurrentSubagents = 1;
   maxToolResultChars = 16_000;
+  toolResultCompressionEnabled = false;
   providerRetryMode = "standard";
   toolHintMaxLength = 40;
   reasoningEffort: string | null = null;
@@ -382,7 +389,7 @@ export class AgentDefaults extends Base {
   unifiedSession = false;
   disabledSkills: string[] = [];
   sessionTtlMinutes = 0;
-  maxMessages = 120;
+  maxMessages = 80;
   consolidationRatio = 0.5;
   dream: DreamConfig;
 
@@ -408,6 +415,8 @@ export class AgentDefaults extends Base {
       this.maxConcurrentSubagents,
     );
     this.maxToolResultChars = pick(init, ["maxToolResultChars"], this.maxToolResultChars);
+    this.toolResultCompressionEnabled = pick(init, ["toolResultCompressionEnabled"], false);
+    if (typeof this.toolResultCompressionEnabled !== "boolean") throw new ValueError("toolResultCompressionEnabled must be a boolean");
     this.providerRetryMode = pick(init, ["providerRetryMode"], this.providerRetryMode);
     this.toolHintMaxLength = pick(init, ["toolHintMaxLength"], this.toolHintMaxLength);
     this.reasoningEffort = pick(init, ["reasoningEffort"], null);
@@ -417,7 +426,7 @@ export class AgentDefaults extends Base {
     this.unifiedSession = pick(init, ["unifiedSession"], false);
     this.disabledSkills = assertStringArray("disabledSkills", pick(init, ["disabledSkills"], []));
     this.sessionTtlMinutes = pick(init, ["idleCompactAfterMinutes", "sessionTtlMinutes"], 0);
-    this.maxMessages = pick(init, ["maxMessages"], 120);
+    this.maxMessages = pick(init, ["maxMessages"], 80);
     assertIntRange("maxMessages", this.maxMessages, 0);
     this.consolidationRatio = pick(init, ["consolidationRatio"], 0.5);
     assertIntRange("maxConcurrentSubagents", this.maxConcurrentSubagents, 1);
@@ -445,6 +454,7 @@ export class AgentDefaults extends Base {
       maxToolIterations: this.maxToolIterations,
       maxConcurrentSubagents: this.maxConcurrentSubagents,
       maxToolResultChars: this.maxToolResultChars,
+      toolResultCompressionEnabled: this.toolResultCompressionEnabled,
       providerRetryMode: this.providerRetryMode,
       toolHintMaxLength: this.toolHintMaxLength,
       reasoningEffort: this.reasoningEffort,
@@ -592,6 +602,7 @@ export class ProviderConfig extends Base {
   private chatEndpoint(): ModelEndpointConfig | null {
     return Object.values(this.endpoints).find((endpoint) => [
       "openai-chat-completions", "openai-responses", "anthropic-messages", "gemini-generate-content", "memmy-account",
+      "bedrock-converse",
     ].includes(endpoint.protocol)) ?? null;
   }
 
@@ -610,9 +621,12 @@ export class ProviderConfig extends Base {
 export class ModelEndpointConfig extends Base {
   apiBase: string;
   protocol: ModelEndpointProtocol;
+  inheritProviderDefaults?: boolean;
   apiKey: string | null;
   extraHeaders: Dict<string> | null;
   extraBody: Dict | null;
+  region: string | null;
+  profile: string | null;
 
   constructor(init: Dict = {}) {
     for (const legacy of ["api_key", "api_base", "api_type", "extra_headers", "extra_body"]) {
@@ -623,17 +637,24 @@ export class ModelEndpointConfig extends Base {
     super(init);
     this.apiBase = assertRequiredString("provider endpoint apiBase", init.apiBase);
     this.protocol = assertOneOf("provider endpoint protocol", init.protocol, ENDPOINT_PROTOCOLS);
+    this.inheritProviderDefaults = init.inheritProviderDefaults === undefined ? undefined
+      : assertBoolean("provider endpoint inheritProviderDefaults", init.inheritProviderDefaults);
     this.apiKey = pick(init, ["apiKey"], null);
     this.extraHeaders = pick(init, ["extraHeaders"], null);
     this.extraBody = pick(init, ["extraBody"], null);
+    this.region = pick(init, ["region"], null);
+    this.profile = pick(init, ["profile"], null);
   }
 
   override toObject(): Dict {
     return omitUndefined({
       ...this,
+      inheritProviderDefaults: this.inheritProviderDefaults,
       apiKey: this.apiKey ?? undefined,
       extraHeaders: this.extraHeaders ?? undefined,
       extraBody: this.extraBody ?? undefined,
+      region: this.region ?? undefined,
+      profile: this.profile ?? undefined,
     });
   }
 }
@@ -702,6 +723,8 @@ export class WebSearchConfig extends Base {
   baseUrl = "";
   maxResults = 5;
   timeout = 30;
+  // Explicit opt-in only; fallback credentials come from their provider environment variables.
+  fallbackProviders: string[] = [];
   constructor(init: Dict = {}) {
     super();
     this.provider = pick(init, ["provider"], this.provider);
@@ -709,6 +732,8 @@ export class WebSearchConfig extends Base {
     this.baseUrl = pick(init, ["baseUrl"], "");
     this.maxResults = pick(init, ["maxResults"], 5);
     this.timeout = pick(init, ["timeout"], 30);
+    const fallbacks: unknown = pick(init, ["fallbackProviders"], []);
+    this.fallbackProviders = Array.isArray(fallbacks) ? fallbacks.filter((value): value is string => typeof value === "string") : [];
   }
 }
 
@@ -795,6 +820,7 @@ export class ExecToolConfig extends Base {
   timeout = 60;
   pathAppend = "";
   sandbox = "";
+  // Additional parent variables beyond the platform and selected runtime defaults.
   allowedEnvKeys: string[] = [];
   allowPatterns: string[] = [];
   denyPatterns: string[] = [];
@@ -1169,6 +1195,7 @@ export class FileMemoryConfig extends Base {
 
 export class Config extends Base {
   app: Dict;
+  agentHooks: string[];
   agents: AgentsConfig;
   providers: ProvidersConfig;
   channels: ChannelsConfig;
@@ -1209,6 +1236,7 @@ export class Config extends Base {
     if (appUserId) {
       this.app.userId = appUserId;
     }
+    this.agentHooks = assertStringArray("agentHooks", pick(init, ["agentHooks"], []));
     this.agents =
       init.agents instanceof AgentsConfig ? init.agents : new AgentsConfig(init.agents ?? {});
     this.providers =
@@ -1299,6 +1327,7 @@ export class Config extends Base {
   private validateModelCatalog(): void {
     const textProtocols = new Set<ModelEndpointProtocol>([
       "openai-chat-completions", "openai-responses", "anthropic-messages", "gemini-generate-content", "memmy-account",
+      "bedrock-converse",
     ]);
     const protocolsByCapability: Readonly<Record<ModelCapability, ReadonlySet<ModelEndpointProtocol>>> = {
       agent: textProtocols,
@@ -1431,7 +1460,10 @@ export class Config extends Base {
     model: string | null = null,
     opts: { preset?: ModelPresetConfig | null } = {},
   ): string | null {
-    return this.getProvider(model, opts)?.apiKey ?? null;
+    const preset = opts.preset ?? this.resolvePreset();
+    const provider = this.getProvider(model, { preset });
+    const endpoint = provider?.endpoints[preset.endpoint];
+    return endpoint?.inheritProviderDefaults === false ? endpoint.apiKey || null : provider?.apiKey ?? null;
   }
 
   getApiBase(
@@ -1457,6 +1489,7 @@ export class Config extends Base {
     delete this.app.user_id;
     this.memmyMemory.userId = appUserId ?? this.memmyMemory.userId ?? "local-user";
     const data: Dict = {
+      agentHooks: this.agentHooks,
       agents: this.agents,
       providers: this.providers,
       channels: this.channels,

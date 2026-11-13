@@ -262,6 +262,7 @@ describe("openclaw skill target", () => {
     expect(skillFile).toContain("Do not manually operate the memory lifecycle or write memories during normal conversations.");
     expect(skillFile).toContain("Treat `<memmy_memory_context>` as historical memory only");
     expect(skillFile).toContain('memmy-memory search "query text" --source openclaw');
+    expect(skillFile).toContain('memmy-memory project search "query text" --source openclaw --session-id "$SESSION_ID"');
     expect(skillFile).toContain('memmy-memory get "$MEMORY_ID" --source openclaw');
     expect(skillFile).not.toContain("memmy-memory add");
     expect(skillFile).not.toContain("memmy_search");

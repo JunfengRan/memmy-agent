@@ -640,6 +640,17 @@ describe("memory LLM thinking configuration", () => {
       thinking: { type: "adaptive" },
       output_config: { effort: "medium" }
     });
+
+    fetchMock.mockClear();
+    await createLlmClient(llmConfig({
+      provider: "anthropic",
+      endpoint: "https://api.anthropic.com/v1/messages",
+      model: "claude-haiku-5-5"
+    })).complete([{ role: "user", content: "filter" }], {
+      operation: "retrieval.filter",
+      thinkingMode: "disabled"
+    });
+    expect(requestBody(fetchMock)).not.toHaveProperty("temperature");
   });
 
   it("maps Bedrock manual/adaptive controls and host per-call overrides", async () => {

@@ -1,10 +1,18 @@
 /** Memmy local API contract. */
 import { z } from "zod";
+import { ModelThinkingConfigSchema } from "./model-thinking-levels.js";
+import { PluginCapabilityEventPayloadSchema } from "./plugin.js";
+export * from "@memmy/agent-source-core/scan-state";
+
+export const ScanVersionSchema = z.object({ generation: z.number().int().nonnegative(), sequence: z.number().int().nonnegative() });
+export const ScanLifecycleSchema = z.enum(["idle", "running", "paused", "completed", "failed", "cancelled"]);
+export const ScanControlInputSchema = z.object({ expectedExecution: z.object({ jobId: z.string().min(1), attemptId: z.string().optional() }).optional(), expectedVersion: ScanVersionSchema.optional() });
 import { normalizeOutputLanguage } from "./output-language.js";
 
 export { normalizeOutputLanguage } from "./output-language.js";
 
 export * from "./model-catalog-resolver.js";
+export * from "./model-thinking-levels.js";
 
 export * from "./memory-runtime.js";
 export * from "./memory-canonical-json.js";
@@ -13,6 +21,7 @@ export * from "./memory-l3-world-model.js";
 export * from "./endpoints.js";
 export * from "./cloud-service.js";
 export * from "./desktop-runtime-manifest.js";
+export * from "./plugin.js";
 export * from "./computer-use-surface.js";
 export * from "./browser-profile-control.js";
 export * from "./embedded-browser-control.js";
@@ -26,6 +35,8 @@ export * from "./browser-task-site-permission.js";
 export * from "./browser-use-site-policy.js";
 export * from "./browser-cdp-readonly.js";
 export * from "./browser-cdp-write.js";
+export * from "./project-instructions.js";
+export * from "./collab-instructions.js";
 
 export const MANAGED_AGENT_DISCOVERY_PENDING_DATA_PATH = "memmy-agent://history-discovery-pending";
 
@@ -454,10 +465,14 @@ export const AgentSourceScanInputSchema = z.preprocess(
     (value) => value ?? {},
     z.object({
         sourceId: z.string().min(1).optional(),
-        mode: AgentSourceScanModeSchema.optional()
+        mode: AgentSourceScanModeSchema.optional(),
+        expectedExecution: ScanControlInputSchema.shape.expectedExecution,
+        expectedVersion: ScanVersionSchema.optional()
     }).transform((input) => ({
         sourceId: input.sourceId ?? "all",
-        ...(input.mode ? { mode: input.mode } : {})
+        ...(input.mode ? { mode: input.mode } : {}),
+        ...(input.expectedExecution ? { expectedExecution: input.expectedExecution } : {}),
+        ...(input.expectedVersion ? { expectedVersion: input.expectedVersion } : {})
     }))
 );
 export type AgentSourceScanInput = z.infer<typeof AgentSourceScanInputSchema>;
@@ -515,11 +530,21 @@ export type OnboardingInsightReportStreamEvent = z.infer<typeof OnboardingInsigh
 
 /** Schema for agent source scan job response. */
 export const AgentSourceScanJobResponseSchema = z.object({
+    version: ScanVersionSchema.optional(),
+    status: ScanLifecycleSchema.optional(),
+    attemptId: z.string().min(1).optional(),
+    attemptStartedAt: z.string().optional(),
     jobId: z.string().min(1)
 });
 export type AgentSourceScanJobResponse = z.infer<typeof AgentSourceScanJobResponseSchema>;
 
 export const AgentSourceScanProgressPayloadSchema = z.object({
+    requestedSourceId: z.string().min(1).optional(),
+    mode: AgentSourceScanModeSchema.optional(),
+    version: ScanVersionSchema.optional(),
+    status: ScanLifecycleSchema.optional(),
+    attemptId: z.string().min(1).optional(),
+    attemptStartedAt: z.string().optional(),
     jobId: z.string().min(1),
     sourceId: z.string().min(1),
     phase: ScanPhaseSchema,
@@ -529,10 +554,24 @@ export const AgentSourceScanProgressPayloadSchema = z.object({
 });
 export type AgentSourceScanProgressPayload = z.infer<typeof AgentSourceScanProgressPayloadSchema>;
 
+export const AgentSourceScanUnavailableSchema = z.object({
+    code: z.enum(["memory_scan_upgrade_required", "memory_layer_unavailable"]),
+    message: z.string()
+});
+export type AgentSourceScanUnavailable = z.infer<typeof AgentSourceScanUnavailableSchema>;
+
 export const AgentSourceScanStatusResponseSchema = z.object({
+    version: ScanVersionSchema.optional(),
+    status: ScanLifecycleSchema.optional(),
+    unavailable: AgentSourceScanUnavailableSchema.optional(),
     active: z.boolean(),
     progress: AgentSourceScanProgressPayloadSchema.nullable(),
+    execution: z.object({ jobId: z.string(), attemptId: z.string().optional(), attemptStartedAt: z.string().optional() }).optional(),
     completion: z.object({
+        version: ScanVersionSchema.optional(),
+        status: ScanLifecycleSchema.optional(),
+        attemptId: z.string().min(1).optional(),
+        attemptStartedAt: z.string().optional(),
         jobId: z.string().min(1),
         sourceId: z.string().min(1),
         succeeded: z.boolean(),
@@ -593,6 +632,7 @@ export type ScanResult = z.infer<typeof ScanResultSchema>;
 
 /** Schema for paged persisted scan details. */
 export const ScanResultPageSchema = z.object({
+    attemptId: z.string().optional(),
     items: z.array(z.object({
         sourceId: z.string().min(1),
         conversationId: z.string().min(1),
@@ -664,6 +704,22 @@ export const LotteryRewardAckInputSchema = z.object({
     drawId: z.string().min(1).optional()
 });
 export type LotteryRewardAckInput = z.infer<typeof LotteryRewardAckInputSchema>;
+
+/** Already-granted task Token benefit awaiting acknowledgement. */
+export const TaskTokenGiftNoticeSchema = z.discriminatedUnion("hasGift", [
+    z.object({ hasGift: z.literal(false), audience: z.enum(["new", "existing"]).optional() }),
+    z.object({
+        hasGift: z.literal(true),
+        grantId: z.string().min(1),
+        audience: z.enum(["new", "existing"]),
+        tokenAmount: z.number().int().positive(),
+        totalTokens: z.number().int().nonnegative()
+    })
+]);
+export type TaskTokenGiftNotice = z.infer<typeof TaskTokenGiftNoticeSchema>;
+
+export const TaskTokenGiftAckInputSchema = z.object({ grantId: z.string().min(1) });
+export type TaskTokenGiftAckInput = z.infer<typeof TaskTokenGiftAckInputSchema>;
 
 export const AppBootstrapResponseSchema = z.object({
     app: AppSettingsDtoSchema,
@@ -745,6 +801,13 @@ export const ModelProviderSchema = z.enum([
 ]);
 export type ModelProvider = z.infer<typeof ModelProviderSchema>;
 
+/** Connection tests accept the catalog provider custom. Role model config stays on ModelProviderSchema. */
+export const ModelConfigTestProviderSchema = z.union([
+    ModelProviderSchema,
+    z.literal("custom")
+]);
+export type ModelConfigTestProvider = z.infer<typeof ModelConfigTestProviderSchema>;
+
 export const CatalogProviderIdSchema = z.enum([
     "openai",
     "anthropic",
@@ -758,7 +821,9 @@ export const CatalogProviderIdSchema = z.enum([
     "volcengine",
     "stepfun",
     "xiaomi_mimo",
-    "memmy_account"
+    "memmy_account",
+    "bedrock",
+    "custom"
 ]);
 export type CatalogProviderId = z.infer<typeof CatalogProviderIdSchema>;
 
@@ -800,7 +865,8 @@ export const ModelEndpointProtocolSchema = z.enum([
     "dashscope-input-audio-chat",
     "openai-images",
     "dashscope-multimodal-generation",
-    "memmy-account"
+    "memmy-account",
+    "bedrock-converse"
 ]);
 export type ModelEndpointProtocol = z.infer<typeof ModelEndpointProtocolSchema>;
 
@@ -919,13 +985,18 @@ export const CatalogEndpointInputSchema = z.object({
     endpointId: z.string().trim().min(1),
     apiBase: z.string().url(),
     protocol: ModelEndpointProtocolSchema,
+    inheritProviderDefaults: z.boolean().optional(),
     apiKey: z.string().optional(),
     extraHeaders: z.record(z.string(), z.string()).optional(),
-    extraBody: z.record(z.string(), z.unknown()).optional()
+    extraBody: z.record(z.string(), z.unknown()).optional(),
+    region: z.string().trim().min(1).optional()
 });
 export type CatalogEndpointInput = z.infer<typeof CatalogEndpointInputSchema>;
 
 export const MODEL_NAME_MAX_LENGTH = 128;
+
+export const ModelInputModalitySchema = z.enum(["text", "image", "video"]);
+export type ModelInputModality = z.infer<typeof ModelInputModalitySchema>;
 
 export const TextModelItemInputSchema = z.object({
     presetId: z.string().trim().min(1).optional(),
@@ -933,7 +1004,10 @@ export const TextModelItemInputSchema = z.object({
     model: z.string().trim().min(1).max(MODEL_NAME_MAX_LENGTH),
     source: ModelSourceSchema,
     ownerAccountId: z.string().trim().min(1).optional(),
-    capabilities: z.array(ModelCapabilitySchema).min(1)
+    capabilities: z.array(ModelCapabilitySchema).min(1),
+    thinking: ModelThinkingConfigSchema.optional(),
+    custom: z.boolean().optional(),
+    inputModalities: z.array(ModelInputModalitySchema).optional()
 });
 export type TextModelItemInput = z.infer<typeof TextModelItemInputSchema>;
 
@@ -981,14 +1055,16 @@ export type ModelConfigInput = z.infer<typeof ModelConfigInputSchema>;
 
 /** Definition for model config test input. */
 export const ModelConfigTestInputSchema = z.object({
-    provider: ModelProviderSchema,
+    provider: ModelConfigTestProviderSchema,
     endpointId: z.string().trim().min(1),
     protocol: ModelEndpointProtocolSchema,
+    inheritProviderDefaults: z.boolean().optional(),
     apiBase: z.string().url(),
     modelId: z.string().min(1),
     apiKey: z.string().min(1).optional(),
     capability: ModelConfigTestCapabilitySchema.optional(),
-    secretTarget: ModelConfigTestSecretTargetSchema.optional()
+    secretTarget: ModelConfigTestSecretTargetSchema.optional(),
+    region: z.string().trim().min(1).optional()
 });
 export type ModelConfigTestInput = z.infer<typeof ModelConfigTestInputSchema>;
 
@@ -1092,9 +1168,11 @@ export const CatalogEndpointViewSchema = z.object({
     endpointId: z.string().min(1),
     apiBase: z.string().url(),
     protocol: ModelEndpointProtocolSchema,
+    inheritProviderDefaults: z.boolean().optional(),
     hasApiKey: z.boolean(),
     apiKeyMasked: z.string(),
-    apiKey: z.string().default("")
+    apiKey: z.string().default(""),
+    region: z.string().min(1).optional()
 });
 export type CatalogEndpointView = z.infer<typeof CatalogEndpointViewSchema>;
 
@@ -1107,7 +1185,10 @@ export const TextModelItemViewSchema = z.object({
     source: ModelSourceSchema,
     ownerAccountId: z.string().min(1).optional(),
     capabilities: z.array(ModelCapabilitySchema).min(1),
-    available: z.boolean()
+    available: z.boolean(),
+    thinking: ModelThinkingConfigSchema.optional(),
+    custom: z.boolean().optional(),
+    inputModalities: z.array(ModelInputModalitySchema).optional()
 });
 export type TextModelItemView = z.infer<typeof TextModelItemViewSchema>;
 
@@ -1143,6 +1224,8 @@ export type MemoryRuntimeModelSettings = z.infer<typeof MemoryRuntimeModelSettin
 
 /** Schema for model config view. */
 export const ModelConfigViewSchema = z.object({
+    /** Write-response-only aliases, resolved by the server using real credentials. */
+    endpointAliases: z.record(z.string(), z.record(z.string(), z.string())).optional(),
     configRevision: z.string().min(1),
     providers: z.array(TextModelProviderViewSchema),
     modelAssignments: ModelAssignmentsSchema,
@@ -1154,12 +1237,41 @@ export const ModelConfigViewSchema = z.object({
 export type ModelConfigView = z.infer<typeof ModelConfigViewSchema>;
 
 /** Schema for asr transcription input. */
+/**
+ * Largest audio payload a single transcription may carry, in decoded bytes.
+ *
+ * The upstream file-transcription API caps one inline audio item at 20 MiB of
+ * base64, which leaves roughly this much actual audio. An hours-long interview
+ * therefore has to be recorded at a bitrate that fits, because splitting it
+ * restarts speaker numbering and destroys the diarization.
+ */
+export const ASR_MAX_AUDIO_BYTES = 15 * 1024 * 1024;
+
+/** Base64 inflates by 4/3; the route needs headroom for that plus the JSON envelope. */
+export const ASR_MAX_REQUEST_BYTES = Math.ceil(ASR_MAX_AUDIO_BYTES * 4 / 3) + 64 * 1024;
+
 export const AsrTranscriptionInputSchema = z.object({
-    audioBase64: z.string().min(1),
+    audioBase64: z.string().min(1).max(Math.ceil(ASR_MAX_AUDIO_BYTES * 4 / 3)),
     mimeType: z.string().min(1),
-    durationMs: z.number().int().nonnegative().optional()
+    durationMs: z.number().int().nonnegative().optional(),
+    /** Requests speaker separation. Honoured only by upstream models that support it. */
+    diarization: z.boolean().optional()
 });
 export type AsrTranscriptionInput = z.infer<typeof AsrTranscriptionInputSchema>;
+
+/**
+ * One diarized utterance.
+ *
+ * `speakerId` is scoped to a single transcription: the same index in two
+ * transcriptions does not denote the same person.
+ */
+export const AsrTranscriptSegmentSchema = z.object({
+    text: z.string(),
+    speakerId: z.number().int().nonnegative().optional(),
+    startMs: z.number().int().nonnegative().optional(),
+    endMs: z.number().int().nonnegative().optional()
+});
+export type AsrTranscriptSegment = z.infer<typeof AsrTranscriptSegmentSchema>;
 
 /** Schema for asr transcription response. */
 export const AsrTranscriptionResponseSchema = z.object({
@@ -1167,9 +1279,41 @@ export const AsrTranscriptionResponseSchema = z.object({
     modelId: z.string().trim().min(1),
     provider: CatalogProviderIdSchema,
     source: z.enum(["account", "byok"]),
-    transcribedAt: z.string().datetime()
+    transcribedAt: z.string().datetime(),
+    /** Present only when diarization was requested and the upstream model returned it. */
+    segments: z.array(AsrTranscriptSegmentSchema).optional()
 });
 export type AsrTranscriptionResponse = z.infer<typeof AsrTranscriptionResponseSchema>;
+
+/**
+ * Events on the live ASR stream (`/api/asr/stream`).
+ *
+ * The renderer pushes raw 16 kHz mono PCM as binary frames and receives these
+ * JSON text frames back. `partial` is a provisional reading of the sentence
+ * being spoken; a later frame with the same `sentenceId` replaces it, and
+ * `sentence` is the final text for that id. Speaker attribution is never
+ * present here: the realtime model does not separate speakers, so labels come
+ * only from the diarized pass over the finished recording.
+ */
+export const AsrStreamEventSchema = z.discriminatedUnion("type", [
+    z.object({
+        type: z.enum(["partial", "sentence"]),
+        sentenceId: z.number().int().nonnegative(),
+        text: z.string(),
+        beginMs: z.number().int().nonnegative(),
+        endMs: z.number().int().nonnegative().optional()
+    }),
+    z.object({ type: z.literal("finished") }),
+    z.object({ type: z.literal("error"), message: z.string() })
+]);
+export type AsrStreamEvent = z.infer<typeof AsrStreamEventSchema>;
+
+/** Control frames the renderer sends on the live ASR stream. */
+export const AsrStreamControlSchema = z.discriminatedUnion("type", [
+    z.object({ type: z.literal("start"), sampleRate: z.number().int().positive().optional() }),
+    z.object({ type: z.literal("finish") })
+]);
+export type AsrStreamControl = z.infer<typeof AsrStreamControlSchema>;
 
 export const AccountChannelSchema = z.enum(["email", "phone"]);
 export type AccountChannel = z.infer<typeof AccountChannelSchema>;
@@ -1642,9 +1786,30 @@ export const ScanCompletedSseEventSchema = z.object({
     type: z.literal("agent_source.scan_completed"),
     timestamp: z.string().datetime(),
     payload: z.object({
+        version: ScanVersionSchema.optional(),
+        status: ScanLifecycleSchema.optional(),
+        attemptId: z.string().min(1).optional(),
+        attemptStartedAt: z.string().optional(),
+        succeeded: z.boolean().optional(),
         jobId: z.string().min(1),
         sourceId: z.string().min(1),
         results: z.array(ScanResultSchema)
+    })
+});
+
+export const PluginCapabilitySseEventSchema = z.object({
+    id: z.string(),
+    type: z.literal("plugin.capability_event"),
+    timestamp: z.string().datetime(),
+    payload: PluginCapabilityEventPayloadSchema
+});
+
+export const PluginCapabilitySnapshotSseEventSchema = z.object({
+    id: z.string(),
+    type: z.literal("plugin.capability_snapshot"),
+    timestamp: z.string().datetime(),
+    payload: z.object({
+        calls: z.array(PluginCapabilityEventPayloadSchema.pick({ pluginId: true, capabilityId: true, callId: true, conversationId: true }))
     })
 });
 
@@ -1652,7 +1817,9 @@ export const SseEventSchema = z.discriminatedUnion("type", [
     ConnectedSseEventSchema,
     HeartbeatSseEventSchema,
     ScanProgressSseEventSchema,
-    ScanCompletedSseEventSchema
+    ScanCompletedSseEventSchema,
+    PluginCapabilitySseEventSchema,
+    PluginCapabilitySnapshotSseEventSchema
 ]);
 export type SseEvent = z.infer<typeof SseEventSchema>;
 
@@ -1695,3 +1862,37 @@ export const TokenQuotaEligibilitySchema = z.object({
 export type TokenQuotaEligibility = z.infer<typeof TokenQuotaEligibilitySchema>;
 export * from './desktop-screen-capture.js';
 export * from './computer-use-onboarding.js';
+
+/** Memory owns scan execution; desktop translates this state into its existing events. */
+export const MemoryAgentSourceScanStateSchema = z.object({
+    version: ScanVersionSchema.optional(),
+    status: ScanLifecycleSchema.optional(),
+    running: z.boolean(),
+    attemptId: z.string().optional(),
+    jobId: z.string().nullable(),
+    sourceId: z.string().nullable(),
+    mode: AgentSourceScanModeSchema.nullable(),
+    progress: AgentSourceScanProgressPayloadSchema.omit({ jobId: true, attemptId: true, attemptStartedAt: true }).extend({
+        phase: z.enum(["discover", "read", "redact", "emit", "scan", "prepare", "add", "summarize", "done", "stopped"])
+    }).nullable(),
+    startedAt: z.string().nullable(),
+    completedAt: z.string().nullable(),
+    error: z.string().nullable(),
+    results: z.array(ScanResultSchema).optional()
+});
+export type MemoryAgentSourceScanState = z.infer<typeof MemoryAgentSourceScanStateSchema>;
+export const MemoryScanControlResponseSchema = z.object({ ok: z.literal(true), outcome: z.enum(["applied", "already_terminal", "conflict"]).optional(), snapshot: MemoryAgentSourceScanStateSchema.optional() });
+export type MemoryScanControlResponse = z.infer<typeof MemoryScanControlResponseSchema>;
+export const AgentSourceScanControlResponseSchema = z.object({ ok: z.literal(true), outcome: z.enum(["applied", "already_terminal", "conflict"]).optional(), snapshot: AgentSourceScanStatusResponseSchema.optional() });
+export type AgentSourceScanControlResponse = z.infer<typeof AgentSourceScanControlResponseSchema>;
+export const MemoryAgentSourceListSchema = z.object({
+    executorAvailable: z.literal(true),
+    sources: z.array(AgentSourceViewSchema)
+});
+export type MemoryAgentSourceList = z.infer<typeof MemoryAgentSourceListSchema>;
+
+/** A retry keeps its job storage but has a new execution identity. */
+export function agentSourceScanExecutionKey(scan: { jobId: string; attemptId?: string }): string {
+    return scan.attemptId ? JSON.stringify([scan.jobId, scan.attemptId]) : scan.jobId;
+}
+export * from "./project-memory.js";

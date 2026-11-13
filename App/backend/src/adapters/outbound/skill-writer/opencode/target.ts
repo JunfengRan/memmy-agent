@@ -1,10 +1,16 @@
 /** Target module. */
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { resolveOpencodeConfigDirectory } from "../../agent-paths.js";
 import { readMemmyMemoryServiceConfig } from "../memmy-runtime-config.js";
-import { removeMemmySkillDirectory, replaceMemmySkillDirectory } from "../skill-directory.js";
+import {
+  removeMemmyProjectSkillDirectory,
+  removeMemmySkillDirectory,
+  replaceMemmyProjectSkillDirectory,
+  replaceMemmySkillDirectory
+} from "../skill-directory.js";
 import { renderMemmyOpencodePlugin, renderMemmyOpencodeResumeCommand } from "../templates/memmy-opencode-plugin.js";
 import { renderMemmyPluginSkillManifest } from "../templates/memmy-plugin.js";
 import { renderMemmySkillBootstrapManifest } from "../templates/memmy-skill-directory.js";
@@ -18,6 +24,9 @@ const PLUGIN_DIRECTORY_NAME = "plugins";
 const PLUGIN_FILE_NAME = "memmy-memory.js";
 const PLUGIN_CONFIG_FILE_NAME = "memmy-memory-config.json";
 const WORKSPACE_BRIDGE_FILE_NAME = "memmy-workspace-bridge.mjs";
+// Bump when the OpenCode bridge contract changes. Backend/Memory bundles have
+// different bytes, so their valid installations must share a logical revision.
+const OPENCODE_BRIDGE_REVISION = "v2-3";
 const COMMAND_DIRECTORY_NAME = "commands";
 const RESUME_COMMAND_FILE_NAME = "memmy-resume.md";
 const START_MARKER = "<!-- memmy:start v=1 -->";
@@ -50,6 +59,7 @@ export function createOpencodeSkillTarget(deps: CreateOpencodeSkillTargetDeps = 
       const existing = removeCliMarkerBlock(await readTextFile(filePath));
       await writeFileAtomically(filePath, upsertMarkerBlock(existing, renderMemmySkillBootstrapManifest(manifest)));
       await replaceMemmySkillDirectory(rootDirectory, manifest);
+      await replaceMemmyProjectSkillDirectory(rootDirectory);
     },
 
     async uninstall(_targetId) {
@@ -64,10 +74,24 @@ export function createOpencodeSkillTarget(deps: CreateOpencodeSkillTargetDeps = 
         await writeFileAtomically(filePath, removeMarkerBlock(existing));
       }
       await removeMemmySkillDirectory(root);
+      await removeMemmyProjectSkillDirectory(root);
     },
 
     async isInstalled(_targetId) {
       return (await readTextFile(join(rootDirectory, TARGET_FILE_NAME))).includes(START_MARKER);
+    },
+
+    async isInstalledHookCurrent() {
+      const expected = await pluginAssets();
+      const config = await readPluginConfig(join(rootDirectory, PLUGIN_DIRECTORY_NAME, PLUGIN_CONFIG_FILE_NAME));
+      if (config.plugin_revision !== pluginRevision(expected)) return false;
+      const installed: Array<[string, string]> = [];
+      for (const [path, content] of expected) {
+        const actual = await readTextFile(join(rootDirectory, path));
+        if (!actual || (basename(path) !== WORKSPACE_BRIDGE_FILE_NAME && actual !== content)) return false;
+        installed.push([path, actual]);
+      }
+      return config.plugin_integrity === assetRevision(installed);
     },
 
     async installPlugin(_targetId) {
@@ -76,19 +100,17 @@ export function createOpencodeSkillTarget(deps: CreateOpencodeSkillTargetDeps = 
       const commandDirectory = join(rootDirectory, COMMAND_DIRECTORY_NAME);
       await mkdir(pluginDirectory, { recursive: true });
       await mkdir(commandDirectory, { recursive: true });
-      await writeFileAtomically(
-        join(pluginDirectory, PLUGIN_CONFIG_FILE_NAME),
-        `${JSON.stringify({
-          memmy_config_path: memmyConfigPath,
-          ...(await readMemmyMemoryServiceConfig(memmyConfigPath))
-        }, null, 2)}\n`
-      );
-      await writeFileAtomically(join(pluginDirectory, PLUGIN_FILE_NAME), renderMemmyOpencodePlugin());
-      await writeFileAtomically(
-        join(pluginDirectory, WORKSPACE_BRIDGE_FILE_NAME),
-        await loadMemmyWorkspaceBridgeRuntimeAsset()
-      );
-      await writeFileAtomically(join(commandDirectory, RESUME_COMMAND_FILE_NAME), renderMemmyOpencodeResumeCommand());
+      const configPath = join(pluginDirectory, PLUGIN_CONFIG_FILE_NAME);
+      // Parse before writing anything. A malformed existing config must not be
+      // silently replaced with empty credentials or defaults.
+      const existingConfig = await readPluginConfig(configPath);
+      const config = {
+        memmy_config_path: memmyConfigPath,
+        ...(await readMemmyMemoryServiceConfig(memmyConfigPath)),
+        ...existingConfig
+      };
+      const assets = await pluginAssets();
+      for (const [path, content] of assets) await writeFileAtomically(join(rootDirectory, path), content);
 
       const manifest = renderMemmyPluginSkillManifest(_targetId);
       const filePath = join(rootDirectory, TARGET_FILE_NAME);
@@ -100,6 +122,11 @@ export function createOpencodeSkillTarget(deps: CreateOpencodeSkillTargetDeps = 
         )
       );
       await replaceMemmySkillDirectory(rootDirectory, manifest);
+      await replaceMemmyProjectSkillDirectory(rootDirectory);
+      // Publish the revision only after every managed file was installed.
+      await writeFileAtomically(configPath, `${JSON.stringify({ ...config,
+        plugin_revision: pluginRevision(assets), plugin_integrity: assetRevision(assets)
+      }, null, 2)}\n`);
     },
 
     async uninstallPlugin(_targetId) {
@@ -118,8 +145,33 @@ export function createOpencodeSkillTarget(deps: CreateOpencodeSkillTargetDeps = 
         await writeFileAtomically(filePath, removeMarkerBlock(existing));
       }
       await removeMemmySkillDirectory(root);
+      await removeMemmyProjectSkillDirectory(root);
     }
   };
+}
+
+async function pluginAssets(): Promise<Array<[string, string]>> {
+  return [
+    [join(PLUGIN_DIRECTORY_NAME, PLUGIN_FILE_NAME), renderMemmyOpencodePlugin()],
+    [join(PLUGIN_DIRECTORY_NAME, WORKSPACE_BRIDGE_FILE_NAME), await loadMemmyWorkspaceBridgeRuntimeAsset()],
+    [join(COMMAND_DIRECTORY_NAME, RESUME_COMMAND_FILE_NAME), renderMemmyOpencodeResumeCommand()]
+  ];
+}
+
+function assetRevision(assets: Array<[string, string]>): string {
+  return createHash("sha256").update(JSON.stringify(assets.map(([, content]) => content))).digest("hex");
+}
+
+function pluginRevision(assets: Array<[string, string]>): string {
+  return OPENCODE_BRIDGE_REVISION + ":" + assetRevision(assets.filter(([path]) => basename(path) !== WORKSPACE_BRIDGE_FILE_NAME));
+}
+
+async function readPluginConfig(path: string): Promise<Record<string, unknown>> {
+  const content = await readTextFile(path);
+  if (!content.trim()) return {};
+  const value: unknown = JSON.parse(content);
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid Memmy OpenCode plugin config");
+  return value as Record<string, unknown>;
 }
 
 async function readTextFile(filePath: string): Promise<string> {

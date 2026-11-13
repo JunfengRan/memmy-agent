@@ -1,10 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
-import {
-  DEFAULT_MEMMY_CONFIG,
-  type LlmClient,
-  type LlmCompletionOptions,
-  type LlmMessage
-} from "../../../src/index.js";
+import { assignedEpisodeId, settleCaptureAssignments } from "../../fixtures/memory-service-fixture.js";
+import { LEGACY_TEST_CONFIG } from "../../fixtures/memory-service-fixture.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { type LlmClient, type LlmCompletionOptions, type LlmMessage } from "../../../src/index.js";
+import { DEFAULT_MEMMY_CONFIG } from "../../../src/index.js";
 import {
   createCapturingEmbedder,
   createMemoryServiceFixture,
@@ -16,7 +14,7 @@ const {
   createTestService
 } = createMemoryServiceFixture();
 
-afterEach(cleanup);
+afterEach(() => { vi.useRealTimers(); cleanup(); });
 
 function createSpanBigTurnLlm(
   calls: Array<{ messages: LlmMessage[]; options: LlmCompletionOptions }>,
@@ -48,7 +46,7 @@ function createSpanBigTurnLlm(
   let spanCallIndex = 0;
   return {
     config: {
-      ...DEFAULT_MEMMY_CONFIG.summary,
+      ...LEGACY_TEST_CONFIG.summary,
       provider: "host",
       endpoint: "http://127.0.0.1/span-big-turn",
       model: "span-big-turn"
@@ -63,6 +61,7 @@ function createSpanBigTurnLlm(
       messages: LlmMessage[],
       options: LlmCompletionOptions
     ): Promise<T> {
+      if (options.operation === "episode.select.v1") return { episodeId: null, title: "Test task", summary: "Test task summary" } as unknown as T;
       calls.push({ messages, options });
       if (options.operation === "capture.reflection.batch.v13") {
         const payload = JSON.parse(messages.at(-1)?.content ?? "{}") as {
@@ -117,17 +116,17 @@ function createSpanBigTurnLlm(
 }
 
 describe("MemoryService / evolution / span big turn", () => {
-  it("stores and recalls subtask spans for a positively rewarded complex turn", async () => {
+  it("stores, recalls, and deletes subtask spans with their task", async () => {
     const calls: Array<{ messages: LlmMessage[]; options: LlmCompletionOptions }> = [];
     const embeddedTexts: string[] = [];
     const embeddedRoles: Array<"query" | "document" | undefined> = [];
     const llm = createSpanBigTurnLlm(calls);
     const config = {
-      ...DEFAULT_MEMMY_CONFIG,
+      ...LEGACY_TEST_CONFIG,
       algorithm: {
-        ...DEFAULT_MEMMY_CONFIG.algorithm,
+        ...LEGACY_TEST_CONFIG.algorithm,
         retrieval: {
-          ...DEFAULT_MEMMY_CONFIG.algorithm.retrieval,
+          ...LEGACY_TEST_CONFIG.algorithm.retrieval,
           relativeThresholdFloor: 0,
           smartSeed: false,
           llmFilterEnabled: false
@@ -171,14 +170,14 @@ describe("MemoryService / evolution / span big turn", () => {
           }
         : { ok: true, index }
     }));
-    const completed = service.completeTurn("span-big-turn", {
+    const completed = (await service.completeTurn("span-big-turn", {
       namespace,
       sessionId: session.sessionId,
       query: "修复项目构建失败并完成测试验证",
       answer: "已经定位依赖冲突，完成修复并通过构建与测试。",
       toolCalls,
       toolResults
-    });
+    }));
     const invalidToolCall = `invalid-${"x".repeat(140)}`;
     const rawToolCalls: unknown[] = [...toolCalls];
     rawToolCalls[5] = invalidToolCall;
@@ -189,16 +188,19 @@ describe("MemoryService / evolution / span big turn", () => {
     ).run(JSON.stringify(rawToolCalls), completed.rawTurnId);
 
     service.closeSession(session.sessionId);
+    await settleCaptureAssignments(service);
     await service.feedback({
       namespace,
       sessionId: session.sessionId,
-      episodeId: completed.episodeId,
+      episodeId: assignedEpisodeId(service, completed),
       l1MemoryId: completed.l1MemoryId,
       channel: "explicit",
       polarity: "positive",
       magnitude: 1,
       rationale: "复杂任务已经正确完成"
     });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 31_000);
     await runWorkerRounds(service, 8);
 
     const spanCall = calls.find((call) => call.options.operation === "span.big_turn.v1");
@@ -321,6 +323,136 @@ describe("MemoryService / evolution / span big turn", () => {
       toolCalls: toolCalls.slice(0, 4).map(({ id, name, input }) => ({ id, name, input }))
     });
     expect(completed.l1MemoryIds).toHaveLength(1);
+
+    const deleted = service.deletePanelTask(assignedEpisodeId(service, completed), { namespace });
+    expect(new Set(deleted.deletedMemoryIds)).toEqual(new Set([
+      completed.l1MemoryId,
+      ...storedSpanIds
+    ]));
+    expect(service.panelTasks({ namespace, page: 1 }).tasks).toHaveLength(0);
+    expect(service.panelItems({ namespace, layer: "L1" }).items).toHaveLength(0);
+    expect(() => service.getMemory(firstSpanId!, { namespace })).toThrow(/not found/i);
+    db.close();
+  });
+
+  it.each([
+    { name: "after the parent trace was deleted", deleteParent: true, splitAgain: false },
+    { name: "after a second successful split with different ranges", deleteParent: false, splitAgain: true },
+    { name: "after both re-splitting and deleting the parent", deleteParent: true, splitAgain: true }
+  ])("deletes all task spans $name", async ({ deleteParent, splitAgain }) => {
+    const calls: Array<{ messages: LlmMessage[]; options: LlmCompletionOptions }> = [];
+    const firstSplit = {
+      spans: [
+        { start: 0, end: 3, spanGoal: "分析构建问题", summary: "检查构建日志" },
+        { start: 4, end: 7, spanGoal: "修改构建配置", summary: "修复依赖冲突" },
+        { start: 8, end: 10, spanGoal: "验证构建结果", summary: "执行测试验证" }
+      ]
+    };
+    const secondSplit = {
+      spans: [
+        { start: 0, end: 6, spanGoal: "分析并修改构建配置", summary: "定位并修复问题" },
+        { start: 7, end: 10, spanGoal: "重新验证构建结果", summary: "完成测试验证" }
+      ]
+    };
+    const llm = createSpanBigTurnLlm(calls, [firstSplit, secondSplit, firstSplit]);
+    const config = {
+      ...LEGACY_TEST_CONFIG,
+      algorithm: {
+        ...LEGACY_TEST_CONFIG.algorithm,
+        retrieval: {
+          ...LEGACY_TEST_CONFIG.algorithm.retrieval,
+          relativeThresholdFloor: 0,
+          smartSeed: false,
+          llmFilterEnabled: false
+        }
+      }
+    };
+    const { db, service } = createTestService({ config, llm, skillLlm: llm });
+    const namespace = { source: "codex", profileId: "cascade", userId: "cascade-review" };
+    async function createTask(requestId: string) {
+      const session = service.openSession({ namespace });
+      const toolCalls = Array.from({ length: 11 }, (_, index) => ({
+        id: `${requestId}-${index}`, name: "task_step", input: { index }
+      }));
+      const completed = await service.completeTurn(requestId, {
+        namespace, sessionId: session.sessionId,
+        query: "分析构建问题、修改配置并验证结果",
+        answer: "已完成分析、修复和验证。",
+        toolCalls,
+        toolResults: toolCalls.map((call) => ({
+          toolCallId: call.id, name: call.name, output: { ok: true }
+        }))
+      });
+      service.closeSession(session.sessionId);
+      return { ...completed, sessionId: session.sessionId };
+    }
+    async function reward(task: Awaited<ReturnType<typeof createTask>>) {
+      await service.feedback({
+        namespace, sessionId: task.sessionId, episodeId: task.episodeId,
+        l1MemoryId: task.l1MemoryId, channel: "explicit", polarity: "positive",
+        magnitude: 1, rationale: "构建修复正确"
+      });
+      vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 31_000);
+    await runWorkerRounds(service, 8);
+    }
+    function spanIds(episodeId: string): string[] {
+      return (db.db.prepare(`SELECT id FROM memories
+        WHERE json_extract(properties_json, '$.internal_info.memory_kind') = 'span'
+          AND json_extract(properties_json, '$.internal_info.span.episode_id') = ?
+          AND deleted_at IS NULL`).all(episodeId) as Array<{ id: string }>).map((row) => row.id);
+    }
+    const task = await createTask("cascade-target");
+    await reward(task);
+    const originalSpans = spanIds(assignedEpisodeId(service, task));
+    expect(originalSpans).toHaveLength(3);
+    if (splitAgain) {
+      await reward(task);
+      expect(calls.filter((call) => call.options.operation === "span.big_turn.v1")).toHaveLength(2);
+      const parent = db.db.prepare("SELECT properties_json FROM memories WHERE id = ?")
+        .get(task.l1MemoryId) as { properties_json: string };
+      const latestIds = JSON.parse(parent.properties_json).internal_info.trace.span_ids as string[];
+      expect(latestIds).toHaveLength(2);
+      expect(latestIds.every((id) => !originalSpans.includes(id))).toBe(true);
+    }
+    const targetIds = spanIds(assignedEpisodeId(service, task));
+    expect(targetIds).toHaveLength(splitAgain ? 5 : 3);
+    const control = await createTask("cascade-control");
+    await reward(control);
+    const controlIds = spanIds(assignedEpisodeId(service, control));
+    expect(controlIds.length).toBeGreaterThan(0);
+    const controlBefore = db.db.prepare("SELECT * FROM memories WHERE id IN (SELECT value FROM json_each(?))")
+      .all(JSON.stringify(controlIds));
+    const countVectors = (ids: string[]) => (db.db.prepare(
+      "SELECT count(*) AS count FROM memory_vector_entries WHERE memory_id IN (SELECT value FROM json_each(?))"
+    ).get(JSON.stringify(ids)) as { count: number }).count;
+    expect(countVectors(targetIds)).toBeGreaterThan(0);
+    const controlVectorCount = countVectors(controlIds);
+    if (deleteParent) service.deleteMemory(task.l1MemoryId!, { namespace });
+
+    const deleted = service.deletePanelTask(assignedEpisodeId(service, task), { namespace });
+    expect(new Set(deleted.deletedMemoryIds)).toEqual(new Set([
+      ...targetIds, ...(deleteParent ? [] : [task.l1MemoryId])
+    ]));
+    expect(db.db.prepare("SELECT id FROM episodes WHERE id = ?").get(task.episodeId)).toBeUndefined();
+    expect(db.db.prepare("SELECT id FROM raw_turns WHERE id = ?").get(task.rawTurnId)).toBeUndefined();
+    for (const id of [...targetIds, task.l1MemoryId!]) {
+      expect(db.db.prepare("SELECT status, deleted_at FROM memories WHERE id = ?").get(id))
+        .toEqual({ status: "deleted", deleted_at: expect.any(String) });
+      expect(() => service.getMemory(id, { namespace })).toThrow(/not found/i);
+      expect(db.db.prepare("SELECT count(*) AS count FROM audit_logs WHERE action = 'delete' AND target_id = ?").get(id))
+        .toEqual({ count: 1 });
+    }
+    expect(countVectors(targetIds)).toBe(0);
+    const remaining = service.panelItems({ namespace, layer: "L1" }).items.map((item) => item.id);
+    expect(targetIds.every((id) => !remaining.includes(id))).toBe(true);
+    const recalled = await service.search({ namespace, query: "分析构建问题 修改配置 验证结果", layers: ["L1"] });
+    expect(recalled.hits.some((hit) => targetIds.includes(hit.id) || hit.id === task.l1MemoryId)).toBe(false);
+    expect(db.db.prepare("SELECT * FROM memories WHERE id IN (SELECT value FROM json_each(?))")
+      .all(JSON.stringify(controlIds))).toEqual(controlBefore);
+    expect(countVectors(controlIds)).toBe(controlVectorCount);
+    for (const id of controlIds) expect(() => service.getMemory(id, { namespace })).not.toThrow();
+    expect(service.panelTasks({ namespace, page: 1 }).tasks.map((item) => item.id)).toContain(assignedEpisodeId(service, control));
     db.close();
   });
 
@@ -343,7 +475,7 @@ describe("MemoryService / evolution / span big turn", () => {
       name: "apply_migration_step",
       input: { index }
     }));
-    const completed = service.completeTurn("span-big-turn-no-split", {
+    const completed = (await service.completeTurn("span-big-turn-no-split", {
       namespace,
       sessionId: session.sessionId,
       query: "完成这一个数据库迁移目标",
@@ -354,19 +486,22 @@ describe("MemoryService / evolution / span big turn", () => {
         name: call.name,
         output: { ok: true, index }
       }))
-    });
+    }));
 
     service.closeSession(session.sessionId);
+    await settleCaptureAssignments(service);
     await service.feedback({
       namespace,
       sessionId: session.sessionId,
-      episodeId: completed.episodeId,
+      episodeId: assignedEpisodeId(service, completed),
       l1MemoryId: completed.l1MemoryId,
       channel: "explicit",
       polarity: "positive",
       magnitude: 1,
       rationale: "迁移结果正确"
     });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 31_000);
     await runWorkerRounds(service, 8);
 
     expect(calls.filter((call) => call.options.operation === "span.big_turn.v1")).toHaveLength(1);
@@ -377,6 +512,7 @@ describe("MemoryService / evolution / span big turn", () => {
   });
 
   it("stores only the successful model result after a failed attempt", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
     const calls: Array<{ messages: LlmMessage[]; options: LlmCompletionOptions }> = [];
     const llm = createSpanBigTurnLlm(calls, [
       {
@@ -409,7 +545,7 @@ describe("MemoryService / evolution / span big turn", () => {
       name: "task_step",
       input: { index }
     }));
-    const completed = service.completeTurn("span-big-turn-replace", {
+    const completed = (await service.completeTurn("span-big-turn-replace", {
       namespace,
       sessionId: session.sessionId,
       query: "完成需要多步处理的复杂任务",
@@ -420,19 +556,28 @@ describe("MemoryService / evolution / span big turn", () => {
         name: call.name,
         output: { ok: true, index }
       }))
-    });
+    }));
     service.closeSession(session.sessionId);
 
+    await settleCaptureAssignments(service);
     await service.feedback({
       namespace,
       sessionId: session.sessionId,
-      episodeId: completed.episodeId,
+      episodeId: assignedEpisodeId(service, completed),
       l1MemoryId: completed.l1MemoryId,
       channel: "explicit",
       polarity: "positive",
       magnitude: 1,
       rationale: "任务结果正确"
     });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 31_000);
+    await runWorkerRounds(service, 8);
+
+    const retry = db.db.prepare(`SELECT available_at FROM evolution_jobs
+      WHERE job_type = 'span_big_turn' AND status = 'failed'`).get() as { available_at: string };
+    expect(Date.parse(retry.available_at)).toBeGreaterThan(Date.now());
+    vi.setSystemTime(Date.parse(retry.available_at));
     await runWorkerRounds(service, 8);
 
     const spans = service.panelItems({ namespace, layer: "L1" }).items.filter(
@@ -457,11 +602,11 @@ describe("MemoryService / evolution / span big turn", () => {
       const calls: Array<{ messages: LlmMessage[]; options: LlmCompletionOptions }> = [];
       const llm = createSpanBigTurnLlm(calls);
       const config = {
-        ...DEFAULT_MEMMY_CONFIG,
+        ...LEGACY_TEST_CONFIG,
         algorithm: {
-          ...DEFAULT_MEMMY_CONFIG.algorithm,
+          ...LEGACY_TEST_CONFIG.algorithm,
           reward: {
-            ...DEFAULT_MEMMY_CONFIG.algorithm.reward,
+            ...LEGACY_TEST_CONFIG.algorithm.reward,
             llmScoring: false
           }
         }
@@ -478,7 +623,7 @@ describe("MemoryService / evolution / span big turn", () => {
         name: "task_step",
         input: { index }
       }));
-      const completed = service.completeTurn(`${scenario.userId}-turn`, {
+      const completed = (await service.completeTurn(`${scenario.userId}-turn`, {
         namespace,
         sessionId: session.sessionId,
         query: "执行复杂任务",
@@ -489,19 +634,22 @@ describe("MemoryService / evolution / span big turn", () => {
           name: call.name,
           output: { ok: scenario.polarity === "positive", index }
         }))
-      });
+      }));
       service.closeSession(session.sessionId);
-      await service.feedback({
+      await settleCaptureAssignments(service);
+    await service.feedback({
         namespace,
         sessionId: session.sessionId,
-        episodeId: completed.episodeId,
+        episodeId: assignedEpisodeId(service, completed),
         l1MemoryId: completed.l1MemoryId,
         channel: "explicit",
         polarity: scenario.polarity,
         magnitude: 1,
         rationale: scenario.polarity === "positive" ? "结果正确" : "任务没有正确完成"
       });
-      await runWorkerRounds(service, 8);
+      vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 31_000);
+    await runWorkerRounds(service, 8);
 
       expect(calls.some((call) => call.options.operation === "span.big_turn.v1")).toBe(false);
       expect(service.panelItems({ namespace, layer: "L1" }).items.some(
@@ -512,6 +660,7 @@ describe("MemoryService / evolution / span big turn", () => {
   });
 
   it("rejects overlapping spans without storing partial results", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
     const calls: Array<{ messages: LlmMessage[]; options: LlmCompletionOptions }> = [];
     const llm = createSpanBigTurnLlm(calls, {
       shouldSplit: true,
@@ -543,7 +692,7 @@ describe("MemoryService / evolution / span big turn", () => {
       name: "task_step",
       input: { index }
     }));
-    const completed = service.completeTurn("span-big-turn-overlap", {
+    const completed = (await service.completeTurn("span-big-turn-overlap", {
       namespace,
       sessionId: session.sessionId,
       query: "分析并修复构建失败",
@@ -554,19 +703,30 @@ describe("MemoryService / evolution / span big turn", () => {
         name: call.name,
         output: { ok: true, index }
       }))
-    });
+    }));
     service.closeSession(session.sessionId);
+    await settleCaptureAssignments(service);
     await service.feedback({
       namespace,
       sessionId: session.sessionId,
-      episodeId: completed.episodeId,
+      episodeId: assignedEpisodeId(service, completed),
       l1MemoryId: completed.l1MemoryId,
       channel: "explicit",
       polarity: "positive",
       magnitude: 1,
       rationale: "任务结果正确"
     });
-    await runWorkerRounds(service, 8);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 31_000);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await runWorkerRounds(service, 8);
+      if (attempt < 2) {
+        const retry = db.db.prepare(`SELECT available_at FROM evolution_jobs
+          WHERE job_type = 'span_big_turn' AND status = 'failed'`).get() as { available_at: string };
+        expect(Date.parse(retry.available_at)).toBeGreaterThan(Date.now());
+        vi.setSystemTime(Date.parse(retry.available_at));
+      }
+    }
 
     expect(calls.filter((call) => call.options.operation === "span.big_turn.v1")).toHaveLength(3);
     expect(service.panelItems({ namespace, layer: "L1" }).items.some(

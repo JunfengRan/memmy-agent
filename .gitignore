@@ -1,5 +1,6 @@
 node_modules/
 dist/
+App/memmy-agent/npm-packages/
 release/
 App/shell/desktop/release/
 Mac软件打包/
@@ -14,6 +15,7 @@ memmy-memory-*.tgz
 App/memmy-agent/package-lock.json
 # Repo-root runtime logs only. Eval fixtures keep their own sessions directories.
 /sessions/
+artifacts/literature-review-*.json
 .*
 !.github/
 !.github/workflows/
@@ -23,11 +25,32 @@ App/memmy-agent/package-lock.json
 .env
 .env.*
 !.env.example
+# Shared agent rules and skills are versioned (.agents is the source; .claude/.cursor/.codex link to it);
+# local app settings stay ignored.
+!.agents/
+!.claude/
+.claude/*
+!.claude/skills/
+!.cursor/
+.cursor/*
+!.cursor/skills/
+!.cursor/rules/
+.cursor/rules/*
+!.cursor/rules/agent-collaboration.mdc
+!.cursor/rules/project-memory-spec-sources.mdc
+!.codex/
+.codex/*
+!.codex/skills/
+!.codex/README.md
 # Holds the Windows Computer History folder open until it has code: git does
 # not track empty directories, and `.*` above would otherwise drop the marker.
 !App/memmy-agent/src/tools/computer-history/win/.gitkeep
 App/backend/src/adapters/outbound/skill-writer/workspace-bridge/memmy-workspace-bridge.mjs
 Memory/src/agent-source/integration/workspace-bridge/memmy-workspace-bridge.mjs
+
+# Office rendering executables and libraries are provisioned during packaging.
+App/memmy-agent/extra-dependencies/office-rendering/*/bin/
+App/memmy-agent/extra-dependencies/office-rendering/*/native/
 /Mac软件打包/
 # Local design drafts and review notes; mirrored from DingTalk, not shipped.
 /design-docs/
@@ -35,5 +58,11 @@ Memory/src/agent-source/integration/workspace-bridge/memmy-workspace-bridge.mjs
 # Project-memory eval replay databases; rebuilt by scripts/project-memory/eval/run-recall.ts.
 /eval/project-memory/runs/**/*-recall-db/
 
-# Empty fixture git repos left in the worktree. This branch does not carry those workspaces.
-/eval/project-memory/workspaces/
+# Fixture workspaces are initialized as empty git repos and have no commits.
+/eval/project-memory/workspaces/*/.git/
+
+# Eval outputs (runs, reports, judge and reader caches) go to eval/project-memory/runs/ and are
+# regenerated per run; only dataset/gold.json and metrics.md summaries are committed.
+/eval/project-memory/gold-add-memory/generated/
+/eval/project-memory/runs/
+/eval/project-memory/gold-add-memory/harness/memory-service/

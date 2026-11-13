@@ -98,8 +98,8 @@ describe("opencode skill target", () => {
     });
     const bridgePath = join(rootDirectory, "plugins", "memmy-workspace-bridge.mjs");
     expect(existsSync(bridgePath)).toBe(true);
-    expect(pluginSource).toContain('import { tool } from "@opencode-ai/plugin";');
-    expect(pluginSource).toContain("export const MemmyMemoryPlugin");
+    expect(pluginSource).not.toContain('from "@opencode-ai/plugin"');
+    expect(pluginSource).toContain("export default");
     expect(pluginSource).toContain('"chat.message"');
     expect(pluginSource).toContain('"experimental.text.complete"');
     expect(pluginSource).toContain('event: async ({ event }) =>');
@@ -112,6 +112,7 @@ describe("opencode skill target", () => {
     expect(skillSource).toContain("A Memmy Memory Hook or plugin is installed for this agent.");
     expect(skillSource).toContain("The installed integration automatically recalls relevant context and captures completed turns.");
     expect(skillSource).toContain('memmy-memory search "query text" --source opencode');
+    expect(skillSource).toContain('memmy-memory project search "query text" --source opencode --session-id "$SESSION_ID"');
     expect(skillSource).not.toContain("memmy-memory add");
     expect(skillSource).not.toContain("Call memmy-memory search when context is needed.");
     expect(readTargetFile(rootDirectory)).toContain("manual instructions");
@@ -368,24 +369,17 @@ interface OpencodePluginHooks {
 
 async function loadPluginHooks(rootDirectory: string): Promise<OpencodePluginHooks> {
   const pluginDirectory = join(rootDirectory, "plugins");
-  const pluginSource = readFileSync(join(pluginDirectory, "memmy-memory.js"), "utf8").replace(
-    'import { tool } from "@opencode-ai/plugin";',
-    [
-      "const schemaValue = () => ({ optional() { return this; } });",
-      "const tool = (definition) => definition;",
-      "tool.schema = { string: schemaValue, enum: schemaValue, array: schemaValue };"
-    ].join("\n")
-  );
+  const pluginSource = readFileSync(join(pluginDirectory, "memmy-memory.js"), "utf8");
   const runtimePath = join(pluginDirectory, `memmy-memory-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}.mjs`);
   writeFileSync(runtimePath, pluginSource, "utf8");
   const module = await import(pathToFileURL(runtimePath).href) as {
-    MemmyMemoryPlugin(input: {
+    default: { server(input: {
       client: { app: { log(input: unknown): Promise<void> } };
       directory: string;
       worktree: string;
-    }): Promise<OpencodePluginHooks>;
+    }): Promise<OpencodePluginHooks> };
   };
-  return module.MemmyMemoryPlugin({
+  return module.default.server({
     client: { app: { async log() { return undefined; } } },
     directory: rootDirectory,
     worktree: rootDirectory

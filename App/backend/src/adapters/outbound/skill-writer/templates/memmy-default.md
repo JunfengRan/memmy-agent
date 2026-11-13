@@ -50,11 +50,17 @@ memmy-memory session close "$SESSION_ID" --source <agent-source>
 
 ## Search And Read
 
-Search when the user asks about prior context, preferences, project decisions, recurring bugs, known workflows, or anything that may already be in memory:
+Personal questions (preferences, earlier conversations, reusable procedures) use personal memory:
 
 ```bash
 memmy-memory search "query text" --source <agent-source>
 memmy-memory search "query text" --source <agent-source> --session-id "$SESSION_ID"
+```
+
+Project questions (how this project decided something, why it changed, or what progress was recorded) use project memory. This command does not search personal memory. If the result includes a degraded hint, the search is incomplete and should be retried with different wording; do not tell the user that there is no record:
+
+```bash
+memmy-memory project search "query text" --source <agent-source> --session-id "$SESSION_ID"
 ```
 
 Read details by id only; no `kind` is needed:

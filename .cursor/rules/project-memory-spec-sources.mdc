@@ -1,0 +1,12 @@
+---
+description: 项目记忆规格只认 design-docs/standard/；alpha/、claude/、codex/ 是历史方案
+alwaysApply: true
+---
+
+项目记忆的规格只有 `design-docs/standard/` 一个来源，冲突时按 `AGENTS.md`「权威顺序」取舍。`design-docs/README.md` 说明了每个目录是什么。
+
+- `design-docs/alpha/`、`design-docs/claude/`、`design-docs/codex/` 是 v3 之前的历史方案，不是事实源。不要把它们和 `standard/` 并列成「几套事实源」或「几套方案没有收口」。
+- 历史方案里有、`standard/` 没有采纳的设计不算实现缺口。例如项目目录下的 `.memos/`、DB 与文件同步、`memos import`、`search` / `get` / `expand`、`ProjectSnapshot` / `ContextSnapshot`。
+- `design-docs/review/` 是对 `standard/` 的评审意见，答复进入 `standard/` 或 ADR 之前不算已定。
+- 判断缺口、写对齐表、open-questions 和评审意见时，只引用 `standard/` 与 `docs/project-memory/decisions/` 下的 ADR。
+- 只有用户明确要求对照历史方案时才读那三个目录，引用时写明「历史方案」。觉得其中某个做法值得采纳，写进 `open-questions.md` 交给 designer，不直接实现。

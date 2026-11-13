@@ -11,7 +11,7 @@ const source = ts.createSourceFile("main.ts", readFileSync(new URL("../src/main/
 const functionNames = new Set([
   "captureMacPermissionRestartRequest", "shouldIgnoreStaleReopenQuit", "relaunchAfterQuitCleanupIfRequested",
   "armQuitCleanupForceExitTimer", "clearQuitCleanupForceExitTimer",
-  "isMacSystemSessionEnding", "readMacSystemSessionProbe", "readMacQuitContext",
+  "isMacSystemSessionEnding", "readMacSystemSessionProbe", "readMacQuitContext", "traceQuitCleanup",
 ]);
 const variableNames = new Set([
   "isQuitting", "isQuitCleanupInProgress", "isQuitCleanupComplete", "stopMemoryServiceForCurrentQuit",
@@ -31,6 +31,11 @@ const selected = source.statements.filter((statement) => {
     && ["before-quit", "activate"].includes((call.arguments[0] as ts.StringLiteral)?.text);
 });
 const code = ts.transpileModule(selected.map((statement) => statement.getText(source)).join("\n"), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+}).outputText;
+const cleanupFunction = source.statements.find((statement) => ts.isFunctionDeclaration(statement)
+  && statement.name?.text === "cleanupBeforeQuit")!;
+const actualCleanupCode = ts.transpileModule(cleanupFunction.getText(source), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
 
@@ -66,6 +71,7 @@ function setup(options: {
   nativeSessionError?: Error;
   relaunchMarker?: boolean;
   argv?: string[];
+  actualCleanup?: boolean;
 } = {}) {
   vi.useFakeTimers();
   vi.setSystemTime(0);
@@ -76,12 +82,17 @@ function setup(options: {
     requestSingleInstanceLock: ReturnType<typeof vi.fn>;
   };
   const logs: string[] = [];
+  const quitTrace = vi.fn();
   const events: string[] = [];
   let completeCleanup!: () => void;
   let failCleanup!: (error: Error) => void;
   const cleanup = new Promise<void>((resolve, reject) => { completeCleanup = resolve; failCleanup = reject; });
   const cleanupBeforeQuit = vi.fn(() => cleanup);
+  const closeServices = vi.fn(() => cleanup);
   const terminateSync = vi.fn(() => events.push("terminate"));
+  const stopComputerUseAgentsOnExitSync = vi.fn();
+  const stopComputerUseAgentForPermissionRestart = vi.fn().mockResolvedValue(undefined);
+  const installPreparedRequiredUpdateOnQuit = vi.fn().mockResolvedValue(undefined);
   let quitContext = options.quitContext === undefined ? systemQuit : options.quitContext;
   let systemSessionEnding: boolean | undefined = options.nativeSessionUnavailable ? undefined : options.systemSessionEnding ?? false;
   let notificationSequence = systemSessionEnding === true ? 1 : 0;
@@ -113,6 +124,7 @@ function setup(options: {
     return event;
   };
   Object.assign(app, {
+    isPackaged: true,
     requestSingleInstanceLock: vi.fn(() => options.ownsLock !== false),
     quit: vi.fn(requestQuit),
     relaunch: vi.fn(() => events.push("relaunch")),
@@ -120,31 +132,48 @@ function setup(options: {
   });
   const context = createContext({
     app,
-    process: { platform: options.platform ?? "darwin",
+    process: { platform: options.platform ?? "darwin", env: {}, resourcesPath: "/Applications/Memmy.app/Contents/Resources",
       argv: options.argv ?? ["Memmy", ...(options.relaunchMarker ? ["--memmy-permission-relaunch"] : [])] },
     Date, setTimeout, clearTimeout, queueMicrotask,
-    console: { warn: vi.fn() },
+    console: { warn: vi.fn(), info: quitTrace },
     loadMenuBarAppearanceNative,
     isMacPermissionSystemQuit: policy,
     isMacSystemSessionQuit, MacPermissionRestartIntent,
     writePackagedStartupLog: async (message: string) => { logs.push(message); },
     closeSplashWindow: vi.fn(), hideAppShellForQuit: vi.fn(),
     readStopMemoryServiceOnExitSetting: () => false,
-    cleanupBeforeQuit, runtimeServices: { terminateSync },
+    cleanupBeforeQuit, runtimeServices: { terminateSync, close: closeServices },
+    stopComputerUseAgentsOnExitSync, stopComputerUseAgentForPermissionRestart,
+    requiredUpdateBackgroundFirstCheckTimer: null, requiredUpdateBackgroundCheckTimer: null,
+    pendingMainWindowAction: null, memoryServiceControl: null, localBackend: null,
+    browserWebviewDownloads: null, disposeBrowserWebviewPermissions: null, browserSidebarBridge: null,
+    pipScreenPermissionGuide: null, computerUseSurfaceWindows: null, areIpcHandlersRegistered: true,
+    ipcMain: { removeHandler: vi.fn(), removeListener: vi.fn(), removeAllListeners: vi.fn() },
+    clearPetWindowCloseActivateSuppression: vi.fn(), closePetWindow: vi.fn(),
+    installPreparedRequiredUpdateOnQuit, destroyMenuBarTray: vi.fn(),
+    embeddedBrowserDriver: { dispose: vi.fn() }, stopPackagedRendererServer: vi.fn().mockResolvedValue(undefined),
+    sendAppExitEventBeforeQuit: vi.fn().mockResolvedValue(undefined),
+    EXTERNAL_BROWSER_EXTENSION_DRAG_CHANNEL: "test-browser-drag",
+    handleComputerHistoryTrayIndicator: vi.fn(), handleMovePetWindow: vi.fn(), handleStartPetWindowDrag: vi.fn(),
+    handleStopPetWindowDrag: vi.fn(), handleUpdatePetWindowLayout: vi.fn(), handleAnalyticsClientId: vi.fn(),
     formatStartupError: (error: Error) => error.message,
     isBootReady: true,
     consumePetWindowCloseActivateSuppression: () => false,
     activateMainWindow: vi.fn(),
   });
   runInContext(code, context);
+  if (options.actualCleanup) runInContext(actualCleanupCode, context);
   if (options.waitedForLock) runInContext("didWaitForSingleInstanceLock = true", context);
   const beginGuide = () => runInContext("macPermissionRestartIntent.begin()", context) as number;
   const finishGuide = (token: number, approved: boolean) => runInContext(`macPermissionRestartIntent.finish(${token}, ${approved})`, context);
   if (options.permissionRequested) beginGuide();
   return {
-    app, logs, events, readCurrentQuitContext, readSystemSessionEnding, readSystemSessionEndingState,
+    app, logs, events, quitTrace, readCurrentQuitContext, readSystemSessionEnding, readSystemSessionEndingState,
     loadMenuBarAppearanceNative, policy,
-    cleanupBeforeQuit, terminateSync, requestQuit, completeCleanup, failCleanup,
+    cleanupBeforeQuit, closeServices, terminateSync, requestQuit, completeCleanup, failCleanup,
+    stopComputerUseAgentsOnExitSync, stopComputerUseAgentForPermissionRestart,
+    installPreparedRequiredUpdateOnQuit,
+    hasRuntimeServices: () => runInContext("runtimeServices !== null", context) as boolean,
     beginGuide, finishGuide,
     setQuitContext: (next: MacPermissionQuitContext | null) => { quitContext = next; },
     setSystemSessionEnding: (next: boolean | undefined) => {
@@ -157,6 +186,106 @@ function setup(options: {
 }
 
 afterEach(() => vi.useRealTimers());
+
+describe("native app-agent shutdown during desktop quit", () => {
+  it.each(["resolved", "rejected"] as const)("cleans native agents before permission relaunch when services close is %s", async (completion) => {
+    const test = setup({ actualCleanup: true });
+    test.stopComputerUseAgentForPermissionRestart.mockImplementation(async () => { test.events.push("native-async"); });
+    const closeServices = test.closeServices.getMockImplementation()!;
+    test.closeServices.mockImplementation(() => {
+      test.events.push("services-close");
+      return closeServices();
+    });
+    test.stopComputerUseAgentsOnExitSync.mockImplementation(() => { test.events.push("native-sync"); });
+    test.requestQuit();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.events).toEqual(["native-async", "services-close"]);
+    expect(test.hasRuntimeServices()).toBe(false);
+    if (completion === "resolved") test.completeCleanup();
+    else test.failCleanup(new Error("service close failed"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.events).toEqual(["native-async", "services-close", "native-sync", "relaunch", "quit"]);
+    expect(test.stopComputerUseAgentsOnExitSync).toHaveBeenCalledExactlyOnceWith(true,
+      "/Applications/Memmy.app/Contents/Resources", undefined);
+    expect(test.quitTrace).toHaveBeenCalledWith("[quit] runtime-services:start");
+    expect(test.quitTrace).toHaveBeenCalledWith("[quit] native-history-agent:start");
+    expect(test.quitTrace).toHaveBeenCalledWith(expect.stringMatching(/^\[quit\] runtime-services:finished elapsedMs=\d+$/));
+    expect(test.quitTrace).toHaveBeenCalledWith(expect.stringMatching(/^\[quit\] native-history-agent:finished elapsedMs=\d+$/));
+  });
+
+  it("closes services while native shutdown is pending, then waits for its bounded cleanup before quitting", async () => {
+    const test = setup({ actualCleanup: true, quitContext: userQuit });
+    let completeNative!: () => void;
+    test.stopComputerUseAgentForPermissionRestart.mockImplementation(() => new Promise<void>(resolve => { completeNative = resolve; }));
+    test.requestQuit();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.closeServices).toHaveBeenCalledOnce();
+    test.completeCleanup();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.quitTrace).toHaveBeenCalledWith(expect.stringMatching(/^\[quit\] runtime-services:finished /));
+    expect(test.quitTrace).not.toHaveBeenCalledWith(expect.stringMatching(/^\[quit\] native-history-agent:finished /));
+    expect(test.stopComputerUseAgentsOnExitSync).not.toHaveBeenCalled();
+    expect(test.events).not.toContain("quit");
+    completeNative();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.quitTrace).toHaveBeenCalledWith(expect.stringMatching(/^\[quit\] native-history-agent:finished /));
+    expect(test.stopComputerUseAgentsOnExitSync).toHaveBeenCalledOnce();
+    expect(test.events).toContain("quit");
+  });
+
+  it("runs native exit cleanup after an earlier cleanup failure and before an ordinary quit", async () => {
+    const test = setup({ actualCleanup: true, quitContext: userQuit });
+    test.installPreparedRequiredUpdateOnQuit.mockRejectedValueOnce(new Error("update cleanup failed"));
+    test.stopComputerUseAgentsOnExitSync.mockImplementation(() => { test.events.push("native-sync"); });
+    test.requestQuit();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.events).toEqual(["native-sync", "quit"]);
+    expect(test.stopComputerUseAgentForPermissionRestart).not.toHaveBeenCalled();
+    expect(test.logs).toContain("quit:cleanup-failed\nupdate cleanup failed");
+  });
+
+  it("retains the services captured before cleanup clears them and stops native agents before forced relaunch/exit", async () => {
+    const test = setup({ actualCleanup: true });
+    test.stopComputerUseAgentsOnExitSync.mockImplementation(() => { test.events.push("native-sync"); });
+    test.requestQuit();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.hasRuntimeServices()).toBe(false);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(test.terminateSync).toHaveBeenCalledExactlyOnceWith({ stopMemory: false });
+    expect(test.events).toEqual(["terminate", "native-sync", "relaunch", "exit"]);
+    test.completeCleanup();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.app.relaunch).toHaveBeenCalledOnce();
+  });
+
+  it("still stops native agents and exits if forced service termination throws", async () => {
+    const test = setup({ actualCleanup: true, quitContext: userQuit });
+    test.terminateSync.mockImplementation(() => { throw new Error("service termination failed"); });
+    test.stopComputerUseAgentsOnExitSync.mockImplementation(() => { test.events.push("native-sync"); });
+    test.requestQuit();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(test.events).toEqual(["native-sync", "exit"]);
+    test.completeCleanup();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+
+  it.each(["win32", "linux"] as const)("does not invoke macOS agent cleanup on %s for normal or forced quit", async (platform) => {
+    const normal = setup({ platform, actualCleanup: true });
+    normal.requestQuit();
+    normal.completeCleanup();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(normal.stopComputerUseAgentForPermissionRestart).not.toHaveBeenCalled();
+    expect(normal.stopComputerUseAgentsOnExitSync).not.toHaveBeenCalled();
+
+    const forced = setup({ platform, actualCleanup: true });
+    forced.requestQuit();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(forced.stopComputerUseAgentForPermissionRestart).not.toHaveBeenCalled();
+    expect(forced.stopComputerUseAgentsOnExitSync).not.toHaveBeenCalled();
+    forced.completeCleanup();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+});
 
 describe("macOS system permission restart lifecycle", () => {
   it("relaunches after cleanup for the system quit request even without an activate event", async () => {

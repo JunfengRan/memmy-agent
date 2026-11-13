@@ -1,13 +1,15 @@
 #!/usr/bin/env node
+import { npmInvocation } from "../../../../scripts/internal/shared/npm-invocation.mjs";
 import { memoryRuntimeBuildIdentity } from "../../../../scripts/internal/shared/memory-runtime-build-identity.mjs";
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
-import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { bundleRuntime } from "../../../../scripts/internal/shared/bundle-runtime.mjs";
 
 const require = createRequire(import.meta.url);
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -68,9 +70,15 @@ try {
     builtAt: new Date().toISOString()
   });
 
+  const bundledRoot = join(temporaryRoot, "bundled");
+  await bundleRuntime({ source: runtimeRoot, destination: bundledRoot, packageDirectory: ".", kind: "memory", target: { platform, arch } });
+  // Workspace code is in the bundle now; native libraries and model files remain external.
+  await verifyRuntimeDependencies(bundledRoot, target, platform, arch, []);
+  if (process.env.MEMMY_MEMORY_SKIP_EMBEDDING_MODEL !== "1") await verifyEmbeddingModel(bundledRoot);
+
   await mkdir(outputRoot, { recursive: true });
   const assetPath = join(outputRoot, assetName);
-  run("tar", ["-czf", assetPath, "-C", runtimeRoot, "."], repositoryRoot);
+  run("tar", ["-czf", assetPath, "-C", bundledRoot, "."], repositoryRoot);
   const descriptor = { ...buildIdentity, name: assetName, sha256: await sha256File(assetPath), size: (await stat(assetPath)).size };
   await updateReleaseManifest(outputRoot, version, target, descriptor);
   process.stdout.write(`${assetPath}\n`);
@@ -116,7 +124,8 @@ function npmPlatformFlags(platform, arch) {
 }
 
 function run(command, args, cwd) {
-  const result = spawnSync(command, args, { cwd, stdio: "inherit", env: process.env, shell: process.platform === "win32" });
+  if (command === "npm") ({ command, args } = npmInvocation(args));
+  const result = spawnSync(command, args, { cwd, stdio: "inherit", env: process.env });
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} failed`);
 }
 
@@ -150,8 +159,9 @@ async function verifyRuntimeDependencies(root, target, platform, arch, workspace
   for (const name of workspaceDependencies) {
     if (!existsSync(join(root, "node_modules", name, "package.json"))) throw new Error(`workspace package is missing from the runtime bundle: ${name}`);
   }
-  const nativeFiles = await findFiles(join(root, "node_modules", "better-sqlite3"), (name) => name === "better_sqlite3.node");
-  if (nativeFiles.length === 0) throw new Error(`better-sqlite3 native module is missing for ${target}`);
+  // better-sqlite3 13 ships N-API prebuilds instead of compiling build/Release/better_sqlite3.node.
+  const sqlitePrebuild = join(root, "node_modules", "better-sqlite3", "prebuilds", `${npmPlatform(platform)}-${arch}.node`);
+  if (!existsSync(sqlitePrebuild)) throw new Error(`better-sqlite3 native module is missing for ${target}`);
   const sqliteVecPackage = join(root, "node_modules", `sqlite-vec-${target}`);
   if (!existsSync(sqliteVecPackage)) throw new Error(`sqlite-vec native package is missing for ${target}`);
   const sharpPackage = join(root, "node_modules", "@img", `sharp-${npmPlatform(platform)}-${arch}`);
@@ -163,17 +173,6 @@ async function verifyEmbeddingModel(root) {
   for (const file of ["config.json", "tokenizer.json", "tokenizer_config.json", "onnx/model_quantized.onnx"]) {
     if (!existsSync(join(root, "embedding-models", model, file))) throw new Error(`embedding model asset is missing: ${file}`);
   }
-}
-
-async function findFiles(root, predicate) {
-  if (!existsSync(root)) return [];
-  const result = [];
-  for (const entry of await readdir(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) result.push(...await findFiles(path, predicate));
-    else if (predicate(entry.name)) result.push(path);
-  }
-  return result;
 }
 
 async function updateReleaseManifest(outputRoot, version, target, descriptor) {

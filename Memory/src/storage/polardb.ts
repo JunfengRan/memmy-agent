@@ -1,5 +1,5 @@
-export const POLARDB_SCHEMA_VERSION = "runtime-v4";
-export const POLARDB_MIGRATION_ID = "004_source_turn_captures";
+export const POLARDB_SCHEMA_VERSION = "runtime-v5";
+export const POLARDB_MIGRATION_ID = "005_pending_episode_assignment";
 
 export function polardbMigrationSql(): string[] {
   return [
@@ -117,7 +117,7 @@ export function polardbMigrationSql(): string[] {
     `CREATE TABLE IF NOT EXISTS raw_turns (
       id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-      episode_id TEXT NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
+      episode_id TEXT REFERENCES episodes(id) ON DELETE CASCADE,
       turn_id TEXT NOT NULL,
       user_id TEXT NOT NULL,
       conversation_id TEXT,
@@ -221,7 +221,7 @@ export function polardbMigrationSql(): string[] {
       project_id TEXT,
       skill_memory_id TEXT NOT NULL,
       session_id TEXT,
-      episode_id TEXT NOT NULL,
+      episode_id TEXT,
       l1_memory_id TEXT,
       raw_turn_id TEXT,
       turn_id TEXT,
@@ -336,6 +336,14 @@ export function polardbMigrationSql(): string[] {
   )`,
   `CREATE INDEX IF NOT EXISTS idx_source_turn_captures_conversation
     ON source_turn_captures (user_id, source, profile_id, namespace_key, conversation_id, completed_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_source_turn_captures_native_turn
+    ON source_turn_captures (source, profile_id, namespace_key, conversation_id, turn_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_source_turn_captures_native_conversation
+    ON source_turn_captures (source, profile_id, namespace_key, conversation_id, completed_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_source_sessions_native_conversation
+    ON sessions (source, profile_id, conversation_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_source_sessions_native_host_key
+    ON sessions (source, profile_id, host_session_key)`,
 
     `CREATE TABLE IF NOT EXISTS runtime_kv (
       key TEXT PRIMARY KEY,
@@ -483,6 +491,8 @@ export function polardbMigrationSql(): string[] {
       payload JSONB NOT NULL DEFAULT '{}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL
     )`,
+    `ALTER TABLE raw_turns ALTER COLUMN episode_id DROP NOT NULL`,
+    `ALTER TABLE skill_trials ALTER COLUMN episode_id DROP NOT NULL`,
     `CREATE TABLE IF NOT EXISTS audit_logs (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,

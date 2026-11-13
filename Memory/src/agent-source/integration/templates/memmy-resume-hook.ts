@@ -14,6 +14,8 @@ import { readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
+  recallLocalProjectMemory,
+  captureLocalProjectTurn,
   closeRuntimeSession,
   completeRuntimeTurn,
   completeSourceTurn,
@@ -94,8 +96,11 @@ async function main() {
   const query = parseResumeQuery(prompt);
   if (!isResumeCommand(prompt)) {
     try {
-      const started = await startCapturedTurn(payload, prompt);
-      writeTurnStartOutput(started);
+      const started = await startCapturedTurn(payload, prompt).catch((error) => {
+        reportCaptureFailure("start_failed", error, payload);
+        return null;
+      });
+      writeTurnStartOutput(started, await projectMemoryContext(payload, prompt));
     } catch (error) {
       reportCaptureFailure("start_failed", error, payload);
       writeAllowOutput();
@@ -373,7 +378,16 @@ async function captureClaudeCodeSourceTurn(payload) {
   await submitSourceTurn(parsed.turn, pending, payload);
 }
 
+async function projectMemoryContext(payload, prompt) {
+  return recallLocalProjectMemory({ configUrl: CONFIG_URL, workspace: workspacePath(payload) || "", query: prompt, conversationId: sessionStateKey(payload) || undefined });
+}
+
 async function submitSourceTurn(turn, pending, payload) {
+  try {
+    await captureLocalProjectTurn({ configUrl: CONFIG_URL, workspace: workspacePath(payload) || turn.workspacePath || "", turn });
+  } catch (error) {
+    reportCaptureFailure("project_capture_failed", error, payload);
+  }
   const result = await completeSourceTurn({
     configUrl: CONFIG_URL,
     turn,
@@ -705,7 +719,7 @@ function writeStopOutput() {
   }));
 }
 
-function writeTurnStartOutput(started) {
+function writeTurnStartOutput(started, projectMemory) {
   if (MODE === "cursor") {
     writeAllowOutput();
     return;
@@ -713,7 +727,7 @@ function writeTurnStartOutput(started) {
   const injected = started && started.injectedContext && typeof started.injectedContext === "object"
     ? normalizeText(started.injectedContext.markdown)
     : normalizeText(started && started.injectedContext);
-  if (!injected) {
+  if (!injected && !projectMemory) {
     writeAllowOutput();
     return;
   }
@@ -723,7 +737,7 @@ function writeTurnStartOutput(started) {
     "",
     injected,
     "</memmy_memory_context>"
-  ].join("\n"));
+  ].join("\n") + (projectMemory ? "\n\n" + projectMemory : ""));
 }
 
 function writeResultOutput(message) {

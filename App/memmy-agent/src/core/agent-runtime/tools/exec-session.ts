@@ -2,6 +2,16 @@ import { ChildProcess, ChildProcessWithoutNullStreams, spawn } from "node:child_
 import { randomUUID } from "node:crypto";
 import { Tool, type ToolExecutionContext } from "./base.js";
 import { CommandOutputDecoder, type CommandOutputDecoderOptions } from "./command-output-decoder.js";
+import { castParameterAliases, normalizeParameterAliases, OUTPUT_LIMIT_ALIASES, OUTPUT_LIMIT_DESCRIPTION } from "./parameter-aliases.js";
+
+const STDIN_ALIASES = [
+  ["session_id", "sessionId"],
+  ["close_stdin", "closeStdin"],
+  ["yield_time_ms", "yieldTimeMs"],
+  ["wait_for", "waitFor"],
+  ["wait_timeout_ms", "waitTimeoutMs"],
+  ...OUTPUT_LIMIT_ALIASES,
+] as const;
 
 export const DEFAULT_YIELD_MS = 1000;
 export const MAX_YIELD_MS = 30_000;
@@ -11,6 +21,8 @@ export const DEFAULT_MAX_OUTPUT_CHARS = 10_000;
 export const MAX_OUTPUT_CHARS = 50_000;
 const STDIO_DRAIN_GRACE_MS = 1000;
 const PROCESS_TERMINATE_GRACE_MS = 1000;
+// Batch progress output without turning every stream chunk into a tool return.
+const OUTPUT_COALESCE_MS = 1000;
 export const EXEC_LIFECYCLE_ERROR =
   "Error: Command process exited but descendants kept stdout/stderr open; the managed process tree was terminated.";
 
@@ -40,10 +52,6 @@ export type ExecSessionInfo = {
   remainingS: number;
   returncode: number | null;
 };
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function processExited(child: ChildProcess): boolean {
   return child.exitCode != null || child.signalCode != null;
@@ -169,18 +177,17 @@ export async function drainExitedProcessStreams({
   streamsClosed,
   forceCloseStreams,
   options,
+  abortSignal,
 }: {
   child: ChildProcess;
   closePromise: Promise<void>;
   streamsClosed: () => boolean;
   forceCloseStreams: () => void;
   options?: ManagedProcessOptions;
+  abortSignal?: AbortSignal | null;
 }): Promise<string | null> {
   if (streamsClosed()) return null;
-  const closedDuringDrain = await Promise.race([
-    closePromise.then(() => true),
-    sleep(STDIO_DRAIN_GRACE_MS).then(() => streamsClosed()),
-  ]);
+  const closedDuringDrain = await waitForDrain(closePromise, streamsClosed, abortSignal);
   if (closedDuringDrain || streamsClosed()) return null;
   await terminateManagedProcessTree(child, options);
   if (!streamsClosed()) forceCloseStreams();
@@ -201,20 +208,27 @@ function throwIfAborted(signal?: AbortSignal | null): void {
   if (signal?.aborted) throw createToolAbortError();
 }
 
-function abortableSleep(ms: number, signal?: AbortSignal | null): Promise<void> {
-  if (ms <= 0) return Promise.resolve();
+function waitForDrain(
+  closePromise: Promise<void>,
+  streamsClosed: () => boolean,
+  signal?: AbortSignal | null,
+): Promise<boolean> {
   throwIfAborted(signal);
-  if (!signal) return sleep(ms);
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    const onAbort = () => {
+    let settled = false;
+    const finish = (closed: boolean, error?: Error) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      reject(createToolAbortError());
+      signal?.removeEventListener("abort", onAbort);
+      if (error) reject(error);
+      else resolve(closed);
     };
-    signal.addEventListener("abort", onAbort, { once: true });
+    const onAbort = () => finish(false, createToolAbortError());
+    const timer = setTimeout(() => finish(streamsClosed()), STDIO_DRAIN_GRACE_MS);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    void closePromise.then(() => finish(true));
+    if (signal?.aborted) onAbort();
   });
 }
 
@@ -241,6 +255,7 @@ export class ExecSession {
   deadlineMs: number;
   lastAccess = Date.now();
   private chunks: string[] = [];
+  private outputStartedAt: number | null = null;
   private timedOut = false;
   private stderrStarted = false;
   private readonly stdoutDecoder: CommandOutputDecoder;
@@ -251,6 +266,7 @@ export class ExecSession {
   private lifecycleError: string | null = null;
   private readonly closePromise: Promise<void>;
   private resolveClose!: () => void;
+  private readonly outputWaiters = new Set<() => void>();
 
   constructor({
     command,
@@ -296,7 +312,7 @@ export class ExecSession {
       args.push("-c", command);
       this.process = spawnProcess(resolvedShell, args, { cwd, env, detached: true });
     }
-    this.process.on("error", (error) => this.chunks.push(`Error executing command: ${error.message}`));
+    this.process.on("error", (error) => this.appendStdout(`Error executing command: ${error.message}`));
     this.process.stdout.on("data", (chunk: Buffer) => {
       this.stdoutDecoder.push(chunk);
       this.appendStdout(this.stdoutDecoder.read());
@@ -317,6 +333,10 @@ export class ExecSession {
 
   private isDone(): boolean {
     return processExited(this.process);
+  }
+
+  get finished(): boolean {
+    return this.streamsClosed;
   }
 
   async write(data: string): Promise<string | null> {
@@ -348,7 +368,7 @@ export class ExecSession {
   ): Promise<SessionPoll> {
     this.lastAccess = Date.now();
     throwIfAborted(abortSignal);
-    if (yieldTimeMs > 0 && !this.isDone()) await abortableSleep(Math.min(yieldTimeMs, MAX_YIELD_MS), abortSignal);
+    if (yieldTimeMs > 0) await this.waitForActivity(Math.min(yieldTimeMs, MAX_YIELD_MS), abortSignal);
     throwIfAborted(abortSignal);
     if (!this.isDone() && Date.now() >= this.deadlineMs) {
       this.timedOut = true;
@@ -360,11 +380,13 @@ export class ExecSession {
         closePromise: this.closePromise,
         streamsClosed: () => this.streamsClosed,
         forceCloseStreams: () => this.forceCloseStreams(),
+        abortSignal,
       });
     }
     throwIfAborted(abortSignal);
     const raw = this.chunks.join("");
     this.chunks = [];
+    this.outputStartedAt = null;
     const [output, truncated] = truncateOutput(raw, maxOutputChars);
     const elapsed = Math.max(0, (Date.now() - this.startedAt) / 1000);
     const done = this.streamsClosed;
@@ -381,14 +403,66 @@ export class ExecSession {
     };
   }
 
+  private waitForActivity(ms: number, signal?: AbortSignal | null): Promise<void> {
+    throwIfAborted(signal);
+    if (this.isDone() || this.streamsClosed) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let outputTimer: ReturnType<typeof setTimeout> | undefined;
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(waitTimer);
+        clearTimeout(outputTimer);
+        this.outputWaiters.delete(onOutput);
+        this.process.removeListener("exit", onDone);
+        this.process.removeListener("close", onDone);
+        signal?.removeEventListener("abort", onAbort);
+        if (error) reject(error);
+        else resolve();
+      };
+      const onDone = () => finish();
+      const onAbort = () => finish(createToolAbortError());
+      const onOutput = () => {
+        if (this.isDone() || this.streamsClosed) {
+          finish();
+        } else if (this.chunks.length > 0 && outputTimer === undefined) {
+          // Anchor at the first readable output, never debounce continuous logs.
+          const remaining = Math.max(0, (this.outputStartedAt ?? Date.now()) + OUTPUT_COALESCE_MS - Date.now());
+          if (remaining === 0) finish();
+          else outputTimer = setTimeout(onDone, remaining);
+        }
+      };
+      const waitMs = Math.max(0, Math.min(ms, this.deadlineMs - Date.now()));
+      const waitTimer = setTimeout(onDone, waitMs);
+      this.process.once("exit", onDone);
+      this.process.once("close", onDone);
+      this.outputWaiters.add(onOutput);
+      signal?.addEventListener("abort", onAbort, { once: true });
+      // Recheck after subscribing so completion, cancellation and buffered
+      // output cannot fall between checking state and installing listeners.
+      if (signal?.aborted) onAbort();
+      else onOutput();
+    });
+  }
+
+  private notifyOutputWaiters(): void {
+    for (const wake of this.outputWaiters) wake();
+  }
+
   private appendStdout(text: string): void {
-    if (text) this.chunks.push(text);
+    if (!text) return;
+    this.chunks.push(text);
+    this.outputStartedAt ??= Date.now();
+    this.notifyOutputWaiters();
   }
 
   private appendStderr(text: string): void {
     if (!text) return;
     this.chunks.push(this.stderrStarted ? text : `STDERR:\n${text}`);
+    this.outputStartedAt ??= Date.now();
     this.stderrStarted = true;
+    this.notifyOutputWaiters();
   }
 
   private finishStdoutOnce(): void {
@@ -412,6 +486,7 @@ export class ExecSession {
     if (this.streamsClosed) return;
     this.streamsClosed = true;
     this.resolveClose();
+    this.notifyOutputWaiters();
   }
 }
 
@@ -610,11 +685,21 @@ export class WriteStdinTool extends Tool {
         yield_time_ms: { type: "integer", minimum: 0, maximum: MAX_YIELD_MS },
         wait_for: { type: "string" },
         wait_timeout_ms: { type: "integer", minimum: 0, maximum: MAX_WAIT_FOR_MS },
-        max_output_chars: { type: "integer", minimum: 1000, maximum: MAX_OUTPUT_CHARS },
-        max_output_tokens: { type: "integer", minimum: 1000, maximum: MAX_OUTPUT_CHARS },
+        max_output_chars: { type: "integer", minimum: 1000, maximum: MAX_OUTPUT_CHARS, description: OUTPUT_LIMIT_DESCRIPTION },
       },
       required: ["session_id"],
     };
+  }
+
+  castParams(params: Record<string, any>): Record<string, any> {
+    return castParameterAliases(params, STDIN_ALIASES, (value) => super.castParams(value));
+  }
+
+  validateParams(params: Record<string, any>): string[] {
+    if (!params || typeof params !== "object" || Array.isArray(params)) return super.validateParams(params);
+    const normalized = normalizeParameterAliases(params, STDIN_ALIASES);
+    if (normalized.error) return [normalized.error];
+    return super.validateParams(normalized.params);
   }
 
   async execute(params: {
@@ -635,23 +720,26 @@ export class WriteStdinTool extends Tool {
     max_output_tokens?: number | null;
     maxOutputTokens?: number | null;
   } = {}, context?: ToolExecutionContext): Promise<string> {
-    const sessionId = params.session_id ?? params.sessionId ?? "";
+    params = this.castParams(params);
+    const errors = this.validateParams(params);
+    if (errors.length) return `Error: ${errors.join("; ")}`;
+    const sessionId = params.session_id!;
     const outputLimit = clampSessionInt(
-      params.max_output_chars ?? params.maxOutputChars ?? params.max_output_tokens ?? params.maxOutputTokens,
+      params.max_output_chars,
       DEFAULT_MAX_OUTPUT_CHARS,
       1000,
       MAX_OUTPUT_CHARS,
     );
     try {
-      const waitFor = params.wait_for ?? params.waitFor;
+      const waitFor = params.wait_for;
       if (waitFor) {
         return this.waitForOutput({
           sessionId,
           chars: params.chars,
-          closeStdin: params.close_stdin ?? params.closeStdin ?? false,
+          closeStdin: params.close_stdin ?? false,
           terminate: params.terminate ?? false,
           waitFor,
-          waitTimeoutMs: clampSessionInt(params.wait_timeout_ms ?? params.waitTimeoutMs, DEFAULT_WAIT_FOR_MS, 0, MAX_WAIT_FOR_MS),
+          waitTimeoutMs: clampSessionInt(params.wait_timeout_ms, DEFAULT_WAIT_FOR_MS, 0, MAX_WAIT_FOR_MS),
           maxOutputChars: outputLimit,
           abortSignal: context?.abortSignal ?? null,
         });
@@ -659,9 +747,9 @@ export class WriteStdinTool extends Tool {
       const poll = await this.manager.write({
         sessionId,
         chars: params.chars,
-        closeStdin: params.close_stdin ?? params.closeStdin ?? false,
+        closeStdin: params.close_stdin ?? false,
         terminate: params.terminate ?? false,
-        yieldTimeMs: clampSessionInt(params.yield_time_ms ?? params.yieldTimeMs, DEFAULT_YIELD_MS, 0, MAX_YIELD_MS),
+        yieldTimeMs: clampSessionInt(params.yield_time_ms, DEFAULT_YIELD_MS, 0, MAX_YIELD_MS),
         maxOutputChars: outputLimit,
         abortSignal: context?.abortSignal ?? null,
       });

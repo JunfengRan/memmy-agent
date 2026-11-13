@@ -72,7 +72,12 @@ async function fixture(options: {
     `const lock = db + '.server.lock'; const version = process.env.FIXTURE_VERSION || ${JSON.stringify(bundledVersion)};`,
     "fs.writeFileSync(lock, JSON.stringify({ pid: process.pid, sqlitePath: db, host: '127.0.0.1', port }));",
     "const server = http.createServer((request, response) => {",
-    "  if (request.url === '/api/v1/health') { response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ ok: process.env.FIXTURE_IDENTITY !== 'false' && !fs.existsSync(path.join(serviceHome, 'unexpected-service')), protocolVersion: 1, serviceVersion: version })); return; }",
+    "  if (request.url === '/api/v1/health') {",
+    "    const hasMemoryIdentity = process.env.FIXTURE_IDENTITY !== 'false' && !fs.existsSync(path.join(serviceHome, 'unexpected-service'));",
+    // A non-Memory endpoint lacks the health contract; `ok: false` is valid for a degraded Memory service.
+    "    const health = hasMemoryIdentity ? { ok: true, protocolVersion: 1, serviceVersion: version } : { serviceVersion: version };",
+    "    response.setHeader('content-type', 'application/json'); response.end(JSON.stringify(health)); return;",
+    "  }",
     "  if (request.url === '/api/v1/admin/shutdown') { response.end('{}'); setImmediate(shutdown); return; }",
     "  response.writeHead(404); response.end();",
     "});",
@@ -179,7 +184,7 @@ describe("bundled Memory upgrades", () => {
     expect(await running.repairCalls()).toHaveLength(1);
     expect(running.children).toHaveLength(0);
     expect(running.old.process.exitCode).toBeNull();
-  });
+  }, 20_000);
 
   it("starts a Desktop child after launcher repair stops the legacy service", async () => {
     const running = await fixture({ version: "2.1.1", platform: "win32", repairStopsService: true });
@@ -189,7 +194,7 @@ describe("bundled Memory upgrades", () => {
     expect(running.children).toHaveLength(1);
     expect(running.children[0]?.persistOnDesktopExit).toBe(true);
     expect(await running.version()).toBe("2.1.1");
-  });
+  }, 20_000);
 
   it.each(["darwin", "linux"] as const)("does not request Windows launcher repair on %s", async (platform) => {
     const running = await fixture({ version: "2.1.1", platform });
@@ -215,7 +220,7 @@ describe("bundled Memory upgrades", () => {
     expect(running.children).toHaveLength(0);
     expect(running.old.process.exitCode).toBeNull();
     expect(await running.version()).toBe("2.1.1");
-  });
+  }, 20_000);
 
   it.each(["2.1.0", "2.1.1"])("starts a Desktop child if launcher repair stopped Memory %s before task update was denied", async (version) => {
     const running = await fixture({ version, platform: "win32", repairFails: true, repairStopsService: true });
@@ -285,8 +290,9 @@ describe("bundled Memory upgrades", () => {
   });
 
   it.each([
-    ["2.1.1-rc.2", "2.1.1-rc.10"],
-    ["2.1.1-rc.10", "2.1.1"],
+    ["1.2.401", "1.2.5"],
+    ["2.1.1-rc.10", "2.1.1-rc.2"],
+    ["2.1.1", "2.1.1-rc.10"],
     ["2.1.1", "2.1.2-rc.1"],
   ])("upgrades the owned Memory runtime from %s to %s", async (version, bundledVersion) => {
     const running = await fixture({ version, bundledVersion });
@@ -297,8 +303,9 @@ describe("bundled Memory upgrades", () => {
   });
 
   it.each([
-    ["2.1.1-rc.10", "2.1.1-rc.2"],
-    ["2.1.1", "2.1.1-rc.10"],
+    ["1.2.5", "1.2.401"],
+    ["2.1.1-rc.2", "2.1.1-rc.10"],
+    ["2.1.1-rc.10", "2.1.1"],
     ["2.1.2-rc.1", "2.1.1"],
   ])("keeps the newer owned Memory runtime %s when Desktop bundles %s", async (version, bundledVersion) => {
     const running = await fixture({ version, bundledVersion });

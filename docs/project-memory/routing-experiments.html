@@ -1,0 +1,1949 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jev 与 Super Agent 实验 · 项目记忆交接</title><script>
+    (function () {
+      try {
+        var theme = localStorage.getItem("memtensor-doc-theme");
+        if (theme === "light" || theme === "dark") document.documentElement.setAttribute("data-theme", theme);
+      } catch (e) { /* 读不到本地记录时继续跟随系统 */ }
+    })();
+  </script><style>
+    /* 变量逐个取自 DESIGN.md；改颜色先改 DESIGN.md。 */
+    :root {
+      color-scheme: light dark;
+
+      --primary: light-dark(#4044ED, #7275F7);
+      --primary-soft: light-dark(#EEF0FF, #0F163E);
+      --primary-line: light-dark(#D8DAFB, #20277A);
+      --brand-blue: #408DFC;
+      --brand-violet: #AA75EF;
+      --ink: light-dark(#141D32, #E2E8F0);
+      --body: light-dark(#364153, #CBD5E1);
+      --muted: light-dark(#62748E, #90A1B9);
+      --line: light-dark(#E2E8F0, #1E293B);
+      --line-strong: light-dark(#CAD5E2, #2E3B58);
+      --surface: light-dark(#FFFFFF, #080F21);
+      --panel: light-dark(#F8FAFC, #0A132D);
+      --canvas: light-dark(#FAFAFF, #080F21);
+      --risk: light-dark(#DC2626, #F87171);
+      --risk-ink: light-dark(#B91C1C, #F87171);
+      --risk-soft: light-dark(#FEF2F2, #141D32);
+      --verify: light-dark(#D97706, #FBBF24);
+      --verify-ink: light-dark(#B45309, #FBBF24);
+      --verify-soft: light-dark(#FFFBEB, #141D32);
+      --positive: light-dark(#16A34A, #4ADE80);
+      --positive-ink: light-dark(#15803D, #4ADE80);
+      --positive-soft: light-dark(#F0FDF4, #141D32);
+      --memmy: light-dark(#0E9D88, #5CBFAE);
+      --memmy-ink: light-dark(#0B7D6D, #5CBFAE);
+      --memmy-soft: light-dark(#E7F7F3, #141D32);
+      --clawforce: #F1623D;
+      --clawforce-ink: light-dark(#C2410C, #F1623D);
+      --clawforce-soft: light-dark(#FFF1EC, #141D32);
+
+      --grad-brand: linear-gradient(90deg, var(--brand-blue), var(--primary) 55%, var(--brand-violet));
+      --grad-brand-v: linear-gradient(180deg, var(--brand-blue), var(--primary) 55%, var(--brand-violet));
+      --nav-active-text: light-dark(#4044ED, #E2E8F0);
+
+      --d-group-fill: light-dark(#FFFFFF, #0A132D);
+      --d-group-line: light-dark(#D8DAFB, #1E293B);
+      --d-node-fill: light-dark(#FFFFFF, #0A132D);
+      --d-node-line: light-dark(#E2E8F0, #2E3B58);
+      --d-focus-fill: light-dark(#EEF0FF, #141D32);
+      --d-focus-line: #4044ED;
+      --d-focus-text: light-dark(#4044ED, #01C6FA);
+      --d-chip-fill: light-dark(#FFFFFF, #0A132D);
+      --d-chip-line: light-dark(#D8DAFB, #20277A);
+      --d-chip-text: light-dark(#4044ED, #7275F7);
+      --d-badge-fill: light-dark(#EEF0FF, #0F163E);
+      --d-badge-line: light-dark(transparent, #20277A);
+      --d-risk-fill: light-dark(#FEF2F2, #141D32);
+      --d-risk-line: light-dark(#DC2626, #F87171);
+      --d-risk-text: light-dark(#B91C1C, #F87171);
+      --d-main: light-dark(#4044ED, #01C6FA);
+      --d-edge: light-dark(#62748E, #90A1B9);
+      --d-ext: light-dark(#CAD5E2, #2E3B58);
+      --d-title: light-dark(#141D32, #E2E8F0);
+      --d-sub: light-dark(#62748E, #90A1B9);
+      --d-msg: light-dark(#364153, #CBD5E1);
+
+      --font-display: "Alibaba PuHuiTi 3.0", -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", sans-serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+      --sp-xs: 4px;
+      --sp-sm: 8px;
+      --sp-md: 12px;
+      --sp-base: 16px;
+      --sp-lg: 24px;
+      --sp-xl: 32px;
+      --sp-2xl: 48px;
+      --nav-width: 248px;
+      --content-width: 720px;
+      --page-width: 1160px;
+
+      --r-sm: 4px;
+      --r-md: 8px;
+      --r-lg: 12px;
+      --r-full: 9999px;
+
+      --shadow-card: 0 1px 2px rgba(20, 29, 50, 0.04), 0 8px 24px rgba(64, 68, 237, 0.05);
+      --glow-focus: 0 0 0 transparent;
+    }
+
+    :root[data-theme="light"] { color-scheme: light; }
+    :root[data-theme="dark"] { color-scheme: dark; }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --grad-brand: linear-gradient(90deg, #1D4ED8, #01C6FA);
+        --grad-brand-v: linear-gradient(180deg, #1D4ED8, #01C6FA);
+        --shadow-card: 0 0 0 1px rgba(64, 68, 237, 0.22), 0 0 40px rgba(1, 198, 250, 0.06);
+        --glow-focus: 0 0 10px rgba(1, 198, 250, 0.35);
+      }
+    }
+    :root[data-theme="dark"] {
+      --grad-brand: linear-gradient(90deg, #1D4ED8, #01C6FA);
+      --grad-brand-v: linear-gradient(180deg, #1D4ED8, #01C6FA);
+      --shadow-card: 0 0 0 1px rgba(64, 68, 237, 0.22), 0 0 40px rgba(1, 198, 250, 0.06);
+      --glow-focus: 0 0 10px rgba(1, 198, 250, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-padding-top: var(--sp-lg); }
+    body {
+      margin: 0;
+      background: var(--surface);
+      color: var(--body);
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.75;
+      -webkit-font-smoothing: antialiased;
+    }
+    ::selection { background: var(--primary-soft); color: var(--ink); }
+    a {
+      color: var(--primary);
+      text-decoration: underline;
+      text-decoration-color: var(--primary-line);
+      text-underline-offset: 3px;
+      transition: color 150ms, text-decoration-color 150ms, background-color 150ms;
+    }
+    a:hover { text-decoration-color: var(--primary); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: var(--nav-width) minmax(0, 1fr);
+      max-width: var(--page-width);
+      margin: 0 auto;
+    }
+
+    nav.toc {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      overflow-y: auto;
+      padding: var(--sp-2xl) var(--sp-base) var(--sp-xl) var(--sp-lg);
+      border-right: 1px solid var(--line);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .toc-brand { display: flex; flex-direction: column; gap: 2px; margin: 0 0 var(--sp-lg); }
+    .toc-brand::after {
+      content: "";
+      width: 24px;
+      height: 3px;
+      margin-top: var(--sp-sm);
+      border-radius: var(--r-full);
+      background: var(--grad-brand);
+    }
+    .toc-org {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink);
+    }
+    .toc-kind { font-size: 12px; color: var(--muted); }
+    nav.toc a {
+      position: relative;
+      display: flex;
+      align-items: baseline;
+      gap: var(--sp-sm);
+      margin: 2px 0;
+      padding: 6px var(--sp-md);
+      border-radius: var(--r-sm);
+      color: var(--muted);
+      text-decoration: none;
+    }
+    nav.toc a:hover { color: var(--ink); }
+    nav.toc a[aria-current="true"] {
+      background: var(--primary-soft);
+      color: var(--nav-active-text);
+      font-weight: 600;
+    }
+    nav.toc a[aria-current="true"]::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 6px;
+      bottom: 6px;
+      width: 3px;
+      border-radius: var(--r-full);
+      background: var(--grad-brand-v);
+    }
+    .toc-no {
+      min-width: 1.75em;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      color: var(--primary);
+    }
+
+    main {
+      position: relative;
+      min-width: 0;
+      max-width: calc(var(--content-width) + 2 * var(--sp-2xl));
+      padding: var(--sp-2xl) var(--sp-2xl) 96px;
+    }
+
+    .doc-head { margin-bottom: var(--sp-xl); }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      margin: 0 0 var(--sp-md);
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+    }
+    .title-rule {
+      width: 56px;
+      height: 3px;
+      margin: var(--sp-base) 0 var(--sp-lg);
+      border-radius: var(--r-full);
+      background: var(--grad-brand);
+    }
+    .lead {
+      position: relative;
+      margin: 0 0 var(--sp-base);
+      padding: var(--sp-base) var(--sp-lg);
+      border-radius: var(--r-md);
+      background: var(--primary-soft);
+      color: var(--ink);
+      font-size: 17px;
+      line-height: 1.65;
+    }
+    .lead::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      border-radius: var(--r-md) 0 0 var(--r-md);
+      background: var(--grad-brand-v);
+    }
+    .lead strong { color: var(--primary); }
+    .meta { display: flex; flex-wrap: wrap; gap: var(--sp-sm); margin: 0; }
+    .meta div {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px var(--sp-md);
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--panel);
+      font-size: 12px;
+      line-height: 1.8;
+    }
+    .meta dt { color: var(--muted); }
+    .meta dd { margin: 0; font-family: var(--font-mono); color: var(--ink); }
+
+    section { margin-top: var(--sp-2xl); }
+    h2 {
+      display: flex;
+      align-items: baseline;
+      gap: var(--sp-md);
+      margin: 0 0 var(--sp-base);
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+    .sec-no {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--primary);
+    }
+    h3 {
+      margin: var(--sp-xl) 0 var(--sp-sm);
+      color: var(--ink);
+      font-size: 17px;
+      font-weight: 600;
+      line-height: 1.5;
+    }
+    p, ul, ol { margin: 0 0 var(--sp-base); }
+    ul, ol { padding-left: 1.4em; }
+    li + li { margin-top: var(--sp-xs); }
+    strong { color: var(--ink); font-weight: 600; }
+
+    code, pre { font-family: var(--font-mono); }
+    code {
+      padding: 1px 6px;
+      border: 1px solid var(--line);
+      border-radius: var(--r-sm);
+      background: var(--panel);
+      color: var(--ink);
+      font-size: 0.875em;
+    }
+    pre {
+      margin: 0 0 var(--sp-base);
+      padding: var(--sp-base);
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: var(--panel);
+      color: var(--ink);
+      font-size: 13.5px;
+      line-height: 1.6;
+    }
+    pre code { padding: 0; border: 0; background: none; font-size: inherit; }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 var(--sp-sm);
+      border-radius: var(--r-full);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0;
+      text-transform: none;
+      white-space: nowrap;
+      vertical-align: 1px;
+    }
+    .tag-memos { background: var(--primary-soft); color: var(--primary); }
+    .tag-memmy { background: var(--memmy-soft); color: var(--memmy-ink); }
+    .tag-clawforce { background: var(--clawforce-soft); color: var(--clawforce-ink); }
+    .tag-positive { background: var(--positive-soft); color: var(--positive-ink); }
+
+    .callout {
+      position: relative;
+      margin: var(--sp-lg) 0;
+      padding: var(--sp-md) var(--sp-base) var(--sp-md) calc(var(--sp-base) + 3px);
+      border-radius: var(--r-md);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .callout::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      border-radius: var(--r-md) 0 0 var(--r-md);
+      background: var(--callout-line);
+    }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { color: inherit; }
+    .callout-title {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--callout-title);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+    .callout.info { --callout-line: var(--primary); --callout-title: var(--primary); background: var(--primary-soft); color: var(--body); }
+    .callout.verify { --callout-line: var(--verify); --callout-title: var(--verify-ink); background: var(--verify-soft); color: var(--verify-ink); }
+    .callout.risk { --callout-line: var(--risk); --callout-title: var(--risk-ink); background: var(--risk-soft); color: var(--risk-ink); }
+
+    ol.steps { list-style: none; counter-reset: step; margin: var(--sp-lg) 0; padding: 0; }
+    ol.steps li { position: relative; margin: 0; padding: 0 0 var(--sp-lg) 40px; counter-increment: step; }
+    ol.steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 2px;
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: var(--r-full);
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+    }
+    ol.steps li::after {
+      content: "";
+      position: absolute;
+      left: 11.5px;
+      top: 32px;
+      bottom: var(--sp-xs);
+      width: 1px;
+      background: var(--line);
+    }
+    ol.steps li:last-child { padding-bottom: 0; }
+    ol.steps li:last-child::after { display: none; }
+    ol.steps strong { display: block; }
+
+    .table-wrap {
+      margin: var(--sp-lg) 0;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.6; }
+    th {
+      padding: 10px var(--sp-base);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-align: left;
+      white-space: nowrap;
+    }
+    td { padding: 10px var(--sp-base); border-top: 1px solid var(--line); color: var(--body); vertical-align: top; }
+    td:first-child { color: var(--ink); font-weight: 600; }
+    th.num, td.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    tr.row-ours td { background: var(--primary-soft); color: var(--ink); }
+    tr.row-ours td:first-child { color: var(--primary); }
+
+    figure.diagram {
+      margin: var(--sp-xl) 0;
+      padding: var(--sp-lg) var(--sp-lg) var(--sp-base);
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      background-color: var(--canvas);
+      box-shadow: var(--shadow-card);
+    }
+    figure.diagram svg { display: block; width: 100%; min-width: 560px; height: auto; }
+    figcaption { margin-top: var(--sp-md); color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .fig-no {
+      margin-right: var(--sp-sm);
+      color: var(--primary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .diagram svg text { font-family: var(--font-sans); }
+    .diagram .t-mono { font-family: var(--font-mono); }
+    .diagram .group { fill: var(--d-group-fill); stroke: var(--d-group-line); }
+    .diagram .node { fill: var(--d-node-fill); stroke: var(--d-node-line); }
+    .diagram .node-focus { fill: var(--d-focus-fill); stroke: var(--d-focus-line); filter: drop-shadow(var(--glow-focus)); }
+    .diagram .chip { fill: var(--d-chip-fill); stroke: var(--d-chip-line); }
+    .diagram .badge { fill: var(--d-badge-fill); stroke: var(--d-badge-line); }
+    .diagram .risk { fill: var(--d-risk-fill); stroke: var(--d-risk-line); }
+    .diagram .legend-box { fill: var(--d-node-fill); stroke: var(--d-node-line); }
+    .diagram .edge-main { stroke: var(--d-main); }
+    .diagram .edge, .diagram .edge-async { stroke: var(--d-edge); }
+    .diagram .edge-ext { stroke: var(--d-ext); }
+    .diagram .arrow-main { fill: var(--d-main); }
+    .diagram .arrow { fill: var(--d-edge); }
+    .diagram .t-title { fill: var(--d-title); font-weight: 600; }
+    .diagram .t-sub { fill: var(--d-sub); }
+    .diagram .t-label { fill: var(--d-sub); font-weight: 600; letter-spacing: 0.08em; }
+    .diagram .t-chip { fill: var(--d-chip-text); font-weight: 500; }
+    .diagram .t-focus { fill: var(--d-focus-text); font-weight: 600; }
+    .diagram .t-risk { fill: var(--d-risk-text); font-weight: 600; }
+    .diagram .t-msg { fill: var(--d-msg); }
+    .diagram .t-guard { fill: var(--d-sub); }
+    .diagram .t-msg, .diagram .t-guard { stroke: var(--canvas); paint-order: stroke; }
+    .diagram .group.frame { fill: none; }
+
+    .page-tools {
+      position: fixed;
+      top: var(--sp-base);
+      right: var(--sp-base);
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+    }
+    .theme-toggle {
+      --icon-sun: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%224%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.6%22%2F%3E%3Cpath%20d%3D%22M12%202.5v2.5M12%2019v2.5M2.5%2012H5M19%2012h2.5M5.2%205.2l1.8%201.8M17%2017l1.8%201.8M18.8%205.2%2017%207M7%2017l-1.8%201.8%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E");
+      --icon-moon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M16%203.2A8.2%208.2%200%201%200%2020.8%2015%206.4%206.4%200%200%201%2016%203.2z%22%20fill%3D%22black%22%2F%3E%3C%2Fsvg%3E");
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      margin: 0;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+    }
+    .theme-toggle::before {
+      content: "";
+      width: 16px;
+      height: 16px;
+      background: currentColor;
+      -webkit-mask: var(--icon-sun) center / contain no-repeat;
+      mask: var(--icon-sun) center / contain no-repeat;
+    }
+    :root[data-theme="dark"] .theme-toggle::before {
+      -webkit-mask-image: var(--icon-moon);
+      mask-image: var(--icon-moon);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .theme-toggle::before {
+        -webkit-mask-image: var(--icon-moon);
+        mask-image: var(--icon-moon);
+      }
+    }
+    .diagram-edit-open {
+      padding: var(--sp-xs) var(--sp-md);
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--surface);
+      color: var(--muted);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .diagram-edit-open[aria-pressed="true"] { color: var(--primary); border-color: var(--primary-line); }
+    .diagram-edit-bar:not([hidden]) {
+      position: fixed;
+      top: 60px;
+      right: var(--sp-base);
+      z-index: 30;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--sp-sm);
+      max-width: min(440px, calc(100% - 32px));
+      padding: var(--sp-sm) var(--sp-md);
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      background: var(--surface);
+      box-shadow: var(--shadow-card);
+      color: var(--body);
+      font-family: var(--font-sans);
+      font-size: 13px;
+    }
+    .diagram-edit-bar.is-plain label { opacity: 0.45; pointer-events: none; }
+    .diagram-edit-bar label { display: flex; align-items: center; gap: var(--sp-xs); color: var(--muted); }
+    .diagram-edit-bar select,
+    .diagram-edit-bar input[type="number"] {
+      border: 1px solid var(--line);
+      border-radius: var(--r-sm);
+      background: var(--panel);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      padding: var(--sp-xs);
+    }
+    .diagram-edit-bar select { max-width: 148px; }
+    .diagram-edit-bar input[type="number"] { width: 64px; }
+    .diagram-edit-bar button {
+      border: 1px solid var(--line);
+      border-radius: var(--r-full);
+      background: var(--panel);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      cursor: pointer;
+      padding: var(--sp-xs) var(--sp-md);
+    }
+    .diagram-edit-tools {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--sp-sm);
+      flex: 0 0 auto;
+    }
+    .diagram-edit-bar.is-code {
+      flex-direction: column;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      width: min(440px, calc(100% - 32px));
+    }
+    .diagram-edit-code:not([hidden]) {
+      flex: 1 1 auto;
+      align-self: stretch;
+      width: auto;
+      min-width: 0;
+      min-height: 0;
+      max-height: 220px;
+      margin: 0;
+      overflow: auto;
+      white-space: pre;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+    .diagram-edit-bar.is-sized .diagram-edit-code:not([hidden]) {
+      max-height: none;
+    }
+    .diagram-edit-resize {
+      position: absolute;
+      z-index: 2;
+      touch-action: none;
+    }
+    .diagram-edit-resize[data-resize="w"] {
+      left: -4px;
+      top: 0;
+      bottom: 8px;
+      width: 8px;
+      cursor: ew-resize;
+      box-shadow: inset 2px 0 0 var(--line-strong);
+    }
+    .diagram-edit-resize[data-resize="s"] {
+      left: 8px;
+      right: 0;
+      bottom: -4px;
+      height: 8px;
+      cursor: ns-resize;
+      box-shadow: inset 0 -2px 0 var(--line-strong);
+    }
+    .diagram-edit-resize[data-resize="sw"] {
+      left: -4px;
+      bottom: -4px;
+      width: 8px;
+      height: 8px;
+      cursor: nesw-resize;
+      background: var(--line-strong);
+    }
+    .edit-spacer {
+      visibility: hidden;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .diagram-edit-text {
+      position: fixed;
+      z-index: 32;
+      min-width: 4em;
+      margin: 0;
+      padding: var(--sp-xs);
+      border: 1px solid var(--primary);
+      border-radius: var(--r-sm);
+      background: var(--surface);
+      color: var(--ink);
+      outline: none;
+    }
+    body.is-diagram-edit [data-editable] { cursor: grab; touch-action: none; }
+    body.is-diagram-edit [data-editable].is-editing { cursor: text; touch-action: auto; }
+    body.is-diagram-edit .diagram rect,
+    body.is-diagram-edit .diagram text { cursor: grab; }
+    .edit-frame {
+      position: fixed;
+      z-index: 28;
+      border: 1px solid var(--primary);
+      pointer-events: none;
+    }
+    .edit-frame [data-edge] {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      margin: -4px 0 0 -4px;
+      border: 1px solid var(--primary);
+      border-radius: 1px;
+      background: var(--surface);
+      pointer-events: auto;
+    }
+    .edit-frame [data-edge="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+    .edit-frame [data-edge="n"] { left: 50%; top: 0; cursor: ns-resize; }
+    .edit-frame [data-edge="ne"] { left: 100%; top: 0; cursor: nesw-resize; }
+    .edit-frame [data-edge="e"] { left: 100%; top: 50%; cursor: ew-resize; }
+    .edit-frame [data-edge="se"] { left: 100%; top: 100%; cursor: nwse-resize; }
+    .edit-frame [data-edge="s"] { left: 50%; top: 100%; cursor: ns-resize; }
+    .edit-frame [data-edge="sw"] { left: 0; top: 100%; cursor: nesw-resize; }
+    .edit-frame [data-edge="w"] { left: 0; top: 50%; cursor: ew-resize; }
+
+    details {
+      margin: var(--sp-base) 0;
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      background: var(--surface);
+    }
+    summary {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: var(--sp-md) var(--sp-base);
+      color: var(--ink);
+      font-weight: 600;
+      cursor: pointer;
+      list-style: none;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::before { content: "+"; width: 1em; color: var(--primary); font-family: var(--font-mono); }
+    details[open] summary { border-bottom: 1px solid var(--line); }
+    details[open] summary::before { content: "−"; }
+    .details-body { padding: var(--sp-base); }
+    .details-body > :last-child { margin-bottom: 0; }
+    .details-body .table-wrap { margin: 0; }
+
+    .site-foot {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: var(--sp-base);
+      margin-top: 64px;
+      padding-top: var(--sp-base);
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+    }
+
+    @media (max-width: 860px) {
+      body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: stretch;
+      }
+      .layout { display: contents; }
+      .page-tools {
+        position: sticky;
+        top: 0;
+        right: auto;
+        grid-column: 2;
+        grid-row: 1;
+        z-index: 11;
+        align-self: stretch;
+        height: auto;
+        margin: 0;
+        padding: var(--sp-sm) var(--sp-base);
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+      }
+      .diagram-edit-open { display: none; }
+      nav.toc {
+        position: sticky;
+        top: 0;
+        grid-column: 1;
+        grid-row: 1;
+        align-self: stretch;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: var(--sp-xs);
+        min-width: 0;
+        height: auto;
+        overflow-x: auto;
+        padding: var(--sp-sm) var(--sp-base);
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        background: var(--surface);
+        white-space: nowrap;
+        scrollbar-width: none;
+      }
+      nav.toc::-webkit-scrollbar { display: none; }
+      .toc-brand { display: none; }
+      nav.toc a { margin: 0; padding: var(--sp-xs) var(--sp-md); }
+      nav.toc a[aria-current="true"]::before {
+        top: auto;
+        right: var(--sp-md);
+        bottom: 0;
+        left: var(--sp-md);
+        width: auto;
+        height: 2px;
+        background: var(--grad-brand);
+      }
+      main {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        padding: var(--sp-xl) var(--sp-base) 64px;
+      }
+    }
+    @media (max-width: 480px) {
+      .page-tools { gap: var(--sp-xs); padding: var(--sp-xs) var(--sp-sm); }
+      nav.toc { padding: var(--sp-xs) var(--sp-sm); }
+    }
+
+    @media print {
+      body { display: block; }
+      nav.toc { display: none; }
+      .layout { display: block; }
+      main { max-width: none; padding: 0; }
+      figure.diagram { break-inside: avoid; box-shadow: none; }
+      .page-tools, .diagram-edit-bar, .edit-frame { display: none !important; }
+      a { text-decoration: none; }
+    }
+  </style></head><body><div class="page-tools">
+    <button type="button" class="diagram-edit-open" aria-pressed="false" title="点选后拖动、贴边缩放，双击改字">调整排版</button>
+    <button type="button" class="theme-toggle" data-theme-toggle aria-label="切换配色"></button>
+  </div><div class="layout"><nav class="toc" aria-label="目录"><p class="toc-brand"><span class="toc-org">MemTensor</span><span class="toc-kind">项目记忆交接</span></p><a href="#concepts"><span class="toc-no">01</span>两者解决的不是同一层问题</a><a href="#choice"><span class="toc-no">02</span>基座：在 Add 与 Search 中加入选择题</a><a href="#dispatch"><span class="toc-no">03</span>独立会话实验：什么时候允许续接</a><a href="#session-topic"><span class="toc-no">04</span>端到端实验：把 session 当作 topic</a><a href="#results"><span class="toc-no">05</span>三组结果分别说明什么</a><a href="#handoff"><span class="toc-no">06</span>接手时从哪里读和复现</a></nav><main><header class="doc-head"><p class="eyebrow">应用深挖 <span class="tag tag-memos">MemOS</span></p>
+<h1>Jev 与 Super Agent 实验</h1>
+<div class="title-rule" aria-hidden="true"></div><p class="lead">当前基座把主题选择作为默认关闭的实验插入点；另两个工作区探索会话路由与 session 作为 topic。它们帮助理解归属粒度的取舍，但不是一条已合并的新产品流水线。</p>
+<dl class="meta"><div><dt>基线</dt><dd>71d3faff · 2026-11-11</dd></div><div><dt>读者</dt><dd>接手研发同事</dd></div><div><dt>配套阅读</dt><dd><a href="algorithm-handoff.html">项目记忆为什么难</a></dd></div></dl></header><section id="concepts"><h2><span class="sec-no">01</span>两者解决的不是同一层问题</h2>
+<p>Jev 是 TypeSafe 提供的 System One 决策模型：输入状态与有类型的问题，返回 choice、概率分布等结构化结果。Choice 适合把“这轮属于哪个候选主题”表达成选择题。这个定位来自 <a href="https://docs.typesafe.ai/introduction">TypeSafe 官方介绍</a>，不是本仓库性能实验的结论；本页不采用厂商速度、成本或可靠性宣传作为产品证据。</p>
+<p>dsh-superagent 是面向单个 GitHub 仓库的主动编码 Agent 研究原型，建立在 DeepSeek Harness 上：它接收触发消息，由编排者决定新建、续接、忽略或停止工作，再由工作会话执行并交回结果。原型 README 明确它不是官方 DeepSeek 产品，并且公开原型不等同于全部设计方向。项目记忆实验只借用了 dispatch 中的路由规则，没有启动整套 Harness，也没有把执行 Agent 接到 Add 里。</p>
+<div class="callout info"><p class="callout-title">先纠正“用了 Jev”的含义</p>
+<p>当前基座的文件和指标沿用了 Jev 命名，但请求实际上由 gpt-6-luna 经 chat completions 生成严格 JSON。它复用了结构化选择题的思路，没有调用 TypeSafe 的 Jev 权重或原生 System One 接口。生成出来的 probabilities 也不能当成已验证校准的 Jev 概率。</p>
+</div><p>阅读顺序：先看基座中的可选选择题，再看独立会话路由比较，最后看 session 直接作为 topic 的端到端实验。这三件事有不同代码、数据集和失败策略。</p>
+</section>
+<section id="choice"><h2><span class="sec-no">02</span>基座：在 Add 与 Search 中加入选择题</h2>
+<p>代码在当前开发分支的 decisions/，由 <a href="decisions/0006-jev-topic-experiment.md">本分支 ADR-0006</a> 记录，默认关闭。模型只选择，不生成决策正文，不直接提交存储。</p>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 472" role="img" aria-label="图 1 · 选择题是默认算法中的可选插入点，不是一套新的完整整理流程。"><defs><marker id="arrow-choice" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#62748E"/></marker></defs><path class="edge" d="M340 92 L340 140" stroke="#62748E" fill="none" marker-end="url(#arrow-choice)"/><path class="edge" d="M340 212 L340 260" stroke="#62748E" fill="none" marker-end="url(#arrow-choice)"/><rect class="node" x="40" y="20" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="node-focus" x="40" y="140" width="600" height="72" rx="8" fill="#EEF0FF" stroke="#4044ED"/><rect class="node" x="40" y="260" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="node" x="40" y="380" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="chip" x="290.0" y="104" width="100" height="24" rx="12" fill="#FFFFFF" stroke="#D8DAFB"/><text class="t-chip" x="340" y="120" text-anchor="middle" fill="#4044ED">选项</text><rect class="chip" x="290.0" y="224" width="100" height="24" rx="12" fill="#FFFFFF" stroke="#D8DAFB"/><text class="t-chip" x="340" y="240" text-anchor="middle" fill="#4044ED">候选池</text><text class="t-title" x="64" y="48" fill="#141D32">Add：M02 草稿与 M03 候选</text><text class="t-sub" x="64" y="71" fill="#62748E">query + answer 和候选卡交给 chooseAdd</text><text class="t-title" x="64" y="168" fill="#141D32">选择已有 id / new / none</text><text class="t-sub" x="64" y="191" fill="#62748E">已有 id 收窄候选；new 清空候选；none 保持原候选</text><text class="t-title" x="64" y="288" fill="#141D32">M04 / M05 / 合并与提交</text><text class="t-sub" x="64" y="311" fill="#62748E">后续仍负责归属、正文、冲突、历史和写入</text><text class="t-title" x="64" y="408" fill="#141D32">Search：确定性排序后 chooseSearch</text><text class="t-sub" x="64" y="431" fill="#62748E">选中主题提前；其余选择和调用失败保留原顺序</text></svg><figcaption>图 1 · 选择题是默认算法中的可选插入点，不是一套新的完整整理流程。 窄屏可横向滚动查看全图。</figcaption></figure>
+<h3>Add 的 new 不等于马上创建</h3>
+<p>通知服务已有“失败重试策略”主题。用户说“这次重试改五次”，选择题可选它；说“新增超时监控”，可选 new；说“回复短一点”，可选 none。这里展示的是协议允许的结果，不是对模型输出的实测预测。</p>
+<p>chooseAdd 用本批 query / answer 构造题目，把候选主题做成卡片，选中已有主题后只保留该主题；new 清空候选，再由 M04 判断新建或推迟。none 并不丢弃这轮，它保持原候选继续处理。若指定了多个领域或信息不足，后续仍可能推迟，不能把一个 new 当作越过产品约束的创建命令。</p>
+<h3>Search 的选中不等于只返回一个主题</h3>
+<p>chooseSearch 只从确定性召回并排序的主题池中选一个已有 id 或 none。已有 id 被移到候选列表首位；随后仍由当前 MMR、数量和相关度等规则组装输出。none 不清空结果，失败也回到原顺序。它没有替代当前主题内的词面条目门槛，因此不能自动修复第一篇中 q04 的冲突过滤。</p>
+<p>请求默认不启用实验。MEMMY_DECISION_TOPIC=1 时才创建决策路由；配置缺失则不启用，调用失败则回退原候选或原排序。测试中还需要 MEMMY_DECISION_TOPIC_IN_TEST=1。模型配置读本地 ~/.openai.env 的 MODEL、OPENAI_API_KEY、OPENAI_API_BASE，文档不包含实际地址和密钥。当前模型请求不传 temperature；“温度零所以确定”不成立。</p>
+<p>独立评测的搜索卡只有名称、摘要、描述，不放条目正文；Add 卡含该时刻之前已出现的条目。候选来自金标，绕开了真实抽取、召回遗漏与主题漂移。因此单独选题准，不等于端到端写入和问答准。</p>
+</section>
+<section id="dispatch"><h2><span class="sec-no">03</span>独立会话实验：什么时候允许续接</h2>
+<p>原型 dispatch 的核心约束是：attach 要有明确指向，主题相近的新请求用 accept 或 ignore，不能仅凭相似度续接。因为错误 attach 会让一个工作项持续接收错误线程的消息；重复开一个工作项往往更容易处理。这是工作编排的代价取舍，移到项目记忆以后也会产生更多小主题。</p>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 352" role="img" aria-label="图 2 · 独立会话路由实验只测会话归属，没有项目记忆 Search。"><defs><marker id="arrow-dispatch" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#62748E"/></marker></defs><path class="edge" d="M340 92 L340 140" stroke="#62748E" fill="none" marker-end="url(#arrow-dispatch)"/><path class="edge" d="M340 212 L340 260" stroke="#62748E" fill="none" marker-end="url(#arrow-dispatch)"/><rect class="node" x="40" y="20" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="node-focus" x="40" y="140" width="600" height="72" rx="8" fill="#EEF0FF" stroke="#4044ED"/><rect class="node" x="40" y="260" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="chip" x="290.0" y="104" width="100" height="24" rx="12" fill="#FFFFFF" stroke="#D8DAFB"/><text class="t-chip" x="340" y="120" text-anchor="middle" fill="#4044ED">待路由消息</text><rect class="chip" x="290.0" y="224" width="100" height="24" rx="12" fill="#FFFFFF" stroke="#D8DAFB"/><text class="t-chip" x="340" y="240" text-anchor="middle" fill="#4044ED">结构化动作</text><text class="t-title" x="64" y="48" fill="#141D32">新消息与已有会话卡</text><text class="t-sub" x="64" y="71" fill="#62748E">卡片概括标题、最后一问、最后一答和停止状态</text><text class="t-title" x="64" y="168" fill="#141D32">一次模型路由</text><text class="t-sub" x="64" y="191" fill="#62748E">accept / attach / ignore / stop</text><text class="t-title" x="64" y="288" fill="#141D32">更新会话状态并计算聚类指标</text><text class="t-sub" x="64" y="311" fill="#62748E">新建、续接、丢弃或停止；不执行项目记忆条目合并</text></svg><figcaption>图 2 · 独立会话路由实验只测会话归属，没有项目记忆 Search。 窄屏可横向滚动查看全图。</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>消息（教学示例）</th><th>选择题协议允许怎样选</th><th>Super Agent 协议要求</th></tr></thead><tbody><tr><td>“失败重试改成五次”且唯一对应已有三次约定</td><td>选择已有 topic</td><td>明确修改刚定的内容，可 attach</td></tr><tr><td>“另一个通知渠道也要失败重试”</td><td>可能选择相近 topic 或 new</td><td>相近的新请求应 accept，不能仅因重试二字 attach</td></tr><tr><td>“沿用刚才那个重试策略，补监控”且唯一对应</td><td>可选择已有 topic</td><td>明确指向唯一既有工作，可 attach</td></tr><tr><td>“回复短一点”</td><td>none</td><td>没有工作请求，用 ignore</td></tr><tr><td>“停止这个重试改造”</td><td>没有独立 stop 选项</td><td>明确指向工作时可 stop</td></tr></tbody></table>
+</div><p>上表是协议差异，不是五条新消息的实测结果。独立路由器会记录人工 stop，停止的 session 不能 attach；数据集没有停止类消息，实际消融没有验证 stop。它也没有 retrieve 动作，因此不要把下面项目记忆实验的 Search 能力归到这个分支。</p>
+<p>“Jev + Super Agent”这个旧实验名的实际含义是用 gpt-6-luna 跑 Super Agent 路由提示词。为便于阅读，本页称“Super Agent 协议 × gpt-6-luna”。不存在先调用一个 Jev，再把结果交给另一个 Super Agent 的串联流水线。</p>
+</section>
+<section id="session-topic"><h2><span class="sec-no">04</span>端到端实验：把 session 当作 topic</h2>
+<p>另一个工作区 feat/superagent-session-as-topic 基于较早的项目记忆 v0.1。它把 router 分配的 session id 直接当 topic id，锁定后续组织的写入目标。该工作区的同编号 <a href="../../.worktrees/superagent-session-as-topic/docs/project-memory/decisions/0006-superagent-session-router.md">ADR-0006</a> 是分支内决策，不是当前基座选择题 ADR 的补充，也不是其默认实现。</p>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 472" role="img" aria-label="图 3 · session-as-topic 分支用模型选择写入目标和读取主题。"><defs><marker id="arrow-locked" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#62748E"/></marker></defs><path class="edge" d="M340 92 L340 140" stroke="#62748E" fill="none" marker-end="url(#arrow-locked)"/><path class="edge" d="M340 212 L340 260" stroke="#62748E" fill="none" marker-end="url(#arrow-locked)"/><rect class="node" x="40" y="20" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="node-focus" x="40" y="140" width="600" height="72" rx="8" fill="#EEF0FF" stroke="#4044ED"/><rect class="node" x="40" y="260" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="node" x="40" y="380" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="chip" x="242.0" y="104" width="196" height="24" rx="12" fill="#FFFFFF" stroke="#D8DAFB"/><text class="t-chip" x="340" y="120" text-anchor="middle" fill="#4044ED">locked_session</text><rect class="chip" x="290.0" y="224" width="100" height="24" rx="12" fill="#FFFFFF" stroke="#D8DAFB"/><text class="t-chip" x="340" y="240" text-anchor="middle" fill="#4044ED">条目动作</text><text class="t-title" x="64" y="48" fill="#141D32">Add：route = write</text><text class="t-sub" x="64" y="71" fill="#62748E">accept 新 topic；attach 既有 topic；ignore / stop 推迟本轮</text><text class="t-title" x="64" y="168" fill="#141D32">组织与合并锁定 session</text><text class="t-sub" x="64" y="191" fill="#62748E">accept 的描述由组织器补齐；条目不能另开第二主题</text><text class="t-title" x="64" y="288" fill="#141D32">存储：仍保留结构化条目</text><text class="t-sub" x="64" y="311" fill="#62748E">决策、conflicts、history 沿用既有整理与合并</text><text class="t-title" x="64" y="408" fill="#141D32">Search：route = retrieve</text><text class="t-sub" x="64" y="431" fill="#62748E">模型多选主题并排序，返回所选主题全部条目</text></svg><figcaption>图 3 · session-as-topic 分支用模型选择写入目标和读取主题。 窄屏可横向滚动查看全图。</figcaption></figure>
+<h3>Add：路由决定容器，组织器提炼知识</h3>
+<p>write 路由一次完成 JSON 决策。accept 创建一个新 topic，attach 只写指定 topic；组织器收到 locked_session，即使输出其他 id，也不会再创建第二个主题。ignore 和 stop 不调用组织，把本轮作为 deferred。此分支的 stop 只停止本轮写入，不把 topic 永久关闭，这与独立会话实验的 stopped 状态不同。</p>
+<p>路由卡最多 30 个，按更新时间降序、topic id 作并列排序；每个最多展示 8 条决策正文。指定 domain 时只展示对应领域。这里的“模型没选对”还可能来自卡片截断或上下文不足，不能只评判提示词。</p>
+<h3>Search：retrieve 是本地实验新增的动作</h3>
+<p>把问题和已有 session 卡交给同一路由提示词，输出按相关性排序的 topic_ids，可多选，也可以为空。所选主题读取完整条目及 conflicts / history；不再由旧 RRF / MMR 决定选哪些主题，也没有默认路径的词面条目裁剪。relativity 按路由次序从 1 线性降到 0，再受 memory_limit_number 和 relativity 门槛约束；这是顺序映射，不是模型置信度。</p>
+<p>召回日志仍记录返回的决策，供后续“已告知”使用。模型缺配置或路由解析失败时，项目检索抛 STORE_UNAVAILABLE，不回退词法；这和基座中可选选择题的回退策略不同。路由每次是一次 completeJson，温度 0，没有原型中的多轮查票与工具执行循环。</p>
+<div class="callout verify"><p class="callout-title">实验与默认路径的边界</p>
+<p>选哪些主题由模型决定，违反默认检索的确定性约束；未知目标的处理也有分支特例。它只能作为显式实验理解，不能未经设计决策替换当前基座。温度 0 不保证重复运行相同。</p>
+</div></section>
+<section id="results"><h2><span class="sec-no">05</span>三组结果分别说明什么</h2>
+<h3>一、金标主题卡上的选择题</h3>
+<p>专项 R-20261106-01（<a href="metrics.md#专项实验">当前 metrics 的专项实验</a>）：数据集 v2；Add 34 题，Search 23 题；模型 gpt-6-luna，单次专项结果，不是多次均值。Add 归属 30/34=0.882，已有主题 21/21、新建 3/5、无关 6/8。Search 选中 Recall@1 为 19/23=0.826，同卡片词法基线 0.522。候选来自金标，不能证明产品抽取或实际召回达到了这个水平。</p>
+<h3>二、23 条消息的会话归属消融</h3>
+<p>6 个 Cursor 原始会话交错成 23 条消息；每个模型格子跑 3 次，词法基线 1 次。下表是均值。金标按来源会话，不是人工判定“同一工作”；同一会话里可能包含新请求。</p>
+<div class="table-wrap"><table><thead><tr><th>协议 × 模型</th><th>会话数</th><th>纯度</th><th>续接命中</th><th>B³ F1</th></tr></thead><tbody><tr><td>词法</td><td>2</td><td>0.043</td><td>0.000</td><td>0.337</td></tr><tr><td>选择题 × gpt-6-luna</td><td>4.3</td><td>0.246</td><td>0.333</td><td>0.622</td></tr><tr><td>选择题 × DeepSeek</td><td>6.0</td><td>0.391</td><td>0.451</td><td>0.669</td></tr><tr><td>Super Agent × gpt-6-luna</td><td>14.3</td><td>0.899</td><td>0.451</td><td>0.649</td></tr><tr><td>Super Agent × DeepSeek</td><td>16.0</td><td>0.986</td><td>0.392</td><td>0.626</td></tr></tbody></table>
+</div><p>这里的“纯度”是消息落入纯净同源会话的比例，忽略也算错；不是普通聚类 purity 的最大类占比。续接命中只看已有同源前文的 17 条消息。Super Agent × DeepSeek 的 attach 精确率为 1.000、跨项目混并为 0，但把 6 个来源拆成 16 个 session。选择题更倾向合并，来源会话召回较高，混并也更多。</p>
+<p>这批小样本中，Super Agent 协议在两个模型下都获得更高纯度，提示协议可能是重要因素；不能据此宣称纯度完全由协议决定。两种协议的卡片内容也不完全一致。B³ F1 只是在精确与召回之间折中，0.62–0.67 相近不代表行为相同。仅 3 次运行不能支持普遍优劣或统计显著性的结论。原始预测和范围见 <a href="../../eval/session-router-ablation/README.md">消融说明</a>。</p>
+<h3>三、session-as-topic 的旧版端到端回放</h3>
+<p>2026-11-06，分支专项 R-20261106-01；基线 25ff3fff 上的未提交工作区，单次运行。数据集 v2：35 轮、5 个金标主题、23 道题；被测 deepseek-v4.1-flash-1017，阅读与裁判 claude-haiku-5-5；Claude 5 拒绝 temperature，实际使用模型默认采样，报告中的 temperature=0 只是评分脚本字段。该模型名称仅按当时记录转述，不表示目前仍可用。</p>
+<div class="table-wrap"><table><thead><tr><th>指标</th><th>session-as-topic</th><th>同一旧口径 v0.1 对照</th></tr></thead><tbody><tr><td>answers.llm</td><td>0.652</td><td>0.609</td></tr><tr><td>entries.f1</td><td>0.583</td><td>0.667</td></tr><tr><td>Recall@3</td><td>0.913</td><td>0.913</td></tr><tr><td>主题数 / 金标</td><td>17 / 5</td><td>见历史评测</td></tr><tr><td>旧版当当前</td><td>7（最终写入状态）</td><td>3（最终写入状态）</td></tr></tbody></table>
+</div><p>问答单次多答对一道，但写入 F1 降低，17 个主题相对 5 个金标明显更碎；不能把“保守分流”直接当作决策维护的改进。此分支元数据、完整分项及检索中旧版当当前的另一个计数见 <a href="../../.worktrees/superagent-session-as-topic/docs/project-memory/metrics.md#r-20261106-01">分支评测记录</a>。</p>
+<div class="callout info"><p class="callout-title">记录号与指标不要混用</p>
+<p>三组实验的 R-20261106-01 是各自上下文里的记录号，不是同一次运行。上面的会话纯度、选择准确率、端到端 answers.llm 不能横向比高低；旧 v2 的端到端分数也不能与第一篇 v2.1 产品成绩直接比较。</p>
+</div></section>
+<section id="handoff"><h2><span class="sec-no">06</span>接手时从哪里读和复现</h2>
+<div class="table-wrap"><table><thead><tr><th>位置与快照</th><th>用途</th><th>未提交范围</th></tr></thead><tbody><tr><td>dev-project-memory-add-search-dev @ 71d3faff</td><td>当前基座；可选选择题</td><td>本次开工干净</td></tr><tr><td>feat/superagent-session-router @ 6853b777</td><td>独立会话路由、协议与模型消融</td><td>session/index.ts、独立路由器、脚本、测试、eval 与忽略规则等</td></tr><tr><td>feat/superagent-session-as-topic @ 25ff3fff</td><td>较早 v0.1 上的 session-topic 端到端实验</td><td>service、organizer、pipeline、retrieve、route 提示词与实现、测试、评测与分支文档</td></tr></tbody></table>
+</div><p>这是一份 2026-11-11 阅读快照。两个实验工作区里的核心实现尚未提交；仅 checkout 上述 HEAD 不能复现。先核对实际工作区 diff 和原始记录，再复制环境或整理提交。本次文档工作不会修改或清理它们。旧分支的已采纳状态只在该实验分支内成立。</p>
+<h3>代码索引</h3>
+<div class="table-wrap"><table><thead><tr><th>对象</th><th>阅读入口</th></tr></thead><tbody><tr><td>选择题定义与解析</td><td><a href="../../Memory/src/service/project-memory/decisions/topic-choice.ts">topic-choice.ts</a></td></tr><tr><td>开关、配置和请求</td><td><a href="../../Memory/src/service/project-memory/decisions/client.ts">decisions/client.ts</a></td></tr><tr><td>独立路由器</td><td><a href="../../.worktrees/superagent-session-router/App/memmy-agent/src/core/session/superagent-session-router.ts">superagent-session-router.ts</a></td></tr><tr><td>session-topic 路由</td><td><a href="../../.worktrees/superagent-session-as-topic/Memory/src/service/project-memory/route/router.ts">route/router.ts</a></td></tr><tr><td>session-topic Search</td><td><a href="../../.worktrees/superagent-session-as-topic/Memory/src/service/project-memory/retrieve/search.ts">retrieve/search.ts</a></td></tr></tbody></table>
+</div><p>Super Agent 原型的本机来源是 <code>/Users/junfengran/repos/dsh-superagent-prototype/</code> 的 README.md、prompts/dispatch.md 与 src/app/tools/main.ts。该路径是阅读来源，不是仓库依赖；搬到另一台机器时需要另行取得原型和两个实验快照。</p>
+<h3>选择题脚本：当前存在数据版本阻塞</h3>
+<pre><code>cd Memory
+npx tsx ../eval/project-memory/jev-topic/run-jev-topic-eval.ts --self-check</code></pre>
+<h3>旧版运行命令（先恢复匹配的语料快照）</h3>
+<pre><code>cd Memory
+npx tsx ../eval/project-memory/jev-topic/run-jev-topic-eval.ts</code></pre>
+<p>2026-11-11 实际执行第一条自检，失败信息是 <code>expected 35 traces, got 104 scored and 9 skipped</code>。原因是 cases.ts 仍固定断言 v2 的 35 轮、23 题，loadTopicDataset 默认读的 dataset/ 已是 v2.1；两条命令都会在调用模型前停住。这不是密钥错误。复现旧结果需在隔离工作区恢复实验当时的 v2 输入和匹配脚本；若改测 v2.1，需另外适配断言与要点格式并记为新实验，不能冒用旧结果。本次只记录阻塞，不修改选择题脚本。第二条在阻塞解决且配置齐全后会调用模型并产生费用；本次未执行。输出在 eval/project-memory/runs/，不启动记忆服务，也不自动打开产品开关。若要试基座内的插入点，在启动服务的环境设 MEMMY_DECISION_TOPIC=1；不要对现有共享服务做无说明的开关更改。</p>
+<h3>会话消融要进入原工作区运行</h3>
+<pre><code>cd .worktrees/superagent-session-router
+node eval/session-router/run-ablation.ts run --runs 3
+node eval/session-router/run-ablation.ts summarize</code></pre>
+<p>需要本机 ~/.deepseek.env 和 ~/.openai.env，字段 MODEL、OPENAI_API_KEY、OPENAI_API_BASE；运行依赖以该工作区脚本和 README 为准。当前开发分支 eval/session-router-ablation/ 是阅读副本，脚本依赖的路由器不在当前分支，不能直接按副本路径运行。</p>
+<p>session-topic 回放入口是该工作区的 run-memmy-live-eval.mjs 与分支 metrics 的配置；复现必须恢复未提交实现和匹配的 v2 语料、模型配置。当前基座的数据集已是 v2.1，不直接复用它去声称重现旧分数。下一步若要比较两条算法，先统一数据集、阅读与裁判口径，再记录新的跑次。</p>
+</section>
+<footer class="site-foot">MEMTENSOR · 项目记忆交接 · 2026-11-11</footer></main></div><script>
+    (() => {
+      const links = [...document.querySelectorAll('nav.toc a[href^="#"]')];
+      const sections = links.map((link) => document.getElementById(link.hash.slice(1))).filter(Boolean);
+      if (sections.length === 0) return;
+      let frame = 0;
+      const update = () => {
+        frame = 0;
+        const line = window.innerHeight * 0.3;
+        const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+        let current = sections[0];
+        for (const section of sections) if (section.getBoundingClientRect().top <= line) current = section;
+        if (atBottom) current = sections[sections.length - 1];
+        for (const link of links) {
+          if (link.hash.slice(1) === current.id) link.setAttribute("aria-current", "true");
+          else link.removeAttribute("aria-current");
+        }
+      };
+      const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
+      window.addEventListener("scroll", schedule, { passive: true });
+      window.addEventListener("resize", schedule);
+      update();
+    })();
+
+    (() => {
+      const KEY = "memtensor-doc-theme";
+      const root = document.documentElement;
+      const btn = document.querySelector("[data-theme-toggle]");
+      if (!btn) return;
+      const appearance = () => {
+        const chosen = root.getAttribute("data-theme");
+        if (chosen === "light" || chosen === "dark") return chosen;
+        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      };
+      const paint = () => {
+        const dark = appearance() === "dark";
+        btn.setAttribute("aria-label", dark ? "切换到浅色" : "切换到深色");
+        btn.title = btn.getAttribute("aria-label");
+      };
+      btn.addEventListener("click", () => {
+        const next = appearance() === "dark" ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        try { localStorage.setItem(KEY, next); } catch { /* 当次切换仍然生效 */ }
+        paint();
+      });
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+        if (!root.getAttribute("data-theme")) paint();
+      });
+      paint();
+    })();
+
+    (() => {
+      const open = document.querySelector(".diagram-edit-open");
+      if (!open) return;
+      const SVG_NS = "http://www.w3.org/2000/svg";
+      const FONTS = [
+        ["", "默认"],
+        ["var(--font-sans)", "正文"],
+        ["var(--font-display)", "标题"],
+        ["var(--font-mono)", "等宽"],
+        ["Segoe UI, PingFang SC, Microsoft YaHei, sans-serif", "Sans Serif"],
+        ["Georgia, Times New Roman, serif", "Serif"],
+        ["Arial, Helvetica, sans-serif", "Arial"],
+        ["Microsoft YaHei, PingFang SC, sans-serif", "微软雅黑"],
+        ["KaiTi, STKaiti, serif", "楷体"],
+        ["Cascadia Code, Consolas, monospace", "Cascadia"],
+      ];
+      const bar = document.createElement("div");
+      bar.className = "diagram-edit-bar";
+      bar.hidden = true;
+      bar.setAttribute("role", "toolbar");
+      bar.innerHTML = '<div class="diagram-edit-tools"><label>字体 <select data-act="font"></select></label><label>字号 <input data-act="size" type="number" min="8" max="200" step="1" value="16"></label><button type="button" data-act="code">展开原始代码</button><button type="button" data-act="copy" hidden>复制这段</button><button type="button" data-act="done">完成</button></div><pre class="diagram-edit-code" hidden></pre><span class="diagram-edit-resize" data-resize="w" hidden></span><span class="diagram-edit-resize" data-resize="s" hidden></span><span class="diagram-edit-resize" data-resize="sw" hidden></span>';
+      const fontInput = bar.querySelector('[data-act="font"]');
+      for (const [value, label] of FONTS) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        fontInput.append(option);
+      }
+      document.body.append(bar);
+      const frame = document.createElement("div");
+      frame.className = "edit-frame";
+      frame.hidden = true;
+      for (const edge of ["nw", "n", "ne", "e", "se", "s", "sw", "w"]) {
+        const handle = document.createElement("span");
+        handle.dataset.edge = edge;
+        frame.append(handle);
+      }
+      document.body.append(frame);
+      const sizeInput = bar.querySelector('[data-act="size"]');
+      const codeBtn = bar.querySelector('[data-act="code"]');
+      const copyBtn = bar.querySelector('[data-act="copy"]');
+      const codeBox = bar.querySelector(".diagram-edit-code");
+      const CURSOR = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", nw: "nwse-resize", se: "nwse-resize", ne: "nesw-resize", sw: "nesw-resize" };
+      let selected = null;
+      let drag = null;
+      let editingEl = null;
+      let editSnapshot = "";
+      let svgTextEdit = null;
+      let savedRange = null;
+      let pendingTarget = null;
+      let interactingWithFormatBar = false;
+      const undo = [];
+      let dirty = false;
+      let saveQueue = Promise.resolve();
+      let textUndo = null;
+      const baselines = new Map();
+      const originals = new Map();
+      const spacers = new Map();
+      const placedAtStart = new Set();
+
+      const n = (el, name) => Number(el.getAttribute(name) || 0);
+      const round = (value) => Math.round(value * 10) / 10;
+      const boxOf = (el) => ({ x: n(el, "x"), y: n(el, "y"), w: n(el, "width"), h: n(el, "height") });
+      const holds = (rect, x, y) => x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+      const fullyInside = (outer, inner) =>
+        inner.x >= outer.x - 0.5 && inner.y >= outer.y - 0.5 && inner.x + inner.w <= outer.x + outer.w + 0.5 && inner.y + inner.h <= outer.y + outer.h + 0.5;
+      const isSvg = (el) => el?.namespaceURI === SVG_NS;
+      const htmlTargets = () => {
+        const all = [...document.querySelectorAll("main h1, main h2, main h3, main p, main li, main dt, main dd, main .callout, main pre")];
+        return all.filter((el) => !el.classList.contains("edit-spacer") && !el.closest("figure.diagram") && !all.some((other) => other !== el && !other.classList.contains("edit-spacer") && other.contains(el)));
+      };
+      const mainEl = () => document.querySelector("main");
+
+      function scaleOf(svg) {
+        const vb = svg.viewBox.baseVal;
+        const rect = svg.getBoundingClientRect();
+        return { sx: vb.width / rect.width || 1, sy: vb.height / rect.height || 1 };
+      }
+      function hitResizeEdge(rect, x, y, threshold = 8) {
+        const left = rect.left;
+        const top = rect.top;
+        const right = rect.right;
+        const bottom = rect.bottom;
+        if (x < left - threshold || x > right + threshold || y < top - threshold || y > bottom + threshold) return "";
+        const onLeft = Math.abs(x - left) <= threshold;
+        const onRight = Math.abs(x - right) <= threshold;
+        const onTop = Math.abs(y - top) <= threshold;
+        const onBottom = Math.abs(y - bottom) <= threshold;
+        if (onTop && onLeft) return "nw";
+        if (onTop && onRight) return "ne";
+        if (onBottom && onLeft) return "sw";
+        if (onBottom && onRight) return "se";
+        if (onLeft) return "w";
+        if (onRight) return "e";
+        if (onTop) return "n";
+        if (onBottom) return "s";
+        return "";
+      }
+      function writePoints(item, points) {
+        if (item.el.tagName === "line") {
+          item.el.setAttribute("x1", String(points[0]));
+          item.el.setAttribute("y1", String(points[1]));
+          item.el.setAttribute("x2", String(points[2]));
+          item.el.setAttribute("y2", String(points[3]));
+          return;
+        }
+        let d = `M${points[0]},${points[1]}`;
+        for (let i = 2; i < points.length; i += 2) d += ` L${points[i]},${points[i + 1]}`;
+        item.el.setAttribute("d", d);
+      }
+      function unitFrom(target) {
+        const root = target.closest?.("svg");
+        if (!root || !root.closest("figure.diagram") || target.closest("g.legend")) return null;
+        const texts = [...root.querySelectorAll("text")].filter((el) => !el.closest("g.legend"));
+        const rects = [...root.querySelectorAll("rect")];
+        let rect = target.closest("rect");
+        if (!rect && target.closest("text")) {
+          const text = target.closest("text");
+          const x = n(text, "x");
+          const y = n(text, "y");
+          rect = rects.filter((el) => holds(boxOf(el), x, y)).sort((a, b) => boxOf(a).w * boxOf(a).h - boxOf(b).w * boxOf(b).h)[0] || null;
+          if (!rect) return { svg: root, rect: null, rects: [], texts: [text], edges: [] };
+        }
+        if (!rect) return null;
+        const area = boxOf(rect);
+        const members = rects.filter((el) => el !== rect && fullyInside(area, boxOf(el)));
+        const moving = [rect, ...members];
+        const boxes = moving.map(boxOf);
+        const labels = texts.filter((el) => boxes.some((item) => holds(item, n(el, "x"), n(el, "y"))));
+        const group = rect.classList.contains("group");
+        const edges = [];
+        for (const el of root.querySelectorAll("line, path")) {
+          const points = el.tagName === "line"
+            ? [n(el, "x1"), n(el, "y1"), n(el, "x2"), n(el, "y2")]
+            : (el.getAttribute("d") || "").match(/-?\d*\.?\d+/g)?.map(Number);
+          if (!points || points.length < 4 || points.length % 2) continue;
+          const indexes = [];
+          for (let i = 0; i < points.length; i += 2) {
+            const x = points[i];
+            const y = points[i + 1];
+            const hit = group
+              ? holds({ x: area.x - 2, y: area.y - 2, w: area.w + 4, h: area.h + 4 }, x, y)
+              : boxes.some((item) => {
+                  const nearX = Math.abs(x - item.x) <= 8 || Math.abs(x - (item.x + item.w)) <= 8;
+                  const nearY = Math.abs(y - item.y) <= 8 || Math.abs(y - (item.y + item.h)) <= 8;
+                  const inX = x >= item.x - 8 && x <= item.x + item.w + 8;
+                  const inY = y >= item.y - 8 && y <= item.y + item.h + 8;
+                  return inX && inY && (nearX || nearY);
+                });
+            if (hit) indexes.push(i);
+          }
+          if (indexes.length) edges.push({ el, points, indexes });
+        }
+        return { svg: root, rect, rects: moving, texts: labels, edges };
+      }
+      function guidesFor(root, skip) {
+        const vb = root.viewBox.baseVal;
+        const vertical = [0, vb.width / 2, vb.width];
+        const horizontal = [0, vb.height / 2, vb.height];
+        for (const el of root.querySelectorAll("rect")) {
+          if (skip.has(el) || el.closest("g.legend")) continue;
+          const box = boxOf(el);
+          vertical.push(box.x, box.x + box.w / 2, box.x + box.w);
+          horizontal.push(box.y, box.y + box.h / 2, box.y + box.h);
+        }
+        return { vertical, horizontal };
+      }
+      function htmlGuides(current) {
+        const parent = mainEl().getBoundingClientRect();
+        const vertical = [0, parent.width / 2, parent.width];
+        const horizontal = [0, parent.height / 2, parent.height];
+        const guides = [...htmlTargets(), ...document.querySelectorAll("main figure.diagram")];
+        for (const el of guides) {
+          if (el === current) continue;
+          const rect = el.getBoundingClientRect();
+          vertical.push(rect.left - parent.left, rect.left - parent.left + rect.width / 2, rect.right - parent.left);
+          horizontal.push(rect.top - parent.top, rect.top - parent.top + rect.height / 2, rect.bottom - parent.top);
+        }
+        return { vertical, horizontal };
+      }
+      function snapShift(pos, size, guides) {
+        let best = 0;
+        let bestDist = 6;
+        for (const at of [pos, pos + size / 2, pos + size]) {
+          for (const guide of guides) {
+            const dist = Math.abs(guide - at);
+            if (dist < bestDist) {
+              bestDist = dist;
+              best = guide - at;
+            }
+          }
+        }
+        return best;
+      }
+      function paintMove(dx, dy, snap = true) {
+        const primary = drag.rects[0];
+        if (!primary) {
+          const text = drag.texts[0];
+          if (!text) return;
+          text.el.setAttribute("x", String(round(text.x0 + dx)));
+          text.el.setAttribute("y", String(round(text.y0 + dy)));
+          return;
+        }
+        if (snap) {
+          const guides = guidesFor(drag.svg, new Set(drag.rects.map((item) => item.el)));
+          dx += snapShift(primary.x0 + dx, primary.w0, guides.vertical);
+          dy += snapShift(primary.y0 + dy, primary.h0, guides.horizontal);
+        }
+        for (const item of drag.rects) {
+          item.el.setAttribute("x", String(round(item.x0 + dx)));
+          item.el.setAttribute("y", String(round(item.y0 + dy)));
+        }
+        for (const item of drag.texts) {
+          item.el.setAttribute("x", String(round(item.x0 + dx)));
+          item.el.setAttribute("y", String(round(item.y0 + dy)));
+        }
+        for (const item of drag.edges) {
+          const moved = item.points.map((value, index) => {
+            if (!item.indexes.includes(index - (index % 2))) return value;
+            return round(value + (index % 2 === 0 ? dx : dy));
+          });
+          writePoints(item, moved);
+        }
+      }
+      function paintResize(dx, dy) {
+        const origin = drag.box;
+        let x = origin.x;
+        let y = origin.y;
+        let w = origin.w;
+        let h = origin.h;
+        if (drag.edge.includes("w")) { x += dx; w -= dx; }
+        if (drag.edge.includes("e")) w += dx;
+        if (drag.edge.includes("n")) { y += dy; h -= dy; }
+        if (drag.edge.includes("s")) h += dy;
+        if (drag.edge.includes("w")) { x = Math.min(x, origin.x + origin.w - 40); w = origin.x + origin.w - x; }
+        if (drag.edge.includes("e")) w = Math.max(40, w);
+        if (drag.edge.includes("n")) { y = Math.min(y, origin.y + origin.h - 24); h = origin.y + origin.h - y; }
+        if (drag.edge.includes("s")) h = Math.max(24, h);
+        const guides = guidesFor(drag.svg, new Set(drag.rects.map((item) => item.el)));
+        if (drag.edge.includes("w")) x += snapShift(x, 0, guides.vertical);
+        if (drag.edge.includes("e")) w += snapShift(x + w, 0, guides.vertical);
+        if (drag.edge.includes("n")) y += snapShift(y, 0, guides.horizontal);
+        if (drag.edge.includes("s")) h += snapShift(y + h, 0, guides.horizontal);
+        w = Math.max(40, w);
+        h = Math.max(24, h);
+        const primary = drag.rects[0];
+        primary.el.setAttribute("x", String(round(x)));
+        primary.el.setAttribute("y", String(round(y)));
+        primary.el.setAttribute("width", String(round(w)));
+        primary.el.setAttribute("height", String(round(h)));
+        const shiftX = x - origin.x;
+        const shiftY = y - origin.y;
+        for (const item of drag.rects.slice(1)) {
+          item.el.setAttribute("x", String(round(item.x0 + shiftX)));
+          item.el.setAttribute("y", String(round(item.y0 + shiftY)));
+        }
+        for (const item of drag.texts) {
+          const nextX = item.anchor === "middle" ? x + w / 2 : x + (item.x0 - origin.x);
+          item.el.setAttribute("x", String(round(nextX)));
+          item.el.setAttribute("y", String(round(y + (item.y0 - origin.y))));
+        }
+        for (const item of drag.edges) {
+          const moved = item.points.map((value, index) => {
+            if (!item.indexes.includes(index - (index % 2))) return value;
+            const px = item.points[index - (index % 2)];
+            const py = item.points[index - (index % 2) + 1];
+            if (index % 2 === 0) {
+              if (Math.abs(px - origin.x) <= 8) return round(x + (px - origin.x));
+              if (Math.abs(px - (origin.x + origin.w)) <= 8) return round(x + w - (origin.x + origin.w - px));
+              return value;
+            }
+            if (Math.abs(py - origin.y) <= 8) return round(y + (py - origin.y));
+            if (Math.abs(py - (origin.y + origin.h)) <= 8) return round(y + h - (origin.y + origin.h - py));
+            return value;
+          });
+          writePoints(item, moved);
+        }
+      }
+      function paintHtmlMove(dx, dy, snap = true) {
+        let left = drag.x + dx;
+        let top = drag.y + dy;
+        if (snap) {
+          const guides = htmlGuides(drag.el);
+          left += snapShift(left, drag.w, guides.vertical);
+          top += snapShift(top, drag.h, guides.horizontal);
+        }
+        drag.el.style.left = `${Math.round(left)}px`;
+        drag.el.style.top = `${Math.round(top)}px`;
+      }
+      function paintHtmlResize(dx, dy) {
+        let left = drag.x;
+        let top = drag.y;
+        let width = drag.w;
+        let height = drag.h;
+        if (drag.edge.includes("w")) { left += dx; width -= dx; }
+        if (drag.edge.includes("e")) width += dx;
+        if (drag.edge.includes("n")) { top += dy; height -= dy; }
+        if (drag.edge.includes("s")) height += dy;
+        width = Math.max(40, width);
+        height = Math.max(24, height);
+        const guides = htmlGuides(drag.el);
+        if (drag.edge.includes("w")) left += snapShift(left, 0, guides.vertical);
+        if (drag.edge.includes("e")) width += snapShift(left + width, 0, guides.vertical);
+        if (drag.edge.includes("n")) top += snapShift(top, 0, guides.horizontal);
+        if (drag.edge.includes("s")) height += snapShift(top + height, 0, guides.horizontal);
+        width = Math.max(40, width);
+        height = Math.max(24, height);
+        drag.el.style.left = `${Math.round(left)}px`;
+        drag.el.style.top = `${Math.round(top)}px`;
+        drag.el.style.width = `${Math.round(width)}px`;
+        drag.el.style.height = `${Math.round(height)}px`;
+      }
+      function flowBox(el) {
+        const parent = mainEl().getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
+        return {
+          left: rect.left - parent.left,
+          top: rect.top - parent.top,
+          width: rect.width,
+          height: rect.height,
+        };
+      }
+      function lift(el) {
+        if (spacers.has(el) || !el.isConnected) return;
+        const prev = el.previousElementSibling;
+        if (prev?.classList.contains("edit-spacer")) {
+          spacers.set(el, prev);
+          return;
+        }
+        const box = flowBox(el);
+        const cs = getComputedStyle(el);
+        const spacer = document.createElement("div");
+        spacer.className = "edit-spacer";
+        spacer.setAttribute("aria-hidden", "true");
+        spacer.style.boxSizing = "border-box";
+        spacer.style.display = "block";
+        spacer.style.flex = "0 0 auto";
+        spacer.style.width = `${Math.round(box.width)}px`;
+        spacer.style.height = `${Math.round(box.height)}px`;
+        spacer.style.marginTop = cs.marginTop;
+        spacer.style.marginRight = cs.marginRight;
+        spacer.style.marginBottom = cs.marginBottom;
+        spacer.style.marginLeft = cs.marginLeft;
+        spacer.style.padding = "0";
+        spacer.style.border = "0";
+        el.before(spacer);
+        spacers.set(el, spacer);
+        el.style.position = "absolute";
+        el.style.left = `${Math.round(box.left)}px`;
+        el.style.top = `${Math.round(box.top)}px`;
+        el.style.width = `${Math.round(box.width)}px`;
+        el.style.height = `${Math.round(box.height)}px`;
+        el.style.margin = "0";
+        el.style.right = "auto";
+        el.style.bottom = "auto";
+        el.style.maxWidth = "none";
+        el.style.maxHeight = "none";
+        el.style.zIndex = "2";
+      }
+      function armEditables() {
+        for (const el of htmlTargets()) {
+          if (!spacers.has(el) && el.previousElementSibling?.classList.contains("edit-spacer")) {
+            spacers.set(el, el.previousElementSibling);
+          }
+          if (!originals.has(el)) originals.set(el, el.getAttribute("style"));
+          el.setAttribute("data-editable", "");
+          const box = flowBox(el);
+          baselines.set(el, {
+            left: Math.round(box.left),
+            top: Math.round(box.top),
+            width: Math.round(box.width),
+            height: Math.round(box.height),
+            html: el.innerHTML,
+          });
+          if (spacers.has(el)) placedAtStart.add(el);
+        }
+      }
+      function dropSpacer(el) {
+        const spacer = spacers.get(el);
+        if (!spacer) return;
+        spacer.remove();
+        spacers.delete(el);
+      }
+      function restoreClean() {
+        const main = mainEl();
+        let dirtyBottom = 0;
+        const parent = main.getBoundingClientRect();
+        for (const [el, style] of originals) {
+          if (!el.isConnected) continue;
+          const base = baselines.get(el);
+          const spacer = spacers.get(el);
+          const left = parseFloat(el.style.left);
+          const top = parseFloat(el.style.top);
+          const width = parseFloat(el.style.width);
+          const height = parseFloat(el.style.height);
+          const moved = !!(spacer && base && (Math.abs(left - base.left) >= 1 || Math.abs(top - base.top) >= 1 || Math.abs(width - base.width) >= 1 || Math.abs(height - base.height) >= 1));
+          const fontFamily = el.style.fontFamily;
+          const fontSize = el.style.fontSize;
+          const html = el.innerHTML;
+          const typed = base && (html !== base.html || fontFamily || fontSize);
+          el.classList.remove("is-picked", "is-editing");
+          el.removeAttribute("contenteditable");
+          el.removeAttribute("data-editable");
+          if (!moved && !placedAtStart.has(el)) {
+            if (style == null) el.removeAttribute("style");
+            else el.setAttribute("style", style);
+            if (typed) {
+              el.innerHTML = html;
+              if (fontFamily) el.style.fontFamily = fontFamily;
+              if (fontSize) el.style.fontSize = fontSize;
+            }
+            dropSpacer(el);
+          } else if (moved) {
+            const rect = el.getBoundingClientRect();
+            dirtyBottom = Math.max(dirtyBottom, rect.bottom - parent.top);
+          }
+        }
+        originals.clear();
+        baselines.clear();
+        placedAtStart.clear();
+        if (dirtyBottom + 24 > parent.height) {
+          const current = parseFloat(main.style.minHeight) || 0;
+          main.style.minHeight = `${Math.ceil(Math.max(current, dirtyBottom + 24))}px`;
+        }
+      }
+      function cleanClone(el) {
+        const clone = el.cloneNode(true);
+        clone.querySelectorAll("*").forEach((node) => {
+          node.classList?.remove("is-picked", "is-editing");
+          if (node.classList && node.classList.length === 0) node.removeAttribute("class");
+          node.removeAttribute?.("contenteditable");
+          node.removeAttribute?.("data-editable");
+        });
+        clone.classList?.remove("is-picked", "is-editing");
+        if (clone.classList && clone.classList.length === 0) clone.removeAttribute("class");
+        clone.removeAttribute?.("contenteditable");
+        clone.removeAttribute?.("data-editable");
+        return clone.outerHTML.replace(/></g, ">\n<");
+      }
+      function sourceHost() {
+        if (selected?.kind === "svg") return selected.unit.svg;
+        if (selected?.kind === "html") return selected.el;
+        return null;
+      }
+      function showCode() {
+        if (codeBox.hidden) return;
+        const host = sourceHost();
+        codeBox.textContent = host ? cleanClone(host) : "先点选一个框或一段文字。";
+      }
+      function snapshot() {
+        if (selected?.kind === "svg") {
+          const svg = selected.unit.svg;
+          const html = svg.innerHTML;
+          return () => {
+            svg.innerHTML = html;
+            clearSelection();
+          };
+        }
+        if (selected?.kind === "html") {
+          const el = selected.el;
+          const style = el.getAttribute("style");
+          const html = el.innerHTML;
+          const spacer = spacers.get(el) || null;
+          const spacerParent = spacer ? spacer.parentNode : null;
+          return () => {
+            if (style == null) el.removeAttribute("style");
+            else el.setAttribute("style", style);
+            el.innerHTML = html;
+            const current = spacers.get(el);
+            if (spacer) {
+              if (current && current !== spacer) current.remove();
+              if (!spacer.isConnected && spacerParent) spacerParent.insertBefore(spacer, el);
+              spacers.set(el, spacer);
+            } else if (current) dropSpacer(el);
+            placeFrame();
+            showCode();
+          };
+        }
+        return null;
+      }
+      function pushUndo(entry) {
+        if (!entry) return;
+        undo.push(entry);
+        dirty = true;
+        if (undo.length > 30) undo.shift();
+      }
+      function remember() {
+        pushUndo(snapshot());
+      }
+      function pageHtml() {
+        const root = document.documentElement.cloneNode(true);
+        root.removeAttribute("data-theme");
+        root.querySelector("body")?.classList.remove("is-diagram-edit");
+        root.querySelectorAll(".diagram-edit-bar, .edit-frame, .diagram-edit-text").forEach((el) => el.remove());
+        root.querySelectorAll("[data-editable], [contenteditable]").forEach((el) => {
+          el.removeAttribute("data-editable");
+          el.removeAttribute("contenteditable");
+        });
+        root.querySelectorAll(".is-picked, .is-editing").forEach((el) => {
+          el.classList.remove("is-picked", "is-editing");
+          if (el.classList.length === 0) el.removeAttribute("class");
+        });
+        return "<!DOCTYPE html>\n" + root.outerHTML;
+      }
+      function persistPage() {
+        const html = pageHtml();
+        const headerPath = location.protocol === "file:" ? location.href : location.pathname;
+        const urls = [];
+        if (location.protocol === "http:" || location.protocol === "https:") urls.push(`${location.origin}/__memtensor/save`);
+        const fallback = "http://127.0.0.1:4173/__memtensor/save";
+        if (!urls.includes(fallback)) urls.push(fallback);
+        saveQueue = saveQueue.catch(() => {}).then(async () => {
+          for (const url of urls) {
+            try {
+              const res = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain", "X-Doc-Path": headerPath },
+                body: html,
+              });
+              if (res.ok) {
+                open.title = "已写回文件";
+                return;
+              }
+            } catch { /* 下一个地址 */ }
+          }
+          open.title = "没能写回文件";
+        });
+      }
+      function placeFrame() {
+        const el = selected?.el;
+        if (!el?.isConnected || editingEl) {
+          frame.hidden = true;
+          return;
+        }
+        const rect = el.getBoundingClientRect();
+        frame.hidden = false;
+        frame.style.left = `${rect.left}px`;
+        frame.style.top = `${rect.top}px`;
+        frame.style.width = `${rect.width}px`;
+        frame.style.height = `${rect.height}px`;
+      }
+      function setFormatEnabled(on) {
+        bar.classList.toggle("is-plain", !on);
+        fontInput.disabled = !on;
+        sizeInput.disabled = !on;
+      }
+      function isSimpleText(el) {
+        return ![...el.childNodes].some((node) => node.nodeType === Node.ELEMENT_NODE);
+      }
+      function rangeParent(range) {
+        const node = range.commonAncestorContainer;
+        return node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+      }
+      function saveTextRange() {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount && !sel.isCollapsed && editingEl && !svgTextEdit && editingEl.contains(sel.anchorNode)) {
+          savedRange = sel.getRangeAt(0).cloneRange();
+          return;
+        }
+        if (!interactingWithFormatBar) savedRange = null;
+      }
+      function typographyTarget() {
+        if (svgTextEdit) return { kind: "element", el: svgTextEdit.node };
+        if (savedRange && !savedRange.collapsed) return { kind: "range", range: savedRange };
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount && !sel.isCollapsed && editingEl && editingEl.contains(sel.anchorNode)) {
+          return { kind: "range", range: sel.getRangeAt(0) };
+        }
+        if (editingEl && sel?.anchorNode && editingEl.contains(sel.anchorNode)) {
+          const el = sel.anchorNode.nodeType === Node.TEXT_NODE ? sel.anchorNode.parentElement : sel.anchorNode;
+          if (el && editingEl.contains(el)) return { kind: "element", el };
+        }
+        if (selected?.kind === "svg") return { kind: "texts", texts: selected.unit.texts };
+        if (selected?.kind === "html") return { kind: "element", el: selected.el };
+        return null;
+      }
+      function applyTypography(el, styles) {
+        if (!el?.style) return;
+        if (styles.fontFamily != null) el.style.fontFamily = styles.fontFamily;
+        if (styles.fontSize == null || styles.fontSize === "") return;
+        el.style.fontSize = `${Math.round(Number(styles.fontSize))}px`;
+        if (!isSvg(el) && el.scrollHeight > el.clientHeight + 1) el.style.height = "auto";
+      }
+      function applyTypographyToRange(range, styles) {
+        if (!range || range.collapsed) return null;
+        const existing = rangeParent(range);
+        if (existing && existing.tagName === "SPAN" && existing.textContent === range.toString()) {
+          applyTypography(existing, styles);
+          return existing;
+        }
+        const span = document.createElement("span");
+        applyTypography(span, styles);
+        try { range.surroundContents(span); }
+        catch { span.append(range.extractContents()); range.insertNode(span); }
+        return span;
+      }
+      function applyCurrentTypography(styles) {
+        const target = typographyTarget() || pendingTarget;
+        if (!target) return;
+        remember();
+        if (target.kind === "range") {
+          const span = applyTypographyToRange(target.range, styles);
+          if (span) {
+            const next = document.createRange();
+            next.selectNodeContents(span);
+            savedRange = next;
+          }
+        } else if (target.kind === "texts") {
+          for (const text of target.texts) applyTypography(text, styles);
+        } else applyTypography(target.el, styles);
+        placeFrame();
+        showCode();
+        readTypography();
+      }
+      function readTypography() {
+        const target = typographyTarget();
+        const el = target?.kind === "texts" ? target.texts[0] : target?.kind === "range" ? rangeParent(target.range) : target?.el;
+        if (!el?.isConnected) return;
+        sizeInput.value = String(Math.round(parseFloat(getComputedStyle(el).fontSize) || 16));
+        const family = el.style?.fontFamily || "";
+        fontInput.value = [...fontInput.options].some((opt) => opt.value === family) ? family : "";
+      }
+      function clearSelection() {
+        document.querySelectorAll(".is-picked").forEach((node) => node.classList.remove("is-picked"));
+        selected = null;
+        pendingTarget = null;
+        frame.hidden = true;
+        setFormatEnabled(false);
+        showCode();
+      }
+      function selectUnit(unit) {
+        if (!unit) return;
+        if (editingEl && !svgTextEdit) endInlineEdit(true);
+        document.querySelectorAll(".is-picked").forEach((node) => node.classList.remove("is-picked"));
+        const el = unit.rect || unit.texts[0];
+        selected = { kind: "svg", unit, el };
+        el.classList.add("is-picked");
+        setFormatEnabled(true);
+        readTypography();
+        pendingTarget = typographyTarget();
+        placeFrame();
+        showCode();
+      }
+      function selectHtml(el) {
+        if (editingEl && editingEl !== el) endInlineEdit(true);
+        document.querySelectorAll(".is-picked").forEach((node) => node.classList.remove("is-picked"));
+        selected = { kind: "html", el };
+        el.classList.add("is-picked");
+        setFormatEnabled(true);
+        readTypography();
+        pendingTarget = typographyTarget();
+        placeFrame();
+        showCode();
+      }
+      function beginSvg(unit, edge, clientX, clientY) {
+        const scale = scaleOf(unit.svg);
+        drag = {
+          kind: "svg",
+          mode: edge && unit.rect ? "resize" : "move",
+          edge: edge || "",
+          svg: unit.svg,
+          sx: scale.sx,
+          sy: scale.sy,
+          clientX,
+          clientY,
+          box: unit.rect ? boxOf(unit.rect) : null,
+          rects: unit.rects.map((el) => ({ el, x0: n(el, "x"), y0: n(el, "y"), w0: n(el, "width"), h0: n(el, "height") })),
+          texts: unit.texts.map((el) => ({ el, x0: n(el, "x"), y0: n(el, "y"), anchor: el.getAttribute("text-anchor") || "start" })),
+          edges: unit.edges,
+          snap: true,
+          noted: false,
+        };
+      }
+      function beginHtml(el, edge, clientX, clientY) {
+        drag = {
+          kind: "html",
+          mode: edge ? "resize" : "move",
+          edge: edge || "",
+          el,
+          x: parseFloat(el.style.left) || 0,
+          y: parseFloat(el.style.top) || 0,
+          w: el.getBoundingClientRect().width,
+          h: el.getBoundingClientRect().height,
+          clientX,
+          clientY,
+          snap: true,
+          noted: false,
+        };
+      }
+      function syncHtmlDragBox() {
+        if (drag?.kind !== "html") return;
+        drag.x = parseFloat(drag.el.style.left) || 0;
+        drag.y = parseFloat(drag.el.style.top) || 0;
+        drag.w = parseFloat(drag.el.style.width) || drag.el.getBoundingClientRect().width;
+        drag.h = parseFloat(drag.el.style.height) || drag.el.getBoundingClientRect().height;
+      }
+      function liftForDrag() {
+        if (drag?.kind !== "html" || spacers.has(drag.el)) return;
+        if (!drag.noted) {
+          remember();
+          drag.noted = true;
+        }
+        lift(drag.el);
+        syncHtmlDragBox();
+      }
+      function startInlineEdit(el) {
+        if (!el || editingEl === el) return;
+        endInlineEdit(true);
+        if (el.hasAttribute?.("data-editable")) selectHtml(el);
+        textUndo = snapshot();
+        editingEl = el;
+        editSnapshot = el.innerHTML;
+        el.contentEditable = "true";
+        el.classList.add("is-editing");
+        frame.hidden = true;
+        el.focus();
+        if (isSimpleText(el)) {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      }
+      function openSvgText(text) {
+        endInlineEdit(true);
+        const unit = unitFrom(text);
+        if (unit) selectUnit(unit);
+        textUndo = snapshot();
+        const bounds = text.getBoundingClientRect();
+        const input = document.createElement("div");
+        input.className = "diagram-edit-text";
+        input.contentEditable = "true";
+        input.textContent = text.textContent;
+        const computed = getComputedStyle(text);
+        input.style.left = `${bounds.left}px`;
+        input.style.top = `${bounds.top}px`;
+        input.style.minWidth = `${Math.max(96, bounds.width + 24)}px`;
+        input.style.font = computed.font;
+        input.style.fontFamily = computed.fontFamily;
+        document.body.append(input);
+        svgTextEdit = { node: text, snapshot: text.textContent };
+        editingEl = input;
+        frame.hidden = true;
+        input.focus();
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        const finish = (commit) => {
+          if (!svgTextEdit || svgTextEdit.node !== text) return;
+          endInlineEdit(commit);
+        };
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") { event.preventDefault(); finish(true); }
+          if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); finish(false); }
+        });
+        input.addEventListener("focusout", (event) => {
+          if (interactingWithFormatBar) return;
+          const next = event.relatedTarget;
+          if (next && bar.contains(next)) return;
+          finish(true);
+        });
+      }
+      function endInlineEdit(commit) {
+        if (svgTextEdit) {
+          const changed = commit && editingEl.textContent !== svgTextEdit.snapshot;
+          if (!commit) svgTextEdit.node.textContent = svgTextEdit.snapshot;
+          else svgTextEdit.node.textContent = editingEl.textContent;
+          if (changed) pushUndo(textUndo);
+          textUndo = null;
+          editingEl.remove();
+          svgTextEdit = null;
+          editingEl = null;
+          savedRange = null;
+          placeFrame();
+          showCode();
+          return;
+        }
+        if (!editingEl) return;
+        const el = editingEl;
+        const changed = commit && el.innerHTML !== editSnapshot;
+        if (!commit) el.innerHTML = editSnapshot;
+        if (changed) pushUndo(textUndo);
+        textUndo = null;
+        el.removeAttribute("contenteditable");
+        el.classList.remove("is-editing");
+        editingEl = null;
+        editSnapshot = "";
+        savedRange = null;
+        placeFrame();
+        showCode();
+      }
+      function setSourceOpen(show) {
+        codeBox.hidden = !show;
+        copyBtn.hidden = !show;
+        codeBtn.textContent = show ? "收起原始代码" : "展开原始代码";
+        bar.classList.toggle("is-code", show);
+        for (const handle of bar.querySelectorAll("[data-resize]")) handle.hidden = !show;
+        if (!show) {
+          bar.classList.remove("is-sized");
+          bar.style.height = "";
+          bar.style.width = "";
+          bar.style.maxWidth = "";
+        } else showCode();
+      }
+      function resizeSource(event) {
+        if (drag.edge === "w" || drag.edge === "sw") {
+          const width = Math.round(Math.max(240, Math.min(drag.right - 8, drag.right - event.clientX)));
+          bar.style.width = `${width}px`;
+          bar.style.maxWidth = "none";
+        }
+        if (drag.edge === "s" || drag.edge === "sw") {
+          const height = Math.round(Math.max(120, Math.min(window.innerHeight - drag.top - 8, event.clientY - drag.top)));
+          bar.style.height = `${height}px`;
+          bar.classList.add("is-sized");
+        }
+      }
+      function setEditing(on) {
+        document.body.classList.toggle("is-diagram-edit", on);
+        open.setAttribute("aria-pressed", on ? "true" : "false");
+        bar.hidden = !on;
+        document.body.style.cursor = "";
+        if (on) {
+          armEditables();
+          setFormatEnabled(false);
+        } else {
+          endInlineEdit(true);
+          clearSelection();
+          restoreClean();
+          setSourceOpen(false);
+          if (dirty) persistPage();
+        }
+      }
+      open.addEventListener("click", () => setEditing(bar.hidden));
+      bar.addEventListener("click", async (event) => {
+        const act = event.target?.dataset?.act;
+        if (act === "done") setEditing(false);
+        if (act === "code") setSourceOpen(codeBox.hidden);
+        if (act === "copy") {
+          const host = sourceHost();
+          if (!host) return;
+          try { await navigator.clipboard.writeText(cleanClone(host)); } catch { /* 仍可从展开的代码里选取 */ }
+        }
+      });
+      fontInput.addEventListener("change", () => applyCurrentTypography({ fontFamily: fontInput.value }));
+      sizeInput.addEventListener("input", () => {
+        const value = Number(sizeInput.value);
+        if (value >= 8 && value <= 200) applyCurrentTypography({ fontSize: value });
+      });
+      bar.addEventListener("pointerdown", (event) => {
+        const handle = event.target.closest?.("[data-resize]");
+        if (handle && !handle.hidden && bar.classList.contains("is-code")) {
+          event.preventDefault();
+          event.stopPropagation();
+          const rect = bar.getBoundingClientRect();
+          document.body.style.cursor = CURSOR[handle.dataset.resize] || "";
+          drag = {
+            kind: "bar",
+            edge: handle.dataset.resize,
+            right: rect.right,
+            top: rect.top,
+            noted: true,
+          };
+          return;
+        }
+        event.stopPropagation();
+        interactingWithFormatBar = true;
+        saveTextRange();
+        pendingTarget = typographyTarget();
+      }, true);
+      window.addEventListener("pointerup", () => { interactingWithFormatBar = false; });
+      window.addEventListener("pointercancel", () => { interactingWithFormatBar = false; });
+      document.addEventListener("selectionchange", () => {
+        if (interactingWithFormatBar || !editingEl || svgTextEdit) return;
+        saveTextRange();
+      });
+      frame.addEventListener("pointerdown", (event) => {
+        const edge = event.target?.dataset?.edge;
+        if (!edge || !selected || editingEl || event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (selected.kind === "svg") beginSvg(selected.unit, edge, event.clientX, event.clientY);
+        else beginHtml(selected.el, edge, event.clientX, event.clientY);
+      });
+      document.addEventListener("pointerdown", (event) => {
+        if (!document.body.classList.contains("is-diagram-edit") || event.button !== 0) return;
+        if (bar.contains(event.target) || open.contains(event.target) || frame.contains(event.target) || event.target.closest(".page-tools") || event.target.closest(".diagram-edit-text")) return;
+        if (editingEl && (editingEl === event.target || editingEl.contains(event.target))) return;
+        const svg = event.target.closest?.("figure.diagram svg");
+        if (svg) {
+          const unit = unitFrom(event.target);
+          if (!unit) {
+            endInlineEdit(true);
+            clearSelection();
+            return;
+          }
+          selectUnit(unit);
+          if (editingEl) return;
+          const edge = unit.rect ? hitResizeEdge(unit.rect.getBoundingClientRect(), event.clientX, event.clientY) : "";
+          beginSvg(unit, edge, event.clientX, event.clientY);
+          event.preventDefault();
+          return;
+        }
+        const html = event.target.closest?.("[data-editable]");
+        if (!html) {
+          endInlineEdit(true);
+          clearSelection();
+          return;
+        }
+        selectHtml(html);
+        if (editingEl) return;
+        const edge = hitResizeEdge(html.getBoundingClientRect(), event.clientX, event.clientY);
+        beginHtml(html, edge, event.clientX, event.clientY);
+        event.preventDefault();
+      });
+      document.addEventListener("pointermove", (event) => {
+        if (drag?.kind === "bar") {
+          resizeSource(event);
+          return;
+        }
+        if (document.body.classList.contains("is-diagram-edit") && !drag && !editingEl) {
+          const rect = event.target.closest?.("rect, [data-editable]");
+          const edge = rect && !rect.closest("g.legend") ? hitResizeEdge(rect.getBoundingClientRect(), event.clientX, event.clientY) : "";
+          document.body.style.cursor = edge ? CURSOR[edge] : "";
+        }
+        if (!drag) return;
+        if (drag.kind === "html" && !spacers.has(drag.el)) {
+          const traveled = Math.hypot(event.clientX - drag.clientX, event.clientY - drag.clientY);
+          if (traveled < 3) return;
+          liftForDrag();
+        }
+        if (!drag.noted) {
+          remember();
+          drag.noted = true;
+        }
+        const dx = event.clientX - drag.clientX;
+        const dy = event.clientY - drag.clientY;
+        if (drag.kind === "svg") {
+          const sdx = dx * drag.sx;
+          const sdy = dy * drag.sy;
+          if (drag.mode === "resize") paintResize(sdx, sdy);
+          else paintMove(sdx, sdy, drag.snap);
+        } else if (drag.mode === "resize") paintHtmlResize(dx, dy);
+        else paintHtmlMove(dx, dy, drag.snap);
+        placeFrame();
+        showCode();
+      });
+      const endDrag = () => {
+        if (drag?.kind === "bar") document.body.style.cursor = "";
+        drag = null;
+      };
+      document.addEventListener("pointerup", endDrag);
+      document.addEventListener("pointercancel", endDrag);
+      document.addEventListener("dblclick", (event) => {
+        if (!document.body.classList.contains("is-diagram-edit")) return;
+        if (bar.contains(event.target)) return;
+        const text = event.target.closest?.("text");
+        if (text && text.closest("figure.diagram") && !text.closest("g.legend")) {
+          event.preventDefault();
+          openSvgText(text);
+          return;
+        }
+        const html = event.target.closest?.("[data-editable]");
+        if (!html || isSvg(html)) return;
+        event.preventDefault();
+        startInlineEdit(html);
+      });
+      document.addEventListener("keydown", (event) => {
+        const undoKey = (event.metaKey || event.ctrlKey) && event.key === "z" && !event.shiftKey;
+        const typing = Boolean(editingEl) || Boolean(event.target.closest?.("input, textarea, select"));
+        if (undoKey && undo.length && !typing) {
+          event.preventDefault();
+          undo.pop()();
+          if (!document.body.classList.contains("is-diagram-edit")) persistPage();
+          return;
+        }
+        if (!document.body.classList.contains("is-diagram-edit")) return;
+        if (editingEl && !svgTextEdit) {
+          if (event.key === "Escape") { event.preventDefault(); endInlineEdit(false); return; }
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey || isSimpleText(editingEl))) {
+            event.preventDefault();
+            endInlineEdit(true);
+          }
+          return;
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key === "z" && undo.length) {
+          event.preventDefault();
+          undo.pop()();
+          return;
+        }
+        if (event.key === "Escape") {
+          if (!codeBox.hidden) setSourceOpen(false);
+          else setEditing(false);
+          return;
+        }
+        const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
+        if (!step || !selected || editingEl) return;
+        event.preventDefault();
+        if (selected.kind === "svg") {
+          beginSvg(selected.unit, "", 0, 0);
+          drag.snap = false;
+          drag.noted = true;
+          remember();
+          paintMove(step[0] * drag.sx, step[1] * drag.sy, false);
+        } else {
+          beginHtml(selected.el, "", 0, 0);
+          drag.snap = false;
+          liftForDrag();
+          if (!drag.noted) {
+            remember();
+            drag.noted = true;
+          }
+          paintHtmlMove(step[0], step[1], false);
+        }
+        drag = null;
+        placeFrame();
+        showCode();
+      });
+      document.addEventListener("focusout", (event) => {
+        if (!editingEl || svgTextEdit) return;
+        if (interactingWithFormatBar) return;
+        const next = event.relatedTarget;
+        if (next && (editingEl.contains(next) || bar.contains(next))) return;
+        endInlineEdit(true);
+      });
+      window.addEventListener("scroll", () => placeFrame(), true);
+      window.addEventListener("resize", () => placeFrame());
+    })();
+  </script></body></html>

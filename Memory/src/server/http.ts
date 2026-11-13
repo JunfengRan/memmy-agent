@@ -1,3 +1,8 @@
+import {localPanelRequest} from "../service/panel/local-read.js";
+import { assertLocalAgentSourceRequest, isAgentSourceScanPath, routeAgentSourceScan } from "./agent-source-api.js";
+import {PanelLogsInputSchema} from "../contracts/memory-runtime.js";
+import { PanelBrowseInputSchema } from "../contracts/memory-runtime.js";
+import { PanelTaskDetailInputSchema, PanelTaskFieldInputSchema } from "../contracts/memory-runtime.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
@@ -6,6 +11,7 @@ import {
   type AgentSourceExecutor
 } from "../agent-source/runtime.js";
 import {
+  EmbeddingInferenceInputSchema,
   L3WorldModelBoundaryRequestSchema,
   L3WorldModelRequestEnvelopeSchema,
   OpenSessionInputSchema
@@ -30,6 +36,9 @@ import type {
 } from "../types.js";
 import { DEFAULT_NAMESPACE_SOURCE } from "../types.js";
 import { MemoryService } from "../service/memory-service.js";
+import { OPENMEM_PREFIX, errorEnvelope, openMemRouteWrites } from "../service/project-memory/api.js";
+import { ProjectMemoryError } from "../service/project-memory/contract/errors.js";
+import { withoutWorkerSchedulerContext } from "../service/worker/worker-scheduler.js";
 import { MemoryServiceError, statusForCode } from "../utils/error.js";
 import { stableHash } from "../utils/id.js";
 import { resolveTimeZone } from "../utils/time.js";
@@ -61,6 +70,23 @@ import {
 const logger = createMemoryLogger("http");
 const workerLogger = createMemoryLogger("worker");
 
+const OPENMEM_ROUTES = [
+  "POST /api/openmem/v1/add/message",
+  "POST /api/openmem/v1/search/memory",
+  "POST /api/openmem/v1/get/status",
+  "POST /api/openmem/v1/get/memory",
+  "GET /api/openmem/v1/get/memory/:id",
+  "POST /api/openmem/v1/delete/memory",
+  "POST /api/openmem/v1/create/space",
+  "POST /api/openmem/v1/get/space",
+  "POST /api/openmem/v1/update/space",
+  "POST /api/openmem/v1/delete/space",
+  "POST /api/openmem/v1/create/domains",
+  "POST /api/openmem/v1/list/domains",
+  "POST /api/openmem/v1/update/domains",
+  "POST /api/openmem/v1/delete/domains"
+] as const;
+
 export const API_ROUTES = [
   "GET /health",
   "GET /api/v1/health",
@@ -78,6 +104,7 @@ export const API_ROUTES = [
   "POST /api/v1/turns/:turnId/complete",
   "POST /api/v1/source-turns/complete",
   "POST /api/v1/memory/search",
+  "POST /api/v1/models/embedding/infer",
   "GET /api/v1/memory/recalls/:queryId",
   "POST /api/v1/memory/add",
   "POST /api/v1/evidence/sync",
@@ -92,11 +119,22 @@ export const API_ROUTES = [
   "POST /api/v1/worker/run",
   "POST /api/v1/worker/import-summaries/enqueue",
   "GET /api/v1/memory/logs",
+  "GET /api/v1/panel/memory/:id",
   "GET /api/v1/panel/overview",
+  "GET /api/v1/panel/overview-stats",
   "GET /api/v1/panel/analysis",
   "GET /api/v1/panel/items",
   "GET /api/v1/panel/tasks",
+  "POST /api/v1/panel/logs",
+  "GET /api/v1/panel/logs/:id",
+  "GET /api/v1/panel/stats",
+  "POST /api/v1/panel/browse",
+  "GET /api/v1/panel/task-summaries",
+  "GET /api/v1/panel/task-details/:id",
+  "GET /api/v1/panel/task-details/:id/check",
+  "GET /api/v1/panel/task-details/:id/turns/:turnId/field",
   "DELETE /api/v1/panel/tasks/:id",
+  ...OPENMEM_ROUTES,
   ...VIEWER_API_ROUTES
 ] as const;
 
@@ -108,6 +146,8 @@ export interface MemoryHttpServerOptions {
   auth?: MemoryHttpAuthOptions;
   workerStartupFallbackMs?: number;
   workerPostHealthDelayMs?: number;
+  /** Maximum delay before an idle worker checks for orphaned or overdue work. */
+  workerIdlePollMs?: number;
   onShutdownRequested?: () => void;
   pluginRuntimeAnalytics?: PluginRuntimeAnalytics;
   memoryAddAnalytics?: Pick<
@@ -150,12 +190,14 @@ interface AutoWorkerDrain {
 
 const DEFAULT_WORKER_STARTUP_FALLBACK_MS = 5_000;
 const DEFAULT_WORKER_POST_HEALTH_DELAY_MS = 250;
+const DEFAULT_WORKER_IDLE_POLL_MS = 30_000;
 const serverCleanup = new WeakMap<Server, () => Promise<void>>();
 
 export function createMemoryHttpServer(options: MemoryHttpServerOptions): Server {
   const autoWorker = createAutoWorkerDrain(options.service, {
     startupFallbackMs: options.workerStartupFallbackMs ?? DEFAULT_WORKER_STARTUP_FALLBACK_MS,
-    postHealthDelayMs: options.workerPostHealthDelayMs ?? DEFAULT_WORKER_POST_HEALTH_DELAY_MS
+    postHealthDelayMs: options.workerPostHealthDelayMs ?? DEFAULT_WORKER_POST_HEALTH_DELAY_MS,
+    idlePollMs: Math.max(10, options.workerIdlePollMs ?? DEFAULT_WORKER_IDLE_POLL_MS)
   });
   const desktopIdentity = () => readDesktopAnalyticsIdentity(options.configPath);
   const pluginRuntimeAnalytics = options.pluginRuntimeAnalytics ?? createPluginRuntimeAnalytics({
@@ -169,6 +211,7 @@ export function createMemoryHttpServer(options: MemoryHttpServerOptions): Server
   const agentSources = options.agentSourceExecutor ?? createAgentSourceExecutor({
     service: options.service,
     configPath: options.configPath,
+    legacyDatabasePath: process.env.MEMMY_APP_DATABASE,
     scheduleWorker: autoWorker.schedule,
     memoryAddAnalytics
   });
@@ -180,6 +223,8 @@ export function createMemoryHttpServer(options: MemoryHttpServerOptions): Server
   });
   async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const startedAt = Date.now();
+    const controller = new AbortController();
+    response.once("close",()=>controller.abort());
     const requestId = requestIdFromHeaders(request) ?? randomUUID();
     const requestPath = request.url?.split("?", 1)[0] ?? "<missing>";
     setSecurityHeaders(response);
@@ -243,6 +288,35 @@ export function createMemoryHttpServer(options: MemoryHttpServerOptions): Server
           return;
         }
       }
+      if (url.pathname.startsWith(OPENMEM_PREFIX)) {
+        if (openMemRouteWrites(url.pathname)) requireMemoryWrite(principal);
+        else requireMemoryRead(principal);
+        const openMem = await options.service.handleProjectMemoryRequest({
+          method: request.method,
+          path: url.pathname,
+          body,
+          timezone: headerString(request, "x-memos-tz") ?? principal.timeZone
+        });
+        if (openMem) {
+          if (openMem.scheduled) autoWorker.schedule();
+          writeJson(response, 200, openMem.envelope);
+          logger.debug("request.succeeded", {
+            requestId,
+            method: request.method,
+            path: requestPath,
+            status: 200,
+            durationMs: Date.now() - startedAt
+          });
+          return;
+        }
+      }
+      if (isAgentSourceScanPath(url.pathname)) {
+        assertLocalAgentSourceRequest(request, principal.kind);
+        const scanResult = await routeAgentSourceScan(agentSources, request.method, url, body);
+        if (!scanResult) throw new MemoryServiceError("not_found", "Unknown Agent source operation");
+        writeJson(response, scanResult.status ?? 200, scanResult.body);
+        return;
+      }
       const result = await routeRequest(
         options.service,
         autoWorker,
@@ -252,7 +326,9 @@ export function createMemoryHttpServer(options: MemoryHttpServerOptions): Server
         principal,
         Boolean(options.onShutdownRequested),
         pluginRuntimeAnalytics,
-        requestId
+        agentSources,
+        requestId,
+        controller.signal
       );
       if (request.method === "POST" && url.pathname === "/api/v1/admin/shutdown") {
         response.once("finish", () => options.onShutdownRequested?.());
@@ -266,6 +342,18 @@ export function createMemoryHttpServer(options: MemoryHttpServerOptions): Server
         durationMs: Date.now() - startedAt
       });
     } catch (error) {
+      if (error instanceof ProjectMemoryError) {
+        logger.warn("request.rejected", {
+          requestId,
+          method: request.method,
+          path: requestPath,
+          status: error.httpStatus,
+          durationMs: Date.now() - startedAt,
+          errorCode: error.errorName
+        });
+        writeJson(response, error.httpStatus, errorEnvelope(error));
+        return;
+      }
       const status = error instanceof MemoryServiceError ? statusForCode(error.code) : 500;
       const fields = {
         requestId,
@@ -343,6 +431,7 @@ function createAutoWorkerDrain(
   options: {
     startupFallbackMs: number;
     postHealthDelayMs: number;
+    idlePollMs: number;
   }
 ): AutoWorkerDrain {
   let running = false;
@@ -359,8 +448,15 @@ function createAutoWorkerDrain(
   let activeDrain: Promise<void> | undefined;
   const maxCycles = 40;
   const workerBatchSize = 4;
+  const admissionAbort = new AbortController();
 
-  async function drain(): Promise<void> {
+  function drain(): Promise<void> {
+    // A wake-up can originate from a running job's async descendants. It queues
+    // independent work rather than awaiting that job's own execution boundary.
+    return withoutWorkerSchedulerContext(drainUnscoped);
+  }
+
+  async function drainUnscoped(): Promise<void> {
     if (disposed) {
       return;
     }
@@ -386,7 +482,12 @@ function createAutoWorkerDrain(
         for (let cycle = 0; cycle < maxCycles && !disposed; cycle += 1) {
           const result = await service.runWorkerOnce(workerBatchSize, {
             priorityCohortOnly: true
-          });
+          }, { continuous: true, signal: admissionAbort.signal, onYieldToPendingRequests: () => {
+            // Keep an automatic continuation behind the accepted manual work.
+            // Awaiting the shared scheduler provides the wake-up; polling zero
+            // results would either lose the tail or spin while manual work runs.
+            requested = true;
+          } });
           if (result.leased === 0 && result.embeddingRetries.leased === 0) {
             break;
           }
@@ -424,20 +525,21 @@ function createAutoWorkerDrain(
       return;
     }
     const delayMs = nextWorkerRunAfterDelayMs(service);
-    if (delayMs === undefined) {
-      return;
-    }
+    // Recheck even with no known due job: a legacy writer or another process
+    // may leave an orphan after the worker has already become idle.
+    const wakeAfterMs = Math.min(delayMs ?? options.idlePollMs, options.idlePollMs);
     delayedTimer = setTimeout(() => {
       delayedTimer = undefined;
       requested = true;
       void drain();
-    }, delayMs);
+    }, wakeAfterMs);
   }
 
   function schedule(): void {
     if (disposed) {
       return;
     }
+    service.notifyWorkerWorkAvailable();
     startupReleased = true;
     requested = true;
     if (startupTimer) {
@@ -467,8 +569,12 @@ function createAutoWorkerDrain(
       clearTimeout(delayedTimer);
       delayedTimer = undefined;
     }
-    scheduleNextDueJob();
+    service.notifyWorkerWorkAvailable();
+    if (!running) scheduleNextDueJob();
   });
+
+  // Capture failures still leave durable work, even when the HTTP response fails.
+  service.setCapturePendingListener(schedule);
 
   service.setPersistRecoveredListener(() => {
     if (disposed || !workerStarted) {
@@ -503,8 +609,10 @@ function createAutoWorkerDrain(
     schedule,
     async dispose(): Promise<void> {
       disposed = true;
+      admissionAbort.abort();
       service.setAppBudgetReconcileListener(undefined);
       service.setPersistRecoveredListener(undefined);
+      service.setCapturePendingListener(undefined);
       requested = false;
       if (startupTimer) {
         clearTimeout(startupTimer);
@@ -542,11 +650,22 @@ async function routeRequest(
   principal: AuthPrincipal,
   canShutdown: boolean,
   pluginRuntimeAnalytics: PluginRuntimeAnalytics,
-  requestId: string
+  agentSources: AgentSourceExecutor,
+  requestId: string,
+  signal?: AbortSignal
 ): Promise<unknown> {
+  const localPanel=principal.kind==="local"||principal.kind==="anonymous"||principal.kind==="viewer";
+  const panelEnvelope=localPanelRequest({namespace:principal.namespace,timeZone:principal.timeZone},localPanel);
+  const readPanel = (method:string,args:unknown[]) => service.readPanel(method,args,signal);
   const path = url.pathname;
 
   if (method === "GET" && (path === "/health" || path === "/api/v1/health")) {
+    // Local cache preparation starts with the ready service, without a login or
+    // health request. Cloud statistics still require an authenticated scope.
+    if (principal.kind === "cloud" && principal.timeZone && principal.namespace?.userId) {
+      const input = { namespace: principal.namespace, timeZone: principal.timeZone };
+      service.panelStatsSnapshot(input,localPanel);
+    }
     return service.health([...API_ROUTES]);
   }
   if (method === "GET" && path === "/api/v1/admin/memory-token-budget") {
@@ -720,7 +839,7 @@ async function routeRequest(
       toolCalls: request.toolCalls, toolResults: request.toolResults, artifacts: request.artifacts,
       sourceMemoryIds: request.sourceMemoryIds, usage: request.usage, status: request.status,
       tags: request.tags, userMemoryCorrection: request.userMemoryCorrection
-    });
+    }, signal);
     const result = request.channel === "hook"
       ? await trackStoredExternalSourceTurnCapture(
         pluginRuntimeAnalytics,
@@ -733,7 +852,7 @@ async function routeRequest(
         request,
         completeSourceTurn,
       )
-      : completeSourceTurn();
+      : await completeSourceTurn();
     if (result.result) scheduleAutoWorkerForEvolution(result.result, autoWorker);
     return result;
   }
@@ -773,7 +892,8 @@ async function routeRequest(
       () =>
         service.completeTurn(
           turnId,
-          publicRequest as TurnCompleteRequest & Record<string, unknown>
+          publicRequest as TurnCompleteRequest & Record<string, unknown>,
+          signal
         )
     );
     scheduleAutoWorkerForEvolution(result, autoWorker);
@@ -815,12 +935,18 @@ async function routeRequest(
     ));
   }
 
+  if (method === "POST" && path === "/api/v1/models/embedding/infer") {
+    requireMemoryRead(principal);
+    const request = EmbeddingInferenceInputSchema.parse(body);
+    return service.embedTexts(request.texts, request.role);
+  }
+
   const recallEvidence = match(path, /^\/api\/v1\/memory\/recalls\/([^/]+)$/);
   if (method === "GET" && recallEvidence) {
     requireMemoryRead(principal);
     const queryId = decodeMatchSegment(recallEvidence, 1);
-    const request = envelopeWithPrincipal({}, principal) as RequestEnvelope;
-    return service.recallEvidence(queryId, request);
+    const request = ownerBoundRequest(envelopeWithPrincipal({}, principal), principal) as RequestEnvelope;
+    return service.recallEvidence(queryId, request, localPanel);
   }
 
   if (method === "POST" && path === "/api/v1/memory/add") {
@@ -916,9 +1042,9 @@ async function routeRequest(
       "worker.import-summaries.enqueue.memoryIds"
     );
     const result = service.enqueuePendingImportSummaries(10_000, memoryIds);
-    if (result.enqueued > 0) {
-      autoWorker.schedule();
-    }
+    // An existing queued task also needs a wake-up. Producers enqueue and
+    // observe status instead of starting their own targeted worker execution.
+    autoWorker.schedule();
     return result;
   }
 
@@ -941,10 +1067,10 @@ async function routeRequest(
 
   if (method === "GET" && path === "/api/v1/panel/overview") {
     requirePanelRead(principal);
-    return service.panelOverviewSummary({
-      namespace: principal.namespace,
+    return (await readPanel("overview", [{
+      namespace: panelEnvelope.namespace,
       timeZone: principal.timeZone
-    });
+    }])).data;
   }
 
   if (method === "GET" && path === "/api/v1/admin/export") {
@@ -959,21 +1085,29 @@ async function routeRequest(
 
   if (method === "DELETE" && path === "/api/v1/admin/data") {
     requireMemoryWrite(principal);
-    return service.clearAllData();
+    if (!localPanel) throw new MemoryServiceError("forbidden", "Clearing device memory requires local access");
+    return agentSources.clearAllData();
+  }
+
+  const panelMemory=path.match(/^\/api\/v1\/panel\/memory\/([^/]+)$/u);
+  if(method==="GET"&&panelMemory){
+    requirePanelRead(principal);
+    return service.getPanelMemory(decodeURIComponent(panelMemory[1]!),ownerBoundRequest({namespace:principal.namespace,timeZone:principal.timeZone},principal),localPanel);
   }
 
   if (method === "GET" && path === "/api/v1/panel/analysis") {
     requirePanelRead(principal);
-    return service.panelAnalysis({
-      namespace: principal.namespace,
+    return (await readPanel("analysis", [{
+      namespace: panelEnvelope.namespace,
       timeZone: principal.timeZone
-    });
+    }])).data;
   }
 
   if (method === "GET" && path === "/api/v1/panel/items") {
     requirePanelRead(principal);
-    return publicPanelItemsResponse(service.panelItems({
-      namespace: principal.namespace,
+    return publicPanelItemsResponse((await readPanel("items", [{
+      userSummary: url.searchParams.get("userSummary") === "true",
+      namespace: panelEnvelope.namespace,
       timeZone: principal.timeZone,
       layer: parseRecallLayer(url.searchParams.get("layer")),
       status: parseStatus(url.searchParams.get("status")),
@@ -981,17 +1115,64 @@ async function routeRequest(
       sourceAgent: url.searchParams.get("sourceAgent") ?? undefined,
       excludedSourceAgents: url.searchParams.getAll("excludedSourceAgents"),
       page: parseNumber(url.searchParams.get("page"))
-    }));
+    }])).data);
+  }
+
+  if (method === "POST" && path === "/api/v1/panel/logs") {
+    requirePanelRead(principal);
+    const input=PanelLogsInputSchema.safeParse(body);
+    if(!input.success) throw new MemoryServiceError("invalid_argument","Invalid log query");
+    return (await readPanel("logs",[input.data,{namespace:panelEnvelope.namespace}])).data;
+  }
+  const logDetail=path.match(/^\/api\/v1\/panel\/logs\/(\d+)$/u);
+  if(method==="GET"&&logDetail) {requirePanelRead(principal);return (await readPanel("logDetail",[Number(logDetail[1]),{namespace:panelEnvelope.namespace}])).data;}
+  if (method === "GET" && path === "/api/v1/panel/stats") {
+    requirePanelRead(principal);
+    return service.panelStatsSnapshot(panelEnvelope,localPanel);
+  }
+  if (method === "GET" && path === "/api/v1/panel/overview-stats") {
+    requirePanelRead(principal);
+    return service.panelOverviewStatsSnapshot(panelEnvelope,localPanel);
+  }
+  if (method === "POST" && path === "/api/v1/panel/browse") {
+    requirePanelRead(principal);
+    const parsed = PanelBrowseInputSchema.safeParse(body);
+    if (!parsed.success) throw new MemoryServiceError("invalid_argument","Invalid panel browse request");
+    return service.browsePanel(parsed.data,{namespace:panelEnvelope.namespace,timeZone:principal.timeZone},signal,localPanel);
+  }
+
+  if (method === "GET" && path === "/api/v1/panel/task-summaries") {
+    requirePanelRead(principal);
+    return (await readPanel("tasks", [{ namespace: panelEnvelope.namespace, timeZone: principal.timeZone,
+      q: url.searchParams.get("q") ?? undefined, page: parseNumber(url.searchParams.get("page")) }])).data;
+  }
+  const taskCheckPath = path.match(/^\/api\/v1\/panel\/task-details\/([^/]+)\/check$/u);
+  if (method === "GET" && taskCheckPath) {
+    requirePanelRead(principal);
+    return (await readPanel("taskCheck", [decodeURIComponent(taskCheckPath[1]!), { namespace: panelEnvelope.namespace }])).data;
+  }
+  const taskDetailPath = path.match(/^\/api\/v1\/panel\/task-details\/([^/]+)$/u);
+  if (method === "GET" && taskDetailPath) {
+    requirePanelRead(principal);
+    return (await readPanel("detail", [decodeURIComponent(taskDetailPath[1]!), { namespace: panelEnvelope.namespace,
+      ...parsePanelInput(PanelTaskDetailInputSchema, url), timeZone: principal.timeZone }])).data;
+  }
+  const taskFieldPath = path.match(/^\/api\/v1\/panel\/task-details\/([^/]+)\/turns\/([^/]+)\/field$/u);
+  if (method === "GET" && taskFieldPath) {
+    requirePanelRead(principal);
+    const {field, ...input} = parsePanelInput(PanelTaskFieldInputSchema, url);
+    return (await readPanel("field", [decodeURIComponent(taskFieldPath[1]!), decodeURIComponent(taskFieldPath[2]!), field,
+      { ...input, namespace: panelEnvelope.namespace, timeZone: principal.timeZone }])).data;
   }
 
   if (method === "GET" && path === "/api/v1/panel/tasks") {
     requirePanelRead(principal);
-    return publicPanelTasksResponse(service.panelTasks({
-      namespace: principal.namespace,
+    return publicPanelTasksResponse((await readPanel("legacyTasks", [{
+      namespace: panelEnvelope.namespace,
       timeZone: principal.timeZone,
       q: url.searchParams.get("q") ?? undefined,
       page: parseNumber(url.searchParams.get("page"))
-    }));
+    }])).data);
   }
 
   if (method === "GET" && path === "/api/v1/memory/logs") {
@@ -1002,7 +1183,7 @@ async function routeRequest(
       excludedSourceAgents: url.searchParams.getAll("excludedSourceAgents"),
       limit: parseNumber(url.searchParams.get("limit")),
       offset: parseNumber(url.searchParams.get("offset"))
-    });
+    },localPanel);
   }
 
   if (method === "POST" && path === "/api/v1/memory/processing/status") {
@@ -1046,7 +1227,8 @@ async function routeRequest(
       () =>
         service.getMemory(
           decodeMatchSegment(memoryGet, 1),
-          { namespace: principal.namespace, timeZone: principal.timeZone }
+          ownerBoundRequest({ namespace: principal.namespace, timeZone: principal.timeZone }, principal),
+          localPanel
         ),
       (result) => ({ hit_count: hitCountFromGetResponse(result) }),
     );
@@ -1055,18 +1237,18 @@ async function routeRequest(
   const panelTaskDelete = match(path, /^\/api\/v1\/panel\/tasks\/([^/]+)$/);
   if (method === "DELETE" && panelTaskDelete) {
     requireMemoryWrite(principal);
-    const request = envelopeWithPrincipal(asObject(body, "panel.task.delete"), principal) as MemoryGovernanceRequest;
+    const request = ownerBoundRequest(envelopeWithPrincipal(asObject(body, "panel.task.delete"), principal), principal) as MemoryGovernanceRequest;
     const id = decodeMatchSegment(panelTaskDelete, 1);
-    return publicDeletePanelTaskResponse(service.deletePanelTask(id, request));
+    return publicDeletePanelTaskResponse(service.deletePanelTask(id, request, localPanel));
   }
 
   const memoryDelete = match(path, /^\/api\/v1\/memory\/([^/]+)$/);
   if (method === "DELETE" && memoryDelete) {
     requireMemoryWrite(principal);
-    const request = envelopeWithPrincipal(asObject(body, "memory.delete"), principal) as MemoryGovernanceRequest;
+    const request = ownerBoundRequest(envelopeWithPrincipal(asObject(body, "memory.delete"), principal), principal) as MemoryGovernanceRequest;
     const id = decodeMatchSegment(memoryDelete, 1);
-    return publicDeleteMemoryResponse(await service.idempotent("memory.delete", request, { id, request }, () =>
-      service.deleteMemory(id, request)
+    return publicDeleteMemoryResponse(await service.idempotent("memory.delete", request, { id, request, local: localPanel }, () =>
+      service.deleteMemory(id, request, localPanel)
     ));
   }
 
@@ -1159,6 +1341,7 @@ function publicCompleteTurnResponse(result: unknown): Record<string, unknown> {
     turnId: record.turnId,
     sessionId: record.sessionId,
     episodeId: record.episodeId,
+    assignmentStatus: record.assignmentStatus,
     rawTurnId: record.rawTurnId,
     userMemoryId: record.userMemoryId,
     userMemoryIds: record.userMemoryIds,
@@ -1361,9 +1544,7 @@ function authenticate(
   url: URL,
   options: MemoryHttpServerOptions
 ): AuthPrincipal {
-  if (url.pathname === "/health" || url.pathname === "/api/v1/health") {
-    return { kind: "anonymous", scopes: ["health:read"] };
-  }
+  const healthRequest = url.pathname === "/health" || url.pathname === "/api/v1/health";
   const auth = options.auth;
   const localToken = auth?.localServiceToken ?? options.apiKey;
   const candidate = tokenFromRequest(request, url);
@@ -1380,17 +1561,20 @@ function authenticate(
     return {
       kind: "cloud",
       tokenId: stableTokenId(candidate!),
-      namespace: mergeNamespaces(cloudNamespace, namespaceFromRequest(request, url)),
+      namespace: mergeNamespaces(namespaceFromRequest(request, url), cloudNamespace),
       authenticatedNamespace: cloudNamespace,
       scopes: ["*"]
     };
   }
+  // Health remains public, but a verified local/cloud token can establish the
+  // real user scope for background warming. Invalid probes never start work.
+  if (healthRequest) return { kind: "anonymous", scopes: ["health:read"] };
   const scoped = candidate ? auth?.scopedApiKeys?.[candidate] : undefined;
   if (scoped) {
     return {
       kind: "scoped",
       tokenId: stableTokenId(candidate!),
-      namespace: mergeNamespaces(scoped.namespace, namespaceFromRequest(request, url)),
+      namespace: mergeNamespaces(namespaceFromRequest(request, url), scoped.namespace),
       authenticatedNamespace: scoped.namespace,
       scopes: scoped.scopes ?? ["memory:read", "memory:write"]
     };
@@ -1526,6 +1710,11 @@ function envelopeWithPrincipal<T extends Record<string, unknown>>(
   } as T & RequestEnvelope;
 }
 
+function ownerBoundRequest<T extends RequestEnvelope>(request: T, principal: AuthPrincipal): T {
+  if (principal.kind !== "cloud" && principal.kind !== "scoped") return request;
+  return { ...request, namespace: { ...request.namespace, userId: principal.authenticatedNamespace?.userId } };
+}
+
 function strictEnvelopeWithPrincipal(
   body: Record<string, unknown>,
   principal: AuthPrincipal
@@ -1535,7 +1724,6 @@ function strictEnvelopeWithPrincipal(
     : undefined;
   const principalNamespace = principal.namespace;
   const fields: Array<keyof RuntimeNamespace> = [
-    "userId",
     "tenantId",
     "projectId",
     "workspaceId",
@@ -1748,4 +1936,10 @@ function parseStatus(value: string | null): "activated" | "resolving" | "archive
     return value;
   }
   return undefined;
+}
+
+function parsePanelInput<T>(schema: {safeParse(value: unknown): {success: true; data: T} | {success: false}}, url: URL): T {
+  const result = schema.safeParse(Object.fromEntries(url.searchParams));
+  if (!result.success) throw new MemoryServiceError("invalid_argument", "Invalid panel query");
+  return result.data;
 }

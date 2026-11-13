@@ -123,6 +123,7 @@ describe("ComputerHistorySubPage", () => {
     const dialog = document.querySelector<HTMLElement>(".ch-source-dialog")!;
     expect(dialog.querySelectorAll(".ch-source-dialog__column")).toHaveLength(2);
     act(() => dialog.querySelector<HTMLButtonElement>(".ch-source-dialog__add")!.click());
+    expect(dialog.querySelector(".ch-source-dialog__list--apps > .ch-source-dialog__app-menu")).not.toBeNull();
     const search = dialog.querySelector<HTMLInputElement>('[aria-label="搜索应用"]')!;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, "Example");
@@ -417,9 +418,9 @@ describe("ComputerHistorySubPage", () => {
     expect(setComputerHistoryWeChatAccess).not.toHaveBeenCalled();
     expect(dialogButton("我已登录")).toBeUndefined();
     expect(openExternal).not.toHaveBeenCalled();
-    await act(async () => dialogButton("打开完全磁盘访问")!.click());
+    await act(async () => dialogButton("打开 Memmy 的完全磁盘访问")!.click());
     expect(openExternal).toHaveBeenCalledWith("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles");
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("需要完全磁盘访问");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Memmy 需要完全磁盘访问");
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("重启后重新打开");
     expect(readWeChatPermissionReturn()).not.toBeNull();
 
@@ -476,7 +477,7 @@ describe("ComputerHistorySubPage", () => {
     const client = await renderWith(disabled);
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-labelledby="computer-history-wechat-label"]')!.click());
     await confirmWeChatRisk();
-    await act(async () => dialogButton("打开完全磁盘访问")!.click());
+    await act(async () => dialogButton("打开 Memmy 的完全磁盘访问")!.click());
     await act(async () => dialogButton("重启 Memmy")!.click());
     expect(restartForComputerHistoryPermissions).toHaveBeenCalledOnce();
     expect(client.setComputerHistoryWeChatAccess).not.toHaveBeenCalled();
@@ -520,14 +521,14 @@ describe("ComputerHistorySubPage", () => {
     const accessSwitch = () => container.querySelector<HTMLButtonElement>('[aria-labelledby="computer-history-wechat-label"]')!;
     await act(async () => accessSwitch().click());
     await confirmWeChatRisk();
-    act(() => dialogButton("打开完全磁盘访问")!.click());
+    act(() => dialogButton("打开 Memmy 的完全磁盘访问")!.click());
     act(() => dialogButton("取消")!.click());
     await act(async () => accessSwitch().click());
     await confirmWeChatRisk();
     await act(async () => oldSession.resolve("current-process"));
     expect(openExternal).not.toHaveBeenCalled();
     expect(readWeChatPermissionReturn()).toBeNull();
-    await act(async () => dialogButton("打开完全磁盘访问")!.click());
+    await act(async () => dialogButton("打开 Memmy 的完全磁盘访问")!.click());
     expect(openExternal).toHaveBeenCalledOnce();
     expect(readWeChatPermissionReturn()?.sessionId).toBe("current-process");
   });
@@ -543,7 +544,7 @@ describe("ComputerHistorySubPage", () => {
     const client = await renderWith(disabled);
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-labelledby="computer-history-wechat-label"]')!.click());
     await confirmWeChatRisk();
-    await act(async () => dialogButton("打开完全磁盘访问")!.click());
+    await act(async () => dialogButton("打开 Memmy 的完全磁盘访问")!.click());
     expect(document.querySelector('[role="alert"]')?.textContent).toContain("未能打开系统设置或重启 Memmy");
     expect(dialogButton("重启 Memmy")).toBeUndefined();
     expect(client.connectComputerHistoryWeChat).not.toHaveBeenCalled();
@@ -1568,7 +1569,23 @@ function snapshot(overrides: Partial<ComputerHistorySnapshot> = {}): ComputerHis
   };
 }
 
-describe("computer history exclusion icons", () => {
+describe("computer history source dialog styles", () => {
+  it("keeps an opaque application picker anchor flush with the list", () => {
+    const styles = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../styles.css"), "utf8");
+    const addAppRule = styles.match(/\.ch-source-dialog__add--app \{[^}]+\}/u)?.[0] ?? "";
+    const appListRule = styles.match(/\.ch-source-dialog__list--apps \{[^}]+\}/u)?.[0] ?? "";
+    expect(addAppRule).toContain("background: var(--ch-surface)");
+    expect(appListRule).toContain("padding-top: 0");
+    expect(appListRule).toContain("overflow: hidden");
+  });
+
+  it("places the application picker in the list flow instead of over selected apps", () => {
+    const styles = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../styles.css"), "utf8");
+    const menuRule = styles.match(/\.ch-source-dialog__app-menu \{[^}]+\}/u)?.[0] ?? "";
+    expect(menuRule).not.toContain("position: absolute");
+    expect(menuRule).toContain("flex: 0 1 220px");
+  });
+
   it("does not let a missing application icon grow with the exclusion row", () => {
     const styles = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../styles.css"), "utf8");
     const nameRule = styles.match(/\.ch-source-dialog__rules li span:not\(\.ch-app-icon\) \{[^}]+\}/u)?.[0] ?? "";

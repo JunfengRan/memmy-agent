@@ -1,0 +1,66 @@
+# 规格对齐表
+
+对齐版本见 [spec-snapshots.md](spec-snapshots.md)。状态：`未开始` / `v0.1 简化` / `已对齐` / `待重新对齐`（规格变化后由 `pm-spec-sync` 标记）/ `偏离`（必须链接 ADR 或 open-questions）。
+
+## 当前应用接入边界（2026-11-13 用户纠正）
+
+按 [ADR-0011](decisions/0011-preserve-release-ui-local-default.md) 恢复 release 原有前端，不再新增项目记忆弹窗/开关。Backend 自动为未绑定的本机项目接入 Space；原项目/任务入口及 Agent 的按会话召回保留。云端上传由 UI 与 Backend transport 双层锁定。以下 ADR-0010 的独立面板描述是上一轮交付背景，已由本段替代；核心投递/隔离/配置恢复重试继续有效。工作项：20261113-restore-release-ui；56e37160 已获独立 review-02 批准。项目与成员协助共用锁定传输层，所有云端写操作在 fetch 前拒绝。
+
+## 桌面接入补充（2026-11-13）
+
+依据 [ADR-0010](decisions/0010-desktop-local-project-binding.md) 接入 release/v1.2.7 的项目看板。Backend 通过现有 OpenMem 接口创建 Space、投递已保存轮次、读取主题和整理状态；Frontend 提供开关、历史导入与主题详情；Agent 按会话的本机项目 ID 绑定 Space，索引、自动检索和工具共用绑定，桌面独立任务不继承全局空间。Q-32 的 CLI 规则保留，应用显式绑定以 ADR-0010 补充。
+
+Memory schema v16 兼容原开发分支 v10 及 release v15；project_memory_organize 注册到 release 调度/预算体系，保留 Space 串行与租约校验。接口/算法/提示词现状仍按下表；本补充不表示云端 Store、外部宿主或此前待决项完成。实现与验证见工作项 20261113-project-memory-desktop，代码 32b789ec 已经独立 review-02 批准；大历史规模读取性能保留为边界。配置补齐后允许 MODEL_NOT_CONFIGURED 原批次重提；宿主 model_error/中断占位不进入采集（ADR-0010 补记）。
+
+## 一、模块与接口
+
+| v3 出处 | 内容 | 代码位置 | 状态 | 测试 / 评测 | 备注 |
+| --- | --- | --- | --- | --- | --- |
+| §1.6.1、§1.6.3 | `/api/openmem/v1/` 下的路径 | server/http.ts → project-memory/api.ts | 部分对齐：Space 4 / domain 4 / add / get status / search / get memory / get memory by id / delete memory 已实现 | `tests/service/project-memory/http-contract.test.ts` | 写权限与 dispatcher 共用 openMemRoute，尾斜杠已归一化（原 review R1-1 已修复）；旧实现已删（ADR-0002） |
+| §4（Space、domain 管理） | create/get/update/delete space；domains 增删改查 | store/、service.ts | 已对齐（create 只收 space_name，拒绝调用方传 space_id；Q-04） | | review R1-5 |
+| §5.1.2 | ProjectMemoryStore 接口 | store/store.ts | 已对齐 | | 云端实现未做（ADR-0005 #8） |
+| §5.1.5 | 错误码 | contract/errors.ts | 已对齐 | http 契约测试 | |
+| §5.3 | SQLite 表 | storage/schema.ts（以当前 SCHEMA_VERSION 为准） | 已对齐（分表前缀 `pm_`） | 迁移测试 | |
+| §2.2.1–2.2.2 M01 | 采集、raw_turns、剥离注入块、返回 task_id | organize/collect.ts、service.ts、pipeline/ | 部分对齐 | task-resubmit.test.ts；restatement-pipeline.test.ts | 已剥离带属性的 `<memos_context>`。同一 Space、同一 domain 集合里已完成任务整理过的消息只作上下文（Q-27）。进度里没有 `domains` 的旧任务不参与去重，缺字段不是空集合（`9953ace9`）。按 Space 与 domain 集合判断已整理范围，跨 Space 仍可整理（原 review R1-2 的现状已由当前流水线修复）。`chat_time` 缺失回落到秒精度到达时间，同一秒的同文提交仍是一条任务（Q-24）。11/12 审计修补：raw turns、上下文边界和成员最新名称按 julianday 排序；重复消息与上下文合并按实际时刻排序，不改存储时间字符串 |
+| §2.2.3 | 会话上云 | — | 未开始 | | 本期只做 cloud store 适配 |
+| §2.2.4 | Space / domain 校验 | service.ts `validateScope`、api.ts | 部分对齐：add 与带 project 视图的 search 会检查 Space 存在、domain 已登记 | http-contract.test.ts | 写权限和分发共用归一化路径，见 §1.6 |
+| §2.2.5 M02 | 抽取：是否写入、回复拆分、字段判定 | organize/extract.ts、prompts/extract.ts（pm-extract-v0.2.2）；organize/restatement.ts；pipeline/organize-job.ts | 部分对齐（独立调用；同一会话的推迟片段可随本批进入抽取；dropped 收 7 类原因；复述与 recall_log 比对已接入） | 数据集 v2.1 add 指标（metrics R-20261111-01/06）；organize-stages.test.ts；deferred-backfill.test.ts；restatement-pipeline.test.ts | ADR-0005 #2 由 ADR-0007 收回；ADR-0005 #3 由 PM-15 收回 |
+| §2.2.6 M03 | 归类用候选召回 | organize/candidates.ts、sqlite-store.ts | 部分对齐（每条草稿一条 query，topic_k=10，degraded 透传 M04；并集再截到 20） | organize-stages.test.ts | 并集上限见 ADR-0007 |
+| §2.2.7 M04 | 归入 / 新建 / 推迟，摘要描述改写 | organize/assign.ts、prompts/assign.ts（pm-assign-v0.2.0）；pipeline/organize-job.ts；store/sqlite/local-state.ts | 部分对齐（只看摘要和描述，basis 写入任务详情；摘要改写在 M05 判断调用里；同一会话下一次整理回填推迟片段，`topic_unavailable` 与清空前受理的行不回填，见 Q-22） | organize-stages.test.ts；deferred-backfill.test.ts | ADR-0007；ADR-0005 #4 由 PM-13 收回；Q-22；选题实验默认关闭（ADR-0006） |
+| §2.2.8 | 全量读 | sqlite-store.ts；organize-job.ts 只读已归入的主题 | 已对齐 | decision golden | §2.3.2 两段读取 |
+| §2.2.9 M05 | 决策 7 种 op、经验 4 种 op、轨迹 | merge/judge.ts（pm-judge-v0.3.1）、merge/merge.ts、store/sqlite/apply.ts | 部分对齐：判断独立调用，规则合并仍确定性；`split` 已实现。保留原 id 的一项（`from` 含 `content`，否则第一项）以及每一片 history 都写入原内容和全部 conflict，是实现提议。op basis 在 ChangeSet 旁返回，不写入 op。作者由会话推出；认可人要和现行结论相交才改写。等于 history、又不等于当前内容或任一 conflict 的草稿不会回到当前：迟交不写；非迟交且无原因、无裁决信号则丢为 restatement（Q-26） | decision-golden.test.ts；store-commit.test.ts；restatement-pipeline.test.ts | ADR-0005 #1 由 PM-14 收回；保留 id 与分片 history 待确认；R1-4 已在 review-02 关闭；摘要改写在判断调用内，ADR-0007；Q-26。11/12 修补：M05 输入补齐当前 topic_summary/topic_description，避免在缺少被改写原文时遗漏更新；版本升至 pm-judge-v0.3.1，针对性冒烟见 R-20261112-01 |
+| §2.2.10 | ChangeSet、条件写、结果码 | apply.ts、organize-job.ts、service.ts | 部分对齐：deferred 事务。`TOPIC_SET_CHANGED` 会把 `newTopicIds` 放进下一次候选。推断的 `chat_time` 进入批次键（Q-15）；可重试失败新建任务（Q-16） | store-commit.test.ts；task-resubmit.test.ts | R1-3 已在 review-02 关闭；R1-6 |
+| §2.2.11 | get_task_status | api.ts、store/sqlite/local-state.ts | 已对齐。可重试失败再提交会新建任务（Q-16），不再总是返回原 task_id | http 契约测试；task-resubmit.test.ts | 任一 Space 不可重试则仍返回原任务（Q-25）。重提任务的 memory_ids、added/updated 只统计本次重跑的 Space；之前已完成 Space 的写入结果须查原 task_id，新任务不重复计数。连续两次失败再重交有回归测试 |
+| §2.3 | OCC、Space 内串行、删除围栏 | pipeline/、repositories.ts | 部分对齐 | concurrency.test.ts | 任务内模型失败会结算该 Space。11/12 复核：worker 的 failed 是可重试中间态，每轮先 requeueFailedJobs 再租约；队头重试期间阻塞后继以保序，重试完成后后继可租约（concurrency.test.ts），不是永久阻塞。极端 worker dead_letter 与任务状态一致性未作故障注入，不能据此宣称全链路故障恢复已验收。云端围栏与故障验收仍待 PM-24～PM-26 |
+| §3.2.1 | 会话开始索引（get_memory） | api.ts | 已对齐（按 space_id 读） | | 无 start_conversation（Q-03） |
+| §3.2.2–3.2.3 M08 | search_memory 三路召回 | retrieve/recall-paths.ts；retrieval-service.ts `recallCandidates`；retrieve/search.ts 负责 project 路排序 | 部分对齐：① 用户记忆、② L1/Skill、③ project 都返回候选。任一路失败写入 `degraded`（Q-28）。跨路融合见 §3.2.5。`memory_detail_list` 等 Q-29 | recall-paths.test.ts；recall-candidates.test.ts；http-contract.test.ts；search.test.ts | ADR-0005 #6 的三路部分由 PM-19 收回；Q-28。项目向量降级名仍是 `vector` |
+| §3.2.4 | L01 召回（FTS5 + 向量） | sqlite-store.ts | 已对齐 | search.test.ts | 有任一过期模型向量即整体退词法（Q-30，不改政策）。11/12 修补：内容提交在同事务中撤销与当前 embedding 文本不符的旧向量；异步索引仅在内容哈希与当前模型仍匹配时写回，防止旧请求覆盖新结果 |
+| §3.2.5、§3.5 M09 | RRF、MMR、条目裁剪、截断、recall_log | retrieve/fuse.ts；retrieve/search.ts；retrieve/recall-paths.ts | 部分对齐：跨路 RRF 已按名次融合，不透传各路原始分数。relativity 是融合分 / 本次最高分，四位小数后名次差压在 61/(60+rank)，再按输出顺序取累计最小值。名次相同按 user_memory、agent_memory、project 打破。条目裁剪仍只用词法。截断不在返回体里标明。列表名仍是 `user_memory` / `agent_memory`，等 Q-29。recall_log 只记实际返回的主题。HTTP 读本机字段 `recall_via`（`turn_start` / `tool`，缺省 `turn_start`）；其他值 `INVALID_PARAMS` 且不写日志；缺 `conversation_id` 不写。`via=tool` 不调用 `/turns/start`，这些行仍计入 `recalledIds` 与已告知。云端客户端不转发 `recall_via` | fuse.test.ts；search.test.ts；recall-paths.test.ts；http-contract.test.ts | RRF k=60（Q-01）；Q-29、Q-30；ADR-0005 #6 的融合部分由 PM-20 收回，词法裁剪和 `memory_detail_list` 仍在；#11 不收回。Decisions 选题默认关闭（ADR-0006）。`recall_via` 见 ADR-0008，Q-17 |
+| §3.3 M10 | 注入模板 1–4、检索工具 | prompts/inject.ts（pm-inject-v0.1.0）；inject/render.ts；inject/tool.ts（pm-tool-v0.2.0）；cli `project search`；App/memmy-agent `search_project_memory` 与 hook.ts | 部分对齐：模板 1–3 按字段渲染，外层 `v="1"`。工具只暴露 `query`、`domains`。宿主绑定 `user_id`、`space_ids`、`conversation_id`，强制 `include_memory_view: ["project"]`，工具 `memory_limit_number` 默认 3，`recall_via=tool`。工具结果是模板三、`kind="tool"`；CLI 默认打渲染文本，`--raw` 打 JSON。`degraded` 非空时加固定提示。`DOMAIN_INVALID` 在工具标签里列出未登记领域和可用领域。没有命中时 turn 不注入、tool 写空结果句；turn 无命中但降级则只写提示（Q-33）。非项目记忆段落不渲染。Memmy agent 在已绑定 space 时，会话提示词写入指南和 `get/memory` size 8 的索引，每轮检索用模板三、`kind=turn`、不传 `recall_via`。Claude / Codex / Cursor 的宿主钩子未接。没有显式 space 绑定则不检索、不注册工具（Q-32）。11/12 修补：索引和每轮 project 检索共享宿主剩余交互预算，写入前检查轮次、取消与超时；带时区的历史、不一致结论和最新进展按实际时刻排序，日期显示仍保留原日期 | inject-render.test.ts；inject-tool.test.ts；cli-command-map.test.ts；http-contract.test.ts | ADR-0008；Q-33 |
+| §3.4 | 三层剥离 | inject/strip.ts；organize/collect.ts；client/openmem-cloud-client.ts `addMessage`；organize/extract.ts；organize/restatement.ts；pipeline/organize-job.ts | 部分对齐：第 1 道云端客户端在 POST 前剥闭合块。第 2 道 M01 再剥闭合的 `<memos_context>` 与 `<project_index>`，字符串形式的 tool_calls 参数一并剥离，且不抄进 M02 请求。同名嵌套块按配对的完整区间剥离，不残留外层尾部文字；计数按删除的最外层块，不重复计嵌套块。闭合块数写入任务详情 JSON 的 `strippedBlocks`（不新增列）。未闭合标签原样留下并记 `unclosedBlocks`（Q-34）。验收只数闭合块。第 3 道 M02 仍按本会话 recall_log 丢弃复述 | inject-strip.test.ts；organize-stages.test.ts；openmem-cloud-client.test.ts；restatement.test.ts；restatement-pipeline.test.ts | 经验与轨迹没有单独的召回 id，比对用主题行上的当前内容（ADR-0005 补记）；Q-34 |
+| §3.6 | 读取与注入验收里的性能：单路 P95、总 P95、渲染 P95 | eval/project-memory/latency/run-search-latency.ts | 部分对齐：2026-11-10，数字测于 `127cca7e`，脚本在 `b5cb5822` 入库。fixture S、stub embedder。第 1、2 路是空库，单路门槛只由第 3 路承担。丢掉 3 轮后测 20 轮、31 道计分题（n=620）。第 3 路 P95 0.741 ms，总 P95 1.462 ms，渲染 P95 0.008 ms，超时 0。门槛用 S（Q-35）。L 只作参照：第 3 路 P95 1.599 ms，总 P95 2.922 ms，渲染 P95 0.010 ms，超时 0。两种存储 Recall@K 差仍是 PM-24 | 金标灌库 Recall@1/3/9 为 0.581 / 0.968 / 0.968（18/31、30/31、30/31），不是流水线分 | 分位用 metrics.mjs 的 `percentile`（(n-1) 线性插值）。11/10 的网关故障是历史阻塞；11/11 R-20261111-01 已记录流水线 Recall@3 0.871 / 0.903 与 HTTP search P95 约 13 ms，不能与本行 stub 基准混作同一测量 |
+| §4.3 `get_memory_by_id` | 按主题 id 读完整主题，供界面使用 | api.ts `GET`/`POST /get/memory/:id` | 偏离：`data` 是 `{ topic_detail_list: [topic] }`，与同空间 `get/memory` 的单个主题同形。v3 §4.3 示例的 `data` 是裸主题。本轮不改信封 | http-contract.test.ts | 不是 Agent 工具。裸主题信封待规格或 ADR 再改。畸形 URI 编码返回 INVALID_PARAMS（40001），不再是 500 |
+| §5.2 | 云端存储服务接口 | — | 未开始 | mock 契约测试 | W48（PM-24） |
+
+## 二、与 PRD / SDK 规格的差异（按架构文档执行）
+
+来自 v3 §6.4，以及我们对比两份产品文档时发现的差异。按 [ADR-0001](decisions/0001-authority-order.md) 以架构文档为准。
+
+| # | 主题 | PRD / SDK 写法 | 架构文档写法（执行） | 出处 |
+| --- | --- | --- | --- | --- |
+| 1 | 领域 | MemOS 自动识别领域，跨领域内容拆开归类 | 调用方指定 domain；新建主题只在恰好一个 domain 时进行，否则推迟（`domain_unresolved`） | v3 §6.1 #12、§6.4 #1 |
+| 2 | 比对位置与顺序 | 云端按提交顺序串行比对 | 本机比对；OCC 代替全局顺序；本机 Space 内串行 | v3 §6.4 #2 |
+| 3 | local_config | 只有写入需要 | 读取项目记忆也需要 | v3 §6.4 #3 |
+| 4 | 经验历史 | 经验不保留历次内容 | 经验带只追加的 `history`，无 `conflicts` | v3 §6.1 #11、§6.4 #9 |
+| 5 | 已告知 | 未定义判定方式 | `recall_log` 显示返回过带冲突的决策 + M02 输出 `informed` 信号 | v3 §2.2.9、§6.4 #7 |
+| 6 | 无法确定所指工作 | 等后续消息 | 依赖 `conversation_id`；没有时不整理 | v3 §6.4 #8 |
+| 7 | 多轮拆分 | SDK 按用户消息拆 | Local 拆，SDK 只发一个请求 | v3 §6.4 #15 |
+| 8 | 混排 | 与其他种类统一排序 | 按种类分列表返回，总数受 `memory_limit_number` 约束 | v3 §6.4 #14 |
+| 9 | 原样提交 | 原样提交消息 | 例外：剥离 `<memos_context>` | v3 §6.4 #11 |
+| 10 | 会话开始 | PRD 11/03 删除 `start_conversation`，改为按 `space_id` 调 `get_memory` | v3 仍写 `start_conversation` | 不实现 start_conversation；会话 ID 由调用方在 add/search 中提交（Q-03，11/04 决定）；待 v3 更新 |
+| 12 | resolve 顺序 | v3 流程先判「结论相同」再判已告知 | v0.1 先判 resolve | v3 §2.2.9；open-questions Q-10 |
+| 11 | create_space | PRD 11/03：传 `space_name`，`space_id` 由 MemOS 生成；SDK 规格仍要求传 `space_id` | v3 未写明 | 按 PRD 11/03 实现（Q-04，11/04 决定） |
+
+## Codex 本机桥接（2026-11-13，已独立复核）
+
+依 ADR-0012 扩展 Q-32：Codex hook 和无显式 Space 的 CLI 按真实工作目录访问 Backend 的本机项目绑定。Backend 统一 owner/Space，复用 OpenMem 与持久化投递；不改 Memory 核心算法和已恢复的 release UI。真实原生双端写入/整理/项目召回已验证；工作项 20261113-codex-memmy-project-bridge 的 review-01 approved。Memmy 自动每轮 search 可能被个人召回耗尽共享预算，项目索引与显式工具通过；不外推所有自动检索稳定或离线补交能力。

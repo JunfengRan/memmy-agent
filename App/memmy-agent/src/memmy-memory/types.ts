@@ -93,6 +93,11 @@ export type MemmyMemoryHookOptions = {
   userId?: string;
   /** Optional per-run upper bound on layers eligible for automatic turn-start retrieval. */
   retrievalLayers?: MemmyMemoryLayer[];
+  /**
+   * Bound project spaces for search_project_memory.
+   * Omit to read MEMMY_PROJECT_SPACE_IDS. An empty list registers no project tool.
+   */
+  projectSpaceIds?: readonly string[];
   /** Optional override for GA4 client_id; defaults to reading desktop-written ~/.memmy/analytics-client-id. */
   getAnalyticsClientId?: () => string | null | undefined;
   /** Optional logged-in account id for GA4 user_id; omitted when anonymous. */
@@ -121,6 +126,9 @@ export type MemmyMemoryToolRuntime = {
   currentEpisodeId(sessionKey?: string | null): string | null;
   currentTurnId(sessionKey?: string | null): string | null;
   currentUserText(sessionKey?: string | null): string | null;
+  /** Bound project spaces. Missing or empty means search_project_memory is not registered. */
+  projectSpaceIds?(sessionKey?: string | null): readonly string[];
+  projectConversationId?(sessionKey?: string | null): string | null;
   /** Fire-and-forget GA4 memory-op event (search/get/add). */
   trackMemoryAnalytics?(eventName: string, params?: Record<string, string | number | boolean>): void;
   /** Session/turn correlation + adapter_id for tool-path memory-op events. */

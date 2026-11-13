@@ -21,6 +21,23 @@ describe("UserMemoriesSubPage interaction", () => {
     container.remove();
   });
 
+  it("does not render pagination when there are no user memories", async () => {
+    const client = createMemoryRuntimeClientStub({
+      listPanelItems: vi.fn(async () => panelItemsOutput([]))
+    });
+
+    await act(async () => {
+      root.render(
+        <I18nProvider language="zh-CN">
+          <UserMemoriesSubPage client={client} />
+        </I18nProvider>
+      );
+    });
+
+    expect(container.textContent).toContain("暂无用户记忆");
+    expect(container.querySelector(".memory-pagination")).toBeNull();
+  });
+
   it("loads the UserMemory layer and deletes the selected record", async () => {
     const item = {
       id: "user_memory_1",
@@ -59,7 +76,7 @@ describe("UserMemoriesSubPage interaction", () => {
       );
     });
 
-    expect(listPanelItems).toHaveBeenCalledWith({ layer: "UserMemory", page: 1 });
+    expect(listPanelItems).toHaveBeenCalledWith({ layer: "UserMemory", page: 1, userSummary: true }, expect.any(AbortSignal));
     act(() => container.querySelector<HTMLButtonElement>(".memory-card")?.click());
     const deleteButton = container.querySelector<HTMLButtonElement>(".memory-delete-button");
     act(() => deleteButton?.click());
@@ -111,6 +128,9 @@ describe("UserMemoriesSubPage interaction", () => {
     expect(drawer?.querySelector(".memory-drawer__title")).toBeNull();
     expect(drawer?.textContent?.split(active.summary).length).toBe(2);
     expect(drawer?.textContent).toContain("表达次数2");
+    for (const label of ["来源轮次", "替代记忆", "被替代为", "归档原因"]) {
+      expect([...drawer!.querySelectorAll("dt")].map(node => node.textContent)).not.toContain(label);
+    }
     act(() => container.querySelector<HTMLButtonElement>(".memory-drawer-backdrop__close")?.click());
     expect(container.querySelector(".memory-drawer")).toBeNull();
   });
