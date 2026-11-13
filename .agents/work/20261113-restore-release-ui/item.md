@@ -1,7 +1,7 @@
 ---
 id: 20261113-restore-release-ui
-status: ready-for-review
-owner: reviewer / 待复核
+status: changes-requested
+owner: developer / Codex
 branch: dev-project-memory-add-search
 updated: 2026-11-13
 ---
@@ -13,3 +13,5 @@ updated: 2026-11-13
 验收：撤掉新增记忆弹窗/按钮/开关及样式，原看板和设置布局恢复；新建本机项目由后端自动绑定记忆；云端上传在 UI 与服务端均锁定；原项目、任务和对话功能回归通过；模型目录与真实推理校验通过。
 
 既有 20261113-project-memory-desktop 的记录保留，以本次修正替代其中新增 UI 与默认关闭的体验决定；核心算法、已修补租约/重试/隔离不回退。
+
+2026-11-13：独立 reviewer / Codex 完成 review-01：1 MUST（协助 transport 漏上传锁），前端恢复与自动绑定边界通过复核，交 developer 修补。
