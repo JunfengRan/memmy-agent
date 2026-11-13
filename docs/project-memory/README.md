@@ -12,7 +12,7 @@ Agent 开工先按仓库 [AGENTS.md](../../AGENTS.md) 的初始化顺序：协�
 | --- | --- | --- |
 | [findings.md](findings.md) | 开发过程中的发现，给同事和汇报用。不是规格 | 有新的评测结论或设计建议时 |
 | [algorithm-handoff.html](algorithm-handoff.html) | 算法背景、贯穿示例、topic 粒度、9 道 RCA、接口接入与运行 B 完整附录 | 实现或证据变化时；生成脚本仅更新标记内附录 |
-| [routing-experiments.html](routing-experiments.html) | Jev 思路、Super Agent 路由、两个实验工作区与 Add/Search 接法 | 实验快照或结论变化时 |
+| [routing-experiments.html](routing-experiments.html) | Jev 思路、Super Agent 路由、实验整合与 Add/Search 接法 | 实验快照或结论变化时 |
 | [ONBOARDING.md](ONBOARDING.md) | 给新同事的现状说明：先读什么、做到哪了、接下来做什么 | 每周五随周报 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 模块布局、编码规则、测试与评测命令、提交流程 | 约定变化时 |
 | [ROADMAP.md](ROADMAP.md) | 里程碑、周计划、条目状态、变更记录 | 每周一确认，每周五修订 |
@@ -45,3 +45,5 @@ Agent 开工先按仓库 [AGENTS.md](../../AGENTS.md) 的初始化顺序：协�
    - L3 改算法或提示词：提示词升版本，`metrics.md` 追加一次评测。
 4. **可追溯**：Roadmap 条目有 ID（PM-xx），状态变化写在底部变更记录；ADR 只追加，改主意时新写一条并注明「取代 ADR-xxxx」；评测数据集带版本号，`metrics.md` 每行写明数据集版本。
 5. **反馈上游**：实现发现的规格问题写进 `open-questions.md`，周报列出待回复项，回复后关闭并在对齐表落地。
+
+实验统一入口与离线复现见 [2026-11-13 分支整理](experiment-consolidation.md)。

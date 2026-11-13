@@ -51,7 +51,7 @@ const CELLS: Record<string, Cell> = {
 const here = dirname(fileURLToPath(import.meta.url));
 const runsDir = join(here, "runs");
 const outDir = join(runsDir, "ablation");
-const dataset = JSON.parse(readFileSync(join(runsDir, "dataset.json"), "utf8")) as { turns: Turn[] };
+const dataset = JSON.parse(readFileSync(join(here, "../session-router-ablation/results/dataset.json"), "utf8")) as { turns: Turn[] };
 
 function parseEnv(path: string): Record<string, string> {
   const env: Record<string, string> = {};
@@ -282,6 +282,8 @@ if (mode === "run") {
   mkdirSync(outDir, { recursive: true });
   const cells = arg("--cells", "jev,sa,both,jev-ds").split(",");
   const runs = Number(arg("--runs", "3"));
+  if (cells.some(name => !CELLS[name])) throw new Error("Unknown ablation cell");
+  if (!Number.isInteger(runs) || runs < 1) throw new Error("--runs must be a positive integer");
   const jobs: Array<Promise<void>> = [];
   const names = [...new Set(["baseline", ...cells])];
   for (const name of names) {
@@ -293,7 +295,10 @@ if (mode === "run") {
         const file = join(outDir, `${name}-r${k}.json`);
         writeFileSync(file, `${JSON.stringify({ cell: name, run: k, ...CELLS[name], model: r.model, saPromptVersion: SUPERAGENT_ROUTER_PROMPT_VERSION, calls: r.calls, wallMs: Date.now() - started, score: score(r.preds), preds: r.preds }, null, 2)}\n`);
         console.error(`${name} r${k} done: f1=${score(r.preds).bcubedF1.toFixed(3)}`);
-      })().catch((e) => console.error(`${name} r${k} FAILED ${e instanceof Error ? e.message : e}`)));
+      })().catch((e) => {
+        process.exitCode = 1;
+        console.error(`${name} r${k} FAILED ${e instanceof Error ? e.message : e}`);
+      }));
     }
   }
   await Promise.all(jobs);

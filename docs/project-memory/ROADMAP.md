@@ -105,3 +105,7 @@
 | 2026-11-04 | 增加多 Agent 交接规范（`.agents/`）；metrics 记录改为每条收录全部指标 | 多个应用的 Agent 以 designer / developer / reviewer 接力 |
 | 2026-11-04 | W45 增加评测基线：旧实现 + main 对照，被测模型改为 deepseek；token 限流与检索 LLM 过滤在评测配置中关闭 | 用户要求先有可比基线 |
 | 2026-11-03 | 初版 | 用户要求 W45 先出基础版本 |
+
+### 2026-11-13 实验分支整理
+
+`codex/jev-superagent-consolidated` 基于 `a32c5fd0` 合入独立路由实验，保留旧 session-as-topic 的提交历史及隔离恢复入口；v2.1 数据与基座一致。专项 harness 支持 v2/v2.1，未重跑在线评测，未改变 PM 条目状态。见 [整理说明](experiment-consolidation.md) 与 [工作项](../../.agents/work/20261113-experiment-consolidation/item.md)，等待独立评审。

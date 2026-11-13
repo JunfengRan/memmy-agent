@@ -56,8 +56,9 @@ interface GoldEntry {
   sources?: string[];
 }
 
-interface Dataset {
+export interface Dataset {
   corpus: {
+    datasetVersion: number;
     conversations: Array<{ id: string; space_id: string }>;
     traces: CorpusTrace[];
   };
@@ -184,11 +185,15 @@ export function buildJevTopicCases(dataset: Dataset): JevTopicCases {
   return { add, search, skipped };
 }
 
-export function assertJevTopicCases(cases: JevTopicCases): void {
-  if (cases.add.length + cases.skipped.length !== 35) {
-    throw new Error(`expected 35 traces, got ${cases.add.length} scored and ${cases.skipped.length} skipped`);
-  }
-  if (cases.search.length !== 23) throw new Error(`expected 23 search questions, got ${cases.search.length}`);
+export function assertJevTopicCases(cases: JevTopicCases, dataset: Dataset): void {
+  const assertCoverage = (actual: string[], expected: string[], kind: string) => {
+    const ids = new Set(actual);
+    if (ids.size !== actual.length || actual.length !== expected.length || expected.some((id) => !ids.has(id))) {
+      throw new Error(`${kind} case coverage does not match dataset v${dataset.corpus.datasetVersion}`);
+    }
+  };
+  assertCoverage([...cases.add, ...cases.skipped].map((item) => item.id), dataset.corpus.traces.map((item) => item.id), "add");
+  assertCoverage(cases.search.map((item) => item.id), dataset.questions.questions.filter((item) => !item.excluded).map((item) => item.id), "search");
   for (const item of cases.add) {
     const ids = new Set(item.topics.map((topic) => topic.id));
     if (item.expected === JEV_NEW_TOPIC || item.expected === JEV_NO_TOPIC) {

@@ -35,3 +35,7 @@ v3 的默认检索仍要求同样输入得到同样输出，模型调用只出�
 ## 阅读提示（2026-11-11）
 
 此处 Decisions 是结构化选择题实验的历史命名。现行实现使用 gpt-6-luna 的 chat completions，不是 Jev 原生模型或原生 Decisions 端点。与两个 Super Agent 工作区的区别及复现边界见 [实验说明](../routing-experiments.html)。
+
+## 整理说明（2026-11-13）
+
+选择题与独立会话路由汇总到 `codex/jev-superagent-consolidated`，未改变本 ADR 的默认关闭决定。旧同编号 session-topic ADR 仅在归档快照内有效。专项脚本已适配 v2/v2.1，详见 [整理说明](../experiment-consolidation.md)。

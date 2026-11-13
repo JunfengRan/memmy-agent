@@ -50,3 +50,7 @@
 | 10 | 会话开始 | PRD 11/03 删除 `start_conversation`，改为按 `space_id` 调 `get_memory` | v3 仍写 `start_conversation` | 不实现 start_conversation；会话 ID 由调用方在 add/search 中提交（Q-03，11/04 决定）；待 v3 更新 |
 | 12 | resolve 顺序 | v3 流程先判「结论相同」再判已告知 | v0.1 先判 resolve | v3 §2.2.9；open-questions Q-10 |
 | 11 | create_space | PRD 11/03：传 `space_name`，`space_id` 由 MemOS 生成；SDK 规格仍要求传 `space_id` | v3 未写明 | 按 PRD 11/03 实现（Q-04，11/04 决定） |
+
+## 2026-11-13 实验整合边界
+
+默认 Add/Search 及 ADR-0006 的选择题开关保持原实现。独立会话 router 合入实验入口；旧 v0.1 session-as-topic 仅保留 Git 历史并通过固定快照运行，未将其模型检索/锁定主题的偏离移入当前产品。见 [整理说明](experiment-consolidation.md)。规格 SHA 不变，无新增公开契约、表结构或产品设计决策，PM-24～PM-27 与待决问题不变。

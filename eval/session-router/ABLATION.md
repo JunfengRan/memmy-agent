@@ -1,3 +1,5 @@
+> 2026-11-13：以下是历史实验记录，权威历史结果在 `../session-router-ablation/results/`。统一脚本读取该目录 dataset.json，新输出写本目录忽略的 runs/ablation/；选择题定义已改为共享转导出。复现命令与当前边界见 [整理说明](../../docs/project-memory/experiment-consolidation.md)。
+
 # 会话归属消融：基线 / Jev / Super Agent / Jev + Super Agent
 
 日期 2026-11-09。分支 `feat/superagent-session-router`。脚本 `eval/session-router/run-ablation.ts`，原始输出在 `eval/session-router/runs/ablation/`（已忽略，不入库）。
@@ -98,8 +100,8 @@
 ## 复现
 
 ```sh
-node eval/session-router/run-ablation.ts run --runs 3
-node eval/session-router/run-ablation.ts summarize
+node --import tsx eval/session-router/run-ablation.ts run --runs 3
+node --import tsx eval/session-router/run-ablation.ts summarize
 ```
 
 需要 `~/.deepseek.env` 和 `~/.openai.env`（`MODEL`、`OPENAI_API_KEY`、`OPENAI_API_BASE`）。

@@ -1,9 +1,9 @@
 /**
- * Replay the session router over eval/session-router/runs/dataset.json.
+ * Replay the session router over eval/session-router-ablation/results/dataset.json.
  * The model is memmy's DeepSeek config in ~/.deepseek.env (deepseek-v4.1-flash-1017).
  * One refused decision is retried once, as orchestrator_route tells the caller to retry that item.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,7 +17,7 @@ import {
   SUPERAGENT_ROUTER_PROMPT_VERSION,
   type ApplyResult,
   type RouteDecision,
-} from "../src/core/session/superagent-session-router.ts";
+} from "../src/core/session/superagent-session-router.js";
 
 type DatasetTurn = {
   id: string;
@@ -118,7 +118,7 @@ async function routeOnce(
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(scriptDir, "../../..");
-const datasetPath = join(repoRoot, "eval/session-router/runs/dataset.json");
+const datasetPath = join(repoRoot, "eval/session-router-ablation/results/dataset.json");
 const outPath = join(repoRoot, "eval/session-router/runs/predictions.json");
 const env = loadEnv(join(homedir(), ".deepseek.env"));
 const model = env.MODEL;
@@ -171,6 +171,7 @@ for (const turn of dataset.turns) {
   console.error(`${turn.id} ${routed.result.kind} ${routed.result.sessionId ?? "-"} ${turn.project}`);
 }
 
+mkdirSync(dirname(outPath), { recursive: true });
 writeFileSync(outPath, `${JSON.stringify({
   promptVersion: SUPERAGENT_ROUTER_PROMPT_VERSION,
   requestedModel: model,

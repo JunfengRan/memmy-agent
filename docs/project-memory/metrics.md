@@ -266,3 +266,22 @@
 
 **备注**：
 ```
+
+## R-20261113-experiment-offline
+
+2026-11-13，`codex/jev-superagent-consolidated`。基座 `a32c5fd0`，独立路由 merge `c97aac68`，旧实验历史保留 merge `261b6b84`；本记录对应后续 harness/材料整理提交，运行时存在未提交的整理改动。模型与评委均未调用，产品提示词和默认开关未改。
+
+这是离线完整性与复现检查，不加入端到端效果总表。数据集 v2.1 与远端基座一致，v2 使用 history/v2。原始词法报告在忽略目录 `eval/project-memory/runs/2026-11-13-jev-topic-v2.1/`、`...-v2/`，会话词法输出在 `eval/session-router/runs/ablation/`。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| 数据集加载 | errors=[]；v2.1：113 traces、50 topics、31 道计分题 |
+| 数据集评分器 selftest | 22/22 passed |
+| Jev harness 回归 | v2/v2.1 共 2 项通过；缺失/重复用例、未知目标均拒绝 |
+| v2.1 选择题离线自检 | 104 条计分、9 条跳过、31 道题；按题型计数 plain 13、conflict 3、stale 5、cross-project 10 |
+| v2 选择题离线自检 | 34 条计分、1 条跳过、23 道题；q21 排除 |
+| 会话消融词法基线 | 统一入口及兼容入口均可运行；B³ F1=0.337，复核旧词法基线，不是模型成绩 |
+| 旧快照恢复 | --check 通过；--create 实际创建 detached worktree，HEAD=65e61c7e，核对后删除临时 worktree |
+| 产品 Add / Search / 回答质量、分题型质量、模型开销及服务 P95 | 不适用：没有启动服务、调用模型或真实回放；历史在线分数不变 |
+
+词法专项分数不代表产品质量：v2.1 Add accuracy=0.510、Search Recall@1/3/9=0.419/0.968/1.000；v2 为 0.588、0.522/1.000/1.000。变化含数据集规模差异，不作算法改进结论。模型调用数及费用为 0；其他效率指标未测。

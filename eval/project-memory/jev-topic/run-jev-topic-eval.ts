@@ -7,7 +7,7 @@
  *   cd Memory && npx tsx ../eval/project-memory/jev-topic/run-jev-topic-eval.ts
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DecisionTopicClient, openAIEnvPath, resolveDecisionCredentials } from "../../../Memory/src/service/project-memory/decisions/client.js";
 import {
@@ -137,6 +137,8 @@ function reportOf(
   );
   return {
     ...meta,
+    datasetVersion: dataset.corpus.datasetVersion,
+    datasetDir: datasetDir ?? "gold-add-memory/dataset",
     decisionVersion: JEV_TOPIC_DECISION_VERSION,
     counts: {
       add: cases.add.length,
@@ -170,10 +172,16 @@ function reportOf(
   };
 }
 
-const cases = buildJevTopicCases(loadTopicDataset());
-assertJevTopicCases(cases);
+const datasetArg = process.argv.indexOf("--dataset-dir");
+if (datasetArg >= 0 && (!process.argv[datasetArg + 1] || process.argv[datasetArg + 1]!.startsWith("--"))) {
+  throw new Error("--dataset-dir requires a directory");
+}
+const datasetDir = datasetArg >= 0 ? resolve(process.argv[datasetArg + 1]!) : undefined;
+const dataset = loadTopicDataset(datasetDir);
+const cases = buildJevTopicCases(dataset);
+assertJevTopicCases(cases, dataset);
 
-const outDir = join(dirname(fileURLToPath(import.meta.url)), "../runs", `${new Date().toISOString().slice(0, 10)}-jev-topic`);
+const outDir = join(dirname(fileURLToPath(import.meta.url)), "../runs", `${new Date().toISOString().slice(0, 10)}-jev-topic-v${dataset.corpus.datasetVersion}`);
 mkdirSync(outDir, { recursive: true });
 
 if (selfCheck) {

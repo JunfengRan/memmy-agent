@@ -1,10 +1,10 @@
 # 会话归属消融：基线 / Jev / Super Agent / Jev + Super Agent
 
-日期 2026-11-09。分支 `feat/superagent-session-router`。脚本和原始输出的原位置在 `feat/superagent-session-router` 分支的 worktree（`.worktrees/superagent-session-router/eval/session-router/`）。本目录是为方便查看放入的副本：`results/` 是每次运行的预测和分数（`<格子>-r<次>.json`）、`summary.json` 汇总和 `dataset.json` 输入，`run-ablation.ts` 与 `jev-topic-choice.ts` 是脚本副本。脚本依赖那个分支上的 `App/memmy-agent/src/core/session/superagent-session-router.ts`，在本分支不能直接运行。
+历史实验日期 2026-11-09；2026-11-13 已整理到 `codex/jev-superagent-consolidated`。`results/` 保留当时的预测、分数、summary.json 与 dataset.json。统一脚本在 `eval/session-router/run-ablation.ts`，本目录的同名脚本为兼容入口；路由器已合入，能够直接运行。新生成物统一写入忽略的 `eval/session-router/runs/ablation/`。
 
 ## 实验设定
 
-任务和数据集沿用 Super Agent 实验：23 条消息（6 个 Cursor 会话按轮转交错，`runs/dataset.json`），路由器逐条决定它属于哪个会话。金标是消息来自哪个原始会话，同一会话的不同条目不一定是同一件事。
+任务和数据集沿用 Super Agent 实验：23 条消息（6 个 Cursor 会话按轮转交错，`results/dataset.json`），路由器逐条决定它属于哪个会话。金标是消息来自哪个原始会话，同一会话的不同条目不一定是同一件事。
 
 两个因子加一个基线：
 
@@ -92,14 +92,16 @@
 - 数据只有 23 条、6 个会话，每格 3 次，差距小的指标（续接命中率、B³ F1）在噪声内。
 - 金标是原始会话，不是人标的「同一件事」。续接命中率会把「同一会话里的新请求不并入旧会话」记为未命中，所以它偏严；Super Agent 之前人工判的 0.913 用的是更宽的规则，不能与本表的会话纯度直接比。
 - 这是会话归属任务，不是 Jev 原评测（主题卡上的 add 归属与 search 选题，见 `docs/project-memory/metrics.md` R-20261106-01）。那组实验里 Jev 的 add 归属准确率是 0.882，两个数字衡量的对象不同，不要互相对比。
-- Jev 协议的 `new` 没有标题，会话标题用首条消息前 80 字代替；`jev-topic-choice.ts` 是 `Memory/src/service/project-memory/decisions/topic-choice.ts` 的副本（该文件不在本分支上）。
+- Jev 协议的 `new` 没有标题，会话标题用首条消息前 80 字代替；`jev-topic-choice.ts` 现转导出 `Memory/src/service/project-memory/decisions/topic-choice.ts`，不再维护副本。
 - 没有测 Super Agent 的 `stop`：数据集里没有停止类消息。
 
 ## 复现
 
 ```sh
-node eval/session-router/run-ablation.ts run --runs 3
-node eval/session-router/run-ablation.ts summarize
+node --import tsx eval/session-router/run-ablation.ts run --runs 3
+node --import tsx eval/session-router/run-ablation.ts summarize
 ```
 
 需要 `~/.deepseek.env` 和 `~/.openai.env`（`MODEL`、`OPENAI_API_KEY`、`OPENAI_API_BASE`）。
+
+离线可先运行 `node --import tsx eval/session-router/run-ablation.ts run --cells baseline --runs 1`，不需要凭据。旧 session-topic 的隔离恢复与两版数据复现见 [整理说明](../../docs/project-memory/experiment-consolidation.md)。

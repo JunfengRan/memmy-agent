@@ -25,7 +25,7 @@ W45 的 v0.1 已经用来暴露问题。W46 和 W47 的代码已经落地，原�
 - **检索**：用户记忆、L1/Skill、project 三路并行，失败写入 `degraded`，再按名次融合。省略 `include_memory_view` 时不搜项目。
 - **注入**：模板 1–3、闭合块剥离、降级提示。宿主钩子只接了 Memmy agent。
 - **数据集**：可跑的是 v2.1（6 个项目、50 个 topic、113 轮写入）。v2 冻在 `eval/project-memory/gold-add-memory/history/v2/`。
-- **实验脚本边界**：选择题专项脚本仍断言 v2 的 35 轮 / 23 题，当前 dataset 已是 v2.1；直接执行 `--self-check` 也会失败。历史命令及复现条件见 [实验交接稿](routing-experiments.html#handoff)。服务内默认关闭的选择题插入点与此专项脚本是两件事。
+- **实验整理**：`codex/jev-superagent-consolidated` 汇总选择题与独立会话路由，专项脚本支持 v2/v2.1；旧 session-as-topic 通过固定提交隔离复现，未覆盖新版 Add/Search。命令、分支与边界见 [整理说明](experiment-consolidation.md)。
 - **实验，默认关闭**：`MEMMY_DECISION_TOPIC=1` 才用 gpt-6-luna 做主题选择题（借鉴 Jev，并非调用 Jev 原生模型），见 [ADR-0006](decisions/0006-jev-topic-experiment.md)。
 
 产品端到端的现行数字在 [metrics.md](metrics.md) 文首。口径见 [ADR-0009](decisions/0009-eval-protocol-v2-1.md)：被测和回答都是 deepseek-v4.1-flash-1017，裁判是 gpt-6-luna 且不计入产品开销。当前版本两次的 `entries.f1` 是 0.816 和 0.861，`answers.llm` 是 0.645 和 0.742。v2 上的旧分数已从正文删除，全文在提交 `47355fa0`。

@@ -792,8 +792,8 @@
     <button type="button" class="theme-toggle" data-theme-toggle aria-label="切换配色"></button>
   </div><div class="layout"><nav class="toc" aria-label="目录"><p class="toc-brand"><span class="toc-org">MemTensor</span><span class="toc-kind">项目记忆交接</span></p><a href="#concepts"><span class="toc-no">01</span>两者解决的不是同一层问题</a><a href="#choice"><span class="toc-no">02</span>基座：在 Add 与 Search 中加入选择题</a><a href="#dispatch"><span class="toc-no">03</span>独立会话实验：什么时候允许续接</a><a href="#session-topic"><span class="toc-no">04</span>端到端实验：把 session 当作 topic</a><a href="#results"><span class="toc-no">05</span>三组结果分别说明什么</a><a href="#handoff"><span class="toc-no">06</span>接手时从哪里读和复现</a></nav><main><header class="doc-head"><p class="eyebrow">应用深挖 <span class="tag tag-memos">MemOS</span></p>
 <h1>Jev 与 Super Agent 实验</h1>
-<div class="title-rule" aria-hidden="true"></div><p class="lead">当前基座把主题选择作为默认关闭的实验插入点；另两个工作区探索会话路由与 session 作为 topic。它们帮助理解归属粒度的取舍，但不是一条已合并的新产品流水线。</p>
-<dl class="meta"><div><dt>基线</dt><dd>71d3faff · 2026-11-11</dd></div><div><dt>读者</dt><dd>接手研发同事</dd></div><div><dt>配套阅读</dt><dd><a href="algorithm-handoff.html">项目记忆为什么难</a></dd></div></dl></header><section id="concepts"><h2><span class="sec-no">01</span>两者解决的不是同一层问题</h2>
+<div class="title-rule" aria-hidden="true"></div><p class="lead">整合分支保留默认关闭的主题选择题，合入独立会话路由，并隔离归档旧 session-topic 实验。三者用于比较归属粒度，当前产品仍使用新版 Add/Search。</p>
+<dl class="meta"><div><dt>基线</dt><dd>a32c5fd0 基座 · 2026-11-13 整理</dd></div><div><dt>读者</dt><dd>接手研发同事</dd></div><div><dt>配套阅读</dt><dd><a href="algorithm-handoff.html">项目记忆为什么难</a></dd></div></dl></header><section id="concepts"><h2><span class="sec-no">01</span>两者解决的不是同一层问题</h2>
 <p>Jev 是 TypeSafe 提供的 System One 决策模型：输入状态与有类型的问题，返回 choice、概率分布等结构化结果。Choice 适合把“这轮属于哪个候选主题”表达成选择题。这个定位来自 <a href="https://docs.typesafe.ai/introduction">TypeSafe 官方介绍</a>，不是本仓库性能实验的结论；本页不采用厂商速度、成本或可靠性宣传作为产品证据。</p>
 <p>dsh-superagent 是面向单个 GitHub 仓库的主动编码 Agent 研究原型，建立在 DeepSeek Harness 上：它接收触发消息，由编排者决定新建、续接、忽略或停止工作，再由工作会话执行并交回结果。原型 README 明确它不是官方 DeepSeek 产品，并且公开原型不等同于全部设计方向。项目记忆实验只借用了 dispatch 中的路由规则，没有启动整套 Harness，也没有把执行 Agent 接到 Add 里。</p>
 <div class="callout info"><p class="callout-title">先纠正“用了 Jev”的含义</p>
@@ -819,7 +819,7 @@
 <p>“Jev + Super Agent”这个旧实验名的实际含义是用 gpt-6-luna 跑 Super Agent 路由提示词。为便于阅读，本页称“Super Agent 协议 × gpt-6-luna”。不存在先调用一个 Jev，再把结果交给另一个 Super Agent 的串联流水线。</p>
 </section>
 <section id="session-topic"><h2><span class="sec-no">04</span>端到端实验：把 session 当作 topic</h2>
-<p>另一个工作区 feat/superagent-session-as-topic 基于较早的项目记忆 v0.1。它把 router 分配的 session id 直接当 topic id，锁定后续组织的写入目标。该工作区的同编号 <a href="../../.worktrees/superagent-session-as-topic/docs/project-memory/decisions/0006-superagent-session-router.md">ADR-0006</a> 是分支内决策，不是当前基座选择题 ADR 的补充，也不是其默认实现。</p>
+<p>归档实验 feat/superagent-session-as-topic 基于较早的项目记忆 v0.1。它把 router 分配的 session id 直接当 topic id，锁定后续组织的写入目标。该工作区的同编号 <a href="../../eval/project-memory/session-as-topic/legacy-adr.md">ADR-0006</a> 是分支内决策，不是当前基座选择题 ADR 的补充，也不是其默认实现。</p>
 <figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 472" role="img" aria-label="图 3 · session-as-topic 分支用模型选择写入目标和读取主题。"><defs><marker id="arrow-locked" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#62748E"/></marker></defs><path class="edge" d="M340 92 L340 140" stroke="#62748E" fill="none" marker-end="url(#arrow-locked)"/><path class="edge" d="M340 212 L340 260" stroke="#62748E" fill="none" marker-end="url(#arrow-locked)"/><rect class="node" x="40" y="20" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="node-focus" x="40" y="140" width="600" height="72" rx="8" fill="#EEF0FF" stroke="#4044ED"/><rect class="node" x="40" y="260" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="node" x="40" y="380" width="600" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/><rect class="chip" x="242.0" y="104" width="196" height="24" rx="12" fill="#FFFFFF" stroke="#D8DAFB"/><text class="t-chip" x="340" y="120" text-anchor="middle" fill="#4044ED">locked_session</text><rect class="chip" x="290.0" y="224" width="100" height="24" rx="12" fill="#FFFFFF" stroke="#D8DAFB"/><text class="t-chip" x="340" y="240" text-anchor="middle" fill="#4044ED">条目动作</text><text class="t-title" x="64" y="48" fill="#141D32">Add：route = write</text><text class="t-sub" x="64" y="71" fill="#62748E">accept 新 topic；attach 既有 topic；ignore / stop 推迟本轮</text><text class="t-title" x="64" y="168" fill="#141D32">组织与合并锁定 session</text><text class="t-sub" x="64" y="191" fill="#62748E">accept 的描述由组织器补齐；条目不能另开第二主题</text><text class="t-title" x="64" y="288" fill="#141D32">存储：仍保留结构化条目</text><text class="t-sub" x="64" y="311" fill="#62748E">决策、conflicts、history 沿用既有整理与合并</text><text class="t-title" x="64" y="408" fill="#141D32">Search：route = retrieve</text><text class="t-sub" x="64" y="431" fill="#62748E">模型多选主题并排序，返回所选主题全部条目</text></svg><figcaption>图 3 · session-as-topic 分支用模型选择写入目标和读取主题。 窄屏可横向滚动查看全图。</figcaption></figure>
 <h3>Add：路由决定容器，组织器提炼知识</h3>
 <p>write 路由一次完成 JSON 决策。accept 创建一个新 topic，attach 只写指定 topic；组织器收到 locked_session，即使输出其他 id，也不会再创建第二个主题。ignore 和 stop 不调用组织，把本轮作为 deferred。此分支的 stop 只停止本轮写入，不把 topic 永久关闭，这与独立会话实验的 stopped 状态不同。</p>
@@ -841,31 +841,28 @@
 <h3>三、session-as-topic 的旧版端到端回放</h3>
 <p>2026-11-06，分支专项 R-20261106-01；基线 25ff3fff 上的未提交工作区，单次运行。数据集 v2：35 轮、5 个金标主题、23 道题；被测 deepseek-v4.1-flash-1017，阅读与裁判 claude-haiku-5-5；Claude 5 拒绝 temperature，实际使用模型默认采样，报告中的 temperature=0 只是评分脚本字段。该模型名称仅按当时记录转述，不表示目前仍可用。</p>
 <div class="table-wrap"><table><thead><tr><th>指标</th><th>session-as-topic</th><th>同一旧口径 v0.1 对照</th></tr></thead><tbody><tr><td>answers.llm</td><td>0.652</td><td>0.609</td></tr><tr><td>entries.f1</td><td>0.583</td><td>0.667</td></tr><tr><td>Recall@3</td><td>0.913</td><td>0.913</td></tr><tr><td>主题数 / 金标</td><td>17 / 5</td><td>见历史评测</td></tr><tr><td>旧版当当前</td><td>7（最终写入状态）</td><td>3（最终写入状态）</td></tr></tbody></table>
-</div><p>问答单次多答对一道，但写入 F1 降低，17 个主题相对 5 个金标明显更碎；不能把“保守分流”直接当作决策维护的改进。此分支元数据、完整分项及检索中旧版当当前的另一个计数见 <a href="../../.worktrees/superagent-session-as-topic/docs/project-memory/metrics.md#r-20261106-01">分支评测记录</a>。</p>
+</div><p>问答单次多答对一道，但写入 F1 降低，17 个主题相对 5 个金标明显更碎；不能把“保守分流”直接当作决策维护的改进。此分支元数据、完整分项及检索中旧版当当前的另一个计数见 <a href="../../eval/project-memory/session-as-topic/legacy-metrics.md#r-20261106-01">分支评测记录</a>。</p>
 <div class="callout info"><p class="callout-title">记录号与指标不要混用</p>
 <p>三组实验的 R-20261106-01 是各自上下文里的记录号，不是同一次运行。上面的会话纯度、选择准确率、端到端 answers.llm 不能横向比高低；旧 v2 的端到端分数也不能与第一篇 v2.1 产品成绩直接比较。</p>
 </div></section>
 <section id="handoff"><h2><span class="sec-no">06</span>接手时从哪里读和复现</h2>
-<div class="table-wrap"><table><thead><tr><th>位置与快照</th><th>用途</th><th>未提交范围</th></tr></thead><tbody><tr><td>dev-project-memory-add-search-dev @ 71d3faff</td><td>当前基座；可选选择题</td><td>本次开工干净</td></tr><tr><td>feat/superagent-session-router @ 6853b777</td><td>独立会话路由、协议与模型消融</td><td>session/index.ts、独立路由器、脚本、测试、eval 与忽略规则等</td></tr><tr><td>feat/superagent-session-as-topic @ 25ff3fff</td><td>较早 v0.1 上的 session-topic 端到端实验</td><td>service、organizer、pipeline、retrieve、route 提示词与实现、测试、评测与分支文档</td></tr></tbody></table>
-</div><p>这是一份 2026-11-11 阅读快照。两个实验工作区里的核心实现尚未提交；仅 checkout 上述 HEAD 不能复现。先核对实际工作区 diff 和原始记录，再复制环境或整理提交。本次文档工作不会修改或清理它们。旧分支的已采纳状态只在该实验分支内成立。</p>
-<h3>代码索引</h3>
-<div class="table-wrap"><table><thead><tr><th>对象</th><th>阅读入口</th></tr></thead><tbody><tr><td>选择题定义与解析</td><td><a href="../../Memory/src/service/project-memory/decisions/topic-choice.ts">topic-choice.ts</a></td></tr><tr><td>开关、配置和请求</td><td><a href="../../Memory/src/service/project-memory/decisions/client.ts">decisions/client.ts</a></td></tr><tr><td>独立路由器</td><td><a href="../../.worktrees/superagent-session-router/App/memmy-agent/src/core/session/superagent-session-router.ts">superagent-session-router.ts</a></td></tr><tr><td>session-topic 路由</td><td><a href="../../.worktrees/superagent-session-as-topic/Memory/src/service/project-memory/route/router.ts">route/router.ts</a></td></tr><tr><td>session-topic Search</td><td><a href="../../.worktrees/superagent-session-as-topic/Memory/src/service/project-memory/retrieve/search.ts">retrieve/search.ts</a></td></tr></tbody></table>
-</div><p>Super Agent 原型的本机来源是 <code>/Users/junfengran/repos/dsh-superagent-prototype/</code> 的 README.md、prompts/dispatch.md 与 src/app/tools/main.ts。该路径是阅读来源，不是仓库依赖；搬到另一台机器时需要另行取得原型和两个实验快照。</p>
-<h3>选择题脚本：当前存在数据版本阻塞</h3>
-<pre><code>cd Memory
-npx tsx ../eval/project-memory/jev-topic/run-jev-topic-eval.ts --self-check</code></pre>
-<h3>旧版运行命令（先恢复匹配的语料快照）</h3>
-<pre><code>cd Memory
-npx tsx ../eval/project-memory/jev-topic/run-jev-topic-eval.ts</code></pre>
-<p>2026-11-11 实际执行第一条自检，失败信息是 <code>expected 35 traces, got 104 scored and 9 skipped</code>。原因是 cases.ts 仍固定断言 v2 的 35 轮、23 题，loadTopicDataset 默认读的 dataset/ 已是 v2.1；两条命令都会在调用模型前停住。这不是密钥错误。复现旧结果需在隔离工作区恢复实验当时的 v2 输入和匹配脚本；若改测 v2.1，需另外适配断言与要点格式并记为新实验，不能冒用旧结果。本次只记录阻塞，不修改选择题脚本。第二条在阻塞解决且配置齐全后会调用模型并产生费用；本次未执行。输出在 eval/project-memory/runs/，不启动记忆服务，也不自动打开产品开关。若要试基座内的插入点，在启动服务的环境设 MEMMY_DECISION_TOPIC=1；不要对现有共享服务做无说明的开关更改。</p>
-<h3>会话消融要进入原工作区运行</h3>
-<pre><code>cd .worktrees/superagent-session-router
-node eval/session-router/run-ablation.ts run --runs 3
-node eval/session-router/run-ablation.ts summarize</code></pre>
-<p>需要本机 ~/.deepseek.env 和 ~/.openai.env，字段 MODEL、OPENAI_API_KEY、OPENAI_API_BASE；运行依赖以该工作区脚本和 README 为准。当前开发分支 eval/session-router-ablation/ 是阅读副本，脚本依赖的路由器不在当前分支，不能直接按副本路径运行。</p>
-<p>session-topic 回放入口是该工作区的 run-memmy-live-eval.mjs 与分支 metrics 的配置；复现必须恢复未提交实现和匹配的 v2 语料、模型配置。当前基座的数据集已是 v2.1，不直接复用它去声称重现旧分数。下一步若要比较两条算法，先统一数据集、阅读与裁判口径，再记录新的跑次。</p>
+<div class="table-wrap"><table><thead><tr><th>位置与快照</th><th>用途</th><th>整合状态（2026-11-13）</th></tr></thead><tbody><tr><td>codex/jev-superagent-consolidated，基于 a32c5fd0</td><td>最新审计修补、v2.1 数据与默认关闭的选择题</td><td>统一实验入口；默认 Add/Search 保持新版</td></tr><tr><td>feat/superagent-session-router @ fa04419b</td><td>独立会话路由、协议与模型消融</td><td>已常规 merge；源码与脚本可从整合分支直接运行</td></tr><tr><td>feat/superagent-session-as-topic @ 65e61c7e</td><td>v0.1 上的 session-topic 端到端实验</td><td>仅合并历史，通过固定提交恢复隔离 worktree；旧代码未覆盖新版</td></tr></tbody></table>
+</div><p>两个实验快照已提交，原分支和工作区保留。旧 session-topic 会替换 Add/Search，因此整合分支用 ours merge 保留其历史，当前工作目录保持 v2.1 实现。具体命令、Jev 插入点与接手事项见 <a href="experiment-consolidation.md">分支整理说明</a>。旧分支的已采纳状态只在该实验快照内成立。</p>
+<div class="table-wrap"><table><thead><tr><th>对象</th><th>阅读入口</th></tr></thead><tbody><tr><td>选择题定义与解析</td><td><a href="../../Memory/src/service/project-memory/decisions/topic-choice.ts">topic-choice.ts</a></td></tr><tr><td>开关、配置和请求</td><td><a href="../../Memory/src/service/project-memory/decisions/client.ts">decisions/client.ts</a></td></tr><tr><td>独立路由器</td><td><a href="../../App/memmy-agent/src/core/session/superagent-session-router.ts">superagent-session-router.ts</a></td></tr><tr><td>session-topic 路由</td><td><a href="../../eval/project-memory/session-as-topic/README.md">route/router.ts</a></td></tr><tr><td>session-topic Search</td><td><a href="../../eval/project-memory/session-as-topic/README.md">retrieve/search.ts</a></td></tr></tbody></table>
+</div><p>Super Agent 原型的本机来源是 <code>/Users/junfengran/repos/dsh-superagent-prototype/</code> 的 README.md、prompts/dispatch.md 与 src/app/tools/main.ts。该路径是阅读来源，不是仓库依赖；两个实验提交已在整合分支历史中，搬到另一台机器可按隔离入口恢复旧快照。</p>
+<h3>选择题专项：v2 与 v2.1 均可离线自检</h3>
+<pre><code>node --import tsx eval/project-memory/jev-topic/run-jev-topic-eval.ts --self-check
+node --import tsx eval/project-memory/jev-topic/run-jev-topic-eval.ts --self-check --dataset-dir eval/project-memory/gold-add-memory/history/v2</code></pre>
+<p>2026-11-11 自检曾因硬编码 v2 数量失败。2026-11-13 整合分支已改为按数据集 ID 检查完整性：v2.1 有 104 条可计分选题、9 条跳过、31 道检索题；v2 有 34 条选题、1 条跳过、23 道检索题。两版报告与目录分开，只跑离线词法自检，没有新的在线 Jev 分数。移除 --self-check 会调用配置的模型并产生费用；本次没有执行。生成物仍写 eval/project-memory/runs/，不启动记忆服务，也不自动打开产品开关。服务内选择题仍需显式设置 MEMMY_DECISION_TOPIC=1。</p>
+<h3>会话消融：在整合分支仓库根运行</h3>
+<pre><code>node --import tsx eval/session-router/run-ablation.ts run --cells baseline --runs 1
+# 以下两条用于在线模型消融与汇总，本次未跑在线格子：
+node --import tsx eval/session-router/run-ablation.ts run --runs 3
+node --import tsx eval/session-router/run-ablation.ts summarize</code></pre>
+<p>baseline 不需要密钥；在线格子需要 ~/.deepseek.env 和 ~/.openai.env，字段为 MODEL、OPENAI_API_KEY、OPENAI_API_BASE。脚本现读取已跟踪的 23 条历史输入，新输出写忽略目录 eval/session-router/runs/ablation/；eval/session-router-ablation/run-ablation.ts 是兼容入口。历史预测保留在 results/，不覆盖。依赖安装与历史模型的当前可用性须另行核对。</p>
+<p>session-topic 回放入口是该工作区的 run-memmy-live-eval.mjs 与分支 metrics 的配置；复现通过固定提交恢复完整旧实现及 v2 语料，再配置模型。当前基座的数据集已是 v2.1，不直接复用它去声称重现旧分数。下一步若要比较两条算法，先统一数据集、阅读与裁判口径，再记录新的跑次。</p>
 </section>
-<footer class="site-foot">MEMTENSOR · 项目记忆交接 · 2026-11-11</footer></main></div><script>
+<footer class="site-foot">MEMTENSOR · 项目记忆交接 · 2026-11-13 更新</footer></main></div><script>
     (() => {
       const links = [...document.querySelectorAll('nav.toc a[href^="#"]')];
       const sections = links.map((link) => document.getElementById(link.hash.slice(1))).filter(Boolean);
