@@ -266,3 +266,13 @@
 
 **备注**：
 ```
+
+## R-20261113-01：release 桌面接线冒烟（非质量评测）
+
+- 日期：2026-11-13；基线 merge commit `baa469c5`，桌面接入工作区（交付 commit 见 20261113-project-memory-desktop/handoff-01）。提示词未改版。
+- 数据：独立目录 `eval/project-memory/runs/20261113-desktop/`，新建临时数据库。合成推送重试场景，未使用金标领域。
+- 模型：M02/M04/M05 使用确定性 LLM 桩，embedding 使用固定向量；没有在线模型、回答模型或评委，不代表抽取/归类/回答质量。没有运行付费 benchmark。
+- 链路：真实 Memory HTTP + 真实 Backend OpenMem client/BFF + 真实项目记忆面板（Vite/Chrome headless）+ Agent hook。A 开启后新轮次落入 1 个 completed 任务、产生 1 个主题；新会话 A 召回为 true、B 为 false；同一会话历史导入不重复投递；关闭 A 后召回为 false；浏览器 page errors 为 0，来源按钮使用原 websocket 会话键。
+- 迁移：分别从原开发分支的 schema v10 源码、release 的 schema v15 源码创建独立数据库，再由本分支升级到 v16；合成已有记忆内容保留，两者 foreign_key_check 均为空。
+- 验证界限：这是本机组件和传输闭环，未打包/安装 Electron 应用，未验证真实在线模型效果或跨成员云端共享。截图、浏览器日志、迁移脚本与数据库都在忽略的 runs 下。
+- 指标：add 的 F1/stateExact/主题分组与重复率、search Recall@K/entryHit、回答 answers.llm/rubric/Token F1 均不适用（单条确定性接线样例）；成本与 tokens 不适用（未用在线模型），P95 不适用（未采集统计样本）；上述集成断言全部通过，不并入质量总表。

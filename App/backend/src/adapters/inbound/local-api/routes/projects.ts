@@ -1,3 +1,4 @@
+import type { DesktopProjectMemoryService } from "../../../../services/project-memory-service.js";
 /** Local project utilities: the managed folder a project without a chosen directory runs in, and project instructions. */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -9,6 +10,7 @@ import type { ProjectInstructionsService } from "../../../../services/project-in
 export interface RegisterProjectRoutesOptions {
   /** 按名称创建项目时用的托管目录；未提供时只注册项目指令接口。 */
   projectDirectory?: ProjectDirectoryService;
+  projectMemory?: DesktopProjectMemoryService;
   /** 本机项目的项目指令：只属于这台电脑上的文件夹，协作项目有自己的一套接口。 */
   projectInstructions?: ProjectInstructionsService;
   authenticateRuntimeToken: (request: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
@@ -27,6 +29,19 @@ const SaveInstructionsSchema = z.object({
 
 /** Registers the local project routes. */
 export function registerProjectRoutes(app: FastifyInstance, options: RegisterProjectRoutesOptions): void {
+  if (options.projectMemory) {
+    const service = options.projectMemory;
+    const params = z.object({ projectId: z.string().uuid() });
+    const prefix = "/api/projects/:projectId/memory";
+    const auth = { preHandler: options.authenticateRuntimeToken };
+    app.get(prefix, auth, withErrorEnvelope(async request => service.view(params.parse(request.params).projectId)));
+    app.put(prefix, auth, withErrorEnvelope(async request => service.configure(params.parse(request.params).projectId, z.object({ enabled: z.boolean() }).strict().parse(request.body).enabled)));
+    app.get(`${prefix}/topics`, auth, withErrorEnvelope(async request => service.listTopics(params.parse(request.params).projectId, z.object({ page: z.coerce.number().int().min(1).default(1) }).parse(request.query).page)));
+    app.get(`${prefix}/topics/:topicId`, auth, withErrorEnvelope(async request => { const input = params.extend({ topicId: z.string().regex(/^[A-Za-z0-9_-]+$/) }).parse(request.params); return service.topic(input.projectId, input.topicId); }));
+    app.get(`${prefix}/sessions`, auth, withErrorEnvelope(async request => service.listSessions(params.parse(request.params).projectId)));
+    app.post(`${prefix}/import`, auth, withErrorEnvelope(async request => service.importSessions(params.parse(request.params).projectId, z.object({ conversationIds: z.array(z.string().min(1)).min(1).max(100) }).strict().parse(request.body).conversationIds)));
+    app.post(`${prefix}/retry`, auth, withErrorEnvelope(async request => service.retry(params.parse(request.params).projectId)));
+  }
   // A project created by name alone still needs a working directory: this is where it gets one.
   if (options.projectDirectory) {
     app.post("/api/projects/working-directory", { preHandler: options.authenticateRuntimeToken }, withErrorEnvelope(async (request, reply) => {

@@ -1,3 +1,4 @@
+import { ProjectMemoryPanel, ProjectMemorySetting } from "./project-memory-panel.js";
 import { AtSign, BookOpen, ChevronDown, ChevronRight, Cloud, Folder, Inbox, Layers, LifeBuoy, Link2, ListChecks, MessageSquarePlus, MoreHorizontal, PanelRight, PanelRightClose, Pencil, Plug, RefreshCw, Search, Settings, Trash2, User, UserPlus, Users, X } from "lucide-react";
 import { memo, useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -535,6 +536,7 @@ const CollabBoard = memo(function CollabBoard(props: {
   /** Choosing which of the project's own Memmy sessions members may read. */
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   /** 看板右侧的项目配置：指令等项目的配置项在这里查看与编辑，与侧栏无关。 */
   const [configOpen, setConfigOpen] = useState(true);
   /** 用户手动收起或展开后，不再随宽度自动开关。换项目时清掉。 */
@@ -1514,6 +1516,7 @@ const CollabBoard = memo(function CollabBoard(props: {
                       <PanelRight size={15} aria-hidden="true" />
                     </Button>
                   )}
+                  <Button size="sm" variant="ghost" onClick={() => setMemoryOpen(true)}>{language.startsWith("en") ? "Project memory" : "项目记忆"}</Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -2048,6 +2051,11 @@ const CollabBoard = memo(function CollabBoard(props: {
           onAdded={(count) => showToast(t("collab.knowledge.added", { count: String(count) }))}
         />
       ) : null}
+      {project && memoryOpen ? <ProjectMemoryPanel key={project.id} projectId={project.id} projectName={project.name} onClose={() => setMemoryOpen(false)} sourceKeys={localTasks.map(task => task.sessionKey)} onOpenSource={key => {
+        if (!dispatch || !localTasks.some(task => task.sessionKey === key)) return;
+        setMemoryOpen(false);
+        void openAgentTaskInChat({ memmyAgent: clients?.memmyAgent, dispatch, task: { sessionKey: key } });
+      }} /> : null}
       {project ? (
         <ProjectBoardSettingsDialog
           open={settingsOpen}
@@ -3031,6 +3039,7 @@ export function ProjectBoardSettingsDialog(props: {
         <CollabAssistProjectSettings client={props.collab} projectId={sharedId} />
       ) : null}
 
+      <ProjectMemorySetting key={props.project.id} projectId={props.project.id} />
       <section className={styles.settingsCard}>
         <div className={styles.settingsCardHead}>
           <span className={styles.settingsCardChip}><Folder size={14} aria-hidden="true" /></span>

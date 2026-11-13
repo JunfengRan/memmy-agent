@@ -127,7 +127,8 @@ export type MemmyMemoryToolRuntime = {
   currentTurnId(sessionKey?: string | null): string | null;
   currentUserText(sessionKey?: string | null): string | null;
   /** Bound project spaces. Missing or empty means search_project_memory is not registered. */
-  projectSpaceIds?(): readonly string[];
+  projectSpaceIds?(sessionKey?: string | null): readonly string[];
+  projectConversationId?(sessionKey?: string | null): string | null;
   /** Fire-and-forget GA4 memory-op event (search/get/add). */
   trackMemoryAnalytics?(eventName: string, params?: Record<string, string | number | boolean>): void;
   /** Session/turn correlation + adapter_id for tool-path memory-op events. */

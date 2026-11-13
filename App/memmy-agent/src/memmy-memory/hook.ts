@@ -1,3 +1,4 @@
+import { readProjectMemoryBindings } from "./project-bindings.js";
 import { createHash, randomUUID } from "node:crypto";
 import { DEFAULT_MEMOS_MEMORY_TIMEOUT_MS, INTERACTIVE_MEMORY_TIMEOUT_MS, MemmyMemoryHttpError } from "./client.js";
 import { MemoryWriteQueue, waitForMemory } from "./lifecycle.js";
@@ -119,6 +120,7 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
   private readonly entrypointBySessionKey = new Map<string, MemoryAnalyticsEntrypoint>();
   private readonly unavailableWarnedSessionKeys = new Set<string>();
   private readonly sessionStateBySessionKey = new Map<string, MemmyMemorySessionState>();
+  private readonly projectBySession = new Map<string, string | null>();
   private readonly projectSessionText = new Map<string, string>();
 
   constructor(client: MemmyMemoryClient, options: MemmyMemoryHookOptions = {}) {
@@ -151,7 +153,9 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
   }
 
   override onRegisterTools(ctx: AgentToolRegistrationContext): void {
-    registerMemmyMemoryTools(ctx.registry, this.client, this);
+    const key = ctx.toolContext?.sessionKey as string | null | undefined;
+    if (key?.startsWith("websocket:")) this.projectBySession.set(key, stringOrUndefined(ctx.toolContext?.metadata?.webuiProjectId) ?? null);
+    registerMemmyMemoryTools(ctx.registry, this.client, this, key);
   }
 
   override onBuildSystemPrompt(ctx: SystemPromptBuildContext): void {
@@ -175,7 +179,7 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
         },
       }, { after: "memmy-memory-context-protocol" });
     }
-    const project = sessionKey ? this.projectSessionText.get(sessionKey) : "";
+    const project = sessionKey && this.projectSpaceIds(sessionKey).length ? this.projectSessionText.get(sessionKey) : "";
     if (project) {
       ctx.upsertSection({
         id: "memmy-project-memory",
@@ -190,6 +194,7 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
   override async beforeBuildSystemPrompt(ctx: AgentHookContext): Promise<void> {
     const sessionKey = this.sessionKeyFromContext(ctx);
     if (!sessionKey || this.disposed) return;
+    if (sessionKey.startsWith("websocket:")) this.projectBySession.set(sessionKey, this.hostProjectIdFromContext(ctx));
     const turn = this.interactiveTurn(ctx, sessionKey);
     try {
       await this.withTurnDeadline(turn, "prompt", async (signal) => {
@@ -298,6 +303,7 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
       ? internalTurnContext.objective.trim()
       : "";
     if (isGoalContinuation && !internalObjective) return;
+    if (sessionKey.startsWith("websocket:")) this.projectBySession.set(sessionKey, this.hostProjectIdFromContext(ctx));
     const turn = this.interactiveTurn(ctx, sessionKey);
     // The loop may await DAG compaction after beforeBuildSystemPrompt.
     // Start the recall budget here so that preparation cannot exhaust it.
@@ -629,7 +635,16 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
     return this.turnBySessionKey.get(sessionKey)?.userText ?? null;
   }
 
-  projectSpaceIds(): string[] {
+  projectConversationId(sessionKey?: string | null): string | null {
+    return sessionKey?.startsWith("websocket:") ? sessionKey : this.currentSessionId(sessionKey);
+  }
+
+  projectSpaceIds(sessionKey?: string | null): string[] {
+    if (sessionKey?.startsWith("websocket:")) {
+      const id = this.projectBySession.get(sessionKey);
+      const binding = id ? readProjectMemoryBindings().projects[id] : null;
+      return binding?.enabled ? [binding.spaceId] : [];
+    }
     const bound = this.options.projectSpaceIds ?? projectSpaceIdsFromEnv(process.env.MEMMY_PROJECT_SPACE_IDS);
     return [...bound];
   }
@@ -917,7 +932,7 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
   }
 
   private async loadProjectSession(sessionKey: string, turn: InteractiveTurn): Promise<void> {
-    const spaces = this.projectSpaceIds();
+    const spaces = this.projectSpaceIds(sessionKey);
     if (spaces.length === 0) {
       this.projectSessionText.delete(sessionKey);
       return;
@@ -938,6 +953,7 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
         }
         signal.throwIfAborted();
         this.assertCurrentTurn(turn);
+        if (JSON.stringify(spaces) !== JSON.stringify(this.projectSpaceIds(sessionKey))) return;
         this.projectSessionText.set(sessionKey, renderSessionInjection({
           spaceName: groups.map((group) => group.spaceName).join("、"),
           sourceHint: "需要原始对话时，用 memmy-project 读取来源任务。",
@@ -950,7 +966,7 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
   }
 
   private async injectBoundProjectTurn(ctx: AgentHookContext, turn: InteractiveTurn, messages: JsonRecord[]): Promise<void> {
-    const spaces = this.projectSpaceIds();
+    const spaces = this.projectSpaceIds(turn.sessionKey);
     const userId = this.options.userId?.trim();
     if (spaces.length === 0 || !userId || !turn.userText.trim()) return;
     if (typeof this.client.post !== "function") return;
@@ -967,10 +983,11 @@ export class MemmyMemoryHook extends AgentHook implements MemmyMemoryToolRuntime
           space_ids: [...spaces],
           query: turn.userText,
           include_memory_view: ["project"],
-          conversation_id: conversationId,
+          conversation_id: this.projectConversationId(turn.sessionKey) ?? conversationId,
         }, { timeoutMs: 2000, signal });
         signal.throwIfAborted();
         this.assertCurrentTurn(turn);
+        if (JSON.stringify(spaces) !== JSON.stringify(this.projectSpaceIds(turn.sessionKey))) return;
         const view = projectPayloadView(payload);
         const rendered = renderTurnMemories({ kind: "turn", topics: view.topics, degraded: view.degraded });
         if (rendered) this.prependProjectTurn(messages, rendered);

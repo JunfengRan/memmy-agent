@@ -77,6 +77,8 @@ export interface AgentSourceScanClient {
 }
 
 export interface MemoryClient {
+  /** Authenticated local OpenMem transport; never accepts an arbitrary URL. */
+  openMem?(route: string, body: Record<string, unknown>): Promise<Record<string, unknown>>;
   agentSources?: AgentSourceScanClient;
   health(context?: MemoryRequestContext): Promise<MemoryHealthSnapshot>;
   reloadConfig(input?: MemoryReloadConfigInput): Promise<MemoryReloadConfigOutput>;

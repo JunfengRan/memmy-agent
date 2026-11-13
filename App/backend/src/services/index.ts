@@ -1,3 +1,4 @@
+import { createDesktopProjectMemoryService, type DesktopProjectMemoryService } from "./project-memory-service.js";
 import { createPluginSkillContentService, type PluginSkillContentService } from "./plugin-skill-content-service.js";
 import type { AccountChannel } from "@memmy/local-api-contracts";
 import { homedir } from "node:os";
@@ -120,6 +121,7 @@ export interface BackendServices {
   tokenQuota: TokenQuotaService;
   /** 本机项目的项目指令：按文件夹归属，只属于这台电脑。 */
   projectInstructions: ProjectInstructionsService;
+  projectMemory?: DesktopProjectMemoryService;
   /** 协作项目指令的本机缓存：按云端项目 id 归属，只读于任务注入。 */
   collabInstructions: CollabInstructionsService;
   /** Third-party plugins. */
@@ -344,6 +346,16 @@ export function createBackendServices(options: CreateBackendServicesOptions): Ba
     getUserMode: resolveAnalyticsUserMode,
   });
 
+  const projectInstructions = createProjectInstructionsService({ memmyConfigPath: options.memmyConfigPath ?? join(homedir(), ".memmy", "config.yaml") });
+  const collabInstructions = createCollabInstructionsService({ memmyConfigPath: options.memmyConfigPath ?? join(homedir(), ".memmy", "config.yaml") });
+  const projectMemory = createDesktopProjectMemoryService({
+    memmyConfigPath: options.memmyConfigPath ?? join(homedir(), ".memmy", "config.yaml"),
+    memoryClient: options.memoryClient, getUserId: resolveMemoryUserId,
+    readInstructions: async directory => {
+      const shared = await collabInstructions.forQuery({ sourceId: "memmy", groupId: directory, directory });
+      return shared?.text ?? (await projectInstructions.read(directory)).text;
+    }
+  });
   return {
     memoryClient: options.memoryClient,
     agentAdapterRegistry: options.agentAdapterRegistry,
@@ -451,15 +463,9 @@ export function createBackendServices(options: CreateBackendServicesOptions): Ba
       cloudClient: options.cloudClient,
       accountSessionRepository: options.appStateStore.repositories.accountSession
     }),
-    projectInstructions: createProjectInstructionsService({
-      // 与 Memmy 任务、其他 Agent 的钩子读同一份文件：配置目录下的 project-instructions.json。
-      memmyConfigPath: options.memmyConfigPath ?? join(homedir(), ".memmy", "config.yaml")
-    }),
-    collabInstructions: createCollabInstructionsService({
-      // 与协作项目的注入钩子读同一份文件：配置目录下的 collab-project-instructions.json。
-      // 它与上面的本机项目指令文件互不读写，只靠装配处各自接好。
-      memmyConfigPath: options.memmyConfigPath ?? join(homedir(), ".memmy", "config.yaml")
-    }),
+    projectInstructions,
+    collabInstructions,
+    projectMemory,
     plugins,
     pluginSkillContent,
     skillDistribution: skillDistributionService

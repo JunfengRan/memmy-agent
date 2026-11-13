@@ -264,7 +264,8 @@ describe("项目设置弹窗", () => {
     await render({ shareAvailable: false, shared: null });
 
     expect(document.body.textContent).toContain("协作项目需要登录 Memmy 账号。当前是 API Key 模式，项目与任务只保存本机。");
-    expect(document.querySelector("[role='switch']")).toBeNull();
+    expect(switchNamed("与成员共享")).toBeNull();
+    expect(document.querySelector("[role='switch'][aria-label='启用本机项目记忆']")).not.toBeNull();
     expect(document.body.textContent).toContain("文件夹");
     expect(button("停止共享")).toBeUndefined();
     expect(button("退出项目")).toBeUndefined();

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,6 +15,7 @@ let home: string;
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), "pm-hook-audit-"));
   vi.stubEnv("MEMMY_HOME", home);
+  vi.stubEnv("MEMMY_CONFIG", join(home, "config.yaml"));
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -116,5 +117,34 @@ describe("bound project hook", () => {
     ] }] }];
     const index = appRender.renderProjectIndex({ groups });
     expect(index).toContain("最新进展（11/11）：latest");
+  });
+});
+
+
+describe("desktop per-session project binding", () => {
+  it("isolates concurrent projects and ignores global spaces in standalone desktop tasks", async () => {
+    vi.stubEnv("MEMMY_PROJECT_SPACE_IDS", "space_global");
+    writeFileSync(join(home, "project-memory-bindings.json"), JSON.stringify({ version: 1, projects: {
+      project_a: { spaceId: "space_a", enabled: true, enabledAt: "2026-11-13T00:00:00Z", directory: "/a", projectName: "a" },
+      project_b: { spaceId: "space_b", enabled: true, enabledAt: "2026-11-13T00:00:00Z", directory: "/b", projectName: "b" }
+    } }));
+    const { hook, client } = fixture();
+    const make = (key: string, project: string | null) => new AgentHookContext({ spec: { sessionKey: key, hostProjectId: project, turnId: key }, messages: [{ role: "user", content: "推送重试" }] });
+    await hook.beforeRun(make("websocket:a", "project_a"));
+    await hook.beforeRun(make("websocket:b", "project_b"));
+    await hook.beforeRun(make("websocket:solo", null));
+    expect(hook.projectSpaceIds("websocket:a")).toEqual(["space_a"]);
+    expect(hook.projectSpaceIds("websocket:b")).toEqual(["space_b"]);
+    expect(hook.projectSpaceIds("websocket:solo")).toEqual([]);
+    const searches = client.post.mock.calls.filter(([route]) => route.endsWith("search/memory"));
+    expect(searches.map(([,body]) => body)).toEqual([
+      expect.objectContaining({ space_ids: ["space_a"], conversation_id: "websocket:a" }),
+      expect.objectContaining({ space_ids: ["space_b"], conversation_id: "websocket:b" })
+    ]);
+    writeFileSync(join(home, "project-memory-bindings.json"), JSON.stringify({ version: 1, projects: {} }));
+    expect(hook.projectSpaceIds("websocket:a")).toEqual([]);
+    const prompt = new SystemPromptBuildContext({ sessionKey: "websocket:a" });
+    hook.onBuildSystemPrompt(prompt);
+    expect(prompt.getSection("memmy-project-memory")).toBeNull();
   });
 });

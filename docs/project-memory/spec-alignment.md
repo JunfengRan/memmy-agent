@@ -2,6 +2,12 @@
 
 对齐版本见 [spec-snapshots.md](spec-snapshots.md)。状态：`未开始` / `v0.1 简化` / `已对齐` / `待重新对齐`（规格变化后由 `pm-spec-sync` 标记）/ `偏离`（必须链接 ADR 或 open-questions）。
 
+## 桌面接入补充（2026-11-13）
+
+依据 [ADR-0010](decisions/0010-desktop-local-project-binding.md) 接入 release/v1.2.7 的项目看板。Backend 通过现有 OpenMem 接口创建 Space、投递已保存轮次、读取主题和整理状态；Frontend 提供开关、历史导入与主题详情；Agent 按会话的本机项目 ID 绑定 Space，索引、自动检索和工具共用绑定，桌面独立任务不继承全局空间。Q-32 的 CLI 规则保留，应用显式绑定以 ADR-0010 补充。
+
+Memory schema v16 兼容原开发分支 v10 及 release v15；project_memory_organize 注册到 release 调度/预算体系，保留 Space 串行与租约校验。接口/算法/提示词现状仍按下表；本补充不表示云端 Store、外部宿主或此前待决项完成。实现与验证见工作项 20261113-project-memory-desktop，待独立评审。
+
 ## 一、模块与接口
 
 | v3 出处 | 内容 | 代码位置 | 状态 | 测试 / 评测 | 备注 |

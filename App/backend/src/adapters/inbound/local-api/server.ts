@@ -185,9 +185,12 @@ export function createLocalApiServer(options: CreateLocalApiServerOptions): Fast
   if (options.collabAssist) {
     registerCollabAssistRoutes(app, { assist: options.collabAssist, authenticateRuntimeToken });
   }
+  app.addHook("onReady", async () => { options.services.projectMemory?.start(); });
+  app.addHook("onClose", async () => { await options.services.projectMemory?.stop(); });
   // 项目指令与托管目录都是项目自己的接口，任一需要时都注册：指令不依赖托管目录。
-  if (options.projectDirectory || options.services.projectInstructions) {
+  if (options.projectDirectory || options.services.projectInstructions || options.services.projectMemory) {
     registerProjectRoutes(app, {
+      projectMemory: options.services.projectMemory,
       projectDirectory: options.projectDirectory,
       projectInstructions: options.services.projectInstructions,
       authenticateRuntimeToken

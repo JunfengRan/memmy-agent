@@ -1117,11 +1117,15 @@ export class AgentLoop {
       messageSendCallback = null,
       readonlySkillRoots,
       modelSelection = null,
+      sessionKey = null,
+      hostProjectId = null,
     }: {
       includeConnectedMcp?: boolean;
       messageSendCallback?: MessageSendCallback | null;
       readonlySkillRoots?: readonly string[];
       modelSelection?: ResolvedModelSelection | null;
+      sessionKey?: string | null;
+      hostProjectId?: string | null;
     } = {},
   ): ToolRegistryInstance {
     this.refreshToolsSnapshot();
@@ -1131,6 +1135,8 @@ export class AgentLoop {
       messageSendCallback,
       modelSelection ?? null,
     );
+    toolCtx.sessionKey = sessionKey;
+    toolCtx.metadata.webuiProjectId = hostProjectId;
     const registry = new ToolLoader({ workspace: this.workspace, ctx: toolCtx }).loadRegistry(toolCtx);
     if (includeConnectedMcp) this.copyConnectedMcpTools(registry);
     this.registerHookTools(toolCtx, phase, registry);
@@ -4341,6 +4347,7 @@ export class AgentLoop {
     await initializeDesktopScreenCapture();
     requestTiming("agent.screen_capture_ready");
     ctx.tools = this.createToolRegistry("turn", sessionWorkspace, {
+      sessionKey: ctx.sessionKey, hostProjectId: ctx.sessionProjectId,
       includeConnectedMcp: true,
       messageSendCallback: ctx.messageSendCallback,
       ...(this.usesExternalSessionWorkspace(ctx.sessionProjectId, sessionWorkspace)
@@ -4763,6 +4770,7 @@ export class AgentLoop {
       "system-turn",
       sessionWorkspace,
       {
+        sessionKey: key, hostProjectId: sessionBinding.projectId,
         includeConnectedMcp: true,
         ...(this.usesExternalSessionWorkspace(sessionBinding.projectId, sessionWorkspace)
           ? { readonlySkillRoots: this.projectReadonlySkillRoots() }

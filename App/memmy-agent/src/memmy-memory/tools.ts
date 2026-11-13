@@ -213,12 +213,12 @@ function toolOpBaseParams(
   });
 }
 
-export function registerMemmyMemoryTools(registry: any, client: MemmyMemoryClient, runtime: MemmyMemoryToolRuntime): void {
+export function registerMemmyMemoryTools(registry: any, client: MemmyMemoryClient, runtime: MemmyMemoryToolRuntime, sessionKey?: string | null): void {
   for (const spec of MEMOS_MEMORY_TOOL_SPECS) {
     if (typeof registry?.has === "function" && registry.has(spec.name)) continue;
     registry.register(new MemmyMemoryTool(spec, client, runtime));
   }
-  const spaces = runtime.projectSpaceIds?.() ?? [];
+  const spaces = runtime.projectSpaceIds?.(sessionKey) ?? [];
   if (spaces.length === 0) return;
   if (typeof registry?.has === "function" && registry.has(searchProjectMemorySpec.name)) return;
   registry.register(new MemmyMemoryTool(searchProjectMemorySpec, client, runtime));
@@ -236,11 +236,11 @@ function withRuntimeDefaults(params: JsonRecord, runtime: MemmyMemoryToolRuntime
 }
 
 function projectSearchBody(params: JsonRecord, runtime: MemmyMemoryToolRuntime, sessionKey: string | null): JsonRecord {
-  const spaces = runtime.projectSpaceIds?.() ?? [];
+  const spaces = runtime.projectSpaceIds?.(sessionKey) ?? [];
   if (spaces.length === 0) throw new Error("This session has no project space.");
   const userId = runtime.requestEnvelope(sessionKey).namespace?.userId;
   if (typeof userId !== "string" || !userId.trim()) throw new Error("user_id is required");
-  const conversationId = runtime.currentSessionId(sessionKey);
+  const conversationId = runtime.projectConversationId?.(sessionKey) ?? runtime.currentSessionId(sessionKey);
   const body: JsonRecord = {
     user_id: userId.trim(),
     space_ids: [...spaces],

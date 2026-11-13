@@ -155,6 +155,16 @@ export function createHttpMemoryClient(
   }
 
   return {
+    async openMem(route, body) {
+      if (!/^(create\/space|delete\/space|update\/space|get\/space|get\/memory(?:\/[A-Za-z0-9_-]+)?|add\/message|get\/status)$/.test(route)) throw new Error("Unsupported OpenMem route");
+      const response = await fetchWithMappedNetworkErrors(fetchImpl, new URL(`/api/openmem/v1/${route}`, config.baseUrl).toString(), {
+        method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${config.token}`, "x-memos-mode": "local" },
+        body: JSON.stringify(body), signal: AbortSignal.timeout(config.timeoutMs)
+      });
+      const value = await response.json() as { code?: number; message?: string; data?: Record<string, unknown> };
+      if (!response.ok || value.code !== 0) throw new MemoryLayerError("memory_layer_unavailable", 503, value.message ?? "项目记忆服务不可用");
+      return value.data ?? {};
+    },
     agentSources: {
       list: () => request("GET", "agentSources", MemoryAgentSourceListSchema),
       start: (input) => request("POST", "agentSourceScan", AgentSourceScanJobResponseSchema, { body: input, maxRetries: 0 }),

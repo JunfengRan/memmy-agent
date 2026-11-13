@@ -37,7 +37,8 @@
     "yaml": "^2.9.0",
     "yauzl": "3.2.0",
     "zod": "^4.4.3",
-    "@memmy/agent-source-readers": "0.0.0"
+    "@memmy/agent-source-readers": "0.0.0",
+    "proper-lockfile": "^4.1.2"
   },
   "devDependencies": {
     "@types/fontkit": "2.0.9",
@@ -46,6 +47,7 @@
     "esbuild": "^0.27.4",
     "fontkit": "2.0.4",
     "pdf-lib": "1.17.1",
-    "pdfjs-dist": "5.4.624"
+    "pdfjs-dist": "5.4.624",
+    "@types/proper-lockfile": "^4.1.4"
   }
 }
