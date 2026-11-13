@@ -134,6 +134,8 @@ export interface CollabAccount {
 export interface CollabServiceOptions {
   /** This local-memory integration may read existing shared records but never upload changes. */
   allowCloudWrites?: boolean;
+  /** The application shares one policy-enforced transport with member assistance. */
+  cloudRequest?: CollabCloudRequest;
   cloudBaseUrl: string;
   getAccount: () => CollabAccount | null;
   /** Reads this machine's agent sessions, in this process; null when they cannot be read here. */
@@ -807,7 +809,7 @@ export function createCollabService(options: CollabServiceOptions): CollabServic
   const onlineWorkdirRoot = join(dirname(projectsDir), "online-projects");
   const agentSessionsDir = options.agentSessionsDir ?? join(memmyHome, "workspace", "sessions");
   const linkBase = (options.linkBaseUrl?.trim() || safeOrigin(options.cloudBaseUrl)).replace(/\/+$/u, "");
-  const cloud = createCollabCloudRequest(options);
+  const cloud = options.cloudRequest ?? createCollabCloudRequest(options);
 
   /** Reads this machine's agent sessions; a session or agent that is gone reads as not found. */
   async function readLocal<T>(read: (reader: LocalSessionReader) => Promise<T>): Promise<T> {

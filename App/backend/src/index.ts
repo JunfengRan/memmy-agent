@@ -321,7 +321,12 @@ export async function createLocalBackend(options: CreateLocalBackendOptions): Pr
       .catch((error: unknown) => {
         console.warn(`Installing memmy-project at startup did not complete: ${error instanceof Error ? error.message : String(error)}`);
       });
+    const collabCloud = createCollabCloudRequest({
+      cloudBaseUrl: cloudConfig.baseUrl, getAccount: getCollabAccount, userMode,
+      allowCloudWrites: PROJECT_CLOUD_UPLOAD_ENABLED
+    });
     const collab = createCollabService({
+      cloudRequest: collabCloud,
       allowCloudWrites: PROJECT_CLOUD_UPLOAD_ENABLED,
       cloudBaseUrl: cloudConfig.baseUrl,
       getAccount: getCollabAccount,
@@ -362,7 +367,7 @@ export async function createLocalBackend(options: CreateLocalBackendOptions): Pr
     const memmyAgentAdmin = options.memmyAgentAdminClient;
     const memmyCanAssist = Boolean(memmyAgentAdmin?.startAssistRun && memmyAgentAdmin.readAssistRun);
     const collabAssist = createCollabAssistService({
-      cloud: createCollabCloudRequest({ cloudBaseUrl: cloudConfig.baseUrl, getAccount: getCollabAccount, userMode }),
+      cloud: collabCloud,
       userMode,
       projectDirectory: async (projectId: string) =>
         (await collab.ensureWorkingDirectory(projectId)).localDirectory ?? null,
