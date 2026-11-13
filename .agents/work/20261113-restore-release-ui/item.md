@@ -1,7 +1,7 @@
 ---
 id: 20261113-restore-release-ui
-status: in-progress
-owner: developer / Codex
+status: ready-for-review
+owner: reviewer / 待复核
 branch: dev-project-memory-add-search
 updated: 2026-11-13
 ---
