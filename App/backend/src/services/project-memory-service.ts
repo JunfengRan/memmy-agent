@@ -70,6 +70,7 @@ export function createDesktopProjectMemoryService(options: ProjectMemoryServiceO
     return join(workspace, "sessions");
   }
   const now = options.now ?? (() => new Date());
+  const automaticBindingStart = now().toISOString();
   let timer: ReturnType<typeof setInterval> | undefined;
   let activeTick: Promise<void> | null = null;
   let queue: Promise<unknown> = Promise.resolve();
@@ -213,7 +214,7 @@ export function createDesktopProjectMemoryService(options: ProjectMemoryServiceO
           const space = await open("create/space", { space_name: owner.name, instructions, domains: [{ domain: "通用", description: "本项目的决策、经验与进展" }] });
           const spaceId = z.string().min(1).parse(space.space_id);
           createdSpace = spaceId;
-          binding = { spaceId, enabled, enabledAt: now().toISOString(), directory: owner.root_path, projectName: owner.name, instructions };
+          binding = { spaceId, enabled, enabledAt: options.autoEnableProjects ? automaticBindingStart : now().toISOString(), directory: owner.root_path, projectName: owner.name, instructions };
           state.projects[id] = binding;
         } else if (binding) { if (enabled && !binding.enabled) binding.enabledAt = now().toISOString(); binding.enabled = enabled; }
       }); } catch (error) {

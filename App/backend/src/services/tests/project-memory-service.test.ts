@@ -40,6 +40,15 @@ describe("local desktop project memory", () => {
     await service.tick();
     expect((await service.view(a)).jobs[0]!.status).toBe("completed");
   });
+  it("keeps the first turn submitted before the background project binding poll", async () => {
+    const { options } = fixture();
+    let clock = new Date("2026-11-13T09:00:00Z");
+    const service = createDesktopProjectMemoryService({ ...options, autoEnableProjects: true, now: () => clock });
+    await writeFile(join(root, "sessions/websocket_chat-one.jsonl"), file(a, "websocket:chat-one", "2026-11-13T09:00:01.000Z"));
+    clock = new Date("2026-11-13T09:00:03Z");
+    await service.tick();
+    expect((await service.view(a)).jobs[0]?.status).toBe("completed");
+  });
   it("serializes concurrent enables across service instances and preserves binding across disable/restart", async () => {
     const { openMem, options, service } = fixture();
     const peer = createDesktopProjectMemoryService(options);
