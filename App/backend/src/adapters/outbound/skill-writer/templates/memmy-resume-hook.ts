@@ -14,6 +14,8 @@ import { readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
+  recallLocalProjectMemory,
+  captureLocalProjectTurn,
   closeRuntimeSession,
   completeRuntimeTurn,
   completeSourceTurn,
@@ -51,6 +53,7 @@ async function main() {
   // Cursor also executes hooks inherited from Claude settings. Its own hook
   // owns these events; recording them as claude_code would duplicate the turn.
   if (MODE === "claude-code" && normalizeText(payload.cursor_version)) return;
+  let promptInstructions = "";
   if (isPromptSubmitEvent(payload)) {
     // 每次提交提示词时补一次项目指令：只读本机文件（几毫秒），不碰记忆服务，不会拖慢发消息。
     // Claude Code 的 SessionStart 上下文会持续整个会话，这里跳过以免每轮重复。
@@ -60,8 +63,7 @@ async function main() {
           .filter(Boolean)
           .join("\n\n");
         if (context) {
-          writeLifecycleOutput(payload, context);
-          return;
+          promptInstructions = context;
         }
       } catch {
         // 读不到项目指令就按没有处理，不影响这一轮对话。
@@ -118,9 +120,12 @@ async function main() {
   const query = parseResumeQuery(prompt);
   if (!isResumeCommand(prompt)) {
     try {
-      const started = await startCapturedTurn(payload, prompt);
+      const started = await startCapturedTurn(payload, prompt).catch((error) => {
+        reportCaptureFailure("start_failed", error, payload);
+        return null;
+      });
       // 知识库与记忆同一轮注入：这一轮的提问就是检索问题，工作目录决定要用哪个项目的知识库。
-      writeTurnStartOutput(started, await projectKnowledgeContext(payload, prompt));
+      writeTurnStartOutput(started, [promptInstructions, await projectKnowledgeContext(payload, prompt), await projectMemoryContext(payload, prompt)].filter(Boolean).join("\n\n"));
     } catch (error) {
       reportCaptureFailure("start_failed", error, payload);
       writeAllowOutput();
@@ -474,7 +479,16 @@ async function captureClaudeCodeSourceTurn(payload) {
   await submitSourceTurn(parsed.turn, pending, payload);
 }
 
+async function projectMemoryContext(payload, prompt) {
+  return recallLocalProjectMemory({ configUrl: CONFIG_URL, workspace: workspacePath(payload) || "", query: prompt, conversationId: sessionStateKey(payload) || undefined });
+}
+
 async function submitSourceTurn(turn, pending, payload) {
+  try {
+    await captureLocalProjectTurn({ configUrl: CONFIG_URL, workspace: workspacePath(payload) || turn.workspacePath || "", turn });
+  } catch (error) {
+    reportCaptureFailure("project_capture_failed", error, payload);
+  }
   const result = await completeSourceTurn({
     configUrl: CONFIG_URL,
     turn,

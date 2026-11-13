@@ -1,4 +1,5 @@
 import type { DesktopProjectMemoryService } from "../../../../services/project-memory-service.js";
+import { ExternalProjectTurnSchema } from "../../../../services/project-memory-service.js";
 /** Local project utilities: the managed folder a project without a chosen directory runs in, and project instructions. */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -34,6 +35,14 @@ export function registerProjectRoutes(app: FastifyInstance, options: RegisterPro
     const params = z.object({ projectId: z.string().uuid() });
     const prefix = "/api/projects/:projectId/memory";
     const auth = { preHandler: options.authenticateRuntimeToken };
+    app.post("/api/project-memory/recall", auth, withErrorEnvelope(async request => {
+      const input = z.object({ workspace: DirectorySchema, query: z.string().trim().min(1).max(100_000), conversationId: z.string().min(1).max(512).optional(), recallVia: z.enum(["turn_start", "tool"]).default("turn_start"), domains: z.array(z.string().trim().min(1).max(100)).min(1).max(20).optional(), memoryLimit: z.number().int().min(1).max(100).default(5) }).strict().parse(request.body);
+      return service.recallWorkspace(input.workspace, input.query, input.conversationId, input.recallVia, input.domains, input.memoryLimit);
+    }));
+    app.post("/api/project-memory/capture", auth, withErrorEnvelope(async request => {
+      const input = z.object({ workspace: DirectorySchema, turn: ExternalProjectTurnSchema }).strict().parse(request.body);
+      return service.captureWorkspace(input.workspace, input.turn);
+    }));
     app.get(prefix, auth, withErrorEnvelope(async request => service.view(params.parse(request.params).projectId)));
     app.put(prefix, auth, withErrorEnvelope(async request => service.configure(params.parse(request.params).projectId, z.object({ enabled: z.boolean() }).strict().parse(request.body).enabled)));
     app.get(`${prefix}/topics`, auth, withErrorEnvelope(async request => service.listTopics(params.parse(request.params).projectId, z.object({ page: z.coerce.number().int().min(1).default(1) }).parse(request.query).page)));

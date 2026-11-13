@@ -156,7 +156,7 @@ export function createHttpMemoryClient(
 
   return {
     async openMem(route, body) {
-      if (!/^(create\/space|delete\/space|update\/space|get\/space|get\/memory(?:\/[A-Za-z0-9_-]+)?|add\/message|get\/status)$/.test(route)) throw new Error("Unsupported OpenMem route");
+      if (!/^(create\/space|delete\/space|update\/space|get\/space|get\/memory(?:\/[A-Za-z0-9_-]+)?|add\/message|get\/status|search\/memory)$/.test(route)) throw new Error("Unsupported OpenMem route");
       const response = await fetchWithMappedNetworkErrors(fetchImpl, new URL(`/api/openmem/v1/${route}`, config.baseUrl).toString(), {
         method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${config.token}`, "x-memos-mode": "local" },
         body: JSON.stringify(body), signal: AbortSignal.timeout(Math.min(config.timeoutMs, 60_000))

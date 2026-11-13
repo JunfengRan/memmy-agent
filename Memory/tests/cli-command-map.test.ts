@@ -590,19 +590,23 @@ describe("memmy CLI command map", () => {
     }
   });
 
-  it("does not call personal search when the session has no project space", async () => {
+  it("resolves the cwd through the local backend without calling personal search", async () => {
     const previous = process.env.MEMMY_PROJECT_SPACE_IDS;
     delete process.env.MEMMY_PROJECT_SPACE_IDS;
+    const root = mkdtempSync(join(tmpdir(), "memmy-cli-project-")); roots.push(root);
+    const configPath = join(root, "config.yaml");
+    writeFileSync(configPath, "{}");
+    writeFileSync(join(root, "runtime.json"), JSON.stringify({baseUrl:"http://127.0.0.1:12345",localToken:"fixture-token"}));
     try {
       const requests: CapturedRequest[] = [];
       await expect(runCommand({
-        argv: ["project", "search", "retry policy", "--url", baseUrl, "--user-id", "user_cli"],
+        argv: ["project", "search", "retry policy", "--config", configPath, "--cwd", "/projects/other"],
         fetch: mockFetch(requests)
       })).rejects.toThrow(/no project space/);
-      expect(requests).toEqual([]);
-    } finally {
-      restoreSpaceEnv(previous);
-    }
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.url).toBe("http://127.0.0.1:12345/api/project-memory/recall");
+      expect(requests[0]?.body).toEqual({workspace:"/projects/other",query:"retry policy",recallVia:"tool"});
+    } finally { restoreSpaceEnv(previous); }
   });
 
   it("prints rendered project search text and keeps JSON behind --raw", async () => {

@@ -871,3 +871,5 @@ async function codexProjectIdFor(directory: string, codexHome: string): Promise<
     db?.close();
   }
 }
+
+export { recallLocalProjectMemory, captureLocalProjectTurn } from "./project-memory.js";

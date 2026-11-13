@@ -22,6 +22,7 @@ import {
 import { DEFAULT_MEMORY_URL, loadCliMemoryConfig } from "./config.js";
 import { renderToolResult } from "../service/project-memory/inject/render.js";
 import { bindProjectToolRequest } from "../service/project-memory/inject/tool.js";
+import { requestLocalProjectMemory } from "../agent-source/integration/workspace-bridge/project-memory.js";
 import { PROJECT_VERSION } from "./project-version.js";
 import {
   currentInstalledRuntime,
@@ -102,6 +103,18 @@ export async function runCommand(context: CommandContext): Promise<unknown> {
   const getVerbose = words[0] === "get" && optionBoolean(options, "verbose") === true;
   const projectSearch = words[0] === "project" && words[1] === "search";
   const projectRaw = projectSearch && optionBoolean(options, "raw") === true;
+  if (projectSearch && projectSpaceIds(parsed).length === 0) {
+    const query = requireValue("query", optionString(options, "query") ?? words[2]);
+    const result = await requestLocalProjectMemory("recall", {
+      workspace: optionString(options, "cwd") ?? process.cwd(), query,
+      conversationId: optionString(options, "session-id"),
+      recallVia: "tool",
+      ...(stringArrayOption(parsed, "domains") ? { domains: stringArrayOption(parsed, "domains") } : {}),
+      ...(positiveIntegerOption(parsed, "limit") !== undefined ? { memoryLimit: positiveIntegerOption(parsed, "limit") } : {})
+    }, { configPath: loadCliMemoryConfig(optionString(options, "config")).path, fetch: context.fetch });
+    if (result.bound !== true) throw new Error("This session has no project space.");
+    return projectRaw ? result.data : renderToolResult(result.data);
+  }
   const request = withSource(await mapTopLevelCommand(words, parsed), parsed);
   try {
     const result = await executeRequest(request, requestOptions(parsed, context.fetch));
@@ -707,6 +720,7 @@ function helpText(): string {
     `  ${CLI_NAME} session open --workspace-path "$PWD"`,
     `  ${CLI_NAME} search "earlier preference"`,
     `  ${CLI_NAME} search "earlier preference" --verbose`,
+    `  ${CLI_NAME} project search "retry policy" --cwd /path/to/project`,
     `  ${CLI_NAME} project search "retry policy" --space-id <space-id> --session-id <session-id>`,
     `  ${CLI_NAME} project search "retry policy" --raw`,
     `  ${CLI_NAME} add "this project stores memory locally in sqlite" --layer L1`,

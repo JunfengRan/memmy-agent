@@ -29,6 +29,28 @@ function fixture() {
   return { openMem, options, instructions, service: createDesktopProjectMemoryService(options) };
 }
 describe("local desktop project memory", () => {
+  it("shares only the enabled canonical workspace with Codex and durably deduplicates native turns", async () => {
+    const { service, openMem } = fixture();
+    const directory = join(root, "chat");
+    await mkdir(join(directory, "nested"), { recursive: true });
+    await mkdir(join(root, "chat-other"));
+    await writeFile(join(root, "projects.json"), JSON.stringify({ projects: [{ id: a, name: "chat", state: "active", root_path: directory }] }));
+    await service.configure(a, true);
+    const turn = { source: "codex" as const, conversationId: "native-chat", turnId: "native-turn", startedAt: "2026-11-13T10:00:00Z", completedAt: "2026-11-13T10:01:00Z", status: "succeeded" as const, query: "推送失败重试五次", answer: "确定为五次", toolCalls: [] };
+    expect((await service.recallWorkspace(join(root, "chat-other"), "重试")).bound).toBe(false);
+    expect((await service.recallWorkspace(join(directory, "nested"), "重试", "native-chat")).bound).toBe(true);
+    expect(openMem).toHaveBeenCalledWith("search/memory", expect.objectContaining({ user_id: "local-user", space_ids: [`space_chat`], conversation_id: "codex:native-chat", include_memory_view: ["project"] }));
+    const first = await service.captureWorkspace(directory, turn);
+    expect(first.jobIds).toHaveLength(1);
+    expect((await service.captureWorkspace(directory, turn)).jobIds).toEqual(first.jobIds);
+    expect((await service.view(a)).jobs).toHaveLength(1);
+    await service.tick();
+    expect(openMem).toHaveBeenCalledWith("add/message", expect.objectContaining({ agent_id: "codex", conversation_id: "codex:native-chat", messages: expect.arrayContaining([expect.objectContaining({ chat_time: turn.startedAt })]) }));
+    expect((await service.captureWorkspace(directory, { ...turn, status: "failed" })).jobIds).toEqual([]);
+    await service.configure(a, false);
+    expect((await service.captureWorkspace(directory, turn)).bound).toBe(false);
+    expect((await service.recallWorkspace(directory, "重试")).bound).toBe(false);
+  });
   it("automatically binds existing and new local projects without adding frontend controls", async () => {
     const { options, openMem } = fixture();
     const service = createDesktopProjectMemoryService({ ...options, autoEnableProjects: true });
@@ -149,5 +171,36 @@ describe("local desktop project memory", () => {
     await writeFile(join(root, "bindings.json"), "broken");
     await expect(service.configure(a, true)).rejects.toThrow();
     expect(openMem).not.toHaveBeenCalled();
+  });
+});
+
+describe("workspace bridge race and timestamp boundaries", () => {
+  it("persists offset timestamps across restart and rejects a late parent search after child registration", async () => {
+    const { service, options, openMem } = fixture();
+    const directory = join(root, "chat");
+    const nested = join(directory, "nested");
+    await mkdir(nested, { recursive: true });
+    const parent = { id: a, name: "chat", state: "active", root_path: directory };
+    const child = { id: b, name: "nested", state: "active", root_path: nested };
+    await writeFile(join(root, "projects.json"), JSON.stringify({ projects: [parent] }));
+    await service.configure(a, true);
+    const turn = { source: "codex" as const, conversationId: "offset-native", turnId: "offset-turn", startedAt: "2026-11-13T18:00:00+08:00", completedAt: "2026-11-13T18:01:00+08:00", status: "succeeded" as const, query: "明确重试五次", answer: "确认五次", toolCalls: [] };
+    await service.captureWorkspace(directory, turn);
+    const restarted = createDesktopProjectMemoryService(options);
+    expect((await restarted.view(a)).jobs).toHaveLength(1);
+    await restarted.tick();
+    expect(openMem).toHaveBeenCalledWith("add/message", expect.objectContaining({ messages: expect.arrayContaining([expect.objectContaining({ chat_time: turn.startedAt })]) }));
+    let release!: () => void;
+    let started!: () => void;
+    const inFlight = new Promise<void>(resolve => { started = resolve; });
+    openMem.mockImplementation(async route => { if (route === "search/memory") { started(); await new Promise<void>(resolve => { release = resolve; }); return { topic_detail_list: [{ topic_id: "parent-secret" }] }; } if (route === "create/space") return { space_id: "space_child" }; return {}; });
+    const recall = restarted.recallWorkspace(nested, "重试");
+    await inFlight;
+    await writeFile(join(root, "projects.json"), JSON.stringify({ projects: [parent, child] }));
+    await restarted.configure(b, true);
+    release();
+    expect((await recall).bound).toBe(false);
+    await restarted.configure(b, false);
+    expect((await restarted.recallWorkspace(nested, "重试")).bound).toBe(false);
   });
 });

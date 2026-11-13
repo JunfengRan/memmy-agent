@@ -1,16 +1,23 @@
 import { homedir } from "node:os";
 import YAML from "yaml";
+import { redactSecrets } from "@memmy/agent-source-core";
 /** Desktop-owned bindings and durable delivery journal. Memory owns all organization and storage. */
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import * as lockfile from "proper-lockfile";
 import { z } from "zod";
 import { PROJECT_MEMORY_BINDINGS_FILE, ProjectMemoryBindingsSchema, ProjectMemoryJobSchema, type ProjectMemoryBinding, type ProjectMemoryView } from "@memmy/local-api-contracts";
 import { MemoryLayerError, type MemoryClient } from "../adapters/outbound/memory-client/index.js";
 
-const MessageSchema = z.object({ role: z.enum(["user", "assistant"]), chat_time: z.string().datetime(), content: z.string(), tool_calls: z.array(z.unknown()).optional() });
-const JobSchema = ProjectMemoryJobSchema.extend({ projectId: z.string(), messages: z.array(MessageSchema), userId: z.string(), deliveryLease: z.object({ token: z.string(), until: z.string().datetime() }).nullable().default(null) });
+const MessageSchema = z.object({ role: z.enum(["user", "assistant"]), chat_time: z.string().datetime({ offset: true }), content: z.string(), tool_calls: z.array(z.unknown()).optional() });
+const JobSchema = ProjectMemoryJobSchema.extend({ projectId: z.string(), messages: z.array(MessageSchema), userId: z.string(), agentId: z.string().default("memmy"), deliveryLease: z.object({ token: z.string(), until: z.string().datetime() }).nullable().default(null) });
+export const ExternalProjectTurnSchema = z.object({
+  source: z.literal("codex"), conversationId: z.string().min(1).max(512), turnId: z.string().min(1).max(512),
+  startedAt: z.string().datetime({ offset: true }), completedAt: z.string().datetime({ offset: true }),
+  query: z.string().max(500_000), answer: z.string().max(500_000), status: z.enum(["succeeded", "failed"]),
+  workspacePath: z.string().optional(), toolCalls: z.array(z.object({ name: z.string(), input: z.unknown().optional(), id: z.string().optional() })).max(1000).default([])
+});
 type Job = z.infer<typeof JobSchema>;
 const StateSchema = ProjectMemoryBindingsSchema.extend({ jobs: z.record(z.string(), JobSchema).default({}) });
 type State = z.infer<typeof StateSchema>;
@@ -134,7 +141,7 @@ export function createDesktopProjectMemoryService(options: ProjectMemoryServiceO
       if (!history && Date.parse(turn.at) < Date.parse(binding.enabledAt)) continue;
       const id = createHash("sha256").update(JSON.stringify([binding.spaceId, session.conversationId, turn.messages])).digest("hex");
       if (state.jobs[id]) continue;
-      state.jobs[id] = { id, projectId: session.projectId, conversationId: session.conversationId, title: session.title, messages: turn.messages, userId: options.getUserId(), taskId: null, status: "pending", error: null, deliveryLease: null };
+      state.jobs[id] = { id, projectId: session.projectId, conversationId: session.conversationId, title: session.title, messages: turn.messages, userId: options.getUserId(), agentId: "memmy", taskId: null, status: "pending", error: null, deliveryLease: null };
     }
   }
   async function tick(): Promise<void> {
@@ -191,7 +198,7 @@ export function createDesktopProjectMemoryService(options: ProjectMemoryServiceO
         const latest = await load();
         if (!latest.projects[job.projectId]?.enabled) { await save(true); continue; }
         if (!job.taskId) {
-          const result = await open("add/message", { user_id: job.userId, agent_id: "memmy", conversation_id: job.conversationId, space_ids: [spaceId], domains: ["通用"], allow_memory_view: ["project"], messages: job.messages });
+          const result = await open("add/message", { user_id: job.userId, agent_id: job.agentId, conversation_id: job.conversationId, space_ids: [spaceId], domains: ["通用"], allow_memory_view: ["project"], messages: job.messages });
           job.taskId = z.string().min(1).parse(result.task_id); job.status = "running";
           await save(false);
         }
@@ -202,7 +209,56 @@ export function createDesktopProjectMemoryService(options: ProjectMemoryServiceO
       await save(true);
     }
   }
+  async function resolveWorkspace(workspace: string) {
+    if (!isAbsolute(workspace)) return null;
+    const canonical = await realpath(workspace).catch(() => null);
+    if (!canonical) return null;
+    const matches = [];
+    for (const owner of await projects()) {
+      const directory = await realpath(owner.root_path).catch(() => null);
+      if (!directory) continue;
+      const remainder = relative(directory, canonical);
+      if (!remainder || (!isAbsolute(remainder) && remainder !== ".." && !remainder.startsWith(`..${sep}`))) matches.push({ owner, directory });
+    }
+    matches.sort((a, b) => b.directory.length - a.directory.length || a.owner.id.localeCompare(b.owner.id));
+    if (!matches.length || (matches[1] && matches[0]!.directory === matches[1].directory)) return null;
+    const owner = matches[0]!.owner;
+    const binding = (await load()).projects[owner.id];
+    return binding?.enabled ? { owner, binding } : null;
+  }
   const service = {
+    async recallWorkspace(workspace: string, query: string, conversationId?: string, recallVia: "turn_start" | "tool" = "turn_start", domains?: string[], memoryLimit = 5) {
+      const resolved = await resolveWorkspace(workspace);
+      if (!resolved) return { bound: false, data: {} };
+      const { owner, binding } = resolved;
+      const data = await open("search/memory", { user_id: options.getUserId(), space_ids: [binding.spaceId], query, include_memory_view: ["project"], memory_limit_number: memoryLimit, recall_via: recallVia, ...(domains?.length ? { domains } : {}), ...(conversationId ? { conversation_id: `codex:${conversationId.replace(/^codex:/u, "")}` } : {}) });
+      // Disabling a project while a slow search is running must also discard its response.
+      const latest = await resolveWorkspace(workspace);
+      if (latest?.owner.id !== owner.id || latest.binding.spaceId !== binding.spaceId) return { bound: false, data: {} };
+      return { bound: true, projectId: owner.id, spaceId: binding.spaceId, data };
+    },
+    async captureWorkspace(workspace: string, input: z.infer<typeof ExternalProjectTurnSchema>) {
+      const turn = ExternalProjectTurnSchema.parse(input);
+      const resolved = await resolveWorkspace(workspace);
+      if (!resolved) return { bound: false, jobIds: [] };
+      if (turn.workspacePath && (await resolveWorkspace(turn.workspacePath))?.owner.id !== resolved.owner.id) throw new MemoryLayerError("invalid_argument", 400, "轮次目录不属于当前项目");
+      if (turn.status !== "succeeded" || !turn.query.trim() || !turn.answer.trim() || Date.parse(turn.completedAt) < Date.parse(turn.startedAt)) return { bound: true, jobIds: [] };
+      const messages: z.infer<typeof MessageSchema>[] = [
+        { role: "user", chat_time: turn.startedAt, content: redactSecrets(turn.query) },
+        { role: "assistant", chat_time: turn.completedAt, content: redactSecrets(turn.answer), ...(turn.toolCalls.length ? { tool_calls: turn.toolCalls.map(call => ({ type: "function", ...(call.id ? { id: call.id } : {}), function: { name: call.name, arguments: redactSecrets(JSON.stringify(call.input ?? {})) } })) } : {}) }
+      ];
+      return mutate(async state => {
+        const latest = await resolveWorkspace(workspace);
+        if (latest?.owner.id !== resolved.owner.id || latest.binding.spaceId !== resolved.binding.spaceId) return { bound: false, jobIds: [] };
+        const binding = state.projects[resolved.owner.id];
+        if (!binding?.enabled || binding.spaceId !== resolved.binding.spaceId) return { bound: false, jobIds: [] };
+        if (Date.parse(turn.startedAt) < Date.parse(binding.enabledAt)) return { bound: true, jobIds: [] };
+        const conversationId = `codex:${turn.conversationId.replace(/^codex:/u, "")}`;
+        const id = createHash("sha256").update(JSON.stringify([binding.spaceId, conversationId, messages])).digest("hex");
+        state.jobs[id] ??= { id, projectId: resolved.owner.id, conversationId, title: turn.query.slice(0, 80), messages, userId: options.getUserId(), agentId: "codex", taskId: null, status: "pending", error: null, deliveryLease: null };
+        return { bound: true, jobIds: [id] };
+      });
+    },
     async view(id: string): Promise<ProjectMemoryView> { await project(id); const state = await load(); return { binding: state.projects[id] ?? null, jobs: Object.values(state.jobs).filter(job => job.projectId === id).map(({ messages: _messages, userId: _userId, projectId: _projectId, deliveryLease: _deliveryLease, ...job }) => job), error: lastError }; },
     async configure(id: string, enabled: boolean): Promise<ProjectMemoryView> {
       const owner = await project(id);

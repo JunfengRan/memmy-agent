@@ -12,6 +12,12 @@ afterEach(async () => {
 });
 
 describe("HttpMemoryClient", () => {
+  it("allows scoped OpenMem project searches through the local authenticated transport", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ code: 0, data: { topic_detail_list: [] } })));
+    const client = createHttpMemoryClient({ baseUrl: "http://memory.test", token: "fixture-token", timeoutMs: 500, maxRetries: 0 }, { fetchImpl });
+    expect(await client.openMem!("search/memory", { space_ids: ["space_chat"], include_memory_view: ["project"] })).toEqual({ topic_detail_list: [] });
+    expect(fetchImpl).toHaveBeenCalledWith("http://memory.test/api/openmem/v1/search/memory", expect.objectContaining({ method: "POST", headers: expect.objectContaining({ authorization: "Bearer fixture-token", "x-memos-mode": "local" }) }));
+  });
   it.each(["memory", "log"].flatMap(kind => ["timeout",503,401,403,404,409].map(failure => ({kind,failure}))))("leaves panel $kind retries to the frontend ($failure)", async ({kind,failure}) => {
     let calls = 0;
     const client = createHttpMemoryClient({baseUrl:"http://synthetic.invalid",timeoutMs:500,maxRetries:3}, {
