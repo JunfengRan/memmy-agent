@@ -190,6 +190,23 @@ describe("project memory task resubmit", () => {
     expect((await call(service, "get/status", { task_id: second })).data.status).toBe("completed");
   });
 
+  it("can resubmit a configuration failure after the model is configured", async () => {
+    stubStages(combinedStages(() => decisionReply("推送失败后重试五次。")));
+    const { service } = harness.createService();
+    await setupSpace(service, "space_a");
+    const llm = (service as unknown as { llm: { isConfigured(): boolean } }).llm;
+    const configured = vi.spyOn(llm, "isConfigured").mockReturnValue(false);
+    const body = { conversation_id: "config_retry", space_ids: ["space_a"], messages: [message("推送失败后重试五次", "2026-11-13T10:00:00Z")] };
+    const first = await add(service, body);
+    await drain(service);
+    expect((await call(service, "get/status", { task_id: first })).data.error).toMatchObject({ reason: "MODEL_NOT_CONFIGURED" });
+    configured.mockRestore();
+    const second = await add(service, body);
+    expect(second).not.toBe(first);
+    await drain(service);
+    expect((await call(service, "get/status", { task_id: second })).data.status).toBe("completed");
+  });
+
   it("opens a new task after MODEL_CALL_FAILED and then replays that task", async () => {
     stubStages(combinedStages(() => {
       throw new Error("model down");

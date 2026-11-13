@@ -10,7 +10,7 @@ import { PROJECT_MEMORY_BINDINGS_FILE, ProjectMemoryBindingsSchema, ProjectMemor
 import { MemoryLayerError, type MemoryClient } from "../adapters/outbound/memory-client/index.js";
 
 const MessageSchema = z.object({ role: z.enum(["user", "assistant"]), chat_time: z.string().datetime(), content: z.string(), tool_calls: z.array(z.unknown()).optional() });
-const JobSchema = ProjectMemoryJobSchema.extend({ projectId: z.string(), messages: z.array(MessageSchema), userId: z.string() });
+const JobSchema = ProjectMemoryJobSchema.extend({ projectId: z.string(), messages: z.array(MessageSchema), userId: z.string(), deliveryLease: z.object({ token: z.string(), until: z.string().datetime() }).nullable().default(null) });
 type Job = z.infer<typeof JobSchema>;
 const StateSchema = ProjectMemoryBindingsSchema.extend({ jobs: z.record(z.string(), JobSchema).default({}) });
 type State = z.infer<typeof StateSchema>;
@@ -37,6 +37,7 @@ export function parseDesktopMemorySession(source: string): DesktopMemorySession 
   for (const row of records) {
     if (row.role !== "user" && row.role !== "assistant") continue;
     if (row.role === "user") finish();
+    if (row.model_error || contentText(row.content) === "Error: Task interrupted before a response was generated.") { messages = []; continue; }
     if (/^\s*<memmy_assist_result\b/u.test(contentText(row.content)) || row.internal_context || row.assist_result || row.status === "cancelled" || row.status === "failed") continue;
     const parsed = MessageSchema.safeParse({ role: row.role, chat_time: row.timestamp, content: contentText(row.content), ...(Array.isArray(row.tool_calls) ? { tool_calls: row.tool_calls } : {}) });
     if (!parsed.success) continue;
@@ -69,6 +70,7 @@ export function createDesktopProjectMemoryService(options: ProjectMemoryServiceO
   }
   const now = options.now ?? (() => new Date());
   let timer: ReturnType<typeof setInterval> | undefined;
+  let activeTick: Promise<void> | null = null;
   let queue: Promise<unknown> = Promise.resolve();
   let lastError: string | null = null;
   const open = async (route: string, body: RecordValue) => {
@@ -130,12 +132,13 @@ export function createDesktopProjectMemoryService(options: ProjectMemoryServiceO
       if (!history && Date.parse(turn.at) < Date.parse(binding.enabledAt)) continue;
       const id = createHash("sha256").update(JSON.stringify([binding.spaceId, session.conversationId, turn.messages])).digest("hex");
       if (state.jobs[id]) continue;
-      state.jobs[id] = { id, projectId: session.projectId, conversationId: session.conversationId, title: session.title, messages: turn.messages, userId: options.getUserId(), taskId: null, status: "pending", error: null };
+      state.jobs[id] = { id, projectId: session.projectId, conversationId: session.conversationId, title: session.title, messages: turn.messages, userId: options.getUserId(), taskId: null, status: "pending", error: null, deliveryLease: null };
     }
   }
   async function tick() {
-    return mutate(async state => {
+    const updates = await mutate(async state => {
       lastError = null;
+      const updates: Array<{ id: string; spaceId: string; instructions: string; name: string }> = [];
       const active = await projects();
       const localSessions = Object.values(state.projects).some(binding => binding.enabled) ? await readSessions() : [];
       for (const id of Object.keys(state.projects)) {
@@ -145,33 +148,56 @@ export function createDesktopProjectMemoryService(options: ProjectMemoryServiceO
         if (!binding.enabled) continue;
         try {
           const instructions = await options.readInstructions(owner.root_path);
-          if (binding.instructions !== instructions || binding.projectName !== owner.name) {
-            await open("update/space", { space_id: binding.spaceId, space_name: owner.name, instructions });
-            binding.instructions = instructions; binding.projectName = owner.name;
-          }
+          if (binding.instructions !== instructions || binding.projectName !== owner.name) updates.push({ id, spaceId: binding.spaceId, instructions, name: owner.name });
           for (const session of localSessions.filter(session => session.projectId === id)) addTurns(state, binding, session, false);
-        } catch (error) { lastError = String(error instanceof Error ? error.message : error); }
+        } catch (error) { lastError = error instanceof Error ? error.message : String(error); }
       }
-      // Persist delivery payloads before any network side effect. A crash replays the exact same request.
-      await store(state);
-      for (const job of Object.values(state.jobs)) {
-        const binding = state.projects[job.projectId];
-        if (!binding?.enabled || job.status === "completed" || job.status === "failed") continue;
-        try {
-          if (!job.taskId) {
-            const result = await open("add/message", { user_id: job.userId, agent_id: "memmy", conversation_id: job.conversationId, space_ids: [binding.spaceId], domains: ["通用"], allow_memory_view: ["project"], messages: job.messages });
-            job.taskId = z.string().min(1).parse(result.task_id); job.status = "running";
-            await store(state);
-          }
-          const result = await open("get/status", { task_id: job.taskId });
-          if (result.status === "completed") { job.status = "completed"; job.error = null; }
-          else if (result.status === "failed") { job.status = "failed"; job.error = JSON.stringify(result.error ?? "整理失败，请检查记忆模型配置后重试"); }
-        } catch (error) { job.status = "failed"; job.error = error instanceof Error ? error.message : String(error); }
-      }
+      // mutate persists every raw delivery before any network side effect.
+      return updates;
     });
+    for (const update of updates) {
+      try {
+        await open("update/space", { space_id: update.spaceId, space_name: update.name, instructions: update.instructions });
+        await mutate(async state => { const binding = state.projects[update.id]; if (binding?.spaceId === update.spaceId) { binding.instructions = update.instructions; binding.projectName = update.name; } });
+      } catch (error) { lastError = error instanceof Error ? error.message : String(error); }
+    }
+    const visited = new Set<string>();
+    // Bound each pass. Only short claims and journal writes hold the global file lock.
+    for (let count = 0; count < 4; count++) {
+      const work = await mutate(async state => {
+        const job = Object.values(state.jobs).find(job => !visited.has(job.id) && state.projects[job.projectId]?.enabled
+          && (job.status === "pending" || job.status === "running")
+          && (!job.deliveryLease || Date.parse(job.deliveryLease.until) <= now().getTime()));
+        if (!job) return null;
+        job.deliveryLease = { token: randomUUID(), until: new Date(now().getTime() + 300_000).toISOString() };
+        return { job: structuredClone(job), spaceId: state.projects[job.projectId]!.spaceId };
+      });
+      if (!work) break;
+      const { job, spaceId } = work;
+      visited.add(job.id);
+      const save = async (release: boolean) => mutate(async state => {
+        const current = state.jobs[job.id];
+        if (!current || current.deliveryLease?.token !== job.deliveryLease?.token || state.projects[job.projectId]?.spaceId !== spaceId) return;
+        current.taskId = job.taskId; current.status = job.status; current.error = job.error;
+        if (release) current.deliveryLease = null;
+      });
+      try {
+        const latest = await load();
+        if (!latest.projects[job.projectId]?.enabled) { await save(true); continue; }
+        if (!job.taskId) {
+          const result = await open("add/message", { user_id: job.userId, agent_id: "memmy", conversation_id: job.conversationId, space_ids: [spaceId], domains: ["通用"], allow_memory_view: ["project"], messages: job.messages });
+          job.taskId = z.string().min(1).parse(result.task_id); job.status = "running";
+          await save(false);
+        }
+        const result = await open("get/status", { task_id: job.taskId });
+        if (result.status === "completed") { job.status = "completed"; job.error = null; }
+        else if (result.status === "failed") { job.status = "failed"; job.error = JSON.stringify(result.error ?? "整理失败，请检查记忆模型配置后重试"); }
+      } catch (error) { job.status = "failed"; job.error = error instanceof Error ? error.message : String(error); }
+      await save(true);
+    }
   }
   return {
-    async view(id: string): Promise<ProjectMemoryView> { await project(id); const state = await load(); return { binding: state.projects[id] ?? null, jobs: Object.values(state.jobs).filter(job => job.projectId === id).map(({ messages: _messages, userId: _userId, projectId: _projectId, ...job }) => job), error: lastError }; },
+    async view(id: string): Promise<ProjectMemoryView> { await project(id); const state = await load(); return { binding: state.projects[id] ?? null, jobs: Object.values(state.jobs).filter(job => job.projectId === id).map(({ messages: _messages, userId: _userId, projectId: _projectId, deliveryLease: _deliveryLease, ...job }) => job), error: lastError }; },
     async configure(id: string, enabled: boolean) {
       const owner = await project(id);
       let createdSpace: string | null = null;
@@ -213,8 +239,8 @@ export function createDesktopProjectMemoryService(options: ProjectMemoryServiceO
     },
     async retry(id: string) { await project(id); await mutate(async state => { for (const job of Object.values(state.jobs)) if (job.projectId === id && job.status === "failed") { job.status = "pending"; job.taskId = null; job.error = null; } }); return this.view(id); },
     tick,
-    start() { if (timer) return; let collecting = false; const run = () => { if (collecting) return; collecting = true; void tick().catch(error => { lastError = error instanceof Error ? error.message : String(error); }).finally(() => { collecting = false; }); }; timer = setInterval(run, 3_000); timer.unref(); run(); },
-    async stop() { if (timer) clearInterval(timer); timer = undefined; await queue; }
+    start() { if (timer) return; const run = () => { if (activeTick) return; activeTick = tick().catch(error => { lastError = error instanceof Error ? error.message : String(error); }).finally(() => { activeTick = null; }); }; timer = setInterval(run, 3_000); timer.unref(); run(); },
+    async stop() { if (timer) clearInterval(timer); timer = undefined; await activeTick; await queue; }
   };
 }
 export type DesktopProjectMemoryService = ReturnType<typeof createDesktopProjectMemoryService>;

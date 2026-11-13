@@ -66,6 +66,30 @@ describe("local desktop project memory", () => {
     await service.retry(a); await service.tick();
     expect((await service.view(a)).jobs[0]!.status).toBe("completed");
   });
+  it("keeps disable responsive during delivery and fences a second backend claim", async () => {
+    const { service, openMem, options } = fixture();
+    await service.configure(a, true);
+    await writeFile(join(root, "sessions/websocket_chat-one.jsonl"), file());
+    let release!: () => void;
+    let started!: () => void;
+    const entered = new Promise<void>(resolve => { started = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    openMem.mockImplementation(async route => {
+      if (route === "add/message") { started(); await gate; return { task_id: "in_flight" }; }
+      return { status: "completed" };
+    });
+    const running = service.tick();
+    await entered;
+    const peer = createDesktopProjectMemoryService(options);
+    await peer.tick();
+    try {
+      const closed = await Promise.race([peer.configure(a, false), new Promise<never>((_, reject) => setTimeout(() => reject(new Error("disable waited for network delivery")), 1000))]);
+      expect(closed.binding!.enabled).toBe(false);
+    } finally { release(); await running; }
+    expect((await peer.view(a)).binding!.enabled).toBe(false);
+    expect(openMem.mock.calls.filter(([route]) => route === "add/message")).toHaveLength(1);
+  });
+
   it("requires explicit history import and rejects foreign sessions/topics", async () => {
     const { service, openMem } = fixture();
     await writeFile(join(root, "sessions/websocket_chat-one.jsonl"), file(a, "websocket:chat-one", "2026-11-12T10:00:00.000Z"));
@@ -88,6 +112,16 @@ describe("local desktop project memory", () => {
     await writeFile(join(root, "projects.json"), '{"projects":[]}'); await service.tick();
     expect(JSON.parse(await readFile(join(root, "bindings.json"), "utf8")).projects).toEqual({});
     expect(openMem.mock.calls.some(([route]) => route === "delete/space")).toBe(false);
+  });
+  it("does not organize model failures or interruption recovery placeholders", () => {
+    const records = file().split("\n").map(line => JSON.parse(line));
+    records[2].model_error = { code: "model_failed", detail: "offline" };
+    expect(parseDesktopMemorySession(records.map(row => JSON.stringify(row)).join("\n"))?.turns).toEqual([]);
+    delete records[2].model_error;
+    records[2].content = "Error: Task interrupted before a response was generated.";
+    expect(parseDesktopMemorySession(records.map(row => JSON.stringify(row)).join("\n"))?.turns).toEqual([]);
+    records.splice(2, 0, { role: "assistant", timestamp: records[1].timestamp, content: "正在检查网络", tool_calls: [{ function: { name: "inspect", arguments: "{}" } }] });
+    expect(parseDesktopMemorySession(records.map(row => JSON.stringify(row)).join("\n"))?.turns).toEqual([]);
   });
   it("ignores incomplete/tool-only turns and fails closed on a corrupt registry", async () => {
     expect(parseDesktopMemorySession(file().split("\n").slice(0,2).join("\n"))?.turns).toEqual([]);

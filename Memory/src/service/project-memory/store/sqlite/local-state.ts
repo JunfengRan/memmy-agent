@@ -54,7 +54,8 @@ type SpaceProgress = TaskRecord["spaces"][string] & {
  */
 export const RESUBMITTABLE_REASONS: ReadonlySet<string> = new Set([
   "VERSION_CONFLICT_RETRY_EXHAUSTED",
-  "MODEL_CALL_FAILED"
+  "MODEL_CALL_FAILED",
+  "MODEL_NOT_CONFIGURED"
 ]);
 
 /** Audit fields kept in pm_tasks.progress_json. get/status does not return them. */
