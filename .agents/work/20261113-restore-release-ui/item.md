@@ -1,7 +1,7 @@
 ---
 id: 20261113-restore-release-ui
-status: ready-for-review
-owner: reviewer / 待复核
+status: done
+owner: developer / 已收尾
 branch: dev-project-memory-add-search
 updated: 2026-11-13
 ---
@@ -17,3 +17,7 @@ updated: 2026-11-13
 2026-11-13：独立 reviewer / Codex 完成 review-01：1 MUST（协助 transport 漏上传锁），前端恢复与自动绑定边界通过复核，交 developer 修补。
 
 2026-11-13：developer 修复 R1-1，共用锁定 transport（56e37160），交 handoff-02 复核。
+
+2026-11-13：独立 reviewer / Codex 完成 review-02：唯一 MUST R1-1 已关闭，统一 transport 云写锁与 120 项相关回归通过；工作项 approved，交 developer 最终重启和收尾。
+
+2026-11-13：review-02 独立批准 56e37160；developer 收尾。原始前端与样式恢复，本机接口接线与上传锁生效；真实模型配置不进 git。

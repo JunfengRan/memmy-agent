@@ -4,7 +4,7 @@
 
 ## 当前应用接入边界（2026-11-13 用户纠正）
 
-按 [ADR-0011](decisions/0011-preserve-release-ui-local-default.md) 恢复 release 原有前端，不再新增项目记忆弹窗/开关。Backend 自动为未绑定的本机项目接入 Space；原项目/任务入口及 Agent 的按会话召回保留。云端上传由 UI 与 Backend transport 双层锁定。以下 ADR-0010 的独立面板描述是上一轮交付背景，已由本段替代；核心投递/隔离/配置恢复重试继续有效。工作项：20261113-restore-release-ui。
+按 [ADR-0011](decisions/0011-preserve-release-ui-local-default.md) 恢复 release 原有前端，不再新增项目记忆弹窗/开关。Backend 自动为未绑定的本机项目接入 Space；原项目/任务入口及 Agent 的按会话召回保留。云端上传由 UI 与 Backend transport 双层锁定。以下 ADR-0010 的独立面板描述是上一轮交付背景，已由本段替代；核心投递/隔离/配置恢复重试继续有效。工作项：20261113-restore-release-ui；56e37160 已获独立 review-02 批准。项目与成员协助共用锁定传输层，所有云端写操作在 fetch 前拒绝。
 
 ## 桌面接入补充（2026-11-13）
 

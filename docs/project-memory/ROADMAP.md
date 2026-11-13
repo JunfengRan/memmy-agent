@@ -8,7 +8,7 @@
 
 - PM-28：合入完整 release/v1.2.7，项目内显式开启本机记忆、自动整理新轮次、手动导入历史、主题与来源查看、按会话绑定召回。状态：done（代码 32b789ec；独立 review-02 approved；本机组件/HTTP/浏览器闭环已验证，真实模型质量与 Electron 打包未验收）。依据 ADR-0010；工作项 20261113-project-memory-desktop。PM-24～PM-27 与此前审计复核状态不变。
 
-- PM-29：按用户纠正恢复 release/v1.2.7 原前端，仅做应用接口接入与本地默认，锁定云端上传；配置 DeepSeek 并真实验证。状态：doing。依据 ADR-0011；工作项 20261113-restore-release-ui。PM-28 的新增界面决定由本条替代，核心算法与投递修补保留。
+- PM-29：按用户纠正恢复 release/v1.2.7 原前端，仅做应用接口接入与本地默认，锁定云端上传；配置 DeepSeek 并真实验证。状态：done（56e37160，独立 review-02 approved；Memory/Backend/Frontend 类型检查、Backend 120 与 Frontend 205 相关回归，以及 DeepSeek 真实接线验证通过）。依据 ADR-0011；工作项 20261113-restore-release-ui。PM-28 的新增界面决定由本条替代，核心算法与投递修补保留。
 
 ## W45（11/3–11/6）M0：基础版本 v0.1，用来暴露问题
 
