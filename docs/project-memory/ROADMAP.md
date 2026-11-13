@@ -116,4 +116,4 @@
 
 ## PM-30：Codex 本机项目桥接
 
-状态：doing；用户 2026-11-13 明确要求。按工作目录共用 Memmy 已绑定 Space，新增 Codex 原生 Stop capture / 每轮 recall 与 CLI cwd 解析，双端真实模型验证和独立评审后收尾。工作项 20261113-codex-memmy-project-bridge，设计见 ADR-0012。
+状态：done；用户 2026-11-13 明确要求。按工作目录共用 Memmy 已绑定 Space，Codex 原生 Stop capture / 每轮 recall 与 CLI cwd 解析已交付；原生双端写入、真实整理、Codex 项目注入和 Memmy 项目工具读取经独立 review-01 approved。Memmy 自动每轮 search 的共享预算限制、后台积压及离线补交边界保留。工作项 20261113-codex-memmy-project-bridge，设计见 ADR-0012。
