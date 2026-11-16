@@ -22,6 +22,8 @@
 
 最终硬断言：不先检索也可凭真实助手告知裁决；5 次成为当前；明确展示的旧 3 次进入 history 且不残留在 conflicts；没有展示的 7 次继续作为冲突；未采纳 Agent 复述不挪成员；search 命中且零召回记录；历史换措辞不改当前/成员/条目数。真实历史复述本轮被 M02 丢弃，因此不能单独宣称 M05 same_history_as 已在真实回放命中，后者有专门单测。
 
+独立复核的剩余质量边界：current-final3 中决策 content 已更新为 5 次、后续为 9 次，但主题 topic_description 仍写旧的 3 次；M05 未返回对应 topic_updates。8/8 硬断言不覆盖描述同步，不能外推完整主题状态正确。按用户“其他行为保持”范围，本轮登记为后续描述质量改进，不扩展重写摘要管线。
+
 过程失败保留：current-final2 的 M02 信号和逐项告知正确，但 M05 漏标 resolve、只给 same_as，导致误 join。没有将“批次 completed”算为质量通过；补上明确裁决信号与 same_as 的确定性绑定后，current-final3 全部断言通过。早期 gpt-6-luna/temp0 HTTP400，后改用网关只读 models 确认可用的 gpt-4.1-mini；第一次带目标故事的评委误判基线结果，已排除，最终以实际数据库字段盲化输入和硬断言交叉核验，不覆盖或隐藏失败证据。
 
 隔离双端适配链路 6/6：合成 Memmy 保存 JSONL → Backend journal → Memory 真实模型 → Codex hook 注入；合成成功 Codex SourceTurn → capture HTTP → journal → Memory → 内置 MemmyMemoryClient/工具渲染；重复采集去重、注入剔除、Backend token 鉴权、重启绑定和 journal 保留。它不是原生窗口操作或已安装 native hook 事件验收，也不外推所有自动每轮检索稳定成功。

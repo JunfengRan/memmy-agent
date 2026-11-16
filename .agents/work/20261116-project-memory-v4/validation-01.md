@@ -66,3 +66,7 @@ node eval/project-memory/runs/20261116-v4-smoke/judge-grounded.mjs
 - 模板 --check、两份独立 hook 构建、git diff --check：通过。
 - 旧版 SQLite 兼容副本：基线 7f4257b9 实际数据库复制后用新 MemoryDb、Store、状态类打开；8 类表逐行不变，旧任务可读、主题可检索、旧日志保持不变，5/5 检查通过。命令：`MEMMY_LOG_LEVEL=error npx tsx eval/project-memory/runs/20261116-v4-smoke/reopen-baseline.ts`。初版脚本误写旧表名 pm_conflicts、只读报错，改为实际 pm_decision_conflicts 后通过，未改源数据库。
 - 独立 reviewer 已逐条关闭代码层 MUST，详见 review-01；该记录基于工作区，最终提交范围尚需正式交接复核，不自标 approved。
+
+### 最终独立证据复核的剩余项
+
+reviewer逐字段读current-final3原始结果，发现topic_description仍写旧3次，而决策content已为5次、后续9次。接受为SHOULD，按用户本轮“其他行为保持”范围登记后续描述质量专项；未修复，不将8/8硬断言说成完整主题状态通过。metrics和open-questions已同步。

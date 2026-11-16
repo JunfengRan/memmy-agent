@@ -79,3 +79,5 @@ Memory schema v16 兼容原开发分支 v10 及 release v15；project_memory_org
 ## Codex 本机桥接（2026-11-13，已独立复核）
 
 依 ADR-0012 扩展 Q-32：Codex hook 和无显式 Space 的 CLI 按真实工作目录访问 Backend 的本机项目绑定。Backend 统一 owner/Space，复用 OpenMem 与持久化投递；不改 Memory 核心算法和已恢复的 release UI。真实原生双端写入/整理/项目召回已验证；工作项 20261113-codex-memmy-project-bridge 的 review-01 approved。Memmy 自动每轮 search 可能被个人召回耗尽共享预算，项目索引与显式工具通过；不外推所有自动检索稳定或离线补交能力。
+
+2026-11-16 收尾：本轮V4边界/无召回记录/本机兼容实现279d39b2经独立review-02批准，工作项done。reviewer亲自重跑476项通过/1既有todo，并核验真实专项、双端适配与旧库副本；R2-1主题描述滞后仍未修复，见metrics R-20261116-01，不将此结论外推纯云端或完整质量通过。
