@@ -2,6 +2,8 @@ import type { LlmClient } from "../../../model/types.js";
 import { PROJECT_MEMORY_LIMITS } from "../contract/limits.js";
 import type { DecisionTarget, TopicSnapshot } from "../contract/types.js";
 import { JUDGE_PROMPT_VERSION, JUDGE_SYSTEM_PROMPT } from "../prompts/merge-judge.js";
+import { evidenceText, type Disclosure } from "../organize/evidence.js";
+import { isBefore } from "../time.js";
 import { clampText } from "../text.js";
 import {
   type DecisionSplitLabel,
@@ -24,7 +26,7 @@ export interface JudgeDraft extends ExtractedDraft {
 export interface JudgeInput {
   drafts: JudgeDraft[];
   topics: TopicSnapshot[];
-  conflictsShown: Set<string>;
+  disclosures?: Disclosure[];
   stateHints: ExtractResult["stateHints"];
 }
 
@@ -53,10 +55,36 @@ function parseSplit(value: unknown, conflicts: number[]): DecisionSplitLabel | n
   return parts.length >= 2 ? { parts } : null;
 }
 
+/** Model binds semantic matches; code checks provenance, chronology and target identity. */
+function parseInformedTargets(value: unknown, disclosures: Disclosure[], draft: JudgeDraft, decision: TopicSnapshot["decisions"][number]) {
+  const targets = new Map<DecisionTarget, { target: DecisionTarget; content: string }>();
+  // Exact conclusions require no model inference. Include every quoted conclusion,
+  // even if the model only labels the chosen option and omits the old content.
+  const quoted = new Set(disclosures.filter((entry) => isBefore(entry.time, draft.time))
+    .flatMap((entry) => entry.conclusions.map(evidenceText)));
+  if (quoted.has(evidenceText(decision.content))) targets.set("content", { target: "content", content: decision.content });
+  for (const entry of decision.conflicts) {
+    if (quoted.has(evidenceText(entry.content))) {
+      const target = `conflict:${entry.seq}` as const;
+      targets.set(target, { target, content: entry.content });
+    }
+  }
+  for (const item of Array.isArray(value) ? value : []) {
+    const row = asRecord(item);
+    if (!row || !Number.isInteger(row.disclosure_idx) || !Number.isInteger(row.conclusion_idx)) continue;
+    const evidence = disclosures[Number(row.disclosure_idx)];
+    const quote = evidence?.conclusions[Number(row.conclusion_idx)];
+    // The member must have seen the conclusion strictly before making this statement.
+    if (!evidence || !quote || !isBefore(evidence.time, draft.time)) continue;
+    const target = parseDecisionTarget(row.target, decision.conflicts.map((entry) => entry.seq));
+    if (!target) continue;
+    const entry = target === "content" ? decision : decision.conflicts.find((entry) => `conflict:${entry.seq}` === target);
+    if (entry) targets.set(target, { target, content: entry.content });
+  }
+  return [...targets.values()];
+}
+
 export function buildJudgeMessages(input: JudgeInput): Array<{ role: "system" | "user"; content: string }> {
-  const conflictsShown = [...input.conflictsShown].filter((id) =>
-    input.topics.some((topic) => topic.decisions.some((decision) => decision.id === id && decision.conflicts.length > 0))
-  );
   const payload = {
     drafts: input.drafts.map((draft) => ({
       draft_id: draft.draftId,
@@ -68,6 +96,7 @@ export function buildJudgeMessages(input: JudgeInput): Array<{ role: "system" | 
       user_ids: draft.userIds,
       reason: draft.reason,
       topic_id: draft.topicId,
+      origin: draft.origin,
       signals: draft.signals
     })),
     topics: input.topics.map((topic) => ({
@@ -87,6 +116,7 @@ export function buildJudgeMessages(input: JudgeInput): Array<{ role: "system" | 
           user_ids: item.userIds
         })),
         history: decision.history.map((item) => ({
+          ref: `history:${item.seq}`,
           content: item.content,
           time: item.time,
           user_ids: item.userIds,
@@ -106,7 +136,7 @@ export function buildJudgeMessages(input: JudgeInput): Array<{ role: "system" | 
         }))
       }))
     })),
-    conflicts_shown: conflictsShown,
+    disclosures: input.disclosures ?? [],
     state_hints: input.stateHints
   };
   return [
@@ -131,6 +161,8 @@ export function parseJudgeOutput(raw: Json, input: JudgeInput): JudgeResult {
     const sameQuestion = asString(record.same_question_as);
     const decision = snapshot?.decisions.find((entry) => entry.id === sameQuestion);
     const seqs = decision?.conflicts.map((entry) => entry.seq) ?? [];
+    const historyRef = asString(record.same_history_as);
+    const matchedHistory = decision?.history.find((entry) => `history:${entry.seq}` === historyRef);
     const resolveRecord = asRecord(record.resolve);
     const pick = resolveRecord?.pick === "new" ? "new" : parseDecisionTarget(resolveRecord?.pick, seqs);
     const resolve: JudgeLabel["resolve"] = decision && pick ? { pick } : null;
@@ -143,6 +175,8 @@ export function parseJudgeOutput(raw: Json, input: JudgeInput): JudgeResult {
       sameAs: decision ? parseDecisionTarget(record.same_as, seqs) : null,
       approvedBy: asStringArray(record.approved_by).filter((id) => !draft.userIds.includes(id)),
       resolve,
+      restatesHistory: matchedHistory?.content,
+      informedTargets: decision ? parseInformedTargets(record.informed_targets, input.disclosures ?? [], draft, decision) : [],
       // A parsed resolve wins when the model sets both.
       split: decision && !resolve ? parseSplit(record.split, seqs) : null,
       sameExperienceAs: experience?.id ?? null,
@@ -166,8 +200,7 @@ export function parseJudgeOutput(raw: Json, input: JudgeInput): JudgeResult {
   return {
     promptVersion: JUDGE_PROMPT_VERSION,
     labels,
-    topicUpdates,
-    informedDecisionIds: new Set(asStringArray(raw.informed_decision_ids))
+    topicUpdates
   };
 }
 

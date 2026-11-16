@@ -77,6 +77,8 @@ export type DecisionOp =
   | { op: "conflict_update"; decisionId: string; target: `conflict:${number}`; content: string; time: string; userIds: string[] }
   | {
       op: "resolve";
+      /** Explicitly covered conclusions; omitted only for legacy internal operations. */
+      processedTargets?: DecisionTarget[];
       decisionId: string;
       target: DecisionTarget | "new";
       content?: string;
@@ -87,6 +89,7 @@ export type DecisionOp =
   /** PM-14 proposal: one piece keeps `decisionId`; each piece archives the current content and every conflict. */
   | {
       op: "split";
+      processedTargets?: DecisionTarget[];
       decisionId: string;
       reason: string;
       splitInto: Array<{ decisionId: string; content: string; time: string; userIds: string[] }>;
@@ -242,12 +245,4 @@ export interface RawTurnInput {
 export interface RawTurnRecord extends RawTurnInput {
   turnId: string;
   taskId: string;
-}
-
-export interface RecallLogInput {
-  conversationId: string;
-  via: "session_start" | "turn_start" | "tool";
-  topicId: string;
-  decisionId: string | null;
-  hadConflicts: boolean;
 }

@@ -88,7 +88,9 @@
     "workspace:test": "npm run test --workspaces --if-present",
     "db:migrate": "npm run db:migrate -w @memmy/backend",
     "test:opencode": "npm run build -w @memmy/agent-source-core && npm run build -w @memmy/local-api-contracts && npm run workspace-bridge:build -w @memmy/backend && npm run integration:build -w @memmy/memory && vitest run tests/opencode-compatibility.test.mjs",
-    "test:contracts": "vitest run tests/computer-history-contract.test.ts"
+    "test:contracts": "vitest run tests/computer-history-contract.test.ts",
+    "project-memory:assets": "node scripts/project-memory/sync-injection-assets.mjs",
+    "project-memory:assets:check": "node scripts/project-memory/sync-injection-assets.mjs --check"
   },
   "engines": {
     "node": ">=20"

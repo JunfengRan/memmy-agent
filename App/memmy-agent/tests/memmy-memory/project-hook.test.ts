@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentHookContext, SystemPromptBuildContext } from "../../src/core/agent-runtime/hook.js";
 import { INTERACTIVE_MEMORY_TIMEOUT_MS } from "../../src/memmy-memory/client.js";
 import { MemmyMemoryHook } from "../../src/memmy-memory/hook.js";
+import { stripMemoryContextBlocks } from "../../src/memmy-memory/protocol.js";
 import * as appRender from "../../src/memmy-memory/project-inject.js";
 
 const topic = {
@@ -103,10 +104,10 @@ describe("bound project hook", () => {
       { content: "later", time: "2026-11-11T23:20:00Z" },
       { content: "latest", time: "2026-11-11T18:30:00-05:00" }
     ] }] }] };
-    const appSource = readFileSync(new URL("../../src/memmy-memory/project-inject.ts", import.meta.url), "utf8");
+    const appSource = readFileSync(new URL("../../src/memmy-memory/project-render.ts", import.meta.url), "utf8");
     const memorySource = readFileSync(new URL("../../../../Memory/src/service/project-memory/inject/render.ts", import.meta.url), "utf8");
     const marker = "export type MemosContextKind";
-    expect(appSource.slice(appSource.indexOf(marker), appSource.indexOf("/** Tool HTTP errors only.")).trim()).toBe(memorySource.slice(memorySource.indexOf(marker)).trim());
+    expect(appSource.slice(appSource.indexOf(marker), appSource.length).trim()).toBe(memorySource.slice(memorySource.indexOf(marker)).trim());
     const result = appRender.renderTurnMemories(input)!;
 
     expect(result).not.toContain("此前：earlier");
@@ -147,4 +148,12 @@ describe("desktop per-session project binding", () => {
     hook.onBuildSystemPrompt(prompt);
     expect(prompt.getSection("memmy-project-memory")).toBeNull();
   });
+});
+
+
+it("uses the canonical balanced project stripper without dropping unclosed tail content", () => {
+ const text = "before<memos_context>old<memos_context>inner</memos_context>outer</memos_context>after";
+ expect(stripMemoryContextBlocks(text)).toBe("beforeafter");
+ expect(stripMemoryContextBlocks("before<project_index>old</project_index>after")).toBe("beforeafter");
+ expect(stripMemoryContextBlocks("before<memos_context>unfinished")).toBe("before<memos_context>unfinished");
 });

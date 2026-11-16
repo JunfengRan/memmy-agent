@@ -1,10 +1,17 @@
+import type { Disclosure } from "./evidence.js";
 import type { LlmClient } from "../../../model/types.js";
 import { PROJECT_MEMORY_LIMITS } from "../contract/limits.js";
 import type { DecisionTarget, RawTurnRecord } from "../contract/types.js";
 
 export type DraftTarget = { topicId: string } | { newTopicRef: string };
 
+export interface InformedTarget {
+  target: DecisionTarget;
+  content: string;
+}
+
 interface DraftBase {
+  origin?: "member" | "adopted" | "delegated";
   draftId: string;
   content: string;
   time: string;
@@ -33,6 +40,9 @@ export interface DecisionDraft extends DraftBase {
   resolve: { pick: DecisionTarget | "new" } | null;
   /** M02 emitted a resolve signal. Distinct from `resolve`, which is the judge's bound pick. */
   signaledResolve: boolean;
+  informedTargets?: InformedTarget[];
+  /** Validated content snapshot of a semantically matching history entry. */
+  restatesHistory?: string;
   split: DecisionSplitLabel | null;
 }
 
@@ -71,7 +81,6 @@ export interface OrganizeResult {
   drafts: Draft[];
   newTopics: Map<string, NewTopicDraft>;
   topicUpdates: Map<string, { topicSummary?: string; topicDescription?: string }>;
-  informedDecisionIds: Set<string>;
   deferred: DeferredSegment[];
 }
 
@@ -81,6 +90,7 @@ export type DraftSignal =
   | { type: "resolve"; pick: string; by: string };
 
 export interface ExtractedDraft {
+  origin?: "member" | "adopted" | "delegated";
   draftId: string;
   kind: "decision" | "experience" | "timeline";
   category: string | null;
@@ -91,13 +101,12 @@ export interface ExtractedDraft {
   /** Role of the source message. `unknown` is a backfill draft with no source turn. */
   role: "user" | "assistant" | "unknown";
   reason: string | null;
-  /** Model hint. The restatement filter ignores a ref that was not recalled. */
-  restates: string | null;
   signals: DraftSignal[];
   backfillOf?: number;
 }
 
 export interface ExtractResult {
+  disclosures?: Disclosure[];
   promptVersion: string;
   drafts: ExtractedDraft[];
   stateHints: Array<{ type: string; content: string }>;
@@ -124,6 +133,9 @@ export interface AssignResult {
 }
 
 export interface JudgeLabel {
+  informedTargets?: InformedTarget[];
+  /** Validated content snapshot of a semantically matching history entry. */
+  restatesHistory?: string;
   draftId: string;
   sameQuestionAs: string | null;
   sameAs: DecisionTarget | null;
@@ -138,7 +150,6 @@ export interface JudgeResult {
   promptVersion: string;
   labels: Map<string, JudgeLabel>;
   topicUpdates: OrganizeResult["topicUpdates"];
-  informedDecisionIds: Set<string>;
 }
 
 export class ModelOutputError extends Error {
@@ -250,6 +261,7 @@ export function assembleOrganizeResult(
       time: draft.time,
       userIds: draft.userIds,
       messageIdx: draft.messageIdx,
+      origin: draft.origin ?? (draft.role === "assistant" ? "delegated" : "member"),
       target: assignment.target,
       ...(draft.backfillOf == null ? {} : { backfillOf: draft.backfillOf })
     };
@@ -262,6 +274,8 @@ export function assembleOrganizeResult(
         sameAs: label?.sameAs ?? null,
         approvedBy: label?.approvedBy ?? [],
         resolve: label?.resolve ?? null,
+        informedTargets: label?.informedTargets ?? [],
+        restatesHistory: label?.restatesHistory,
         signaledResolve: draft.signals.some((signal) => signal.type === "resolve"),
         split: label?.split ?? null
       });
@@ -284,7 +298,6 @@ export function assembleOrganizeResult(
     drafts,
     newTopics: assigned.newTopics,
     topicUpdates: judged?.topicUpdates ?? new Map(),
-    informedDecisionIds: judged?.informedDecisionIds ?? new Set(),
     deferred
   };
 }

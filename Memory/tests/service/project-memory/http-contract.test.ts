@@ -2,7 +2,6 @@ import type { Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { API_ROUTES, createMemoryHttpServer } from "../../../src/server/http.js";
 import type { MemoryDb, MemoryService } from "../../../src/index.js";
-import type { ProjectLocalState } from "../../../src/service/project-memory/store/sqlite/local-state.js";
 import { combinedStages, createProjectMemoryHarness, emptyReply, stubStages } from "./helpers.js";
 
 const realFetch = globalThis.fetch;
@@ -257,7 +256,7 @@ describe("openmem HTTP contract", () => {
     expect(degraded.body.data.degraded).not.toContain("skill");
   });
 
-  it("writes via=tool for recall_via tool and does not start a turn", async () => {
+  it("accepts recall_via tool without writing recall receipts or starting a turn", async () => {
     const { post, service, db, spaceId } = await seedTopic();
     const turnStarts = watchTurnStarts(service);
     const searched = await post("search/memory", {
@@ -270,25 +269,11 @@ describe("openmem HTTP contract", () => {
     });
     expect(searched.status).toBe(200);
     expect(searched.body.data.topic_detail_list.length).toBeGreaterThan(0);
-    const rows = recallRows(db);
-    expect(rows.length).toBeGreaterThan(0);
-    expect(rows.every((row) => row.via === "tool")).toBe(true);
-    const local = projectLocal(service);
-    const recalled = local.recalledIds("conv_tool");
-    expect(recalled.topicIds.length).toBeGreaterThan(0);
-    expect(recalled.decisionIds.length).toBeGreaterThan(0);
+    expect(recallRows(db)).toEqual([]);
     expect(turnStarts()).toBe(0);
-    local.appendRecallLog([{
-      conversationId: "conv_tool",
-      via: "tool",
-      topicId: recalled.topicIds[0]!,
-      decisionId: "dec_informed_tool",
-      hadConflicts: true
-    }]);
-    expect([...local.conflictedDecisionsShown("conv_tool")]).toContain("dec_informed_tool");
   });
 
-  it("defaults recall_via to turn_start", async () => {
+  it("accepts an omitted recall_via without writing receipts", async () => {
     const { post, db, spaceId } = await seedTopic();
     const searched = await post("search/memory", {
       user_id: "user_a",
@@ -298,9 +283,41 @@ describe("openmem HTTP contract", () => {
       conversation_id: "conv_default"
     });
     expect(searched.status).toBe(200);
-    const rows = recallRows(db);
-    expect(rows.length).toBeGreaterThan(0);
-    expect(rows.every((row) => row.via === "turn_start")).toBe(true);
+    expect(searched.body.data.topic_detail_list.length).toBeGreaterThan(0);
+    expect(recallRows(db)).toEqual([]);
+  });
+
+  it("keeps legacy recall receipts inert and does not authorize a resolution from them", async () => {
+    const { post, db, spaceId } = await seedTopic();
+    const decision = db.db.prepare("SELECT id, topic_id FROM pm_decisions LIMIT 1").get() as { id: string; topic_id: string };
+    db.db.prepare("INSERT INTO pm_decision_conflicts (decision_id, seq, content, time, user_ids_json) VALUES (?, 1, ?, ?, ?)")
+      .run(decision.id, "推送失败后不再重试。", "2026-10-29T11:00:00+08:00", '["user_b"]');
+    db.db.prepare("INSERT INTO pm_recall_log (conversation_id, seq, via, topic_id, decision_id, had_conflicts, ts) VALUES (?, 1, 'tool', ?, ?, 1, ?)")
+      .run("conv_legacy_receipt", decision.topic_id, decision.id, "2026-10-29T11:01:00+08:00");
+    const legacyRows = recallRows(db);
+    const stages = stubStages({
+      extract: () => ({ drafts: [{ draft_id: "d0", kind: "decision", content: "推送失败后不再重试。", message_idx: 0, signals: [{ type: "resolve", pick: "不再重试", by: "user_c" }] }], disclosures: [] }),
+      assign: () => ({ assignments: [{ draft_id: "d0", target: { topic_id: decision.topic_id }, basis: { independent_delivery: false, affects_existing_decisions: true } }], new_topics: [] }),
+      judge: () => ({ drafts: [{ draft_id: "d0", same_question_as: decision.id, same_as: "conflict:1", resolve: { pick: "conflict:1" } }], informed_decision_ids: [decision.id] })
+    });
+    const searched = await post("search/memory", { user_id: "user_c", query: "推送失败怎么重试", space_ids: [spaceId], include_memory_view: ["project"], conversation_id: "conv_legacy_receipt", recall_via: "tool" });
+    expect(searched.body.data.topic_detail_list).toHaveLength(1);
+    expect(recallRows(db)).toEqual(legacyRows);
+    const accepted = await post("add/message", {
+      user_id: "user_c", conversation_id: "conv_legacy_receipt", space_ids: [spaceId], allow_memory_view: ["project"],
+      messages: [{ role: "user", chat_time: "2026-10-29 12:00:00", content: "以不再重试为准。" }]
+    });
+    expect(accepted.body.code).toBe(0);
+    await waitForTask(post, accepted.body.data.task_id);
+    expect(stages.judge).toHaveLength(1);
+    expect(stages.judge[0]).not.toHaveProperty("conflicts_shown");
+    const listed = await post("get/memory", { space_id: spaceId });
+    const current = listed.body.data.topic_detail_list[0].decisions[0];
+    expect(current.content).toBe("推送失败后指数退避重试三次。");
+    expect(current.conflicts).toHaveLength(1);
+    expect(current.conflicts[0]).toMatchObject({ content: "推送失败后不再重试。", user_ids: ["user_b", "user_c"] });
+    expect(db.db.prepare("SELECT COUNT(*) FROM pm_decision_history WHERE decision_id = ?").pluck().get(decision.id)).toBe(0);
+    expect(recallRows(db)).toEqual(legacyRows);
   });
 
   it("rejects a bad recall_via and writes no recall rows", async () => {
@@ -387,10 +404,6 @@ function recallRows(db: MemoryDb): Array<{ via: string; topic_id: string; decisi
     topic_id: string;
     decision_id: string | null;
   }>;
-}
-
-function projectLocal(service: MemoryService): ProjectLocalState {
-  return (service as unknown as { projectMemory: { local: ProjectLocalState } }).projectMemory.local;
 }
 
 function watchTurnStarts(service: MemoryService): () => number {

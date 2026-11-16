@@ -3,11 +3,13 @@ import { createHash, randomUUID } from "node:crypto";
 import type {
   RawTurnInput,
   RawTurnRecord,
-  RecallLogInput,
   TaskError,
   TaskRecord,
   TaskStatus
 } from "../../contract/types.js";
+
+import type { CreateTaskInput, DeferredSettlement, PendingDeferred, ProjectPipelineState, SpaceOutcome, TaskDetails } from "../state.js";
+export type { PendingDeferred, SpaceOutcome, TaskDetails } from "../state.js";
 
 type Db = Database.Database;
 
@@ -57,31 +59,6 @@ export const RESUBMITTABLE_REASONS: ReadonlySet<string> = new Set([
   "MODEL_CALL_FAILED",
   "MODEL_NOT_CONFIGURED"
 ]);
-
-/** Audit fields kept in pm_tasks.progress_json. get/status does not return them. */
-export interface TaskDetails {
-  assignments: Array<{
-    draftId: string;
-    basis: { independentDelivery: boolean; affectsExistingDecisions: boolean };
-  }>;
-  dropped: Array<{ reason: string; text: string | null }>;
-  degraded: string[];
-  ops: Array<{ basis: { draftId: string; hit: string | null; checked: string[] } }>;
-  /** Closed `<memos_context>` / `<project_index>` blocks removed before M02. */
-  strippedBlocks?: number;
-  /** Unclosed tags left in the text (Q-34). Not part of the M02 acceptance count. */
-  unclosedBlocks?: number;
-}
-
-export interface SpaceOutcome {
-  status: Exclude<TaskStatus, "running">;
-  memoryIds: string[];
-  added: number;
-  updated: number;
-  deferredCount: number;
-  error?: TaskError | null;
-  details?: TaskDetails;
-}
 
 function taskFromRow(row: TaskRow): TaskRecord {
   const progress = JSON.parse(row.progress_json) as Record<string, SpaceProgress>;
@@ -145,14 +122,14 @@ function turnFromRow(row: TurnRow): RawTurnRecord {
 }
 
 /**
- * Device-local pipeline state (v3 §5.3 "仅本地"): tasks, raw turns, recall log
- * and deferred segments. These stay in SQLite whatever store backs the topics.
+ * SQLite adapter for durable tasks, raw turns and deferred segments.
+ * The legacy recall-log table is retained on disk but is no longer read or written.
  */
-export class ProjectLocalState {
+export class ProjectLocalState implements ProjectPipelineState {
   constructor(private readonly db: Db, private readonly now: () => Date = () => new Date()) {}
 
   createTask(
-    input: { taskId: string; spaceIds: string[]; conversationId: string; batchKey: string; sourceBatchId: string; acceptedAt: string },
+    input: CreateTaskInput,
     turns: RawTurnInput[]
   ): { task: TaskRecord; created: boolean; pendingSpaceIds: string[] } {
     return this.db.transaction(() => {
@@ -311,51 +288,6 @@ export class ProjectLocalState {
     return typeof value === "string" ? value : null;
   }
 
-  appendRecallLog(entries: RecallLogInput[]): void {
-    if (entries.length === 0) return;
-    this.db.transaction(() => {
-      const nextSeq = this.db.prepare(`SELECT COALESCE(MAX(seq), 0) + 1 FROM pm_recall_log WHERE conversation_id = ?`).pluck();
-      const insert = this.db.prepare(
-        `INSERT INTO pm_recall_log (conversation_id, seq, via, topic_id, decision_id, had_conflicts, ts) VALUES (?, ?, ?, ?, ?, ?, ?)`
-      );
-      const ts = this.now().toISOString();
-      for (const entry of entries) {
-        const seq = Number(nextSeq.get(entry.conversationId));
-        insert.run(entry.conversationId, seq, entry.via, entry.topicId, entry.decisionId, entry.hadConflicts ? 1 : 0, ts);
-      }
-    })();
-  }
-
-  /** Decisions whose conflicts were shown to this conversation (first half of the "informed" test). */
-  conflictedDecisionsShown(conversationId: string): Set<string> {
-    return new Set(this.db.prepare(
-      `SELECT DISTINCT decision_id FROM pm_recall_log
-       WHERE conversation_id = ? AND had_conflicts = 1 AND decision_id IS NOT NULL`
-    ).pluck().all(conversationId) as string[]);
-  }
-
-  /** Decision ids and topic ids this conversation has been shown, in first-seen order. */
-  recalledIds(conversationId: string): { decisionIds: string[]; topicIds: string[] } {
-    const rows = this.db.prepare(
-      `SELECT topic_id, decision_id FROM pm_recall_log WHERE conversation_id = ? ORDER BY seq`
-    ).all(conversationId) as Array<{ topic_id: string; decision_id: string | null }>;
-    const topicIds: string[] = [];
-    const decisionIds: string[] = [];
-    const seenTopics = new Set<string>();
-    const seenDecisions = new Set<string>();
-    for (const row of rows) {
-      if (row.topic_id && !seenTopics.has(row.topic_id)) {
-        seenTopics.add(row.topic_id);
-        topicIds.push(row.topic_id);
-      }
-      if (row.decision_id && !seenDecisions.has(row.decision_id)) {
-        seenDecisions.add(row.decision_id);
-        decisionIds.push(row.decision_id);
-      }
-    }
-    return { decisionIds, topicIds };
-  }
-
   /**
    * Turns a completed task already organized for this Space and domain set (Q-27).
    * A failed task, another Space, or a different domain set does not qualify.
@@ -424,14 +356,7 @@ export class ProjectLocalState {
    * Deletes consumed rows, leaves kept rows, and inserts new segments in one transaction.
    * A topic_unavailable replacement is a consumed id plus an appended row.
    */
-  settleDeferred(input: {
-    conversationId: string;
-    spaceId: string;
-    taskId: string;
-    consumed: number[];
-    kept: number[];
-    appended: Array<{ text: string; reason: string }>;
-  }): void {
+  settleDeferred(input: DeferredSettlement): void {
     const kept = new Set(input.kept);
     const consumed = input.consumed.filter((id) => !kept.has(id));
     if (consumed.length === 0 && input.appended.length === 0) return;
@@ -478,11 +403,4 @@ export class ProjectLocalState {
   forgetSpace(spaceId: string): void {
     this.forgetDeferred(spaceId);
   }
-}
-
-export interface PendingDeferred {
-  id: number;
-  taskId: string;
-  text: string;
-  reason: string;
 }

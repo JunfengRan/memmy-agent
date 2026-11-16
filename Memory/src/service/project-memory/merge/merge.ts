@@ -16,7 +16,7 @@ import {
   type ExperienceDraft,
   type OrganizeResult
 } from "../organize/organizer.js";
-import { applyDecisionEntries, applyExperienceOp, type MutableDecision, type MutableExperience } from "../store/sqlite/apply.js";
+import { applyDecisionEntries, applyExperienceOp, type MutableDecision, type MutableExperience } from "./apply.js";
 import { normalizeForCompare } from "../text.js";
 import { isBefore } from "../time.js";
 
@@ -43,8 +43,6 @@ export interface MergeContext {
   /** Domain for new topics, or null when it cannot be resolved (v3 §2.2.8). */
   newTopicDomain: string | null;
   topicSeq: Record<string, number>;
-  /** Decisions whose conflicts this conversation has already been shown. */
-  conflictsShown: Set<string>;
   displayName(userId: string): string;
   newId?(prefix: "topic" | "dec" | "exp" | "tl"): string;
 }
@@ -137,16 +135,18 @@ function splitDecision(
   draft: DecisionDraft,
   decision: MutableDecision,
   context: MergeContext,
-  newId: (prefix: "dec") => string
+  newId: (prefix: "dec") => string,
+  processedTargets: DecisionTarget[]
 ): DecisionOp | null {
   const parts = draft.split?.parts;
-  if (!parts || parts.length < 2) return null;
+  if (!parts || parts.length < 2 || parts.some((part) => part.from.some((target) => !processedTargets.includes(target)))) return null;
   const authors = draft.userIds;
   const resolver = authors[0] ? [authors[0]] : [];
   const citingContent = parts.findIndex((part) => part.from.includes("content"));
   const keptIndex = citingContent >= 0 ? citingContent : 0;
   return {
     op: "split",
+    processedTargets,
     decisionId: decision.id,
     reason: `${context.displayName(authors[0]!)} 确定各项适用于不同情况`,
     splitInto: parts.map((part, index) => ({
@@ -161,25 +161,40 @@ function splitDecision(
 function decideDecision(
   draft: DecisionDraft,
   decision: DecisionState | undefined,
-  informed: boolean,
+  processedTargets: DecisionTarget[],
   context: MergeContext,
   newId: (prefix: "dec") => string
-): DecisionOp | "restatement" | null {
+): DecisionOp | "restatement" | "defer_resolution" | null {
   if (!decision) {
     return { op: "add", decisionId: newId("dec"), content: draft.content, time: draft.time, userIds: draft.userIds, reason: draft.reason };
   }
   const authors = draft.userIds;
   const sameAs = sameConclusion(decision, draft.content) ?? draft.sameAs;
   const late = isBefore(draft.time, decision.time);
+  const normalized = normalizeForCompare(draft.content);
+  if (draft.origin === "delegated" && (sameAs || decision.pastContents.includes(normalized)
+    || (draft.restatesHistory !== undefined && decision.pastContents.includes(normalizeForCompare(draft.restatesHistory))))) return "restatement";
+  const informed = draft.signaledResolve && processedTargets.some((target) => target !== "content");
+
+  // M02 already recognized the member's explicit resolution. Once M05 binds
+  // the same conclusion, a missing redundant resolve label must not turn it
+  // into a join. A split retains its own explicit binding.
+  const resolvePick = draft.resolve?.pick ?? (!draft.split && draft.signaledResolve ? draft.sameAs : null);
 
   // An informed member settling the disagreement wins over "same conclusion":
   // picking someone's conclusion is a resolution, not a vote for it.
-  if (draft.resolve && informed && !late && decision.conflicts.length > 0) {
-    const pick = draft.resolve.pick;
+  if (resolvePick && informed && !late && decision.conflicts.length > 0) {
+    const pick = resolvePick;
     const resolver = context.displayName(authors[0]!);
     if (pick === "new") {
+      const unseen = [
+        ...(!processedTargets.includes("content") ? [decision] : []),
+        ...decision.conflicts.filter((item) => !processedTargets.includes(`conflict:${item.seq}`))
+      ];
+      if (unseen.some((item) => intersects(item.userIds, authors))) return "defer_resolution";
       return {
         op: "resolve",
+        processedTargets,
         decisionId: decision.id,
         target: "new",
         content: draft.content,
@@ -189,10 +204,11 @@ function decideDecision(
       };
     }
     const selected = itemFor(decision, pick);
-    if (selected) {
+    if (selected && processedTargets.includes(pick)) {
       const owner = selected.userIds[0];
       return {
         op: "resolve",
+        processedTargets,
         decisionId: decision.id,
         target: pick,
         reason: owner ? `${resolver} 确定以${context.displayName(owner)} 的结论为准` : `${resolver} 确定了结论`
@@ -202,7 +218,13 @@ function decideDecision(
 
   // Same slot as resolve (Q-10): an informed split wins over "same conclusion".
   if (draft.split && informed && !late && decision.conflicts.length > 0) {
-    const split = splitDecision(draft, decision, context, newId);
+    const unseen = [
+      ...(!processedTargets.includes("content") ? [decision] : []),
+      ...decision.conflicts.filter((item) => !processedTargets.includes(`conflict:${item.seq}`))
+    ];
+    if (draft.split.parts.some((part) => part.from.length === 0)
+      && unseen.some((item) => item.userIds.includes(authors[0]!))) return "defer_resolution";
+    const split = splitDecision(draft, decision, context, newId, processedTargets);
     if (split) return split;
   }
 
@@ -210,7 +232,6 @@ function decideDecision(
   // Late submissions do not come back as a new conflict. A not-late draft with no
   // reason and no resolve signal is a restatement. A reason or a resolve signal
   // falls through and is treated as changing back.
-  const normalized = normalizeForCompare(draft.content);
   const onlyHistory = sameConclusion(decision, draft.content) === null && decision.pastContents.includes(normalized);
   if (onlyHistory) {
     if (late) return null;
@@ -340,9 +361,15 @@ export function mergeDrafts(
     let wrote = false;
     if (draft.kind === "decision") {
       const current = change.op === "update" && draft.sameQuestionAs ? decisionState.get(draft.sameQuestionAs) : undefined;
-      const informed = Boolean(current && context.conflictsShown.has(current.id) && organized.informedDecisionIds.has(current.id));
-      const op = decideDecision(draft, current, informed, context, newId);
-      if (op === "restatement") {
+      const processedTargets = (draft.informedTargets ?? []).filter((evidence) => {
+        if (!current) return false;
+        const entry = itemFor(current, evidence.target);
+        return entry && entry.content === evidence.content;
+      }).map((evidence) => evidence.target);
+      const op = decideDecision(draft, current, processedTargets, context, newId);
+      if (op === "defer_resolution") {
+        deferred.push(deferredSegment(draft.content, "partial_resolution_membership_conflict", draft.backfillOf));
+      } else if (op === "restatement") {
         dropped.push({ reason: "restatement", text: draft.content });
       } else if (op) {
         change.decisions.push(op);

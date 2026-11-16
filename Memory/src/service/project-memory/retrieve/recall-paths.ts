@@ -1,14 +1,11 @@
 import { createMemoryLogger, memoryErrorFields } from "../../../logging/logger.js";
 import { PROJECT_MEMORY_LIMITS } from "../contract/limits.js";
-import type { RecallLogInput } from "../contract/types.js";
-import type { ProjectLocalState } from "../store/sqlite/local-state.js";
 import type { ProjectMemoryStore } from "../store/store.js";
 import type { DecisionTopicRouter } from "../decisions/client.js";
 import { fuseRanked, type FuseCandidate } from "./fuse.js";
 import {
   projectTopicView,
   rankProjectCandidates,
-  type RankedProjectCandidate,
   type SearchInput,
   type SearchTopicView
 } from "./search.js";
@@ -67,7 +64,6 @@ export interface ThreePathSearchOutput {
 
 export interface RecallPathDeps {
   store: ProjectMemoryStore;
-  local: ProjectLocalState;
   decision?: DecisionTopicRouter | null;
   nonProjectRecall: NonProjectRecallPort | null;
   timeoutMs?: number;
@@ -146,7 +142,6 @@ export async function recallSearchPaths(input: SearchInput, deps: RecallPathDeps
   const userMemory = user.state === "ok" ? [] as RecallCandidateView[] : undefined;
   const agentMemory = agent.state === "ok" ? [] as RecallCandidateView[] : undefined;
   const topics = project.state === "ok" ? [] as SearchTopicView[] : undefined;
-  const returnedProjects: RankedProjectCandidate[] = [];
   for (const hit of fused) {
     if (hit.path === "user_memory" && userMemory) {
       const source = userById.get(hit.id);
@@ -160,11 +155,7 @@ export async function recallSearchPaths(input: SearchInput, deps: RecallPathDeps
       const source = projectById.get(hit.id);
       if (!source) continue;
       topics.push(projectTopicView(source, hit.relativity));
-      returnedProjects.push(source);
     }
-  }
-  if (input.conversationId && returnedProjects.length > 0) {
-    deps.local.appendRecallLog(recallRows(input.conversationId, input.via ?? "turn_start", returnedProjects));
   }
 
   return {
@@ -183,24 +174,6 @@ function candidateView(candidate: LaneHit, relativity: number): RecallCandidateV
     relativity,
     updated_at: candidate.updatedAt
   };
-}
-
-function recallRows(conversationId: string, via: "turn_start" | "tool", candidates: readonly RankedProjectCandidate[]): RecallLogInput[] {
-  const rows: RecallLogInput[] = [];
-  for (const candidate of candidates) {
-    rows.push({ conversationId, via, topicId: candidate.snapshot.topicId, decisionId: null, hadConflicts: false });
-    for (const decision of candidate.snapshot.decisions) {
-      if (!candidate.entries.some((entry) => entry.id === decision.id)) continue;
-      rows.push({
-        conversationId,
-        via,
-        topicId: candidate.snapshot.topicId,
-        decisionId: decision.id,
-        hadConflicts: decision.conflicts.length > 0
-      });
-    }
-  }
-  return rows;
 }
 
 function settleAll<T extends readonly Promise<unknown>[]>(

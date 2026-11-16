@@ -2,6 +2,21 @@
 
 对齐版本见 [spec-snapshots.md](spec-snapshots.md)。状态：`未开始` / `v0.1 简化` / `已对齐` / `待重新对齐`（规格变化后由 `pm-spec-sync` 标记）/ `偏离`（必须链接 ADR 或 open-questions）。
 
+## V4 重构对齐（2026-11-16）
+
+最新规格为 V4（1e2e0db92f92）及代码组织设计（fdc115eac3c6），本次用户确认的过渡范围见 ADR-0013。以下原 v3 表为历史基线；与本节冲突的召回记录/复述/目录说明已被替代。
+
+| V4 / 代码组织出处 | 本轮实现 | 状态与边界 |
+| --- | --- | --- |
+| §1.4、§5.4；代码组织 §2.2/2.5 | 存储状态端口、纯 ChangeSet 应用、同步受理事务、阶段编排 | 本仓边界已重构；SQLite 为用户要求的过渡部署，非 V4 生产存储 |
+| §5.3、§3.2.4 | IndexedProjectMemoryStore 调模型，SQLite 索引查询不调模型 | 已拆分；Jev/计量/服务端部署未实现 |
+| §2.2.8、§3.4（11/13） | 原文 disclosures、逐项 informed_targets、processedTargets；Agent delegated 复述在合并阶段丢弃 | 已实现；不读写旧召回记录；依赖上下文窗口与 LLM 语义质量 |
+| §2.2.9 | processedTargets 限定 resolve/split 的归档范围，未告知项保留，OCC 后重判 | 已实现；不改其余待决维护规则 |
+| §3.3；代码组织 §3.4/4.3 | 单一模板源、构建生成、独立 hook 打包 | 本仓实现；未来模板源迁往 MemOS 另行推进 |
+| §1.1、§2.3、§4.12；代码组织 §2/3/4 | 纯云端、抽取并行合并串行、Memmy 网关、L0、独立插件 | 待重新对齐／本轮不实施，不标全量 V4 完成 |
+
+原接口路径、响应信封、Space/主题 ID、本机 journal 与数据库版本保持兼容；旧 recall_via 只解析不记日志。验证记录见工作项 20261116-project-memory-v4 与 metrics 的本轮记录。
+
 ## 当前应用接入边界（2026-11-13 用户纠正）
 
 按 [ADR-0011](decisions/0011-preserve-release-ui-local-default.md) 恢复 release 原有前端，不再新增项目记忆弹窗/开关。Backend 自动为未绑定的本机项目接入 Space；原项目/任务入口及 Agent 的按会话召回保留。云端上传由 UI 与 Backend transport 双层锁定。以下 ADR-0010 的独立面板描述是上一轮交付背景，已由本段替代；核心投递/隔离/配置恢复重试继续有效。工作项：20261113-restore-release-ui；56e37160 已获独立 review-02 批准。项目与成员协助共用锁定传输层，所有云端写操作在 fetch 前拒绝。

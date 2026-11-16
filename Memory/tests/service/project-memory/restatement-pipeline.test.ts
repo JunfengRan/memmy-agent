@@ -160,9 +160,8 @@ describe("restatement filter in the organize job", () => {
     await drain(service);
 
     expect(stub.extract.length - before).toBe(1);
-    const recalled = stub.extract.at(-1)!.recalled as Array<{ ref: string; text: string }>;
-    expect(recalled.some((entry) => entry.ref.startsWith("conflict:") && entry.text === FIVE)).toBe(true);
-    expect(stub.assign.length).toBe(assigns);
+    expect(stub.extract.at(-1)).not.toHaveProperty("recalled");
+    expect(stub.assign.length).toBe(assigns + 1);
     expect(droppedOf(db.db, taskId)).toEqual(expect.arrayContaining([{ reason: "restatement", text: FIVE }]));
     const [decision] = await decisions(service);
     expect(decision!.content).toBe(TRIPLE);
@@ -170,7 +169,7 @@ describe("restatement filter in the organize job", () => {
     expect(decision!.conflicts).toEqual([expect.objectContaining({ content: FIVE, user_ids: ["user_b"] })]);
   });
 
-  it("merges the same assistant draft when this conversation has not searched", async () => {
+  it("drops the same assistant draft even when this conversation has not searched", async () => {
     stubStages(combinedStages((payload) => {
       const assistantIdx = payload.messages.findIndex((message) => message.role === "assistant");
       if (assistantIdx >= 0) {
@@ -220,8 +219,8 @@ describe("restatement filter in the organize job", () => {
 
     const [decision] = await decisions(service);
     expect(decision!.content).toBe(TRIPLE);
-    expect(decision!.user_ids).toEqual([]);
-    expect(decision!.conflicts).toEqual([expect.objectContaining({ content: FIVE, user_ids: ["user_b", "user_a"] })]);
+    expect(decision!.user_ids).toEqual(["user_a"]);
+    expect(decision!.conflicts).toEqual([expect.objectContaining({ content: FIVE, user_ids: ["user_b"] })]);
   });
 
   it("does not resurrect a dropped restatement when the topic set changes", async () => {
@@ -266,7 +265,7 @@ describe("restatement filter in the organize job", () => {
               content: FIVE,
               message_idx: assistantIdx,
               user_ids: ["user_a"],
-              ...(topic?.topic_id ? { topic: { topic_id: topic.topic_id } } : { topic: { new_topic: "n2" } })
+              ...(topic?.topic_id ? { topic: { topic_id: topic.topic_id }, same_question_as: topic.decisions[0]?.id ?? null } : { topic: { new_topic: "n2" } })
             }
           ],
           new_topics: topicShell("推送告警", "推送失败后的告警计数")
@@ -320,7 +319,7 @@ describe("restatement filter in the organize job", () => {
     expect(stub.assign.length - assigns).toBe(2);
     for (const payload of stub.assign.slice(assigns)) {
       const drafts = payload.drafts as Array<{ content: string }>;
-      expect(drafts.map((draft) => draft.content)).not.toContain(FIVE);
+      expect(drafts.map((draft) => draft.content)).toContain(FIVE); // V4 compares only after assignment/full read.
     }
     expect(droppedOf(db.db, taskId)).toEqual(expect.arrayContaining([{ reason: "restatement", text: FIVE }]));
     const rows = await decisions(service);
@@ -529,7 +528,7 @@ describe("history versions in the merge", () => {
     });
     await drain(service);
 
-    expect(stub.judge.at(-1)!.conflicts_shown).toEqual([expect.any(String)]);
+    expect(stub.judge.at(-1)!.disclosures).toEqual([]);
     const [decision] = await decisions(service);
     expect(decision!.content).toBe(TRIPLE);
     expect(decision!.conflicts).toEqual([expect.objectContaining({ content: FIVE, user_ids: ["user_b"] })]);

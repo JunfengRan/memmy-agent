@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { MemoryDb } from "../../../../Memory/src/storage/db.ts";
 import { createEmbedder } from "../../../../Memory/src/model/embedder.ts";
 import { PROJECT_MEMORY_LIMITS } from "../../../../Memory/src/service/project-memory/contract/limits.ts";
+import { IndexedProjectMemoryStore } from "../../../../Memory/src/service/project-memory/model/index.ts";
 import { SqliteProjectMemoryStore } from "../../../../Memory/src/service/project-memory/store/sqlite/sqlite-store.ts";
 import { scoreProjectTopics } from "../../../../Memory/src/service/project-memory/retrieve/search.ts";
 import { normalizeForCompare } from "../../../../Memory/src/service/project-memory/text.ts";
@@ -68,7 +69,7 @@ for (const asked of live.questions) {
   const conversationId = `${conversation.conversation_id}:${live.runTag}`;
   const memory = new MemoryDb({ path: snapshot, readonly: true });
   try {
-    const store = new SqliteProjectMemoryStore({ db: memory.db, embedder: () => embedder });
+    const store = new IndexedProjectMemoryStore(new SqliteProjectMemoryStore({ db: memory.db }), () => embedder);
     const recall = await store.recall({
       spaceIds: [serverSpaceId],
       queries: [{ qid: "q", text: question.question }],

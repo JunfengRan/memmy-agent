@@ -10,6 +10,10 @@
 
 Agent 进入项目记忆任务时，先读协作协议与相关工作项全部交接、评审，再读 `docs/project-memory/DEVELOPMENT.md`、规格快照、`standard/` 对应章节、ADR、对齐表和待决问题，最后检查代码与验证命令。背景交接稿和实验介绍不能代替这些入口。先确认当前分支、工作区和规格 SHA；按已开发范围审计时，不把 todo 或待裁决设计自动转成开发任务。评审与修补分阶段记录身份，不自行把未经独立复核的修补标为 approved。
 
+## 当前项目记忆过渡范围（2026-11-16）
+
+用户已确认 ADR-0013：本轮仅在 memmy-agent 内重构，保留 SQLite 本机闭环、旧数据、目录绑定与 Codex ↔ Memmy 接入，退役召回记录；不自动扩展为 MemOS 云端迁移或 Jev 算法升级。以下旧 v3 条款中，部署与召回日志口径以 ADR-0013 和 V4 为准；未被本轮替代的事务、隔离及质量红线继续有效。注入唯一维护源在 Memory，App/Backend 副本由 scripts/project-memory/sync-injection-assets.mjs 生成。
+
 ## 全仓约定
 
 - 改完代码先跑相关检查：`npm --prefix Memory run typecheck`，再用 `npx vitest run <path>` 跑受影响的测试。全量测试是 `npm test`。
@@ -23,7 +27,7 @@ Agent 进入项目记忆任务时，先读协作协议与相关工作项全部�
 
 ### 权威顺序
 
-1. `design-docs/standard/` 中最新版的架构文档（当前是《项目记忆：端云协同架构与模块设计（v3）》）。
+1. `design-docs/standard/` 中最新版的架构文档（当前是《项目记忆：纯云端架构与模块设计（v4）》）。
 2. 《MemOS SDK接口规格》。
 3. 《MemOS 项目记忆PRD》。
 
@@ -37,7 +41,7 @@ Agent 进入项目记忆任务时，先读协作协议与相关工作项全部�
 
 ### 模块边界
 
-- 项目记忆代码只放在 `Memory/src/service/project-memory/`，按 v3 模块分目录：`contract/`、`store/`、`organize/`、`merge/`、`pipeline/`、`retrieve/`、`inject/`、`prompts/`。另有 `decisions/`，放默认关闭的主题选择实验（ADR-0006），不属于 v3 模块。
+- 项目记忆代码只放在 `Memory/src/service/project-memory/`，按职责分目录：`contract/`、`store/`、`organize/`、`merge/`、`pipeline/`、`model/`、`retrieve/`、`inject/`、`prompts/`。另有 `decisions/`，放默认关闭的主题选择实验（ADR-0006），不属于 v3 模块。
 - `memory-service.ts` 和 `server/http.ts` 只做薄委托，不写项目记忆逻辑。
 - 不复用 `memories` 表和 `work_memory` kind。项目记忆有自己的表（v3 §5.3）。
 - 存储一律经过 `ProjectMemoryStore`，按 `capabilities()` 分支，不写 `if (mode === ...)`（v3 §5.1）。

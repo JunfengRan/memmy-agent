@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, expect, it, vi } from "vitest";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { captureLocalProjectTurn, recallLocalProjectMemory, requestLocalProjectMemory } from "../src/agent-source/integration/workspace-bridge/project-memory.js";
 import { runCommand } from "../src/cli/commands.js";
 import type { SourceTurn } from "@memmy/agent-source-core";
@@ -41,10 +43,9 @@ it("refuses a nonlocal runtime before sending the token", async()=>{
  await expect(requestLocalProjectMemory("recall",{workspace:"/projects/chat"},{...config,fetch})).rejects.toThrow("unavailable");
  expect(fetch).not.toHaveBeenCalled();
 });
-it("keeps the desktop renderer aligned with the Memory renderer",()=>{
- const memory=readFileSync(new URL("../src/service/project-memory/inject/render.ts",import.meta.url),"utf8");
- const desktop=readFileSync(new URL("../../App/backend/src/adapters/outbound/skill-writer/workspace-bridge/project-render.ts",import.meta.url),"utf8");
- expect(desktop).toBe(memory.replace('"../prompts/inject.js"','"./project-prompts.js"'));
+it("checks every generated host injection asset against the canonical sources", () => {
+ const script = fileURLToPath(new URL("../../scripts/project-memory/sync-injection-assets.mjs", import.meta.url));
+ expect(() => execFileSync(process.execPath, [script, "--check"], { stdio: "pipe" })).not.toThrow();
 });
 
 it("CLI searches its workspace binding without explicit Space or personal owner", async()=>{
@@ -70,4 +71,22 @@ it("CLI forwards registered-domain filters and a valid result limit", async()=>{
   await runCommand({argv:["project","search","palette","--cwd","/projects/chat","--config",config.configPath,"--domains","通用","--limit","2"],fetch:fetch as typeof globalThis.fetch});
   expect(fetch).toHaveBeenCalledOnce();
  } finally { if(previous===undefined) delete process.env.MEMMY_PROJECT_SPACE_IDS; else process.env.MEMMY_PROJECT_SPACE_IDS=previous; }
+});
+
+
+it("strips balanced project blocks before native capture and preserves unclosed text", async () => {
+ const config = fixture();
+ const fetch = vi.fn(async (_url: unknown, options?: RequestInit) => {
+  const delivered = JSON.parse(options!.body as string).turn;
+  expect(delivered.query).toBe("choose amber");
+  expect(delivered.answer).toBe("confirmed amber <memos_context>unfinished");
+  return Response.json({ bound: true });
+ });
+ vi.stubGlobal("fetch", fetch);
+ await captureLocalProjectTurn({ ...config, workspace: "/projects/chat", turn: {
+  ...turn,
+  query: "<memos_context>old<memos_context>nested</memos_context>outer</memos_context>choose amber",
+  answer: "<project_index>index</project_index>confirmed amber <memos_context>unfinished"
+ } });
+ expect(fetch).toHaveBeenCalledOnce();
 });

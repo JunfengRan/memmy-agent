@@ -1,3 +1,5 @@
+// Generated from Memory/src/service/project-memory/prompts/inject.ts.
+// Run node scripts/project-memory/sync-injection-assets.mjs; do not edit.
 /**
  * Fixed injection copy (v3 §3.3). Wording is ours; the required behaviors match
  * the guide, the index lead-in, and the turn closing line.

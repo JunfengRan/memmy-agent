@@ -1,3 +1,5 @@
+// Generated from Memory/src/service/project-memory/inject/render.ts.
+// Run node scripts/project-memory/sync-injection-assets.mjs; do not edit.
 /**
  * Injection templates 1–3 (v3 §3.3). Ranking is not applied here.
  * Non-project memory lists are ignored (Q-29).

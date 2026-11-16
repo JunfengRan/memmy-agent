@@ -1,3 +1,4 @@
+import { stripInjectedText } from "../../../service/project-memory/inject/strip.js";
 import { projectPayloadView, renderTurnMemories } from "../../../service/project-memory/inject/render.js";
 /** Local project access is resolved and authorized by the desktop backend. */
 import { readFile } from "node:fs/promises";
@@ -35,5 +36,5 @@ export async function recallLocalProjectMemory(input: { configUrl: URL; workspac
 }
 export async function captureLocalProjectTurn(input: { configUrl: URL; workspace: string; turn: SourceTurn }): Promise<void> {
   if (!input.workspace || input.turn.source !== "codex" || input.turn.status !== "succeeded") return;
-  await requestLocalProjectMemory("capture", { workspace: input.workspace, turn: input.turn }, input);
+  await requestLocalProjectMemory("capture", { workspace: input.workspace, turn: { ...input.turn, query: stripInjectedText(input.turn.query).text, answer: stripInjectedText(input.turn.answer).text } }, input);
 }

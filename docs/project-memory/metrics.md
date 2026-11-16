@@ -4,6 +4,30 @@
 
 这一轮只保留数据集 v2.1、被测与回答都是 `deepseek-v4.1-flash-1017`、裁判是 `gpt-6-luna` 的大版本结果。v1，以及 v2 上用 Claude 阅读或 Claude 裁判的记录已删除，全文在提交 `47355fa0`。v0.1 不再重跑。当前版本跑了两次。rubric 相同，回答分差 0.097，总表写成均值，括号里是两次的范围。带全程追踪的第三次（R-20261111-06）只作错题归因，不并进均值。
 
+## R-20261116-01：V4 无召回记录专项与本机双端接入
+
+- 2026-11-16；基线 `7f4257b9`，被测为本轮工作区（未提交时运行）；本机过渡部署按 ADR-0013，不宣称 V4 纯云端完成。
+- 被测模型 `deepseek-v4.1-flash-1017`；评委 `gpt-4.1-mini`，temperature=0，不同家族，实际数据库字段盲化输入，6/6 判定及逐字 content 引用校验通过，843 tokens（692 入、151 出）。
+- 提示词：`pm-extract-v0.3.0` SHA256 `540bde6d1333a795bafbefcea09fdfdcd2f677213e7fbed78f45b9be4c8ad129`；`pm-assign-v0.2.0`；`pm-judge-v0.4.0` SHA256 `77203941d304ab4d890ae08d26a21a997f71e3c7f355e7becbd0c7ffd005c940`。注入模板版本未变。
+- 旧版实际 SQLite 副本用新实现重新打开：5/5 检查通过，Space/主题/决策/冲突/历史/任务/原文/旧日志逐行不变，6 个旧任务可读且旧主题可检索；见 reopened-baseline/result.json。
+- 数据集 v2.1 校验 errors=[]（113 轮、50 主题、31 计分题），未做全量回放。本次另用固定推送策略专项真实回放，不修改金标，不把专项检查当 F1/Recall。
+- 隔离 HTTP 服务、独立 SQLite、真实产品 M02/M04/M05；显式词法降级，不用合成 embedding 冒充质量。凭据仅从现有配置读取；未改用户配置、绑定、安装或运行进程。
+
+| 维度 | 实际结果 | 未测的标准指标 |
+| --- | --- | --- |
+| add | 基线 6/6 批完成，5 检查中 3 通过；最终 current-final3 8/8 批完成，8/8 强化检查通过 | entries precision/recall/F1、stateExact、主题 B³、重复/误合并率、各字段及题型分项：不适用，未运行 v2.1 全量金标评分 |
+| search | 真正调用 search/memory 命中目标主题；查询前后旧召回表不增加 | Recall@1/3/9、entryHit 及题型分项：不适用，专项不是 31 道计分检索题；向量质量未测 |
+| 回答 | 双端渲染中实际出现对端已整理结论；没有用阅读模型生成 31 道答案 | answers.llm/rubric/token F1 及题型分项：不适用，没有全量答题 |
+| 效率 | 基线 6 批 15 次产品模型调用；最终 8 批 17 次；双端回放 4 次；评委 843 tokens | SUT 分阶段 tokens/缓存/美元费用、标准 add/search/回答 P95：不适用，SUT 用量未完整回报且专项规模不同，不能据调用总数宣称成本改善 |
+
+最终硬断言：不先检索也可凭真实助手告知裁决；5 次成为当前；明确展示的旧 3 次进入 history 且不残留在 conflicts；没有展示的 7 次继续作为冲突；未采纳 Agent 复述不挪成员；search 命中且零召回记录；历史换措辞不改当前/成员/条目数。真实历史复述本轮被 M02 丢弃，因此不能单独宣称 M05 same_history_as 已在真实回放命中，后者有专门单测。
+
+过程失败保留：current-final2 的 M02 信号和逐项告知正确，但 M05 漏标 resolve、只给 same_as，导致误 join。没有将“批次 completed”算为质量通过；补上明确裁决信号与 same_as 的确定性绑定后，current-final3 全部断言通过。早期 gpt-6-luna/temp0 HTTP400，后改用网关只读 models 确认可用的 gpt-4.1-mini；第一次带目标故事的评委误判基线结果，已排除，最终以实际数据库字段盲化输入和硬断言交叉核验，不覆盖或隐藏失败证据。
+
+隔离双端适配链路 6/6：合成 Memmy 保存 JSONL → Backend journal → Memory 真实模型 → Codex hook 注入；合成成功 Codex SourceTurn → capture HTTP → journal → Memory → 内置 MemmyMemoryClient/工具渲染；重复采集去重、注入剔除、Backend token 鉴权、重启绑定和 journal 保留。它不是原生窗口操作或已安装 native hook 事件验收，也不外推所有自动每轮检索稳定成功。
+
+产物（忽略目录）：`eval/project-memory/runs/20261116-v4-smoke/verification-summary.json`、`baseline/result.json`、`current-final2/result.json`、`current-final3/result.json`、`cross-host/result.json`、`judge-grounded-results.json`。精确命令见汇总及工作项 validation-01。下列原 v3 总表为历史结果，不能当作本轮全量质量成绩。
+
 ## 目标（v3）
 
 | 指标 | 目标 | 出处 |

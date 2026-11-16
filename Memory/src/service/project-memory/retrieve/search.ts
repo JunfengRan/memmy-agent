@@ -36,7 +36,7 @@ export interface SearchInput {
   memoryLimit: number;
   relativity?: number;
   views: MemoryViewSelection;
-  /** Recall-log entry. HTTP `recall_via` maps here; omitted means turn_start (ADR-0008). */
+  /** Legacy local request hint, accepted for compatibility; never authorizes writes. */
   via?: "turn_start" | "tool";
 }
 

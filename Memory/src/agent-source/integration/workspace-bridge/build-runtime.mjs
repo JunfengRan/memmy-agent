@@ -1,7 +1,10 @@
+import { syncInjectionAssets } from "../../../../../scripts/project-memory/sync-injection-assets.mjs";
 import { mkdir, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+
+await syncInjectionAssets();
 
 const sourceDirectory = dirname(fileURLToPath(import.meta.url));
 const memoryDirectory = resolve(sourceDirectory, "../../../..");

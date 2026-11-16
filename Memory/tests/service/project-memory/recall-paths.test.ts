@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Repositories } from "../../../src/storage/repositories.js";
 import type { MemoryRow } from "../../../src/types.js";
 import { PROJECT_MEMORY_LIMITS } from "../../../src/service/project-memory/contract/limits.js";
-import type { RecallLogInput, RecallRequest, RecallResult, TopicSnapshot } from "../../../src/service/project-memory/contract/types.js";
+import type { RecallRequest, RecallResult, TopicSnapshot } from "../../../src/service/project-memory/contract/types.js";
 import {
   recallSearchPaths,
   type NonProjectRecallInput,
@@ -11,7 +11,6 @@ import {
   type ThreePathSearchOutput
 } from "../../../src/service/project-memory/retrieve/recall-paths.js";
 import type { MemoryViewSelection, SearchInput } from "../../../src/service/project-memory/retrieve/search.js";
-import type { ProjectLocalState } from "../../../src/service/project-memory/store/sqlite/local-state.js";
 import type { ProjectMemoryStore } from "../../../src/service/project-memory/store/store.js";
 import { call, combinedStages, createProjectMemoryHarness, drain, emptyReply, setupSpace, stubStages } from "./helpers.js";
 
@@ -20,8 +19,6 @@ afterEach(() => harness.cleanup());
 
 const PATHS = ["user_memory", "agent_memory", "project"] as const;
 type PathName = (typeof PATHS)[number];
-
-const local = { appendRecallLog() {} } as unknown as ProjectLocalState;
 
 const snapshot: TopicSnapshot = {
   topicId: "topic_retry",
@@ -164,7 +161,6 @@ describe("project memory three-path recall", () => {
     const views: MemoryViewSelection = { userMemory: true, agentLayers: ["L1"], project: true };
     const result = await recallSearchPaths(input(views, 4), {
       store: project.store,
-      local,
       nonProjectRecall: recalled.port
     });
 
@@ -183,7 +179,6 @@ describe("project memory three-path recall", () => {
     const views: MemoryViewSelection = { userMemory: false, agentLayers: [], project: true };
     const result = await recallSearchPaths(input(views), {
       store: project.store,
-      local,
       nonProjectRecall: recalled.port
     });
     expect(recalled.calls).toEqual([]);
@@ -198,7 +193,6 @@ describe("project memory three-path recall", () => {
     const project = storeFrom(async () => ({ results: [{ qid: "q", topics: [] }], topicSeq: {}, degraded: [] }));
     const result = await recallSearchPaths(input(allViews), {
       store: project.store,
-      local,
       nonProjectRecall: recalled.port
     });
     expect(result.userMemory).toEqual([]);
@@ -213,7 +207,6 @@ describe("project memory three-path recall", () => {
     const project = storeFrom(async () => projectRecall(["vector"]));
     const result = await recallSearchPaths(input(allViews), {
       store: project.store,
-      local,
       nonProjectRecall: recalled.port
     });
     expect(result.topics).toHaveLength(1);
@@ -232,7 +225,6 @@ describe("project memory three-path recall", () => {
     });
     const result = await recallSearchPaths(input(allViews), {
       store: storeFrom(async () => projectRecall()).store,
-      local,
       nonProjectRecall: recalled.port
     });
     expect(result.degraded).toEqual([`${name}:vector`]);
@@ -254,7 +246,6 @@ describe("project memory three-path recall", () => {
     });
     const result = await recallSearchPaths(input(allViews), {
       store: project.store,
-      local,
       nonProjectRecall: recalled.port
     });
     expect(result.degraded).toEqual([path]);
@@ -267,7 +258,6 @@ describe("project memory three-path recall", () => {
       store: storeFrom(async () => {
         throw new Error("project lane down");
       }).store,
-      local,
       nonProjectRecall: {
         async recallCandidates() {
           throw new Error("personal lane down");
@@ -285,7 +275,6 @@ describe("project memory three-path recall", () => {
     const views: MemoryViewSelection = { userMemory: true, agentLayers: ["Skill"], project: true };
     const result = await recallSearchPaths(input(views), {
       store: storeFrom(async () => projectRecall()).store,
-      local,
       nonProjectRecall: null
     });
     expect(result.topics).toHaveLength(1);
@@ -297,7 +286,6 @@ describe("project memory three-path recall", () => {
     const views: MemoryViewSelection = { userMemory: true, agentLayers: [], project: false };
     const result = await recallSearchPaths(input(views), {
       store: storeFrom(async () => projectRecall()).store,
-      local,
       nonProjectRecall: portFrom(ready).port
     });
     expect(result.userMemory?.map((item) => item.id)).toEqual(["user-1"]);
@@ -316,8 +304,7 @@ describe("project memory three-path recall", () => {
       const project = storeFrom(() => path === "project" ? new Promise(() => undefined) : Promise.resolve(projectRecall()));
       const pending = recallSearchPaths(input(allViews), {
         store: project.store,
-        local,
-        nonProjectRecall: recalled.port
+          nonProjectRecall: recalled.port
       });
       await vi.advanceTimersByTimeAsync(PROJECT_MEMORY_LIMITS.recallPathTimeoutMs);
       const result = await pending;
@@ -443,9 +430,9 @@ describe("project memory three-path recall", () => {
     });
     const { store } = projectPair();
     const views: MemoryViewSelection = { userMemory: true, agentLayers: ["L1", "Skill"], project: true };
-    const all = await recallSearchPaths(input(views), { store, local, nonProjectRecall: port(false) });
-    const failed = await recallSearchPaths(input(views), { store, local, nonProjectRecall: port(true) });
-    const absent = await recallSearchPaths(input({ ...views, userMemory: false }), { store, local, nonProjectRecall: port(false) });
+    const all = await recallSearchPaths(input(views), { store, nonProjectRecall: port(false) });
+    const failed = await recallSearchPaths(input(views), { store, nonProjectRecall: port(true) });
+    const absent = await recallSearchPaths(input({ ...views, userMemory: false }), { store, nonProjectRecall: port(false) });
 
     expect(all.userMemory?.map((item) => item.id)).toEqual(["user-low", "user-high"]);
     expect(all.userMemory?.[0]).not.toHaveProperty("score");
@@ -461,44 +448,25 @@ describe("project memory three-path recall", () => {
     for (const item of [...(failed.agentMemory ?? []), ...(failed.topics ?? [])]) expect(item).not.toHaveProperty("score");
   });
 
-  it("logs only topics that are returned, and defaults via to turn_start", async () => {
-    const logged: RecallLogInput[] = [];
-    const recording = {
-      appendRecallLog(entries: RecallLogInput[]) {
-        logged.push(...entries);
-      }
-    } as unknown as ProjectLocalState;
+  it("keeps filtering and ranking independent of the legacy recall_via hint", async () => {
     const views: MemoryViewSelection = { userMemory: false, agentLayers: [], project: true };
     const request = { ...input(views), conversationId: "conv_log", relativity: 0.99 };
-    await recallSearchPaths(request, { store: projectPair().store, local: recording, nonProjectRecall: null });
-    expect(logged.map((row) => [row.topicId, row.decisionId, row.via])).toEqual([
-      ["topic_high", null, "turn_start"],
-      ["topic_high", "dec_high", "turn_start"]
-    ]);
-
-    logged.length = 0;
-    await recallSearchPaths({ ...request, via: "tool" }, { store: projectPair().store, local: recording, nonProjectRecall: null });
-    expect(logged.map((row) => row.via)).toEqual(["tool", "tool"]);
-    expect(logged.map((row) => row.topicId)).toEqual(["topic_high", "topic_high"]);
+    const automatic = await recallSearchPaths(request, { store: projectPair().store, nonProjectRecall: null });
+    const tool = await recallSearchPaths({ ...request, via: "tool" }, { store: projectPair().store, nonProjectRecall: null });
+    expect(automatic.topics?.map((topic) => topic.id)).toEqual(["topic_high"]);
+    expect(automatic.topics?.[0]?.decisions).toHaveLength(1);
+    expect(tool).toEqual(automatic);
   });
 
   it("drops a project topic with no snapshot before fusion", async () => {
-    const logged: RecallLogInput[] = [];
-    const recording = {
-      appendRecallLog(entries: RecallLogInput[]) {
-        logged.push(...entries);
-      }
-    } as unknown as ProjectLocalState;
     const views: MemoryViewSelection = { userMemory: false, agentLayers: [], project: true };
     const result = await recallSearchPaths({ ...input(views), conversationId: "conv_gap" }, {
       store: projectPair({ missingHigh: true }).store,
-      local: recording,
       nonProjectRecall: null
     });
     expect(result.topics?.map((topic) => topic.id)).toEqual(["topic_low"]);
     expect(result.topics?.[0]?.relativity).toBe(1);
-    expect(logged.map((row) => row.topicId)).toEqual(["topic_low", "topic_low"]);
-    expect(logged.some((row) => row.topicId === "topic_high")).toBe(false);
+    expect(result.topics?.some((topic) => topic.id === "topic_high")).toBe(false);
   });
 });
 

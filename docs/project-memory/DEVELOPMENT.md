@@ -10,37 +10,35 @@
 
 评审先写 review，修补阶段切换为 developer。引用的修复代码提交后再写 handoff；未经独立 reviewer 复核不标 approved。
 
+## V4 过渡实现（2026-11-16）
+
+最高权威已更新为 standard V4 与配套代码组织设计，快照见 spec-snapshots。本轮交付范围按 ADR-0013：本机继续运行，不把 MemOS Python 目录结构机械搬到本仓库，不新增 SDK。
+
+- pipeline/accept：同步受理并原子创建任务/入队；organize-job：worker 结算；organize：阶段编排与 OCC 重算；prepare：上下文、暂缓回填及审计组装。
+- store/state：消息/任务状态端口；store/sqlite/task-runtime：本机队列装配；model/index：向量化与补齐；SQLite 只执行索引原语与存储。模型配置继续按调用时读取。
+- merge/apply：存储无关的 ChangeSet 应用；merge/judge：带原文证据的逐项判断；organize/evidence：校验真实来源、逐字引文及采纳来源。
+- 查询不写召回记录；旧 pm_recall_log 闲置保留。recall_via 兼容但无授权用途。不得恢复用“返回过”替代“助手在会话里告知过”。
+- 注入资产改动后运行 node scripts/project-memory/sync-injection-assets.mjs；提交前运行同命令加 --check。只修改 Memory 的 render/prompts/strip 源码，不手改生成副本。
+
 ## 模块布局
 
-按 v3 §1.3 的模块编号组织，v3 §5.4.1 的 `project-memory-core/` 在本仓库对应 `Memory/src/service/project-memory/`。
-
-```
+```text
 Memory/src/service/project-memory/
-  contract/   请求/响应类型、字段限长、错误码（v3 §5.1.5）、ChangeSet、RecallRequest/Result
-  store/      ProjectMemoryStore 接口（v3 §5.1.2）
-    sqlite/   L01 召回（FTS5 + sqlite-vec）、L02 全量读、L03 条件写、L05 向量化
-    cloud/    云端存储服务的 HTTP 适配（/project/recall、topics:batchGet、commit）
-  organize/   M01 采集与剥离注入块、M02 抽取、M04 归类
-  merge/      M05 判断（含摘要描述改写）、确定性条目合并
-  pipeline/   异步任务、Space 内串行、OCC 重试、任务状态
-  retrieve/   M08 三路召回、M09 融合与组装
-  decisions/  可选结构化主题选择题，gpt-6-luna / chat completions，默认关闭（ADR-0006）
-  inject/     注入模板与检索工具定义（v3 §3.3）
-  prompts/    产品侧技能与提示词，带版本号
-  service.ts  对外门面
+  contract/       实体、ChangeSet、召回契约与错误码
+  store/          主题/管线状态/索引端口
+    sqlite/       SQLite 表与索引原语、受理/队列事务适配
+  model/          模型调用装配、查询向量化、文档向量补齐
+  pipeline/       accept、prepare、organize、worker 结果结算
+  organize/       会话采集、抽取、原文证据校验、候选及归类
+  merge/          模型判断、确定性合并、纯 ChangeSet 应用
+  retrieve/       项目排序与兼容三路混排（本机过渡）
+  inject/         宿主注入渲染、剔除和工具协议
+  prompts/        带版本号的产品提示词与模板
+  decisions/      默认关闭的选题实验（不等同 V4 Jev）
+  service.ts      门面及本机组合装配
 ```
 
-| v3 模块 | 目录 | 说明 |
-| --- | --- | --- |
-| M01 会话采集 | organize/ | 写 `raw_turns`，剥离 `<memos_context>` |
-| M02 抽取 | organize/ | add 技能；不读存储 |
-| M03 候选召回 | store/ + organize/ | `recall(purpose="merge")`，topic_k=10，entry_k=0 |
-| M04 归类 | organize/ | topic 技能；归入 / 新建 / 推迟。可选 Decisions 收窄候选，默认关闭 |
-| M05 条目合并 | merge/ | 决策 7 种 op、经验 4 种 op、轨迹追加 |
-| M08 多路召回 | retrieve/ | ①用户 ②agent ③project |
-| M09 混排组装 | retrieve/ | 项目路先用 RRF 与确定性信号排序，计算词面条目门槛；跨路按名次融合、相关度过滤、MMR 选择及总数截断，再组装并记录实际返回的主题。保留决策附带 history/conflicts；可选选择题在项目路排序后把选中 topic 提前，默认关闭 |
-| M10 注入组装 | inject/ | v3 规定在 SDK；本仓库先实现模板与工具定义，供 Memmy 宿主和 SDK 共用 |
-| L01–L05 | store/sqlite/ | |
+M02 不读取记忆库；M03 召回摘要候选、M04 归类后全量读取目标主题，M05 判断并确定性组装 ChangeSet。条件写失败重新读取/判断，最多 3 次，不重放旧操作。新建主题围栏仍保留以兼容本机现有部署；尚未实现 V4 抽取并行/合并串行的两阶段调度。
 
 ## 可复用的现有代码
 

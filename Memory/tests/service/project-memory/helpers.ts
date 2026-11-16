@@ -38,7 +38,7 @@ export type OrganizePayload = {
     decisions: Array<{ id: string; content: string; user_ids: string[]; conflicts: Array<{ ref: string; content: string; user_ids: string[] }> }>;
     experiences: Array<{ id: string; content: string }>;
   }>;
-  conflicts_shown: string[];
+  disclosures: Array<{ turnId: string; time: string; conclusions: string[] }>;
   request_domains: string[];
 };
 
@@ -100,8 +100,9 @@ function mapExtract(combined: Record<string, unknown>): Record<string, unknown> 
       reason: draft.reason ?? null,
       user_ids: draft.user_ids ?? [],
       signals: Array.isArray(draft.signals) ? draft.signals : [],
-      ...(draft.restates === null || typeof draft.restates === "string" ? { restates: draft.restates } : {})
+      adoption: draft.adoption ?? null
     })),
+    disclosures: combined.disclosures ?? [],
     state_hints: Array.isArray(combined.state_hints) ? combined.state_hints : [],
     dropped: Array.isArray(combined.dropped) ? combined.dropped : [],
     deferred: Array.isArray(combined.deferred) ? combined.deferred : []
@@ -134,15 +135,16 @@ function mapJudge(combined: Record<string, unknown>): Record<string, unknown> {
   return {
     drafts: acceptedDrafts(combined).map(({ index, draft }) => ({
       draft_id: `d${index}`,
+      informed_targets: draft.informed_targets ?? [],
       same_question_as: draft.same_question_as ?? null,
       same_as: draft.same_as ?? null,
+      same_history_as: draft.same_history_as ?? null,
       approved_by: draft.approved_by ?? [],
       resolve: draft.resolve ?? null,
       split: draft.split ?? null,
       same_experience_as: draft.same_experience_as ?? null,
       experience_change: draft.experience_change ?? null
     })),
-    informed_decision_ids: Array.isArray(combined.informed_decision_ids) ? combined.informed_decision_ids : [],
     topic_updates: Array.isArray(combined.topic_updates) ? combined.topic_updates : []
   };
 }
@@ -161,13 +163,13 @@ export function combinedStages(reply: OrganizeReply): { extract: StageReply; ass
   let deferredSegments: OrganizePayload["deferred_segments"] = [];
   let requestDomains: string[] = [];
 
-  const view = (candidateTopics: OrganizePayload["candidate_topics"], conflictsShown: string[] = []): OrganizePayload => ({
+  const view = (candidateTopics: OrganizePayload["candidate_topics"], disclosures: OrganizePayload["disclosures"] = []): OrganizePayload => ({
     messages,
     context_turns: contextTurns,
     deferred_turns: deferredTurns,
     deferred_segments: deferredSegments,
     candidate_topics: candidateTopics,
-    conflicts_shown: conflictsShown,
+    disclosures,
     request_domains: requestDomains
   });
 
@@ -194,14 +196,14 @@ export function combinedStages(reply: OrganizeReply): { extract: StageReply; ass
     },
     judge(payload) {
       const topics = Array.isArray(payload.topics) ? payload.topics as Array<Record<string, unknown>> : [];
-      const conflictsShown = Array.isArray(payload.conflicts_shown) ? payload.conflicts_shown as string[] : [];
+      const disclosures = Array.isArray(payload.disclosures) ? payload.disclosures as OrganizePayload["disclosures"] : [];
       const candidateTopics = topics.map((topic) => ({
         topic_id: String(topic.topic_id ?? ""),
         domain: String(topic.domain ?? ""),
         decisions: Array.isArray(topic.decisions) ? topic.decisions as OrganizePayload["candidate_topics"][number]["decisions"] : [],
         experiences: Array.isArray(topic.experiences) ? topic.experiences as OrganizePayload["candidate_topics"][number]["experiences"] : []
       }));
-      return mapJudge(reply(view(candidateTopics, conflictsShown), batchNumber));
+      return mapJudge(reply(view(candidateTopics, disclosures), batchNumber));
     }
   };
 }

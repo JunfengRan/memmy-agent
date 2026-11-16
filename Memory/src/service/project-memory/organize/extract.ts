@@ -4,7 +4,7 @@ import type { DomainRecord, RawTurnRecord } from "../contract/types.js";
 import { stripInjectedText } from "../inject/strip.js";
 import { EXTRACT_PROMPT_VERSION, EXTRACT_SYSTEM_PROMPT } from "../prompts/extract.js";
 import { clampText } from "../text.js";
-import type { RecalledEntry } from "./restatement.js";
+import { adoptedBy, parseDisclosures } from "./evidence.js";
 import {
   type DeferredSegment,
   type DraftSignal,
@@ -39,8 +39,6 @@ export interface ExtractInput {
   /** Original turns of the tasks that produced the pending rows, indexed by didx. */
   deferredTurns?: RawTurnRecord[];
   deferredSegments?: DeferredSegmentInput[];
-  /** Clamped recall rows for this conversation. The job filters against the full texts. */
-  recalled?: RecalledEntry[];
 }
 
 const DECISION_CATEGORIES = new Set(["范围", "对外约定", "共同约定"]);
@@ -80,7 +78,7 @@ export function buildExtractMessages(input: ExtractInput): Array<{ role: "system
     space: { instructions: input.instructions, domains: input.domains },
     request_domains: input.requestDomains,
     participants: participantsOf([...input.context, ...input.messages, ...deferredTurns]),
-    context_turns: input.context.map((turn) => turnView(turn)),
+    context_turns: input.context.map((turn, idx) => ({ context_idx: idx, ...turnView(turn) })),
     messages: input.messages.map((turn, idx) => turnView(turn, idx)),
     ...(deferredSegments.length === 0 ? {} : {
       deferred_turns: deferredTurns.map((turn, didx) => turnView(turn, didx, "didx")),
@@ -90,8 +88,7 @@ export function buildExtractMessages(input: ExtractInput): Array<{ role: "system
         reason: segment.reason,
         didx: segment.didx
       }))
-    }),
-    ...(input.recalled && input.recalled.length > 0 ? { recalled: input.recalled } : {})
+    })
   };
   return [
     { role: "system", content: EXTRACT_SYSTEM_PROMPT },
@@ -195,6 +192,7 @@ export function parseExtractOutput(raw: Json, input: ExtractInput): ExtractResul
         rejected.add(segment.id);
         return;
       }
+      const adopters = adoptedBy(record.adoption, turn, input.messages, input.context);
       const category = kind === "decision" && DECISION_CATEGORIES.has(String(record.category)) ? String(record.category) : null;
       drafts.push({
         draftId,
@@ -203,21 +201,22 @@ export function parseExtractOutput(raw: Json, input: ExtractInput): ExtractResul
         content: clampText(content, KIND_LIMIT[kind]),
         messageIdx: deferredIdx,
         time: turn.chatTime,
-        userIds,
+        userIds: adopters.length ? adopters : userIds,
         role: sourceRole(turn),
+        origin: turn.role === "user" ? "member" : adopters.length ? "adopted" : "delegated",
         reason: asString(record.reason),
-        restates: asString(record.restates),
         signals: parseSignals(record.signals),
         backfillOf: segment.id
       });
       return;
     }
-    const messageIdx = Number(record.message_idx);
-    const message = Number.isInteger(messageIdx) ? input.messages[messageIdx] : undefined;
-    if (!message) return;
+    const messageIdx = integerIndex(record.message_idx);
+    const message = messageIdx === null ? undefined : input.messages[messageIdx];
+    if (!message || messageIdx === null) return;
     seen.add(draftId);
     const userIds = draftAuthors(message, messageIdx, asStringArray(record.user_ids), input.messages, batchSpeakers, fallbackUser);
     if (userIds.length === 0) return;
+    const adopters = adoptedBy(record.adoption, message, input.messages, input.context);
     const category = kind === "decision" && DECISION_CATEGORIES.has(String(record.category)) ? String(record.category) : null;
     drafts.push({
       draftId,
@@ -226,10 +225,10 @@ export function parseExtractOutput(raw: Json, input: ExtractInput): ExtractResul
       content: clampText(content, KIND_LIMIT[kind]),
       messageIdx,
       time: message.chatTime,
-      userIds,
+      userIds: adopters.length ? adopters : userIds,
       role: sourceRole(message),
+      origin: message.role === "user" ? "member" : adopters.length ? "adopted" : "delegated",
       reason: asString(record.reason),
-      restates: asString(record.restates),
       signals: parseSignals(record.signals)
     });
   });
@@ -256,7 +255,8 @@ export function parseExtractOutput(raw: Json, input: ExtractInput): ExtractResul
     dropped.push({ reason, text: asString(record.text) });
   }
 
-  return { promptVersion: EXTRACT_PROMPT_VERSION, drafts, stateHints, dropped, deferred };
+  return { promptVersion: EXTRACT_PROMPT_VERSION, drafts, stateHints, dropped, deferred,
+    disclosures: parseDisclosures(raw.disclosures, input.messages, input.context) };
 }
 
 export function extractBatch(llm: LlmClient, input: ExtractInput): Promise<ExtractResult> {

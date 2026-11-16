@@ -49,7 +49,7 @@ describe("merge candidate union", () => {
 
 describe("project memory organize stages", () => {
   it("gives M05 the current summary and description that it is responsible for updating", () => {
-    const messages = buildJudgeMessages({ drafts: [], conflictsShown: new Set(), stateHints: [], topics: [{
+    const messages = buildJudgeMessages({ drafts: [], disclosures: [], stateHints: [], topics: [{
       topicId: "topic_retry", spaceId: "space_a", domain: "工程", topicName: "推送",
       topicSummary: "推送失败的重试策略", topicDescription: "发送失败最多重试三次。",
       decisions: [], experiences: [], timeline: [], sources: [], revision: 1,

@@ -29,16 +29,24 @@ function splitLabel(): Record<string, unknown> {
   };
 }
 
-type Turn = { user: string; name: string; conversation: string; time: string; content: string };
+type Turn = { user: string; name: string; conversation: string; time: string; content: string; informed?: string[] };
 
 function decisionDraft(payload: OrganizePayload, content: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
   const topic = payload.candidate_topics[0];
   const decision = topic?.decisions?.[0];
+  const messageIdx = payload.messages.map((message) => message.role).lastIndexOf("user");
+  const userId = payload.messages[messageIdx]!.user_id;
+  const informedTargets = (payload.disclosures ?? []).flatMap((disclosure, disclosureIndex) => disclosure.conclusions.flatMap((quote, conclusionIndex) => {
+    const target = decision?.content === quote ? "content" : decision?.conflicts.find((item) => item.content === quote)?.ref;
+    return target ? [{ target, disclosure_idx: disclosureIndex, conclusion_idx: conclusionIndex }] : [];
+  }));
   return {
     kind: "decision",
     content,
-    message_idx: 0,
-    user_ids: [payload.messages[0]!.user_id],
+    message_idx: messageIdx,
+    user_ids: [userId],
+    signals: extra.resolve || extra.split ? [{ type: "resolve", pick: content, by: userId }] : [],
+    informed_targets: informedTargets,
     reason: null,
     topic: topic ? { topic_id: topic.topic_id } : { new_topic: "n1" },
     same_question_as: decision?.id ?? null,
@@ -53,17 +61,21 @@ function decisionDraft(payload: OrganizePayload, content: string, extra: Record<
 }
 
 function reply(drafts: Record<string, unknown>[], extra: Record<string, unknown> = {}): Record<string, unknown> {
-  return { drafts, new_topics: [], topic_updates: [], informed_decision_ids: [], deferred: [], ...extra };
+  return { drafts, new_topics: [], topic_updates: [], deferred: [], ...extra };
 }
 
 async function add(service: Parameters<typeof call>[0], turn: Turn): Promise<string> {
+  const occurredAt = turn.time.includes("T") ? turn.time : `${turn.time.replace(" ", "T")}+08:00`;
   const accepted = await call(service, "add/message", {
     user_id: turn.user,
     agent_id: "codex",
     conversation_id: turn.conversation,
     space_ids: [SPACE],
     allow_memory_view: ["project"],
-    messages: [{ role: "user", role_id: turn.user, role_name: turn.name, chat_time: turn.time, content: turn.content }]
+    messages: [
+      ...(turn.informed ? [{ role: "assistant", chat_time: new Date(Date.parse(occurredAt) - 1000).toISOString(), content: turn.informed.join("\n") }] : []),
+      { role: "user", role_id: turn.user, role_name: turn.name, chat_time: turn.time, content: turn.content }
+    ]
   });
   expect(accepted.code).toBe(0);
   await drain(service);
@@ -94,10 +106,15 @@ async function showConflicts(service: Parameters<typeof call>[0], conversation: 
   });
 }
 
-/** PRD「决策的维护」/ v3 §2.2.9 四轮分歧示例. */
+/** PRD「决策的维护」/ v4 §2.2.8：告知来源是会话中真实助手消息. */
 describe("project memory decision golden", () => {
   async function seedBase(rounds: Array<(payload: OrganizePayload) => Record<string, unknown>>) {
-    const stub = stubStages(combinedStages((payload, callIndex) => rounds[callIndex - 1]!(payload)));
+    const stub = stubStages(combinedStages((payload, callIndex) => ({
+      ...rounds[callIndex - 1]!(payload),
+      disclosures: payload.messages.flatMap((message, index) => message.role === "assistant"
+        ? [{ message_idx: index, conclusions: message.content.split("\n") }]
+        : [])
+    })));
     const { service, db } = harness.createService();
     await setupSpace(service, SPACE);
     await add(service, { user: "user_b", name: "用户B", conversation: "codex:b", time: "2026-10-29 10:20:00", content: "本机整理结果就存 SQLite，每个 Space 一个库文件。" });
@@ -137,10 +154,7 @@ describe("project memory decision golden", () => {
       (payload) => reply([decisionDraft(payload, "同意单库按 space_id 分表", { same_as: "conflict:1" })]),
       (payload) => reply([decisionDraft(payload, LANCEDB)]),
       (payload) => {
-        const decisionId = payload.candidate_topics[0]?.decisions?.[0]?.id;
-        return reply([decisionDraft(payload, SINGLE_DB, { resolve: { pick: "conflict:1" } })], {
-          informed_decision_ids: decisionId ? [decisionId] : []
-        });
+        return reply([decisionDraft(payload, SINGLE_DB, { resolve: { pick: "conflict:1" } })]);
       }
     ]);
 
@@ -161,7 +175,7 @@ describe("project memory decision golden", () => {
     expect(decision.content).toBe(BASE);
     expect((decision.conflicts as unknown[])).toHaveLength(2);
 
-    // The Agent shows user_b the three conclusions: search records had_conflicts for this conversation.
+    // Retrieval returns data, but only the following actual assistant message can establish disclosure.
     const searched = await call(service, "search/memory", {
       user_id: "user_b",
       query: "本机整理结果存在哪里？SQLite 还是 LanceDB",
@@ -171,8 +185,8 @@ describe("project memory decision golden", () => {
     });
     expect(searched.data.topic_detail_list[0].decisions[0].conflicts).toHaveLength(2);
 
-    await add(service, { user: "user_b", name: "用户B", conversation: "codex:b2", time: "2026-10-31 10:00:00", content: "以用户C 的为准。" });
-    expect(stub.judge.at(-1)!.conflicts_shown).toHaveLength(1);
+    await add(service, { user: "user_b", name: "用户B", conversation: "codex:b2", time: "2026-10-31 10:00:00", informed: [BASE, SINGLE_DB, LANCEDB], content: "以用户C 的为准。" });
+    expect(stub.judge.at(-1)!.disclosures).toHaveLength(1);
     decision = await onlyDecision(service);
     expect(decision).toEqual({
       content: SINGLE_DB,
@@ -190,10 +204,7 @@ describe("project memory decision golden", () => {
       baseRound,
       (payload) => reply([decisionDraft(payload, SINGLE_DB)]),
       (payload) => {
-        const decisionId = payload.candidate_topics[0]?.decisions?.[0]?.id;
-        return reply([decisionDraft(payload, SINGLE_DB, { resolve: { pick: "conflict:1" } })], {
-          informed_decision_ids: decisionId ? [decisionId] : []
-        });
+        return reply([decisionDraft(payload, SINGLE_DB, { resolve: { pick: "conflict:1" } })]);
       }
     ]);
     await add(service, { user: "user_c", name: "用户C", conversation: "codex:c", time: "2026-10-30 14:05:00", content: SINGLE_DB });
@@ -263,16 +274,12 @@ describe("project memory decision golden", () => {
 
   it("resolves to a new conclusion after the member was informed", async () => {
     const conversation = "codex:b-new";
-    let decisionId = "";
     const { service, stub } = await buildDisagreement((payload) => {
-      decisionId = payload.candidate_topics[0]?.decisions?.[0]?.id ?? "";
-      return reply([decisionDraft(payload, NEW_CONCLUSION, { resolve: { pick: "new" } })], {
-        informed_decision_ids: decisionId ? [decisionId] : []
-      });
+      return reply([decisionDraft(payload, NEW_CONCLUSION, { resolve: { pick: "new" } })]);
     }, { lance: true });
     await showConflicts(service, conversation);
-    await add(service, { user: "user_b", name: "用户B", conversation, time: "2026-10-31 10:00:00", content: NEW_CONCLUSION });
-    expect(stub.judge.at(-1)!.conflicts_shown).toEqual([decisionId]);
+    await add(service, { user: "user_b", name: "用户B", conversation, time: "2026-10-31 10:00:00", informed: [BASE, SINGLE_DB, LANCEDB], content: NEW_CONCLUSION });
+    expect(stub.judge.at(-1)!.disclosures).toHaveLength(1);
     const reason = "用户B 确定了新的结论";
     expect(await onlyDecision(service)).toEqual({
       content: NEW_CONCLUSION,
@@ -288,15 +295,11 @@ describe("project memory decision golden", () => {
 
   it("resolves by keeping content and moving both conflicts into history", async () => {
     const conversation = "codex:b-keep";
-    let decisionId = "";
     const { service } = await buildDisagreement((payload) => {
-      decisionId = payload.candidate_topics[0]?.decisions?.[0]?.id ?? "";
-      return reply([decisionDraft(payload, BASE, { resolve: { pick: "content" } })], {
-        informed_decision_ids: decisionId ? [decisionId] : []
-      });
+      return reply([decisionDraft(payload, BASE, { resolve: { pick: "content" } })]);
     }, { lance: true });
     await showConflicts(service, conversation);
-    await add(service, { user: "user_b", name: "用户B", conversation, time: "2026-10-31 10:00:00", content: "就按每个 Space 一个库文件。" });
+    await add(service, { user: "user_b", name: "用户B", conversation, time: "2026-10-31 10:00:00", informed: [BASE, SINGLE_DB, LANCEDB], content: "就按每个 Space 一个库文件。" });
     const reason = "用户B 确定以用户B 的结论为准";
     expect(await onlyDecision(service)).toEqual({
       content: BASE,
@@ -314,13 +317,11 @@ describe("project memory decision golden", () => {
     let originalId = "";
     const { service, stub, db } = await buildDisagreement((payload) => {
       originalId = payload.candidate_topics[0]?.decisions?.[0]?.id ?? "";
-      return reply([decisionDraft(payload, SPLIT_NOTE, { split: splitLabel() })], {
-        informed_decision_ids: originalId ? [originalId] : []
-      });
+      return reply([decisionDraft(payload, SPLIT_NOTE, { split: splitLabel() })]);
     }, { join: true, lance: true });
     await showConflicts(service, conversation);
-    await add(service, { user: "user_b", name: "用户B", conversation, time: "2026-10-31 10:00:00", content: SPLIT_NOTE });
-    expect(stub.judge.at(-1)!.conflicts_shown).toEqual([originalId]);
+    await add(service, { user: "user_b", name: "用户B", conversation, time: "2026-10-31 10:00:00", informed: [BASE, SINGLE_DB, LANCEDB], content: SPLIT_NOTE });
+    expect(stub.judge.at(-1)!.disclosures).toHaveLength(1);
 
     const reason = "用户B 确定各项适用于不同情况";
     const history = [
@@ -340,12 +341,12 @@ describe("project memory decision golden", () => {
     expect(rows[1]!.id).not.toBe(originalId);
   });
 
-  it("does not split when the conversation never searched and rewrites as the content author", async () => {
+  it("does not split without actual disclosure and rewrites as the content author", async () => {
     const { service, stub } = await buildDisagreement((payload) => reply([
       decisionDraft(payload, SPLIT_NOTE, { split: splitLabel() })
     ]), { join: true, lance: true });
     await add(service, { user: "user_b", name: "用户B", conversation: "codex:b-noshow", time: "2026-10-31 10:00:00", content: SPLIT_NOTE });
-    expect(stub.judge.at(-1)!.conflicts_shown).toEqual([]);
+    expect(stub.judge.at(-1)!.disclosures).toEqual([]);
     expect(await onlyDecision(service)).toEqual({
       content: SPLIT_NOTE,
       time: T.decide,
@@ -358,14 +359,33 @@ describe("project memory decision golden", () => {
     });
   });
 
-  it("does not resolve when recall recorded conflicts but the judge sent no informed id", async () => {
+  it("splits only disclosed conclusions and retains an undisclosed conflict on the original decision", async () => {
+    const { service } = await buildDisagreement((payload) => reply([
+      decisionDraft(payload, SPLIT_NOTE, { split: splitLabel() })
+    ]), { join: true, lance: true });
+    await add(service, {
+      user: "user_b", name: "用户B", conversation: "codex:b-partial-split", time: "2026-10-31 10:00:00",
+      informed: [BASE, SINGLE_DB], content: SPLIT_NOTE
+    });
+    const reason = "用户B 确定各项适用于不同情况";
+    const history = [
+      { content: BASE, time: T.base, user_ids: ["user_b"], reason },
+      { content: SINGLE_DB, time: T.c, user_ids: ["user_c", "user_d"], reason }
+    ];
+    expect(await listDecisions(service)).toEqual([
+      { content: BASE, time: T.decide, user_ids: ["user_b"], history, conflicts: [{ content: LANCEDB, time: T.e, user_ids: ["user_e"] }] },
+      { content: SINGLE_DB, time: T.decide, user_ids: ["user_c", "user_d"], history }
+    ]);
+  });
+
+  it("does not resolve when search returned conflicts but the assistant never disclosed them", async () => {
     const conversation = "codex:b-uninformed";
     const { service, stub } = await buildDisagreement((payload) => reply([
       decisionDraft(payload, SINGLE_DB, { resolve: { pick: "conflict:1" } })
     ]));
     await showConflicts(service, conversation);
     await add(service, { user: "user_b", name: "用户B", conversation, time: "2026-10-31 10:00:00", content: "以用户C 的为准。" });
-    expect(stub.judge.at(-1)!.conflicts_shown).toHaveLength(1);
+    expect(stub.judge.at(-1)!.disclosures).toEqual([]);
     expect(await onlyDecision(service)).toEqual({
       content: BASE,
       time: T.base,
@@ -382,9 +402,7 @@ describe("project memory decision golden", () => {
       (payload) => reply([decisionDraft(payload, SINGLE_DB)]),
       (payload) => {
         decisionId = payload.candidate_topics[0]?.decisions?.[0]?.id ?? "";
-        return reply([decisionDraft(payload, SINGLE_DB, { resolve: { pick: "conflict:1" } })], {
-          informed_decision_ids: decisionId ? [decisionId] : []
-        });
+        return reply([decisionDraft(payload, SINGLE_DB, { resolve: { pick: "conflict:1" } })]);
       }
     ]);
     const searched = await showConflicts(service, conversation);
@@ -392,7 +410,7 @@ describe("project memory decision golden", () => {
     expect(searched.data.topic_detail_list[0].decisions[0].conflicts).toBeUndefined();
     await add(service, { user: "user_c", name: "用户C", conversation: "codex:c", time: "2026-10-30 14:05:00", content: SINGLE_DB });
     await add(service, { user: "user_b", name: "用户B", conversation, time: "2026-10-31 10:00:00", content: "以用户C 的为准。" });
-    expect(stub.judge.at(-1)!.conflicts_shown).toEqual([]);
+    expect(stub.judge.at(-1)!.disclosures).toEqual([]);
     expect(decisionId).not.toBe("");
     expect(await onlyDecision(service)).toEqual({
       content: BASE,
@@ -404,16 +422,12 @@ describe("project memory decision golden", () => {
 
   it("resolves rather than joins when an informed draft repeats a conflict", async () => {
     const conversation = "codex:b-same";
-    let decisionId = "";
     const { service, stub } = await buildDisagreement((payload) => {
-      decisionId = payload.candidate_topics[0]?.decisions?.[0]?.id ?? "";
-      return reply([decisionDraft(payload, SINGLE_DB, { resolve: { pick: "conflict:1" } })], {
-        informed_decision_ids: decisionId ? [decisionId] : []
-      });
+      return reply([decisionDraft(payload, SINGLE_DB, { resolve: { pick: "conflict:1" } })]);
     });
     await showConflicts(service, conversation);
-    await add(service, { user: "user_b", name: "用户B", conversation, time: "2026-10-31 10:00:00", content: SINGLE_DB });
-    expect(stub.judge.at(-1)!.conflicts_shown).toEqual([decisionId]);
+    await add(service, { user: "user_b", name: "用户B", conversation, time: "2026-10-31 10:00:00", informed: [BASE, SINGLE_DB], content: SINGLE_DB });
+    expect(stub.judge.at(-1)!.disclosures).toHaveLength(1);
     expect(await onlyDecision(service)).toEqual({
       content: SINGLE_DB,
       time: T.c,

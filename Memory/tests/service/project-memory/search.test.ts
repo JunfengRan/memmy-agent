@@ -51,7 +51,7 @@ function search(service: Parameters<typeof call>[0], body: Record<string, unknow
 }
 
 describe("project memory search", () => {
-  it("returns the same ranked topics for the same input and logs what it showed", async () => {
+  it("returns the same ranked topics without writing recall receipts", async () => {
     const { service, db, stub } = await seed("ok");
     expect(stub.embeddingCalls).toBeGreaterThan(0);
     expect(db.db.prepare("SELECT COUNT(*) FROM pm_topic_vectors").pluck().get()).toBe(TOPICS.length);
@@ -74,12 +74,7 @@ describe("project memory search", () => {
     expect(scores[0]).toBe(1);
     expect(top).not.toHaveProperty("score");
 
-    const logged = db.db.prepare("SELECT conversation_id, via, topic_id FROM pm_recall_log").all() as Array<{ conversation_id: string; via: string; topic_id: string }>;
-    expect(logged.length).toBeGreaterThan(0);
-    expect(new Set(logged.map((row) => row.conversation_id))).toEqual(new Set(["conv_search"]));
-    expect(logged.every((row) => row.via === "turn_start")).toBe(true);
-    const returnedIds = new Set(first.data.topic_detail_list.map((topic: { id: string }) => topic.id));
-    expect(logged.every((row) => returnedIds.has(row.topic_id))).toBe(true);
+    expect(db.db.prepare("SELECT * FROM pm_recall_log").all()).toEqual([]);
   });
 
   it("caps results at memory_limit_number and filters by relativity", async () => {

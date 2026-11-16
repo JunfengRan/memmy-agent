@@ -1,8 +1,6 @@
 import type Database from "better-sqlite3";
 import { createHash } from "node:crypto";
-import type { Embedder } from "../../../../model/types.js";
 import { vectorToBuffer } from "../../../../storage/sqlite-vec-store.js";
-import { createMemoryLogger, memoryErrorFields } from "../../../../logging/logger.js";
 import { ProjectMemoryError } from "../../contract/errors.js";
 import { PROJECT_MEMORY_LIMITS } from "../../contract/limits.js";
 import type {
@@ -26,9 +24,8 @@ import type {
 } from "../../contract/types.js";
 import { charLength, ftsMatchExpression, normalizeForCompare, textTokens, tokenOverlap, uniqueTokens } from "../../text.js";
 import type { CommitContext, DomainUpdate, ListTopicsFilter, ProjectMemoryStore } from "../store.js";
-import { applyDecisionEntries, applyExperienceOp, type MutableDecision, type MutableExperience } from "./apply.js";
-
-const log = createMemoryLogger("project-memory.store");
+import { topicIndexHash, topicIndexText, type IndexQuery, type TopicVectorInput, type TopicVectorWrite, type ProjectVectorStore } from "../vector-store.js";
+import { applyDecisionEntries, applyExperienceOp, type MutableDecision, type MutableExperience } from "../../merge/apply.js";
 
 type Db = Database.Database;
 
@@ -64,8 +61,6 @@ interface SpaceRow {
 
 export interface SqliteProjectMemoryStoreOptions {
   db: Db;
-  /** Read on every use: the host swaps its embedder when the model config changes. */
-  embedder?: () => Embedder | null;
   now?: () => Date;
 }
 
@@ -122,29 +117,22 @@ export function timelineFingerprint(content: string, time: string): string {
  * Local-mode ProjectMemoryStore (v3 §5.2): one SQLite file, FTS5 for lexical
  * recall, sqlite-vec for vector recall, and a single transaction for L03.
  */
-export class SqliteProjectMemoryStore implements ProjectMemoryStore {
+export class SqliteProjectMemoryStore implements ProjectMemoryStore, ProjectVectorStore {
   private readonly db: Db;
-  private readonly embedderRef: () => Embedder | null;
   private readonly now: () => Date;
 
   constructor(options: SqliteProjectMemoryStoreOptions) {
     this.db = options.db;
-    this.embedderRef = options.embedder ?? (() => null);
     this.now = options.now ?? (() => new Date());
   }
 
-  private get embedder(): Embedder | null {
-    return this.embedderRef();
-  }
-
   capabilities(): StoreCapabilities {
-    const embedding = this.embeddingModel();
     return {
       fullText: "fts5",
-      vector: embedding ? "sqlite-vec" : "none",
+      vector: "sqlite-vec",
       conditionalWrite: true,
       teardownFence: "local_queue",
-      embeddingModel: embedding,
+      embeddingModel: null,
       embeddingDim: null
     };
   }
@@ -302,30 +290,17 @@ export class SqliteProjectMemoryStore implements ProjectMemoryStore {
   // ---------------------------------------------------------------- recall (L01)
 
   async recall(request: RecallRequest): Promise<RecallResult> {
-    const degraded: string[] = [];
+    return this.queryIndex(request, { model: null, vectors: [] });
+  }
+
+  /** C02: deterministic index queries. Vectorization belongs to the model service. */
+  async queryIndex(request: RecallRequest, index: IndexQuery): Promise<RecallResult> {
+    const degraded: string[] = index.model ? [] : ["vector"];
     const domainsJson = request.domains && request.domains.length > 0 ? JSON.stringify(request.domains) : null;
     const spacesJson = JSON.stringify(request.spaceIds);
     const topicSeq = this.topicSeqFor(request.spaceIds, request.domains);
-
-    let queryVectors: Array<number[] | null> = request.queries.map(() => null);
-    let model = this.embeddingModel();
-    const stale = model ? this.topicsWithStaleVector(model, spacesJson, domainsJson) : [];
-    if (stale.length > 0) {
-      // Vectors from another embedding model are not comparable: stay lexical
-      // and re-index in the background (v3 §5.2 embedding consistency).
-      void this.indexTopics(stale.slice(0, 64)).catch(() => undefined);
-      model = null;
-    }
-    if (!model || !this.embedder) {
-      degraded.push("vector");
-    } else if (request.queries.length > 0) {
-      try {
-        queryVectors = await this.embedder.embed(request.queries.map((query) => query.text), "query");
-      } catch (error) {
-        log.warn("recall.embedding_failed", memoryErrorFields(error));
-        degraded.push("vector");
-      }
-    }
+    const queryVectors = index.vectors;
+    const model = index.model;
 
     const conversationTopics = request.preferConversationId
       ? new Set(this.db.prepare(
@@ -474,51 +449,36 @@ export class SqliteProjectMemoryStore implements ProjectMemoryStore {
 
   // ---------------------------------------------------------------- vectors (L05)
 
-  async indexTopics(topicIds: string[]): Promise<void> {
-    const model = this.embeddingModel();
-    const embedder = this.embedder;
-    if (!model || !embedder || topicIds.length === 0) return;
-    const topics = this.readTopics(topicIds);
-    const pending = topics
-      .map((topic) => ({ topic, text: topicEmbeddingText(topic) }))
-      .map((item) => ({ ...item, hash: sha(`${model}\u0000${item.text}`) }))
-      .filter((item) => {
-        const current = this.db.prepare(`SELECT source_hash FROM pm_topic_vectors WHERE topic_id = ?`).pluck().get(item.topic.topicId);
-        return current !== item.hash;
-      });
-    if (pending.length === 0) return;
-    let vectors: number[][];
-    try {
-      vectors = await embedder.embed(pending.map((item) => item.text), "document");
-    } catch (error) {
-      log.warn("index.embedding_failed", { topics: pending.length, ...memoryErrorFields(error) });
-      return;
-    }
+  /** Compatibility no-op: use IndexedProjectMemoryStore to build vectors. */
+  async indexTopics(_topicIds: string[]): Promise<void> {}
+
+  pendingVectorInputs(topicIds: string[], model: string): TopicVectorInput[] {
+    return this.readTopics(topicIds)
+      .map((topic) => ({ topicId: topic.topicId, text: topicIndexText(topic), sourceHash: topicIndexHash(topic, model) }))
+      .filter((item) => this.db.prepare(`SELECT source_hash FROM pm_topic_vectors WHERE topic_id = ?`).pluck().get(item.topicId) !== item.sourceHash);
+  }
+
+  /** Content check and replacement are in the same transaction as the index write. */
+  writeTopicVectors(model: string, inputs: TopicVectorWrite[]): void {
     this.db.transaction(() => {
-      if (this.embeddingModel() !== model) return;
-      pending.forEach((item, index) => {
-        const vector = vectors[index];
-        if (!vector || vector.length === 0) return;
-        const [current] = this.readTopics([item.topic.topicId]);
-        if (!current || sha(`${model}\u0000${topicEmbeddingText(current)}`) !== item.hash) return;
-        this.deleteVector(item.topic.topicId);
+      for (const input of inputs) {
+        const [current] = this.readTopics([input.topicId]);
+        if (!current || topicIndexHash(current, model) !== input.sourceHash) continue;
+        this.deleteVector(input.topicId);
         const info = this.db.prepare(
           `INSERT INTO pm_topic_vectors (topic_id, embedding_model, embedding_dim, source_hash, updated_at) VALUES (?, ?, ?, ?, ?)`
-        ).run(item.topic.topicId, model, vector.length, item.hash, this.nowIso());
-        const table = this.ensureVectorTable(vector.length);
-        this.db.prepare(`INSERT INTO ${table} (rowid, embedding) VALUES (?, ?)`).run(BigInt(info.lastInsertRowid), vectorToBuffer(vector));
-      });
+        ).run(input.topicId, model, input.vector.length, input.sourceHash, this.nowIso());
+        const table = this.ensureVectorTable(input.vector.length);
+        this.db.prepare(`INSERT INTO ${table} (rowid, embedding) VALUES (?, ?)`).run(BigInt(info.lastInsertRowid), vectorToBuffer(input.vector));
+      }
     })();
   }
 
-  // ---------------------------------------------------------------- internals
-
-  private embeddingModel(): string | null {
-    if (!this.embedder) return null;
-    const status = this.embedder.status();
-    if (!status.configured) return null;
-    return `${this.embedder.config.provider}:${this.embedder.config.model ?? "default"}`;
+  staleVectorTopicIds(request: RecallRequest, model: string): string[] {
+    return this.topicsWithStaleVector(model, JSON.stringify(request.spaceIds), request.domains?.length ? JSON.stringify(request.domains) : null);
   }
+
+  // ---------------------------------------------------------------- internals
 
   private nowIso(): string {
     return this.now().toISOString();
@@ -914,7 +874,7 @@ export class SqliteProjectMemoryStore implements ProjectMemoryStore {
     // recall must not use a vector for the previous version of this topic.
     const vector = this.db.prepare(`SELECT embedding_model, source_hash FROM pm_topic_vectors WHERE topic_id = ?`).get(topicId) as
       { embedding_model: string; source_hash: string } | undefined;
-    if (vector && vector.source_hash !== sha(`${vector.embedding_model}\u0000${topicEmbeddingText(topic)}`)) this.deleteVector(topicId);
+    if (vector && vector.source_hash !== topicIndexHash(topic, vector.embedding_model)) this.deleteVector(topicId);
     const text = [
       topic.topicName,
       topic.topicSummary,
@@ -965,15 +925,4 @@ export class SqliteProjectMemoryStore implements ProjectMemoryStore {
   private tableExists(name: string): boolean {
     return Boolean(this.db.prepare(`SELECT 1 FROM sqlite_master WHERE name = ?`).get(name));
   }
-}
-
-function topicEmbeddingText(topic: TopicSnapshot): string {
-  const parts = [
-    topic.topicName,
-    topic.topicSummary,
-    topic.topicDescription,
-    ...topic.decisions.map((decision) => decision.content),
-    ...topic.experiences.map((experience) => experience.content)
-  ];
-  return [...parts.join("\n")].slice(0, 2000).join("");
 }

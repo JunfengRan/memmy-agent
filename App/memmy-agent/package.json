@@ -10,9 +10,9 @@
   },
   "scripts": {
     "version:sync": "npm --prefix ../.. run version:sync",
-    "prebuild": "npm --prefix ../../Knowledge run build && npm run version:sync && npm --prefix ../../Migrations run build && npm --prefix ../backend/local-api-contracts run build",
-    "pretypecheck": "npm --prefix ../../Knowledge run build && npm run version:sync && npm --prefix ../../Migrations run build && npm --prefix ../backend/local-api-contracts run build",
-    "pretest": "npm --prefix ../../Knowledge run build && npm run version:sync && npm --prefix ../../Migrations run build && npm --prefix ../backend/local-api-contracts run build",
+    "prebuild": "node ../../scripts/project-memory/sync-injection-assets.mjs && npm --prefix ../../Knowledge run build && npm run version:sync && npm --prefix ../../Migrations run build && npm --prefix ../backend/local-api-contracts run build",
+    "pretypecheck": "node ../../scripts/project-memory/sync-injection-assets.mjs && npm --prefix ../../Knowledge run build && npm run version:sync && npm --prefix ../../Migrations run build && npm --prefix ../backend/local-api-contracts run build",
+    "pretest": "node ../../scripts/project-memory/sync-injection-assets.mjs && npm --prefix ../../Knowledge run build && npm run version:sync && npm --prefix ../../Migrations run build && npm --prefix ../backend/local-api-contracts run build",
     "pretest:tui-cursor": "npm run version:sync",
     "build": "tsc -p tsconfig.build.json && node scripts/copy-build-assets.mjs",
     "prepackage:npm": "npm run build",

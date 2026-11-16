@@ -11,10 +11,14 @@ import { PROJECT_MEMORY_LIMITS } from "./contract/limits.js";
 import { recallSearchPaths, type NonProjectRecallPort, type ThreePathSearchOutput } from "./retrieve/recall-paths.js";
 import type { SearchInput } from "./retrieve/search.js";
 import { ProjectLocalState } from "./store/sqlite/local-state.js";
+import { acceptProjectTask } from "./pipeline/accept.js";
+import { createSqliteProjectTaskRuntime } from "./store/sqlite/task-runtime.js";
+import type { ProjectPipelineState, ProjectTaskRuntime } from "./store/state.js";
+import { IndexedProjectMemoryStore } from "./model/index.js";
 import { SqliteProjectMemoryStore } from "./store/sqlite/sqlite-store.js";
 import type { DomainUpdate, ProjectMemoryStore } from "./store/store.js";
 
-export const PROJECT_MEMORY_JOB_TYPE = "project_memory_organize" as const;
+export { PROJECT_MEMORY_JOB_TYPE } from "./pipeline/accept.js";
 
 export interface ProjectMemoryServiceDeps {
   repos: Repositories;
@@ -22,6 +26,9 @@ export interface ProjectMemoryServiceDeps {
   embedder?: Embedder | null;
   now?: () => Date;
   store?: ProjectMemoryStore;
+  /** A custom state adapter and runtime must share the same transaction domain. */
+  state?: ProjectPipelineState;
+  runtime?: ProjectTaskRuntime;
   /** Pass null to force the experiment off. Omit to read MEMMY_DECISION_TOPIC, which defaults off. */
   decision?: DecisionTopicRouter | null;
   /**
@@ -47,14 +54,19 @@ export interface AddMessageInput {
  */
 export class ProjectMemoryService {
   readonly store: ProjectMemoryStore;
-  readonly local: ProjectLocalState;
+  readonly local: ProjectPipelineState;
+  private readonly taskRuntime: ProjectTaskRuntime;
   private readonly now: () => Date;
   private readonly decision: DecisionTopicRouter | null;
 
   constructor(private readonly deps: ProjectMemoryServiceDeps) {
+    if (Boolean(deps.state) !== Boolean(deps.runtime)) {
+      throw new Error("Project pipeline state and task runtime must be supplied together");
+    }
     this.now = deps.now ?? (() => new Date());
-    this.store = deps.store ?? new SqliteProjectMemoryStore({ db: deps.repos.db, embedder: () => deps.embedder ?? null, now: this.now });
-    this.local = new ProjectLocalState(deps.repos.db, this.now);
+    this.store = deps.store ?? new IndexedProjectMemoryStore(new SqliteProjectMemoryStore({ db: deps.repos.db, now: this.now }), () => deps.embedder ?? null);
+    this.local = deps.state ?? new ProjectLocalState(deps.repos.db, this.now);
+    this.taskRuntime = deps.runtime ?? createSqliteProjectTaskRuntime(deps.repos);
     this.decision = deps.decision !== undefined ? deps.decision : createDecisionTopicRouter();
   }
 
@@ -132,26 +144,16 @@ export class ProjectMemoryService {
     const turns = collected.turns;
     const batchKey = input.conversationId ? this.batchKey(input, turns) : `anon:${taskId}`;
     const acceptedAt = now.toISOString();
-    return this.deps.repos.transaction(() => {
-      const { task, created, pendingSpaceIds } = this.local.createTask(
-        { taskId, spaceIds: input.spaceIds, conversationId: conversationKey, batchKey, sourceBatchId: taskId, acceptedAt },
-        turns
-      );
-      if (!created) return task;
-      for (const spaceId of pendingSpaceIds) {
-        const payload: OrganizeJobPayload = {
-          taskId,
-          spaceId,
-          domains: input.domains,
-          agentId: input.agentId,
-          conversationId: input.conversationId,
-          strippedBlocks: collected.strippedBlocks,
-          unclosedBlocks: collected.unclosedBlocks
-        };
-        this.enqueue(spaceId, input.userId, payload, acceptedAt);
-      }
-      return task;
-    });
+    return acceptProjectTask({
+      task: { taskId, spaceIds: input.spaceIds, conversationId: conversationKey, batchKey, sourceBatchId: taskId, acceptedAt },
+      turns,
+      userId: input.userId,
+      domains: input.domains,
+      agentId: input.agentId,
+      conversationId: input.conversationId,
+      strippedBlocks: collected.strippedBlocks,
+      unclosedBlocks: collected.unclosedBlocks
+    }, { state: this.local, runtime: this.taskRuntime });
   }
 
   getTask(taskId: string): TaskRecord {
@@ -176,7 +178,6 @@ export class ProjectMemoryService {
     if (input.views.project) await this.validateScope(input.spaceIds, input.domains ?? [], false);
     return recallSearchPaths(input, {
       store: this.store,
-      local: this.local,
       decision: this.decision,
       nonProjectRecall: this.deps.nonProjectRecall?.() ?? null,
       timeoutMs: PROJECT_MEMORY_LIMITS.recallPathTimeoutMs
@@ -262,24 +263,4 @@ export class ProjectMemoryService {
     return hash.digest("hex");
   }
 
-  private enqueue(spaceId: string, userId: string, payload: OrganizeJobPayload, at: string): void {
-    const runtime = this.deps.repos.runtime;
-    const scopeKey = `project_memory:${spaceId}`;
-    runtime.enqueueJobInTransaction({
-      id: newId("job"),
-      jobType: PROJECT_MEMORY_JOB_TYPE,
-      status: "queued",
-      dedupeKey: `${PROJECT_MEMORY_JOB_TYPE}:${payload.taskId}:${spaceId}`,
-      userId,
-      scopeKey,
-      scopeSeq: runtime.nextScopeSeq(PROJECT_MEMORY_JOB_TYPE, scopeKey),
-      payload: { ...payload },
-      attempts: 0,
-      maxAttempts: 3,
-      leasedUntil: null,
-      lastError: null,
-      createdAt: at,
-      updatedAt: at
-    });
-  }
 }

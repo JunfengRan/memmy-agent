@@ -2,6 +2,10 @@
 
 本文描述当前已交付的 Memmy / Codex 本机接入，代码基线 b7cb8c56，设计见 [ADR-0012](decisions/0012-codex-local-project-bridge.md)。它是实现说明，不替代 standard 规格。
 
+## 2026-11-16 V4 过渡更新
+
+本机链路、绑定和云端写锁按原接入继续。整理已改为真实会话告知证据，不再读写 pm_recall_log；检索成功本身不代表成员已知情。Agent 未采纳的旧决策复述在合并阶段丢弃。模板由 Memory 唯一源码生成到内置 Agent 与 Backend hook，不能手改副本。存储状态与队列通过端口装配，模型向量化在 model/index，SQLite 只查写索引；数据库无需重建。旧文中涉及 recall_log 的验证是历史证据，不能作为当前实现行为。详见 ADR-0013。
+
 ## 宿主如何接入
 
 Memmy 的集成安装器向 Codex 用户目录安装 `hooks/memmy-resume-hook.mjs`、打包的 workspace bridge 与本机配置指针，在 `hooks.json` 注册生命周期事件，并通过 Codex 的正式接口核验 hook 信任。它是 Memmy 提供的本机 hook 集成，并非 Codex 内置的项目记忆存储。

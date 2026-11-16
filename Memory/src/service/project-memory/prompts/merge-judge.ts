@@ -3,7 +3,7 @@
  * experience change, informed, and summary/description rewrite.
  * The rewrite step lives in this call (ADR-0007); applying ops stays deterministic.
  */
-export const JUDGE_PROMPT_VERSION = "pm-judge-v0.3.1";
+export const JUDGE_PROMPT_VERSION = "pm-judge-v0.4.0";
 
 export const JUDGE_SYSTEM_PROMPT = `提示词版本：${JUDGE_PROMPT_VERSION}
 
@@ -23,8 +23,12 @@ export const JUDGE_SYSTEM_PROMPT = `提示词版本：${JUDGE_PROMPT_VERSION}
 - same_experience_as：和某条已有 experience 讲的是同一件事时填它的 id，否则 null。
 - experience_change："same" 表示说法一致、只是再认可一次；"new_version" 表示做法本身变了。没有 same_experience_as 时填 null。
 
-## 分歧知情
-informed_decision_ids：conflicts_shown 里的 decision，如果草稿或 signals 表明发言人已经知道那条分歧的各项结论，填它的 id。你看不到原始消息。两个条件稍后由系统一起核对，你只标你看到的告知。
+## 分歧知情：只按会话原文，不使用召回记录
+输入 disclosures 中每项为经过原文校验的助手消息（turnId、time、conclusions）。
+为每条草稿输出 informed_targets 数组：[{"target":"content 或 conflict:N","disclosure_idx":证据索引,"conclusion_idx":原话索引}]。
+只有原话与库内该项是同一结论、且告知发生在该草稿之前，才可对应；不能凭主题相似、成员说知道了或裁决语气认定已告知。
+逐项对应所有已列出的结论，包括当前 content 和所有已列出的 conflicts，不能只返回用户最终选中的那项。不得把没列出、后来新增或改过的冲突算进来。证据不足返回 []。
+Agent 出处 origin=delegated 且与库内当前、冲突或历史相同的草稿属于复述，仍正确绑定 same_question_as、same_as；与历史是同一结论时把该历史 ref 填进 same_history_as（如 "history:1"，否则 null），即使只是换了措辞也要比对；不能把交办成员当作新投票人。origin=member/adopted 不按 Agent 复述丢弃。
 
 ## 摘要和描述
 对本批有草稿归入的主题，如果范围或目标变了，改写 topic_summary（不超过 80 字，不写进展）。如果做法、进展或后续计划变了，改写 topic_description（不超过 400 字，不保留已经失效的计划）。用 state_hints 和草稿作线索。没变化就不要列出该主题。
@@ -35,8 +39,10 @@ informed_decision_ids：conflicts_shown 里的 decision，如果草稿或 signal
   "drafts": [
     {
       "draft_id": "d0",
+      "informed_targets": [],
       "same_question_as": null,
       "same_as": null,
+      "same_history_as": null,
       "approved_by": [],
       "resolve": null,
       "split": null,
@@ -44,7 +50,6 @@ informed_decision_ids：conflicts_shown 里的 decision，如果草稿或 signal
       "experience_change": null
     }
   ],
-  "informed_decision_ids": [],
   "topic_updates": [{"topic_id": "...", "topic_summary": "...", "topic_description": "..."}]
 }
 

@@ -89,3 +89,5 @@ npx vitest run tests/service
 - Each test file must register fixture cleanup explicitly with `afterEach`.
 
 The REST contract suite requires permission to listen on `127.0.0.1`; the facade suite does not open a local server.
+
+项目记忆 V4 过渡：`conversation-evidence.test.ts` 覆盖来源原文/注入剥离证据，`accept.test.ts` 覆盖受理入队原子性，`v4-merge.test.ts` 覆盖逐项裁决与 Agent 复述；旧 recall 专属预过滤测试由合并阶段测试替代。

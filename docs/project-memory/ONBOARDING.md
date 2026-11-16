@@ -9,13 +9,13 @@ Agent 开工必须先读 [协作协议](../../.agents/README.md) 及对应工作
 面向人的背景阅读可从两篇交接稿建立全貌：[项目记忆为什么难](algorithm-handoff.html)（算法、RCA、接口例子），以及 [Jev 与 Super Agent 实验](routing-experiments.html)（默认路径、实验分支与证据边界）。再查下面的规范与指标。
 
 1. 仓库根的 [AGENTS.md](../../AGENTS.md)：权威顺序、模块边界、算法红线。所有 Agent 和人都按它来。
-2. 规格：`design-docs/standard/` 里的《项目记忆：端云协同架构与模块设计（v3）》，其次是 SDK 规格和 PRD。`design-docs/` 不进 git，找负责人要本地镜像。代码对齐的版本见 [spec-snapshots.md](spec-snapshots.md)，目前是 v3 的 11/02 评审稿。
+2. 规格：`design-docs/standard/` 里的《项目记忆：纯云端架构与模块设计（v4）》及配套代码组织设计；其次对照 PRD，旧 SDK 规格仅作历史兼容参考。`design-docs/` 不进 git，找负责人要本地镜像。代码对齐的版本见 [spec-snapshots.md](spec-snapshots.md)，目前为 V4 修订至 11/13；本机过渡范围见 ADR-0013，不表示已完成云端迁移。
 3. [DEVELOPMENT.md](DEVELOPMENT.md)：模块布局、编码规则、测试和评测命令。
 4. [findings.md](findings.md)：这次开发里值得告诉同事的发现。它不是规格。
 5. [metrics.md](metrics.md) 文首的三张总表：端到端、只测写入、只测检索或回答。想看数字先看总表，不要把金标上限读成产品效果。
 6. [gaps-v01.md](gaps-v01.md)：v0.1 哪里不行、证据是什么、由哪个 Roadmap 条目收回。
 
-`design-docs/` 下的 `alpha/`、`claude/`、`codex/` 是 v3 之前的历史方案，不是事实源；里面有而 v3 没采纳的设计（如 `.memos/` 目录、`ProjectSnapshot`）不算缺口。
+`design-docs/` 下的 `alpha/`、`claude/`、`codex/` 是 v3 之前的历史方案，不是事实源；里面有而现行 standard 没采纳的设计（如 `.memos/` 目录、`ProjectSnapshot`）不算缺口。
 
 ## 做到哪了
 

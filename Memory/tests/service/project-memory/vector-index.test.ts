@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Embedder } from "../../../src/model/types.js";
+import { IndexedProjectMemoryStore } from "../../../src/service/project-memory/model/index.js";
 import { SqliteProjectMemoryStore } from "../../../src/service/project-memory/store/sqlite/sqlite-store.js";
 import type { TopicChange } from "../../../src/service/project-memory/contract/types.js";
 import { createProjectMemoryHarness } from "./helpers.js";
@@ -16,7 +17,7 @@ async function fixture() {
   const embed = vi.fn(async (): Promise<number[][]> => [[1, 0]]);
   const embedder = { config: { provider: "openai_compatible", model: "test-a" }, embed,
     status: () => ({ configured: true }), isRemote: () => false } as unknown as Embedder;
-  const store = new SqliteProjectMemoryStore({ db: db.db, embedder: () => embedder });
+  const store = new IndexedProjectMemoryStore(new SqliteProjectMemoryStore({ db: db.db }), () => embedder);
   await store.createSpace({ spaceId: "s", domains: [{ domain: "工程", description: "" }] });
   async function write(key: string, change: TopicChange) {
     const result = await store.commitChangeSet({ spaceId: "s", taskId: key, sourceBatchId: key, idempotencyKey: key, topics: [change] }, { acceptedAt: new Date().toISOString() });
@@ -66,4 +67,40 @@ describe("project vector index freshness", () => {
     await pending;
     expect(row()).toBeUndefined();
   });
+  it("discards query embeddings when the configured model changes in flight", async () => {
+    const { store, embed, embedder } = await fixture();
+    await store.indexTopics(["t"]);
+    const late = deferred<number[][]>();
+    embed.mockImplementationOnce(() => late.promise);
+    const pending = store.recall({ spaceIds: ["s"], queries: [{ qid: "q", text: "推送" }], purpose: "search", topicK: 5, entryK: 0 });
+    embedder.config.model = "test-b";
+    late.resolve([[1, 0]]);
+    const result = await pending;
+    expect(result.degraded).toContain("vector");
+    expect(result.results[0]?.topics[0]?.scores.vector).toBeNull();
+  });
+
+  it("keeps stale-model recall lexical while the model service refreshes the index", async () => {
+    const { store, embed, embedder, row } = await fixture();
+    await store.indexTopics(["t"]);
+    embedder.config.model = "test-b";
+    const late = deferred<number[][]>();
+    embed.mockImplementationOnce(() => late.promise);
+    const result = await store.recall({ spaceIds: ["s"], queries: [{ qid: "q", text: "推送" }], purpose: "search", topicK: 5, entryK: 0 });
+    expect(result.degraded).toContain("vector");
+    expect(result.results[0]?.topics[0]?.scores.vector).toBeNull();
+    expect(embed.mock.calls).toHaveLength(2);
+    late.resolve([[0, 1]]);
+    await vi.waitFor(() => expect(row()).toMatchObject({ embedding_model: "openai_compatible:test-b" }));
+  });
+
+  it("does not replace a valid index with an invalid model vector", async () => {
+    const { store, embed, update, row } = await fixture();
+    await store.indexTopics(["t"]);
+    await update();
+    embed.mockResolvedValueOnce([[Number.NaN, 1]]);
+    await store.indexTopics(["t"]);
+    expect(row()).toBeUndefined();
+  });
+
 });

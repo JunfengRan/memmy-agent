@@ -28,7 +28,7 @@ Agent 开工先按仓库 [AGENTS.md](../../AGENTS.md) 的初始化顺序：协�
 
 ## 权威顺序
 
-最新版架构文档（当前 v3）> SDK 接口规格 > PRD。冲突按此取舍并登记到 `spec-alignment.md`。见 [ADR-0001](decisions/0001-authority-order.md)。
+最新版架构文档（当前 V4，11/13 修订）及配套代码组织设计优先；SDK 规格作为历史兼容参考，产品行为再对照 PRD。冲突按此取舍并登记到 `spec-alignment.md`。见 [ADR-0001](decisions/0001-authority-order.md)。
 
 ## 当前对齐的规格
 
@@ -46,3 +46,7 @@ Agent 开工先按仓库 [AGENTS.md](../../AGENTS.md) 的初始化顺序：协�
    - L3 改算法或提示词：提示词升版本，`metrics.md` 追加一次评测。
 4. **可追溯**：Roadmap 条目有 ID（PM-xx），状态变化写在底部变更记录；ADR 只追加，改主意时新写一条并注明「取代 ADR-xxxx」；评测数据集带版本号，`metrics.md` 每行写明数据集版本。
 5. **反馈上游**：实现发现的规格问题写进 `open-questions.md`，周报列出待回复项，回复后关闭并在对齐表落地。
+
+## V4 过渡重构
+
+2026-11-16 本轮仅改 memmy-agent：保留已有本机数据和双端互通，分离管线状态、主题存储、向量化和宿主模板；退役召回记录，改按真实会话告知逐项裁决。部署、兼容与模型边界见 [ADR-0013](decisions/0013-v4-local-transition.md)，当前实现与后续云端范围见 [对齐表](spec-alignment.md)。
