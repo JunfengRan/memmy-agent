@@ -2,7 +2,7 @@
 
 由 `pm-eval` 维护。口径见 [ADR-0009](decisions/0009-eval-protocol-v2-1.md)。原始输出在 `eval/project-memory/runs/`（不进 git）。
 
-这一轮只保留数据集 v2.1、被测与回答都是 `deepseek-v4.1-flash-1017`、裁判是 `gpt-6-luna` 的大版本结果。v1，以及 v2 上用 Claude 阅读或 Claude 裁判的记录已删除，全文在提交 `47355fa0`。v0.1 不再重跑。当前版本跑了两次。rubric 相同，回答分差 0.097，总表写成均值，括号里是两次的范围。带全程追踪的第三次（R-20261111-06）只作错题归因，不并进均值。
+下方的 v2.1 历史对照保留数据集 v2.1、被测与回答都是 `deepseek-v4.1-flash-1017`、裁判是 `gpt-6-luna` 的大版本结果。v1，以及 v2 上用 Claude 阅读或 Claude 裁判的记录已删除，全文在提交 `47355fa0`。v0.1 不再重跑。当前版本跑了两次。rubric 相同，回答分差 0.097，总表写成均值，括号里是两次的范围。带全程追踪的第三次（R-20261111-06）只作错题归因，不并进均值。
 
 ## R-20261116-01：V4 无召回记录专项与本机双端接入
 
@@ -100,6 +100,14 @@
 
 总表只放效果、费用和时延。按题型的分数、错误类计数和分段 token 写在每条记录里。
 
+## MemOS v3 端到端
+
+| 记录 | 实际配置 | answers.llm | rubric | Recall@3 | entries.f1 | 主题 B³ F1 | 门禁 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| [R-20261119-02](#r-20261119-02) | 分批归属及关闭推理 | 0.5 | 0.4444 | 0.5758 | 0.7517 | 0.4159 | 未通过（11 项） |
+| [R-20261119-03](#r-20261119-03) | 跨 Domain 召回和披露修复 | 0.2778 | 0.2222 | 0.4545 | 0.6508 | 0.3677 | 未通过（10 项） |
+| [R-20261119-01](#r-20261119-01) | 基线 | 0.2778 | 0.25 | 0.6364 | 0.6393 | 0.4303 | 未通过（12 项） |
+
 ## 端到端
 
 产品先 add，再用这次写下的记忆 search，再由 DeepSeek 作答。main 没有项目记忆，写入按构造是 0。search P95：当前版本和旧实现是 HTTP 请求；main 的检索会调聊天模型，P95 是那次模型调用。回答 P95 三次都没记到单次延迟。
@@ -133,6 +141,457 @@
 金标灌库的报告把 Search 费用写成 null，因为评分时没有用量文件。检索路径没有聊天调用，这里记 0。3.8 ms 是那 31 次检索请求的 P95。
 
 ## 记录
+
+### R-20261119-03
+
+**结果** MemOS v3 端到端跨 Domain 召回和披露修复。Add 113 次、不同 Task ID 108 个，答题 36 道，接口 4/4 项通过，回放失败记录 1 条，终态 Topic 15/43。质量门槛有 10 项未达标。
+
+**版本** MemOS `0823e3c3` 干净工作树（仅本地启动配置，推理模式 `disabled`），Memmy v3 金标 `2d05426e`，在线回放 `0971668a`。服务提示词由源码版本固定（`add_extraction.py` `853ae25b`, `add_algorithm.py` `b719018a`, `add_merge.py` `c8f21a01`）。阅读模板 v2，独立评委提示词 v4。
+
+**配置** MemOS 与阅读模型使用 `deepseek-v4.1-flash-1017`，独立评委 `gpt-4.1-mini`（温度 0）。向量使用离线 `all-MiniLM-L6-v2` ONNX，384 维。全新 PostgreSQL schema 和 Redis Streams 命名空间，通过 MemOS `/product` API 读写。
+
+**时点** 按原始受理时间顺序推进评测时钟，依次触发现有到期关段与重试。每个时点等已关闭的工作处理后再取查询快照。正常业务代码执行模型写入、调度、事务和检索。总回放墙钟 429.1 s，其中时钟推进及等待 367.2 s。时钟控制请求超时 0 次，从原回放断点续跑。
+
+**Episode** 97 段、108 个持久化 Turn，Formation 提交 12 次。结局 staged=76, committed=11, skipped=9, failed=1。关段 idle=90, task_boundary=3, max_wait=4。
+
+**全量评分**
+
+| 指标 | 值 |
+| --- | --- |
+| `entries.precision` | 0.7885 |
+| `entries.recall` | 0.5541 |
+| `entries.recall.deferred` | 0.6 |
+| `entries.f1` | 0.6508 |
+| `entries.decision.precision` | 0.8261 |
+| `entries.decision.recall` | 0.623 |
+| `entries.decision.f1` | 0.7103 |
+| `entries.experience.precision` | 0 |
+| `entries.experience.recall` | 0 |
+| `entries.experience.f1` | 0 |
+| `entries.timeline.precision` | 0.5 |
+| `entries.timeline.recall` | 0.25 |
+| `entries.timeline.f1` | 0.3333 |
+| `entries.kindCorrect` | 0.5541 |
+| `decisions.content` | 0.623 |
+| `decisions.conflicts` | 0.5902 |
+| `decisions.history` | 0.623 |
+| `decisions.userIds` | 0.623 |
+| `decisions.time` | 0.623 |
+| `decisions.reasons` | 0 |
+| `decisions.stateExact` | 0.5902 |
+| `topics.bcubed.precision` | 0.3229 |
+| `topics.bcubed.recall` | 0.427 |
+| `topics.bcubed.f1` | 0.3677 |
+| `topics.domain` | 0.7209 |
+| `topics.keyPoints` | 0.5354 |
+| `search.recall@1` | 0.303 |
+| `search.recall@3` | 0.4545 |
+| `search.recall@9` | 0.4545 |
+| `search.entryHit` | 0.3939 |
+| `search.itemHit` | 0.4324 |
+| `search.staleTrapInHistory` | 0 |
+| `answers.llm` | 0.2778 |
+| `answers.rubric` | 0.2222 |
+| `answers.tokenF1` | 0.2354 |
+| `answers.llm.conflict` | 0.25 |
+| `answers.tokenF1.conflict` | 0.3182 |
+| `answers.llm.cross-project` | 0.3 |
+| `answers.tokenF1.cross-project` | 0.1451 |
+| `answers.llm.plain` | 0.3571 |
+| `answers.tokenF1.plain` | 0.2433 |
+| `answers.llm.stale` | 0 |
+| `answers.tokenF1.stale` | 0.1556 |
+| `answers.llm.visibility` | 0.3333 |
+| `answers.tokenF1.visibility` | 0.5217 |
+| `api.passRate` | 1 |
+
+| 错误指标 | 值 |
+| --- | --- |
+| `notWritten.falseWriteRate` | 0.08 |
+| `notWritten.deferredForced` | 0 |
+| `writes.staleAsCurrent` | 3 |
+| `writes.lateAsCurrent` | 0 |
+| `writes.conflictAsEntry` | 2 |
+| `writes.unattributed` | 3 |
+| `writes.duplicate` | 0 |
+| `writes.fieldLimitViolations` | 0 |
+| `decisions.reasonFabricated` | 1 |
+| `topics.duplicateTopics` | 2 |
+| `topics.wrongMerges` | 20 |
+| `topics.duplicateRate` | 0.0645 |
+| `topics.wrongMergeRate` | 1.5385 |
+| `topics.controlMerges` | 3 |
+| `topics.controlSplits` | 0 |
+| `search.staleShownAsCurrent` | 3 |
+| `search.crossProjectLeak` | 0 |
+| `search.foreignTopics` | 0 |
+| `search.prematureVisibility` | 0 |
+| `search.overLimit` | 0 |
+| `questions.missing` | 0 |
+
+| 题型 | 题数 | 正确率 | Token F1 | 证据命中 |
+| --- | --- | --- | --- | --- |
+| conflict | 4 | 0.25 | 0.3182 | 0.25 |
+| cross-project | 10 | 0.3 | 0.1451 | 0.3 |
+| plain | 14 | 0.3571 | 0.2433 | 0.5 |
+| stale | 5 | 0 | 0.1556 | 0.4 |
+| visibility | 3 | 0.3333 | 0.5217 | 不适用（可见性题单列） |
+
+**用量与延迟**
+
+| 阶段 | 聊天调用 | 未命中输入 | 命中输入 | 输出 | 估算 USD | 模型 P95 | HTTP P95 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Add | 222 | 204984 | 7936 | 29873 | 0.0487 | 2224.5884 ms | 15.2307 ms |
+| Search | 0 | 0 | 0 | 0 | 0 | 0 ms | 130.6041 ms |
+| 阅读 | 36 | 13368 | 4608 | 3169 | 0.0039 | 2186.0241 ms | 不适用 |
+| 独立评委 | 175 | 65083 | 21504 | 4358 | 不适用 | 2986.7878 ms | 不适用 |
+
+MemOS 聊天模型分步骤记录如下。输出包含提供方记入输出的推理 token。
+
+| 步骤 | 发起 | 已响应 | 空正文 | 未命中输入 | 命中输入 | 输出 | 推理 | 模型 P95 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| assign | 40 | 40 | 0 | 30338 | 0 | 2497 | 0 | 1342.581 ms |
+| assign_batch | 6 | 6 | 0 | 23067 | 0 | 1252 | 0 | 2221.794 ms |
+| decision_update | 38 | 38 | 0 | 50863 | 0 | 3397 | 0 | 1502.619 ms |
+| extract | 103 | 103 | 0 | 65011 | 6912 | 17501 | 0 | 2494.517 ms |
+| formation | 12 | 12 | 0 | 32528 | 0 | 2708 | 0 | 2326.68 ms |
+| metadata | 23 | 23 | 0 | 3177 | 1024 | 2518 | 0 | 1918.054 ms |
+
+空正文响应消耗 0 个输出 token。Topic 归属判断上下文计数 {'direct': 40}。Formation 请求共记录 83 个候选 Episode 次数，涉及 69 个不同 Episode。
+
+| 本地向量阶段 | 请求 | 成功 | 输入文本数 | P95 |
+| --- | --- | --- | --- | --- |
+| add_unattributed | 3 | 3 | 3 | 8.307 ms |
+| candidate_recall | 84 | 84 | 84 | 12.219 ms |
+| check | 70 | 70 | 195 | 17.303 ms |
+| search | 234 | 234 | 633 | 18.22 ms |
+| topic_index | 14 | 14 | 94 | 212.796 ms |
+
+| Redis 处理器 | 入队消息 | 出队消息 | 开始批次 | 结束批次 | 处理 P95 |
+| --- | --- | --- | --- | --- | --- |
+| project_add_merge | 15 | 15 | 15 | 15 | 8731.951 ms |
+| project_add_merge_result | 92 | 92 | 90 | 90 | 2905.965 ms |
+| project_add_process | 103 | 103 | 103 | 103 | 2526.161 ms |
+| project_add_space | 92 | 92 | 90 | 90 | 3426.128 ms |
+
+Add 请求 P95 衡量受理。任务端到端 P95 不适用（回放以评测时钟推进并等待到期工作）。SUT 用量从提供方成功响应日志提取，222/222 条调用日志带响应 token 统计，包含原始缓存计数。费用取仓库 `pricing.json` 的估算值。缺失费用和时延的原因见评分 JSON 的 `efficiency`。
+
+**门禁**
+
+- `decisions.stateExact=0.5901639344262295 < 0.8`
+- `topics.bcubed.f1=0.36774532622569245 < 0.8`
+- `entries.f1=0.6507936507936507 < 0.8`
+- `search.recall@3=0.45454545454545453 < 0.85`
+- `answers.llm=0.2777777777777778 < 0.8`
+- `search.staleShownAsCurrent=3 must be 0`
+- `decisions.reasonFabricated=1 must be 0`
+- `topics.controlMerges=3 must be 0`
+- `topics.duplicateRate=0.06451612903225806 > 0.02`
+- `topics.wrongMergeRate=1.5384615384615385 > 0.01`
+
+**原始输出** `eval/project-memory/runs/20261119-memos-v3-corrected/live-run.json`、`score.json`、`episode-observations.json`、`sut-usage-summary.json`、逐调用 JSONL、`index.html`。该记录使用 MemOS + v3，历史 SQLite v2.1 记录使用不同被测服务、金标和时延口径。
+
+### R-20261119-02
+
+**结果** MemOS v3 端到端分批归属及关闭推理。Add 113 次、不同 Task ID 108 个，答题 36 道，接口 4/4 项通过，回放失败记录 0 条，终态 Topic 24/43。质量门槛有 11 项未达标。
+
+**版本** MemOS `01bd71c0` 干净工作树（仅本地启动配置，推理模式 `disabled`），Memmy v3 金标 `2d05426e`，在线回放 `0971668a`。服务提示词由源码版本固定（`add_extraction.py` `4e3d374f`, `add_algorithm.py` `283100a5`, `add_merge.py` `c8f21a01`）。阅读模板 v2，独立评委提示词 v4。
+
+**配置** MemOS 与阅读模型使用 `deepseek-v4.1-flash-1017`，独立评委 `gpt-4.1-mini`（温度 0）。向量使用离线 `all-MiniLM-L6-v2` ONNX，384 维。全新 PostgreSQL schema 和 Redis Streams 命名空间，通过 MemOS `/product` API 读写。
+
+**时点** 按原始受理时间顺序推进评测时钟，依次触发现有到期关段与重试。每个时点等已关闭的工作处理后再取查询快照。正常业务代码执行模型写入、调度、事务和检索。总回放墙钟 475.0 s，其中时钟推进及等待 406.6 s。时钟控制请求超时 0 次，从原回放断点续跑。
+
+**Episode** 97 段、108 个持久化 Turn，Formation 提交 13 次。结局 staged=67, committed=20, skipped=10。关段 idle=90, task_boundary=3, max_wait=4。
+
+**全量评分**
+
+| 指标 | 值 |
+| --- | --- |
+| `entries.precision` | 0.7467 |
+| `entries.recall` | 0.7568 |
+| `entries.recall.deferred` | 1 |
+| `entries.f1` | 0.7517 |
+| `entries.decision.precision` | 0.8 |
+| `entries.decision.recall` | 0.7869 |
+| `entries.decision.f1` | 0.7934 |
+| `entries.experience.precision` | 0 |
+| `entries.experience.recall` | 0 |
+| `entries.experience.f1` | 0 |
+| `entries.timeline.precision` | 0.4286 |
+| `entries.timeline.recall` | 0.5 |
+| `entries.timeline.f1` | 0.4615 |
+| `entries.kindCorrect` | 0.7297 |
+| `decisions.content` | 0.7869 |
+| `decisions.conflicts` | 0.7377 |
+| `decisions.history` | 0.7541 |
+| `decisions.userIds` | 0.7705 |
+| `decisions.time` | 0.7705 |
+| `decisions.reasons` | 0 |
+| `decisions.stateExact` | 0.6885 |
+| `topics.bcubed.precision` | 0.334 |
+| `topics.bcubed.recall` | 0.5509 |
+| `topics.bcubed.f1` | 0.4159 |
+| `topics.domain` | 0.9302 |
+| `topics.keyPoints` | 0.6768 |
+| `search.recall@1` | 0.2727 |
+| `search.recall@3` | 0.5758 |
+| `search.recall@9` | 0.6061 |
+| `search.entryHit` | 0.6364 |
+| `search.itemHit` | 0.6486 |
+| `search.staleTrapInHistory` | 0.1667 |
+| `answers.llm` | 0.5 |
+| `answers.rubric` | 0.4444 |
+| `answers.tokenF1` | 0.3764 |
+| `answers.llm.conflict` | 0.25 |
+| `answers.tokenF1.conflict` | 0.3384 |
+| `answers.llm.cross-project` | 0.6 |
+| `answers.tokenF1.cross-project` | 0.4155 |
+| `answers.llm.plain` | 0.5 |
+| `answers.tokenF1.plain` | 0.3353 |
+| `answers.llm.stale` | 0.6 |
+| `answers.tokenF1.stale` | 0.3567 |
+| `answers.llm.visibility` | 0.3333 |
+| `answers.tokenF1.visibility` | 0.5217 |
+| `api.passRate` | 1 |
+
+| 错误指标 | 值 |
+| --- | --- |
+| `notWritten.falseWriteRate` | 0.2 |
+| `notWritten.deferredForced` | 1 |
+| `writes.staleAsCurrent` | 5 |
+| `writes.lateAsCurrent` | 0 |
+| `writes.conflictAsEntry` | 2 |
+| `writes.unattributed` | 3 |
+| `writes.duplicate` | 3 |
+| `writes.fieldLimitViolations` | 0 |
+| `decisions.reasonFabricated` | 2 |
+| `topics.duplicateTopics` | 5 |
+| `topics.wrongMerges` | 25 |
+| `topics.duplicateRate` | 0.125 |
+| `topics.wrongMergeRate` | 1.25 |
+| `topics.controlMerges` | 3 |
+| `topics.controlSplits` | 0 |
+| `search.staleShownAsCurrent` | 3 |
+| `search.crossProjectLeak` | 0 |
+| `search.foreignTopics` | 0 |
+| `search.prematureVisibility` | 1 |
+| `search.overLimit` | 0 |
+| `questions.missing` | 0 |
+
+| 题型 | 题数 | 正确率 | Token F1 | 证据命中 |
+| --- | --- | --- | --- | --- |
+| conflict | 4 | 0.25 | 0.3384 | 0.25 |
+| cross-project | 10 | 0.6 | 0.4155 | 0.7 |
+| plain | 14 | 0.5 | 0.3353 | 0.6429 |
+| stale | 5 | 0.6 | 0.3567 | 0.8 |
+| visibility | 3 | 0.3333 | 0.5217 | 不适用（可见性题单列） |
+
+**用量与延迟**
+
+| 阶段 | 聊天调用 | 未命中输入 | 命中输入 | 输出 | 估算 USD | 模型 P95 | HTTP P95 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Add | 245 | 201604 | 4736 | 32214 | 0.0496 | 2218.5099 ms | 13.8501 ms |
+| Search | 0 | 0 | 0 | 0 | 0 | 0 ms | 229.6299 ms |
+| 阅读 | 36 | 22181 | 4608 | 3857 | 0.0057 | 3138.9633 ms | 不适用 |
+| 独立评委 | 228 | 92354 | 36864 | 5550 | 不适用 | 3350.9997 ms | 不适用 |
+
+MemOS 聊天模型分步骤记录如下。输出包含提供方记入输出的推理 token。
+
+| 步骤 | 发起 | 已响应 | 空正文 | 未命中输入 | 命中输入 | 输出 | 推理 | 模型 P95 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| assign | 39 | 39 | 0 | 36008 | 0 | 2402 | 0 | 1368.095 ms |
+| assign_batch | 6 | 6 | 0 | 10429 | 0 | 691 | 0 | 1551.825 ms |
+| decision_update | 49 | 49 | 0 | 63646 | 896 | 4596 | 0 | 1521.669 ms |
+| extract | 98 | 98 | 0 | 61214 | 1536 | 17312 | 0 | 2561.537 ms |
+| formation | 13 | 13 | 0 | 25185 | 0 | 2894 | 0 | 2327.53 ms |
+| metadata | 40 | 40 | 0 | 5122 | 2304 | 4319 | 0 | 1830.472 ms |
+
+空正文响应消耗 0 个输出 token。Topic 归属判断上下文计数 {'direct': 38, 'unknown': 1}。Formation 请求共记录 74 个候选 Episode 次数，涉及 70 个不同 Episode。
+
+| 本地向量阶段 | 请求 | 成功 | 输入文本数 | P95 |
+| --- | --- | --- | --- | --- |
+| add_unattributed | 6 | 6 | 6 | 9.457 ms |
+| candidate_recall | 81 | 81 | 81 | 12.48 ms |
+| check | 125 | 125 | 325 | 19.576 ms |
+| search | 357 | 357 | 991 | 19.982 ms |
+| topic_index | 21 | 21 | 147 | 214.74 ms |
+
+| Redis 处理器 | 入队消息 | 出队消息 | 开始批次 | 结束批次 | 处理 P95 |
+| --- | --- | --- | --- | --- | --- |
+| project_add_merge | 21 | 21 | 21 | 21 | 8138.376 ms |
+| project_add_merge_result | 92 | 92 | 89 | 89 | 3661.382 ms |
+| project_add_process | 98 | 98 | 98 | 98 | 2588.053 ms |
+| project_add_space | 94 | 94 | 92 | 92 | 3686.374 ms |
+
+q45 的提前披露沿用原评分。查询快照未包含限速数值，条目对齐未命中。离线复用同一评委缓存，确认命中来自元数据判分。
+
+Add 请求 P95 衡量受理。任务端到端 P95 不适用（回放以评测时钟推进并等待到期工作）。SUT 用量从提供方成功响应日志提取，245/245 条调用日志带响应 token 统计，包含原始缓存计数。费用取仓库 `pricing.json` 的估算值。缺失费用和时延的原因见评分 JSON 的 `efficiency`。
+
+**门禁**
+
+- `decisions.stateExact=0.6885245901639344 < 0.8`
+- `topics.bcubed.f1=0.4158924195106469 < 0.8`
+- `entries.f1=0.7516778523489932 < 0.8`
+- `search.recall@3=0.5757575757575758 < 0.85`
+- `answers.llm=0.5 < 0.8`
+- `search.staleShownAsCurrent=3 must be 0`
+- `decisions.reasonFabricated=2 must be 0`
+- `topics.controlMerges=3 must be 0`
+- `search.prematureVisibility must be 0`
+- `topics.duplicateRate=0.125 > 0.02`
+- `topics.wrongMergeRate=1.25 > 0.01`
+
+**原始输出** `eval/project-memory/runs/20261119-memos-v3-optimized/live-run.json`、`score.json`、`episode-observations.json`、`sut-usage-summary.json`、逐调用 JSONL、`index.html`。该记录使用 MemOS + v3，历史 SQLite v2.1 记录使用不同被测服务、金标和时延口径。
+
+### R-20261119-01
+
+**结果** MemOS v3 端到端基线。Add 113 次、不同 Task ID 108 个，答题 36 道，接口 3/4 项通过，回放失败记录 0 条，终态 Topic 17/43。质量门槛有 12 项未达标。
+
+**版本** MemOS `729cfc30` 干净工作树（仅本地启动配置，推理模式 `provider_default`），Memmy v3 金标 `2d05426e`，在线回放 `0971668a`。服务提示词由源码版本固定（`add_extraction.py` `4e3d374f`, `add_algorithm.py` `e66aeca5`, `add_merge.py` `c8f21a01`）。阅读模板 v2，独立评委提示词 v4。
+
+**配置** MemOS 与阅读模型使用 `deepseek-v4.1-flash-1017`，独立评委 `gpt-4.1-mini`（温度 0）。向量使用离线 `all-MiniLM-L6-v2` ONNX，384 维。全新 PostgreSQL schema 和 Redis Streams 命名空间，通过 MemOS `/product` API 读写。
+
+**时点** 按原始受理时间顺序推进评测时钟，依次触发现有到期关段与重试。每个时点等已关闭的工作处理后再取查询快照。正常业务代码执行模型写入、调度、事务和检索。总回放墙钟 4160.4 s，其中时钟推进及等待 4081.9 s。时钟控制请求超时 3 次，从原回放断点续跑。
+
+**Episode** 97 段、108 个持久化 Turn，Formation 提交 9 次。结局 staged=80, committed=12, skipped=5。关段 idle=90, task_boundary=3, max_wait=4。
+
+**全量评分**
+
+| 指标 | 值 |
+| --- | --- |
+| `entries.precision` | 0.8125 |
+| `entries.recall` | 0.527 |
+| `entries.recall.deferred` | 0.6 |
+| `entries.f1` | 0.6393 |
+| `entries.decision.precision` | 0.8372 |
+| `entries.decision.recall` | 0.5902 |
+| `entries.decision.f1` | 0.6923 |
+| `entries.experience.precision` | 0 |
+| `entries.experience.recall` | 0 |
+| `entries.experience.f1` | 0 |
+| `entries.timeline.precision` | 0.6 |
+| `entries.timeline.recall` | 0.25 |
+| `entries.timeline.f1` | 0.3529 |
+| `entries.kindCorrect` | 0.527 |
+| `decisions.content` | 0.5902 |
+| `decisions.conflicts` | 0.5738 |
+| `decisions.history` | 0.5738 |
+| `decisions.userIds` | 0.5738 |
+| `decisions.time` | 0.5738 |
+| `decisions.reasons` | 0 |
+| `decisions.stateExact` | 0.541 |
+| `topics.bcubed.precision` | 0.4375 |
+| `topics.bcubed.recall` | 0.4234 |
+| `topics.bcubed.f1` | 0.4303 |
+| `topics.domain` | 0.6279 |
+| `topics.keyPoints` | 0.5152 |
+| `search.recall@1` | 0.5455 |
+| `search.recall@3` | 0.6364 |
+| `search.recall@9` | 0.6364 |
+| `search.entryHit` | 0.3636 |
+| `search.itemHit` | 0.3784 |
+| `search.staleTrapInHistory` | 0.1667 |
+| `answers.llm` | 0.2778 |
+| `answers.rubric` | 0.25 |
+| `answers.tokenF1` | 0.2655 |
+| `answers.llm.conflict` | 0 |
+| `answers.tokenF1.conflict` | 0.1964 |
+| `answers.llm.cross-project` | 0.3 |
+| `answers.tokenF1.cross-project` | 0.229 |
+| `answers.llm.plain` | 0.3571 |
+| `answers.tokenF1.plain` | 0.2651 |
+| `answers.llm.stale` | 0.2 |
+| `answers.tokenF1.stale` | 0.2414 |
+| `answers.llm.visibility` | 0.3333 |
+| `answers.tokenF1.visibility` | 0.5217 |
+| `api.passRate` | 0.75 |
+
+| 错误指标 | 值 |
+| --- | --- |
+| `notWritten.falseWriteRate` | 0.08 |
+| `notWritten.deferredForced` | 1 |
+| `writes.staleAsCurrent` | 2 |
+| `writes.lateAsCurrent` | 0 |
+| `writes.conflictAsEntry` | 2 |
+| `writes.unattributed` | 3 |
+| `writes.duplicate` | 0 |
+| `writes.fieldLimitViolations` | 0 |
+| `decisions.reasonFabricated` | 1 |
+| `topics.duplicateTopics` | 2 |
+| `topics.wrongMerges` | 14 |
+| `topics.duplicateRate` | 0.0741 |
+| `topics.wrongMergeRate` | 0.9333 |
+| `topics.controlMerges` | 2 |
+| `topics.controlSplits` | 1 |
+| `search.staleShownAsCurrent` | 2 |
+| `search.crossProjectLeak` | 1 |
+| `search.foreignTopics` | 0 |
+| `search.prematureVisibility` | 0 |
+| `search.overLimit` | 0 |
+| `questions.missing` | 0 |
+
+| 题型 | 题数 | 正确率 | Token F1 | 证据命中 |
+| --- | --- | --- | --- | --- |
+| conflict | 4 | 0 | 0.1964 | 0 |
+| cross-project | 10 | 0.3 | 0.229 | 0.5 |
+| plain | 14 | 0.3571 | 0.2651 | 0.3571 |
+| stale | 5 | 0.2 | 0.2414 | 0.4 |
+| visibility | 3 | 0.3333 | 0.5217 | 不适用（可见性题单列） |
+
+**用量与延迟**
+
+| 阶段 | 聊天调用 | 未命中输入 | 命中输入 | 输出 | 估算 USD | 模型 P95 | HTTP P95 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Add | 364 | 291761 | 177664 | 575634 | 0.3897 | 28089.5111 ms | 14.8997 ms |
+| Search | 0 | 0 | 0 | 0 | 0 | 0 ms | 81.7614 ms |
+| 阅读 | 36 | 14015 | 4480 | 3320 | 0.0041 | 2557.2027 ms | 不适用 |
+| 独立评委 | 163 | 61094 | 10752 | 3807 | 不适用 | 3012.1556 ms | 不适用 |
+
+MemOS 聊天模型分步骤记录如下。输出包含提供方记入输出的推理 token。
+
+| 步骤 | 发起 | 已响应 | 空正文 | 未命中输入 | 命中输入 | 输出 | 推理 | 模型 P95 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| assign | 166 | 166 | 14 | 61736 | 70656 | 261547 | 251706 | 27552.469 ms |
+| decision_update | 31 | 31 | 0 | 40366 | 0 | 10873 | 8086 | 3996.046 ms |
+| extract | 99 | 99 | 2 | 64712 | 1536 | 137000 | 114378 | 21173.458 ms |
+| formation | 41 | 41 | 31 | 121033 | 104192 | 156302 | 153800 | 29625.839 ms |
+| metadata | 27 | 27 | 0 | 3914 | 1280 | 9912 | 7281 | 5098.73 ms |
+
+空正文响应消耗 192512 个输出 token。Topic 归属判断上下文计数 {'direct': 38, 'formation_reassignment': 128}。Formation 请求共记录 495 个候选 Episode 次数，涉及 83 个不同 Episode。
+
+| 本地向量阶段 | 请求 | 成功 | 输入文本数 | P95 |
+| --- | --- | --- | --- | --- |
+| add_unattributed | 4 | 4 | 4 | 13.918 ms |
+| candidate_recall | 88 | 88 | 88 | 16.127 ms |
+| check | 40 | 40 | 115 | 17.993 ms |
+| search | 147 | 147 | 416 | 21.099 ms |
+| topic_index | 13 | 13 | 85 | 216.452 ms |
+
+| Redis 处理器 | 入队消息 | 出队消息 | 开始批次 | 结束批次 | 处理 P95 |
+| --- | --- | --- | --- | --- | --- |
+| project_add_merge | 14 | 14 | 14 | 14 | 17760.502 ms |
+| project_add_merge_result | 100 | 100 | 99 | 99 | 6862.949 ms |
+| project_add_process | 98 | 98 | 98 | 98 | 19712.398 ms |
+| project_add_space | 96 | 96 | 95 | 95 | 182878.824 ms |
+
+Add 请求 P95 衡量受理。任务端到端 P95 不适用（回放以评测时钟推进并等待到期工作）。SUT 用量从提供方成功响应日志提取，364/364 条调用日志带响应 token 统计，包含原始缓存计数。费用取仓库 `pricing.json` 的估算值。缺失费用和时延的原因见评分 JSON 的 `efficiency`。
+
+**门禁**
+
+- `decisions.stateExact=0.5409836065573771 < 0.8`
+- `topics.bcubed.f1=0.4303466317854807 < 0.8`
+- `entries.f1=0.6393442622950819 < 0.8`
+- `search.recall@3=0.6363636363636364 < 0.85`
+- `answers.llm=0.2777777777777778 < 0.8`
+- `api.passRate=0.75 < 1`
+- `search.staleShownAsCurrent=2 must be 0`
+- `search.crossProjectLeak=1 must be 0`
+- `decisions.reasonFabricated=1 must be 0`
+- `topics.controlMerges=2 must be 0`
+- `topics.duplicateRate=0.07407407407407407 > 0.02`
+- `topics.wrongMergeRate=0.9333333333333333 > 0.01`
+
+**原始输出** `eval/project-memory/runs/20261119-memos-v3-729cfc30/live-run.json`、`score.json`、`episode-observations.json`、`sut-usage-summary.json`、逐调用 JSONL、`index.html`。该记录使用 MemOS + v3，历史 SQLite v2.1 记录使用不同被测服务、金标和时延口径。
 
 ### R-20261112-01
 
