@@ -29,6 +29,7 @@ import { rankProjectCandidates, type SearchInput } from "../../../Memory/src/ser
 import type { ProjectMemoryStore } from "../../../Memory/src/service/project-memory/store/store.js";
 import { charLength } from "../../../Memory/src/service/project-memory/text.js";
 import { MemoryDb } from "../../../Memory/src/storage/db.js";
+import { datasetDirectory } from "../gold-add-memory/build-gold-baseline.mjs";
 import { mean, percentile, ratio } from "../gold-add-memory/metrics.mjs";
 
 const HASH_DIM = 64;
@@ -42,7 +43,7 @@ const TIMEOUT_MS = PROJECT_MEMORY_LIMITS.recallPathTimeoutMs;
 const VIEWS = ["user_memory", "detail_factual", "skill", "project"];
 
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
-const goldPath = join(repoRoot, "eval/project-memory/gold-add-memory/dataset/gold.json");
+const goldPath = join(datasetDirectory(2.1), "gold.json");
 
 interface GoldPoint {
   text: string;

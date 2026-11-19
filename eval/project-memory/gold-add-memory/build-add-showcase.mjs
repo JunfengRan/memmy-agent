@@ -10,6 +10,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { datasetDirectory } from "./build-gold-baseline.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, "..", "..", "..");
@@ -288,8 +289,9 @@ function main() {
   };
   for (const key of Object.keys(runs)) assertRun(key, runs[key]);
 
-  const gold = readJson(join(repo, "eval", "project-memory", "gold-add-memory", "dataset", "gold.json"));
-  const corpus = readJson(join(repo, "eval", "project-memory", "gold-add-memory", "dataset", "corpus.json"));
+  const archived = datasetDirectory(2.1);
+  const gold = readJson(join(archived, "gold.json"));
+  const corpus = readJson(join(archived, "corpus.json"));
   const live = readJson(join(repo, "eval", "project-memory", "runs", RUN_IDS.B, "live-run.json"));
   const counted = countEntries(live.final ?? {});
   if (counted.topics !== runs.B.topics) throw new Error(`gallery topics ${counted.topics} != report ${runs.B.topics}`);
