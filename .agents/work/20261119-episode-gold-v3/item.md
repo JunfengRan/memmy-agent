@@ -1,7 +1,7 @@
 ---
 id: 20261119-episode-gold-v3
-status: ready-for-review
-owner: developer / Codex
+status: approved
+owner: reviewer / Codex
 roadmap: 无
 branch: codex/project-memory-gold-v3
 updated: 2026-11-19
@@ -28,7 +28,7 @@ updated: 2026-11-19
 - [x] 113 条轨迹中的 108 个原始 Turn 均有基于原文的唯一语义 Episode 标注。
 - [x] 冻结的 v2.1 可按原口径重新生成、检查与评分。
 - [x] v3 生成器、校验器与评分器覆盖开放、暂存、发布与旧结论时点。
-- [ ] 独立评审。
+- [x] 独立评审。
 
 ## 状态记录
 
@@ -37,3 +37,4 @@ updated: 2026-11-19
 | 2026-11-19 | ready-for-review | developer / Codex | [handoff-01.md](handoff-01.md) |
 | 2026-11-19 | changes-requested | reviewer / Codex | [review-01.md](review-01.md) |
 | 2026-11-19 | ready-for-review | developer / Codex | [handoff-02.md](handoff-02.md) |
+| 2026-11-19 | approved | reviewer / Codex | [review-02.md](review-02.md) |
