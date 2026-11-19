@@ -255,6 +255,7 @@ export function buildGold(ds) {
   const allSourceOperations = timeline ? replay(ds, "9999", { traceMode: true }).state : null;
   const pendingEntries = [];
   const topics = new Map(labels.topics.map((topic) => [topic.id, topic]));
+  const traces = new Map(corpus.traces.map((trace) => [trace.id, trace]));
   const conversations = new Map(corpus.conversations.map((c) => [c.id, c]));
   const entries = Object.entries(labels.entries).map(([id, meta]) => {
     const final = state.get(id);
@@ -335,10 +336,11 @@ export function buildGold(ds) {
       const { entry: id, phase } = question.pending;
       const draftTrace = corpus.traces.find((trace) => labels.traces[trace.id]?.ops.some((op) => op.op === "add" && op.entry === id));
       const draft = draftTrace && labels.traces[draftTrace.id].ops.find((op) => op.op === "add" && op.entry === id);
-      const batch = draft && timeline.batchByTrace.get(draft.deferredUntil ?? draftTrace.id);
+      const release = draft?.deferredUntil ? traces.get(draft.deferredUntil) : draftTrace;
+      const batch = release && timeline.batchByTrace.get(release.id);
       const topic = topics.get(labels.entries[id]?.topic);
       const asked = question.askedAt;
-      const open = batch && batch.acceptedAt <= asked && batch.closedAt > asked;
+      const open = batch && traceVisibleTime(release) <= asked && batch.closedAt > asked;
       const staged = batch?.stagedAt && batch.stagedAt <= asked && (!batch.committedAt || batch.committedAt > asked);
       if (!topic || topic.space_id !== question.space_id || (phase === "open" ? !open : phase === "staged" ? !staged : true) || snap.has(id)) {
         errors.push(`${question.id} does not ask while ${id} is ${phase} in the same Space`);

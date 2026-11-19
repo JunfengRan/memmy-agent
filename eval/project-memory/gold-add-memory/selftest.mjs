@@ -47,6 +47,20 @@ test("v3 oracle sees committed state at the question time", () => {
   assert.ok(after.some((item) => item.content.includes("amount 列") && item.history.length === 1 && !item.conflicts.length));
 });
 
+test("v3 open visibility starts at the entry's own effective Turn acceptance", () => {
+  const current = loadDataset();
+  const question = current.questions.questions.find((item) => item.id === "q48");
+  Object.assign(question, {
+    conversation: "ledger-ask", space_id: "space_ledger", askedAt: "2026-10-21T21:02:00+08:00",
+    pending: { entry: "tl_archive", phase: "open" }
+  });
+  assert.ok(buildGold(current).errors.includes("q48 does not ask while tl_archive is open in the same Space"));
+  question.pending.entry = "dec_archive";
+  assert.ok(buildGold(current).errors.includes("q48 does not ask while dec_archive is open in the same Space"));
+  question.askedAt = "2026-10-21T21:12:00+08:00";
+  assert.deepEqual(buildGold(current).errors, []);
+});
+
 test("v3 scorer detects early disclosure of a staged Topic and a pending decision", async () => {
   const current = loadDataset();
   const currentGold = loadGold();
