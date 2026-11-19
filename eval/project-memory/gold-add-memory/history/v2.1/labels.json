@@ -1,0 +1,2614 @@
+{
+  "datasetVersion": 2.1,
+  "spec": "项目记忆：端云协同架构与模块设计（v3）§2.2.5–§2.2.9",
+  "rules": {
+    "decision": "只记约束其他工作的选择：范围 / 对外约定 / 共同约定；局部实现、执行步骤、未采纳方案、未决事项不记",
+    "experience": "脱离当前背景仍能指导同类工作才记；先写应该怎么做，再写被否定的做法及原因",
+    "timeline": "只记产出的状态变化（完成 / 提交 / 合并 / 通过 / 上线 / 暂停 / 恢复 / 作废）；文档只记初稿、评审、定稿、发布。较早的轨迹不是过时内容",
+    "author": "user_ids 记作出决策或交办、采纳该内容的成员，不记 Agent",
+    "reason": "取自会话，没说就为空；每个非空 reason 都带 reasonQuote（会话原文片段）",
+    "ops": "非作者且未经认可的不同结论只进 conflicts（conflict_append）；作者本人或会话体现认可 → rewrite，旧结论进 history；已告知后成员裁决 → resolve，清空 conflicts 并写 history",
+    "optional": "optional 的条目写不写都对：写了不算误写，不写不算漏写（边界情况，见 README「规格含糊处」）"
+  },
+  "dropReasons": {
+    "local_implementation": "局部实现",
+    "execution_step": "执行步骤",
+    "unadopted_proposal": "未采纳的方案",
+    "unresolved": "未决事项",
+    "restatement": "重复内容（复述已召回或已记录的结论）",
+    "process_material": "过程材料",
+    "unrelated": "与工作无关的内容"
+  },
+  "topics": [
+    {
+      "id": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "domain": "代码开发",
+      "topic_name": "ledger 月报生成",
+      "summaryKeyPoints": [
+        {
+          "text": "按客户汇总生成 ledger 的月度账务报表",
+          "since": "t_journal"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "月报按 entries 的 amount 列汇总",
+          "since": "t_resolve"
+        },
+        {
+          "text": "空客户的处理尚有不一致结论",
+          "since": "t_column"
+        },
+        {
+          "text": "report.ts 丢弃空客户整行的问题已修复",
+          "since": "t_bug"
+        }
+      ]
+    },
+    {
+      "id": "tp_ledger_export",
+      "space_id": "space_ledger",
+      "domain": "代码开发",
+      "topic_name": "月报导出方案",
+      "summaryKeyPoints": [
+        {
+          "text": "决定 ledger 月报是否复用 catalog 的导出做法",
+          "since": "t_copy"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "dry-run 报告显示月报用不上 export，不搬进 ledger",
+          "since": "t_dryrun"
+        },
+        {
+          "text": "ledger 里的 export 拷贝已撤回",
+          "since": "t_wait"
+        }
+      ]
+    },
+    {
+      "id": "tp_ledger_repo",
+      "space_id": "space_ledger",
+      "domain": "工程规范",
+      "topic_name": "仓库协作规范",
+      "summaryKeyPoints": [
+        {
+          "text": "约定 ledger 仓库的分支与数据库密钥管理方式",
+          "since": "t_write_secret"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "数据库密码只留在本机 .env",
+          "since": "t_env"
+        },
+        {
+          "text": "分支策略尚有不一致结论",
+          "since": "t_admin_branch"
+        }
+      ]
+    },
+    {
+      "id": "tp_cat_price",
+      "space_id": "space_catalog",
+      "domain": "代码开发",
+      "topic_name": "价格查询与展示",
+      "summaryKeyPoints": [
+        {
+          "text": "为价格列表提供快速、口径一致的价格数据",
+          "since": "t_price"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "price 表已加 amount 列，价格列表直接读取",
+          "since": "t_price"
+        }
+      ]
+    },
+    {
+      "id": "tp_cat_export",
+      "space_id": "space_catalog",
+      "domain": "代码开发",
+      "topic_name": "价格表导出",
+      "summaryKeyPoints": [
+        {
+          "text": "把价格表导出成文件",
+          "since": "t_export"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "价格表导出已完成，当前写 prices.csv",
+          "since": "t_csv"
+        }
+      ]
+    },
+    {
+      "id": "tp_ledger_archive",
+      "space_id": "space_ledger",
+      "domain": "代码开发",
+      "topic_name": "月报归档规则",
+      "summaryKeyPoints": [
+        {
+          "text": "约定月报定稿后的归档位置和保留期",
+          "since": "t_archive_land"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "月报定稿后放入 archive/，只保留十二个月",
+          "since": "t_archive_land"
+        },
+        {
+          "text": "保留期尚有不一致结论",
+          "since": "t_archive_late"
+        }
+      ]
+    },
+    {
+      "id": "tp_clinic_quota",
+      "space_id": "space_clinic",
+      "domain": "门诊排班",
+      "topic_name": "门诊号源规则",
+      "summaryKeyPoints": [
+        {
+          "text": "约定门诊号源的释放时间",
+          "since": "t_clinic_quota"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定门诊号源的释放时间",
+          "since": "t_clinic_quota"
+        }
+      ]
+    },
+    {
+      "id": "tp_clinic_call",
+      "space_id": "space_clinic",
+      "domain": "门诊排班",
+      "topic_name": "候诊叫号顺序",
+      "summaryKeyPoints": [
+        {
+          "text": "约定候诊叫号和过号的排队方式",
+          "since": "t_clinic_call"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "叫号按挂号先后，过号排到当前队尾",
+          "since": "t_clinic_call"
+        }
+      ]
+    },
+    {
+      "id": "tp_clinic_slot",
+      "space_id": "space_clinic",
+      "domain": "门诊排班",
+      "topic_name": "门诊时段",
+      "summaryKeyPoints": [
+        {
+          "text": "约定上午和下午门诊的起止时间",
+          "since": "t_clinic_slot"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定上午和下午门诊的起止时间",
+          "since": "t_clinic_slot"
+        }
+      ]
+    },
+    {
+      "id": "tp_clinic_rx",
+      "space_id": "space_clinic",
+      "domain": "门诊排班",
+      "topic_name": "处方有效期",
+      "summaryKeyPoints": [
+        {
+          "text": "约定普通处方可以拿药的期限",
+          "since": "t_clinic_rx"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "普通处方的有效期限尚有另一项说法",
+          "since": "t_clinic_rx_late"
+        }
+      ]
+    },
+    {
+      "id": "tp_clinic_expiry",
+      "space_id": "space_clinic",
+      "domain": "药房管理",
+      "topic_name": "药品效期管理",
+      "summaryKeyPoints": [
+        {
+          "text": "约定临近失效药品如何标示",
+          "since": "t_clinic_expiry"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定临近失效药品如何标示",
+          "since": "t_clinic_expiry"
+        }
+      ]
+    },
+    {
+      "id": "tp_clinic_cold",
+      "space_id": "space_clinic",
+      "domain": "药房管理",
+      "topic_name": "冷藏药品",
+      "summaryKeyPoints": [
+        {
+          "text": "约定冷藏药放在哪一类柜子",
+          "since": "t_clinic_cold"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定冷藏药放在哪一类柜子",
+          "since": "t_clinic_cold"
+        }
+      ]
+    },
+    {
+      "id": "tp_clinic_return",
+      "space_id": "space_clinic",
+      "domain": "药房管理",
+      "topic_name": "退药窗口",
+      "summaryKeyPoints": [
+        {
+          "text": "约定退药只在上午窗口收取",
+          "since": "t_clinic_return_land"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定退药只在上午窗口收取",
+          "since": "t_clinic_return_land"
+        }
+      ]
+    },
+    {
+      "id": "tp_clinic_label",
+      "space_id": "space_clinic",
+      "domain": "药房管理",
+      "topic_name": "药袋标签",
+      "summaryKeyPoints": [
+        {
+          "text": "约定药袋上写通用名",
+          "since": "t_clinic_label"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定药袋上写通用名",
+          "since": "t_clinic_label"
+        }
+      ]
+    },
+    {
+      "id": "tp_clinic_extra",
+      "space_id": "space_clinic",
+      "domain": "门诊排班",
+      "topic_name": "门诊加号规则",
+      "summaryKeyPoints": [
+        {
+          "text": "约定临时加号每个半天的上限",
+          "since": "t_clinic_extra"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定临时加号每个半天的上限",
+          "since": "t_clinic_extra"
+        }
+      ]
+    },
+    {
+      "id": "tp_clinic_near",
+      "space_id": "space_clinic",
+      "domain": "药房管理",
+      "topic_name": "药品近效管理",
+      "summaryKeyPoints": [
+        {
+          "text": "约定近效期药优先调去哪里",
+          "since": "t_clinic_near"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定近效期药优先调去哪里",
+          "since": "t_clinic_near"
+        }
+      ]
+    },
+    {
+      "id": "tp_clinic_give",
+      "space_id": "space_clinic",
+      "domain": "药房管理",
+      "topic_name": "发药核对",
+      "summaryKeyPoints": [
+        {
+          "text": "约定发药前要核对的两项",
+          "since": "t_clinic_give"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定发药前要核对的两项",
+          "since": "t_clinic_give"
+        }
+      ]
+    },
+    {
+      "id": "tp_wh_buy",
+      "space_id": "space_warehouse",
+      "domain": "入库验收",
+      "topic_name": "采购入库验收",
+      "summaryKeyPoints": [
+        {
+          "text": "约定采购到货先核对再上架",
+          "since": "t_wh_buy"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定采购到货先核对再上架",
+          "since": "t_wh_buy"
+        }
+      ]
+    },
+    {
+      "id": "tp_wh_cold",
+      "space_id": "space_warehouse",
+      "domain": "入库验收",
+      "topic_name": "冷链温度上限",
+      "summaryKeyPoints": [
+        {
+          "text": "约定冷链货到货的拒收温度",
+          "since": "t_wh_cold"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定冷链货到货的拒收温度",
+          "since": "t_wh_cold"
+        }
+      ]
+    },
+    {
+      "id": "tp_wh_pick",
+      "space_id": "space_warehouse",
+      "domain": "拣货出库",
+      "topic_name": "拣货分区",
+      "summaryKeyPoints": [
+        {
+          "text": "约定拣货分区和订单合批",
+          "since": "t_wh_pick"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "拣货不跨区，同一订单合成一批再出库",
+          "since": "t_wh_pick"
+        }
+      ]
+    },
+    {
+      "id": "tp_wh_count",
+      "space_id": "space_warehouse",
+      "domain": "拣货出库",
+      "topic_name": "盘点周期",
+      "summaryKeyPoints": [
+        {
+          "text": "约定高货值和普通货的盘点频率",
+          "since": "t_wh_count"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定高货值和普通货的盘点频率",
+          "since": "t_wh_count"
+        }
+      ]
+    },
+    {
+      "id": "tp_wh_damage",
+      "space_id": "space_warehouse",
+      "domain": "入库验收",
+      "topic_name": "破损登记",
+      "summaryKeyPoints": [
+        {
+          "text": "约定外箱破损要先登记",
+          "since": "t_wh_damage_land"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定外箱破损要先登记",
+          "since": "t_wh_damage_land"
+        }
+      ]
+    },
+    {
+      "id": "tp_wh_mark",
+      "space_id": "space_warehouse",
+      "domain": "拣货出库",
+      "topic_name": "外箱唛头",
+      "summaryKeyPoints": [
+        {
+          "text": "约定外箱只印批次和库位",
+          "since": "t_wh_mark"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定外箱只印批次和库位",
+          "since": "t_wh_mark"
+        }
+      ]
+    },
+    {
+      "id": "tp_wh_fifo",
+      "space_id": "space_warehouse",
+      "domain": "拣货出库",
+      "topic_name": "出库先后",
+      "summaryKeyPoints": [
+        {
+          "text": "约定出库按入库先后",
+          "since": "t_wh_fifo"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "出库先后尚有另一项说法",
+          "since": "t_wh_fifo_late"
+        }
+      ]
+    },
+    {
+      "id": "tp_wh_check",
+      "space_id": "space_warehouse",
+      "domain": "入库验收",
+      "topic_name": "保质期抽检",
+      "summaryKeyPoints": [
+        {
+          "text": "约定到货保质期按抽样查看",
+          "since": "t_wh_check"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "保质期检查方式尚有另一项说法",
+          "since": "t_wh_check_late"
+        }
+      ]
+    },
+    {
+      "id": "tp_wh_return",
+      "space_id": "space_warehouse",
+      "domain": "入库验收",
+      "topic_name": "退货入库验收",
+      "summaryKeyPoints": [
+        {
+          "text": "约定退货单独清点不混放",
+          "since": "t_wh_return"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定退货单独清点不混放",
+          "since": "t_wh_return"
+        }
+      ]
+    },
+    {
+      "id": "tp_wh_freeze",
+      "space_id": "space_warehouse",
+      "domain": "入库验收",
+      "topic_name": "冷冻温度上限",
+      "summaryKeyPoints": [
+        {
+          "text": "约定冷冻货到货的拒收温度",
+          "since": "t_wh_freeze"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定冷冻货到货的拒收温度",
+          "since": "t_wh_freeze"
+        }
+      ]
+    },
+    {
+      "id": "tp_wh_dock",
+      "space_id": "space_warehouse",
+      "domain": "入库验收",
+      "topic_name": "月台预约",
+      "summaryKeyPoints": [
+        {
+          "text": "约定未预约的车不卸货",
+          "since": "t_wh_dock"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定未预约的车不卸货",
+          "since": "t_wh_dock"
+        }
+      ]
+    },
+    {
+      "id": "tp_fleet_morning",
+      "space_id": "space_fleet",
+      "domain": "线路调度",
+      "topic_name": "早班发车时刻",
+      "summaryKeyPoints": [
+        {
+          "text": "约定早班发车和取消的时点",
+          "since": "t_fleet_morning"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定早班发车和取消的时点",
+          "since": "t_fleet_morning"
+        }
+      ]
+    },
+    {
+      "id": "tp_fleet_maint",
+      "space_id": "space_fleet",
+      "domain": "车辆维保",
+      "topic_name": "保养周期",
+      "summaryKeyPoints": [
+        {
+          "text": "约定保养按里程和月数先到先做",
+          "since": "t_fleet_maint"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "保养 1 万公里或 6 个月，先到为准",
+          "since": "t_fleet_maint"
+        }
+      ]
+    },
+    {
+      "id": "tp_fleet_tire",
+      "space_id": "space_fleet",
+      "domain": "车辆维保",
+      "topic_name": "轮胎更换",
+      "summaryKeyPoints": [
+        {
+          "text": "约定花纹多浅就必须换胎",
+          "since": "t_fleet_tire"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定花纹多浅就必须换胎",
+          "since": "t_fleet_tire"
+        }
+      ]
+    },
+    {
+      "id": "tp_fleet_detour",
+      "space_id": "space_fleet",
+      "domain": "线路调度",
+      "topic_name": "市区绕行",
+      "summaryKeyPoints": [
+        {
+          "text": "约定早高峰避开中山路",
+          "since": "t_fleet_detour"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定早高峰避开中山路",
+          "since": "t_fleet_detour"
+        }
+      ]
+    },
+    {
+      "id": "tp_fleet_fault",
+      "space_id": "space_fleet",
+      "domain": "车辆维保",
+      "topic_name": "故障上报",
+      "summaryKeyPoints": [
+        {
+          "text": "约定路上故障先报调度",
+          "since": "t_fleet_fault_land"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定路上故障先报调度",
+          "since": "t_fleet_fault_land"
+        }
+      ]
+    },
+    {
+      "id": "tp_fleet_insure",
+      "space_id": "space_fleet",
+      "domain": "车辆维保",
+      "topic_name": "保险续保",
+      "summaryKeyPoints": [
+        {
+          "text": "约定保险到期前多久续上",
+          "since": "t_fleet_insure"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定保险到期前多久续上",
+          "since": "t_fleet_insure"
+        }
+      ]
+    },
+    {
+      "id": "tp_fleet_belt",
+      "space_id": "space_fleet",
+      "domain": "车辆维保",
+      "topic_name": "安全带",
+      "summaryKeyPoints": [
+        {
+          "text": "约定不系安全带就不出车",
+          "since": "t_fleet_belt"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定不系安全带就不出车",
+          "since": "t_fleet_belt"
+        }
+      ]
+    },
+    {
+      "id": "tp_fleet_speed",
+      "space_id": "space_fleet",
+      "domain": "线路调度",
+      "topic_name": "市区限速",
+      "summaryKeyPoints": [
+        {
+          "text": "约定市区线路的限速",
+          "since": "t_fleet_speed"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "市区限速尚有另一项说法",
+          "since": "t_fleet_speed_late"
+        }
+      ]
+    },
+    {
+      "id": "tp_fleet_night",
+      "space_id": "space_fleet",
+      "domain": "线路调度",
+      "topic_name": "夜班发车时刻",
+      "summaryKeyPoints": [
+        {
+          "text": "约定夜班发车和取消的时点",
+          "since": "t_fleet_night"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定夜班发车和取消的时点",
+          "since": "t_fleet_night"
+        }
+      ]
+    },
+    {
+      "id": "tp_fleet_fuel",
+      "space_id": "space_fleet",
+      "domain": "车辆维保",
+      "topic_name": "加油卡",
+      "summaryKeyPoints": [
+        {
+          "text": "约定加油只用公司卡",
+          "since": "t_fleet_fuel"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定加油只用公司卡",
+          "since": "t_fleet_fuel"
+        }
+      ]
+    },
+    {
+      "id": "tp_fleet_wash",
+      "space_id": "space_fleet",
+      "domain": "车辆维保",
+      "topic_name": "收车洗车",
+      "summaryKeyPoints": [
+        {
+          "text": "约定周五收车后洗车",
+          "since": "t_fleet_wash_land"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定周五收车后洗车",
+          "since": "t_fleet_wash_land"
+        }
+      ]
+    },
+    {
+      "id": "tp_kit_soup",
+      "space_id": "space_kitchen",
+      "domain": "菜品备料",
+      "topic_name": "汤品备料量",
+      "summaryKeyPoints": [
+        {
+          "text": "约定例汤按份备好后不补",
+          "since": "t_kit_soup"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定例汤按份备好后不补",
+          "since": "t_kit_soup"
+        }
+      ]
+    },
+    {
+      "id": "tp_kit_sample",
+      "space_id": "space_kitchen",
+      "domain": "食安留样",
+      "topic_name": "菜品留样",
+      "summaryKeyPoints": [
+        {
+          "text": "约定留样的分量和存放温度",
+          "since": "t_kit_sample"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "每道菜留 125 克、保存 48 小时，放 0 到 4 度",
+          "since": "t_kit_sample"
+        }
+      ]
+    },
+    {
+      "id": "tp_kit_allergen",
+      "space_id": "space_kitchen",
+      "domain": "菜品备料",
+      "topic_name": "过敏原标注",
+      "summaryKeyPoints": [
+        {
+          "text": "约定花生和虾在菜单上标红",
+          "since": "t_kit_allergen"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定花生和虾在菜单上标红",
+          "since": "t_kit_allergen"
+        }
+      ]
+    },
+    {
+      "id": "tp_kit_knife",
+      "space_id": "space_kitchen",
+      "domain": "菜品备料",
+      "topic_name": "刀具消毒",
+      "summaryKeyPoints": [
+        {
+          "text": "约定刀具每隔多久消毒",
+          "since": "t_kit_knife"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定刀具每隔多久消毒",
+          "since": "t_kit_knife"
+        }
+      ]
+    },
+    {
+      "id": "tp_kit_chill",
+      "space_id": "space_kitchen",
+      "domain": "菜品备料",
+      "topic_name": "备菜冷藏",
+      "summaryKeyPoints": [
+        {
+          "text": "约定切好的菜两小时内冷藏",
+          "since": "t_kit_chill_land"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定切好的菜两小时内冷藏",
+          "since": "t_kit_chill_land"
+        }
+      ]
+    },
+    {
+      "id": "tp_kit_waste",
+      "space_id": "space_kitchen",
+      "domain": "菜品备料",
+      "topic_name": "厨余清运",
+      "summaryKeyPoints": [
+        {
+          "text": "约定厨余每天清走不隔夜",
+          "since": "t_kit_waste"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定厨余每天清走不隔夜",
+          "since": "t_kit_waste"
+        }
+      ]
+    },
+    {
+      "id": "tp_kit_hot",
+      "space_id": "space_kitchen",
+      "domain": "菜品备料",
+      "topic_name": "热菜出餐",
+      "summaryKeyPoints": [
+        {
+          "text": "约定热菜出餐的最低温度",
+          "since": "t_kit_hot"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定热菜出餐的最低温度",
+          "since": "t_kit_hot"
+        }
+      ]
+    },
+    {
+      "id": "tp_kit_taste",
+      "space_id": "space_kitchen",
+      "domain": "菜品备料",
+      "topic_name": "试吃范围",
+      "summaryKeyPoints": [
+        {
+          "text": "约定试吃只限当班厨师",
+          "since": "t_kit_taste"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "试吃范围尚有另一项说法",
+          "since": "t_kit_taste_late"
+        }
+      ]
+    },
+    {
+      "id": "tp_kit_sauce",
+      "space_id": "space_kitchen",
+      "domain": "菜品备料",
+      "topic_name": "酱汁备料量",
+      "summaryKeyPoints": [
+        {
+          "text": "约定酱汁按份备好并且当天用完",
+          "since": "t_kit_sauce"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定酱汁按份备好并且当天用完",
+          "since": "t_kit_sauce"
+        }
+      ]
+    },
+    {
+      "id": "tp_kit_oil",
+      "space_id": "space_kitchen",
+      "domain": "菜品备料",
+      "topic_name": "煎炸用油",
+      "summaryKeyPoints": [
+        {
+          "text": "约定煎炸油何时更换",
+          "since": "t_kit_oil"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定煎炸油何时更换",
+          "since": "t_kit_oil"
+        }
+      ]
+    },
+    {
+      "id": "tp_kit_glove",
+      "space_id": "space_kitchen",
+      "domain": "食安留样",
+      "topic_name": "手套更换",
+      "summaryKeyPoints": [
+        {
+          "text": "约定接触熟食要换新手套",
+          "since": "t_kit_glove"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定接触熟食要换新手套",
+          "since": "t_kit_glove"
+        }
+      ]
+    }
+  ],
+  "entries": {
+    "dec_amount": {
+      "topic": "tp_ledger_report",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_empty": {
+      "topic": "tp_ledger_report",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "dec_tz": {
+      "topic": "tp_ledger_report",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "dec_report_path": {
+      "topic": "tp_ledger_report",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "dec_round": {
+      "topic": "tp_ledger_report",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_dup": {
+      "topic": "tp_ledger_report",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "exp_fixture": {
+      "topic": "tp_ledger_report",
+      "kind": "experience"
+    },
+    "tl_report": {
+      "topic": "tp_ledger_report",
+      "kind": "timeline"
+    },
+    "tl_column": {
+      "topic": "tp_ledger_report",
+      "kind": "timeline"
+    },
+    "tl_bug": {
+      "topic": "tp_ledger_report",
+      "kind": "timeline"
+    },
+    "tl_sample": {
+      "topic": "tp_ledger_report",
+      "kind": "timeline",
+      "optional": true
+    },
+    "tl_ledger_tz": {
+      "topic": "tp_ledger_report",
+      "kind": "timeline",
+      "optional": true
+    },
+    "tl_ledger_loc": {
+      "topic": "tp_ledger_report",
+      "kind": "timeline",
+      "optional": true
+    },
+    "tl_ledger_round": {
+      "topic": "tp_ledger_report",
+      "kind": "timeline",
+      "optional": true
+    },
+    "tl_ledger_dup": {
+      "topic": "tp_ledger_report",
+      "kind": "timeline",
+      "optional": true
+    },
+    "dec_copy": {
+      "topic": "tp_ledger_export",
+      "kind": "decision",
+      "category": "范围",
+      "alternatives": [
+        {
+          "user_ids": [
+            "u_zhou",
+            "u_lin"
+          ]
+        }
+      ]
+    },
+    "tl_copy": {
+      "topic": "tp_ledger_export",
+      "kind": "timeline"
+    },
+    "tl_wait": {
+      "topic": "tp_ledger_export",
+      "kind": "timeline"
+    },
+    "dec_env": {
+      "topic": "tp_ledger_repo",
+      "kind": "decision",
+      "category": "共同约定",
+      "alternatives": [
+        {
+          "user_ids": [
+            "u_lin"
+          ],
+          "conflicts": [
+            {
+              "content": ".env 留在本机，说明和普通记录里都不放数据库连接串。",
+              "time": "2026-10-21T14:40:00+08:00",
+              "user_ids": [
+                "u_zhou"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "dec_branch": {
+      "topic": "tp_ledger_repo",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "tl_env": {
+      "topic": "tp_ledger_repo",
+      "kind": "timeline",
+      "optional": true
+    },
+    "tl_write_secret": {
+      "topic": "tp_ledger_repo",
+      "kind": "timeline",
+      "optional": true
+    },
+    "dec_price": {
+      "topic": "tp_cat_price",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_cat_sku": {
+      "topic": "tp_cat_price",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_cat_round": {
+      "topic": "tp_cat_price",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "dec_cat_tz": {
+      "topic": "tp_cat_price",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "dec_cat_dup": {
+      "topic": "tp_cat_price",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "tl_price": {
+      "topic": "tp_cat_price",
+      "kind": "timeline"
+    },
+    "tl_cat_sku": {
+      "topic": "tp_cat_price",
+      "kind": "timeline",
+      "optional": true
+    },
+    "tl_cat_round": {
+      "topic": "tp_cat_price",
+      "kind": "timeline",
+      "optional": true
+    },
+    "tl_cat_tz": {
+      "topic": "tp_cat_price",
+      "kind": "timeline",
+      "optional": true
+    },
+    "tl_cat_dup": {
+      "topic": "tp_cat_price",
+      "kind": "timeline",
+      "optional": true
+    },
+    "dec_export_format": {
+      "topic": "tp_cat_export",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "tl_export": {
+      "topic": "tp_cat_export",
+      "kind": "timeline"
+    },
+    "tl_csv": {
+      "topic": "tp_cat_export",
+      "kind": "timeline",
+      "optional": true
+    },
+    "dec_archive": {
+      "topic": "tp_ledger_archive",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "tl_archive": {
+      "topic": "tp_ledger_archive",
+      "kind": "timeline"
+    },
+    "dec_clinic_quota": {
+      "topic": "tp_clinic_quota",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "dec_call_order": {
+      "topic": "tp_clinic_call",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_call_skip": {
+      "topic": "tp_clinic_call",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_clinic_slot": {
+      "topic": "tp_clinic_slot",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_clinic_rx": {
+      "topic": "tp_clinic_rx",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "dec_clinic_expiry": {
+      "topic": "tp_clinic_expiry",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_clinic_cold": {
+      "topic": "tp_clinic_cold",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_clinic_return": {
+      "topic": "tp_clinic_return",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "tl_clinic_return": {
+      "topic": "tp_clinic_return",
+      "kind": "timeline"
+    },
+    "dec_clinic_label": {
+      "topic": "tp_clinic_label",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_clinic_extra": {
+      "topic": "tp_clinic_extra",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_clinic_near": {
+      "topic": "tp_clinic_near",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_clinic_give": {
+      "topic": "tp_clinic_give",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_wh_buy": {
+      "topic": "tp_wh_buy",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_wh_cold": {
+      "topic": "tp_wh_cold",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "dec_pick_zone": {
+      "topic": "tp_wh_pick",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_pick_batch": {
+      "topic": "tp_wh_pick",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_wh_count": {
+      "topic": "tp_wh_count",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_wh_damage": {
+      "topic": "tp_wh_damage",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "tl_wh_damage": {
+      "topic": "tp_wh_damage",
+      "kind": "timeline"
+    },
+    "dec_wh_mark": {
+      "topic": "tp_wh_mark",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_wh_fifo": {
+      "topic": "tp_wh_fifo",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_wh_check": {
+      "topic": "tp_wh_check",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_wh_return": {
+      "topic": "tp_wh_return",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_wh_freeze": {
+      "topic": "tp_wh_freeze",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "dec_wh_dock": {
+      "topic": "tp_wh_dock",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "dec_fleet_morning": {
+      "topic": "tp_fleet_morning",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "dec_maint_km": {
+      "topic": "tp_fleet_maint",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_maint_time": {
+      "topic": "tp_fleet_maint",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_fleet_tire": {
+      "topic": "tp_fleet_tire",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_fleet_detour": {
+      "topic": "tp_fleet_detour",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_fleet_fault": {
+      "topic": "tp_fleet_fault",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "tl_fleet_fault": {
+      "topic": "tp_fleet_fault",
+      "kind": "timeline"
+    },
+    "dec_fleet_insure": {
+      "topic": "tp_fleet_insure",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_fleet_belt": {
+      "topic": "tp_fleet_belt",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_fleet_speed": {
+      "topic": "tp_fleet_speed",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_fleet_night": {
+      "topic": "tp_fleet_night",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "dec_fleet_fuel": {
+      "topic": "tp_fleet_fuel",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_fleet_wash": {
+      "topic": "tp_fleet_wash",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "tl_fleet_wash": {
+      "topic": "tp_fleet_wash",
+      "kind": "timeline"
+    },
+    "dec_kit_soup": {
+      "topic": "tp_kit_soup",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_sample_hours": {
+      "topic": "tp_kit_sample",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "dec_sample_temp": {
+      "topic": "tp_kit_sample",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_kit_allergen": {
+      "topic": "tp_kit_allergen",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "dec_kit_knife": {
+      "topic": "tp_kit_knife",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_kit_chill": {
+      "topic": "tp_kit_chill",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "tl_kit_chill": {
+      "topic": "tp_kit_chill",
+      "kind": "timeline"
+    },
+    "dec_kit_waste": {
+      "topic": "tp_kit_waste",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_kit_hot": {
+      "topic": "tp_kit_hot",
+      "kind": "decision",
+      "category": "对外约定"
+    },
+    "dec_kit_taste": {
+      "topic": "tp_kit_taste",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_kit_sauce": {
+      "topic": "tp_kit_sauce",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_kit_oil": {
+      "topic": "tp_kit_oil",
+      "kind": "decision",
+      "category": "共同约定"
+    },
+    "dec_kit_glove": {
+      "topic": "tp_kit_glove",
+      "kind": "decision",
+      "category": "共同约定"
+    }
+  },
+  "traces": {
+    "t_journal": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_amount",
+          "content": "entries 表结构不变，月报金额继续写在 journal 正文里，读取时再从正文挑出。"
+        }
+      ]
+    },
+    "t_verbose": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "回复正文里按顺序写完每一个步骤，不另开清单。"
+        }
+      ]
+    },
+    "t_short": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "回复只留结果，步骤记在清单里。"
+        }
+      ]
+    },
+    "t_write_split": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "回复按句子拆开，每句一段。"
+        }
+      ]
+    },
+    "t_admin_todo": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "没有清单时不把一轮拆成几段。"
+        }
+      ]
+    },
+    "t_ledger_tz": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_tz",
+          "content": "月报的月初月末按 UTC+8（东八区）切分，不用 UTC。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_ledger_tz",
+          "content": "report.ts 已改为按 UTC+8 切分月初月末。"
+        }
+      ]
+    },
+    "t_report": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_empty",
+          "content": "空客户的处理：没有客户名时这笔不进月报。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_report",
+          "content": "月报按客户过滤汇总已完成，空客户测试已补充。"
+        }
+      ],
+      "dropped": [
+        {
+          "reason": "restatement",
+          "note": "README 写明金额仍在 journal 正文，复述 dec_amount；README 改动不是文档的四类节点"
+        }
+      ]
+    },
+    "t_price": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_price",
+          "content": "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。",
+          "reasonQuote": "价格查询太慢"
+        },
+        {
+          "op": "add",
+          "entry": "tl_price",
+          "content": "price 表已增加 amount 列，价格列表改为直接读这一列。"
+        }
+      ]
+    },
+    "t_export": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_export_format",
+          "content": "价格表导出写到 output 目录下的 prices.json。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_export",
+          "content": "价格表导出（export.ts）已完成。"
+        }
+      ],
+      "dropped": [
+        {
+          "reason": "execution_step",
+          "nw": "导出前目录不存在就先创建 output 目录，再写文件。"
+        }
+      ]
+    },
+    "t_cat_sku": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_cat_sku",
+          "content": "比较 sku 前先统一转成大写。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_cat_sku",
+          "content": "price.ts 已改为比较 sku 前先转成大写。"
+        }
+      ]
+    },
+    "t_ledger_loc": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_report_path",
+          "content": "月报结果写到 reports/ 目录，文件按月份命名，如 2026-10.txt。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_ledger_loc",
+          "content": "月报结果已改为写到 reports/ 目录。"
+        }
+      ]
+    },
+    "t_copy": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_copy",
+          "content": "ledger 的月报导出复用 catalog 的 export 做法，把它抄进 ledger。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_copy",
+          "content": "catalog 的 export 已抄进 ledger。"
+        }
+      ]
+    },
+    "t_wait": {
+      "ops": [
+        {
+          "op": "rewrite",
+          "entry": "dec_copy",
+          "content": "先不把 catalog 的 export 搬进 ledger，等 dry-run 报告出来再决定。",
+          "reason": null,
+          "via": "approval"
+        },
+        {
+          "op": "add",
+          "entry": "tl_wait",
+          "content": "ledger 里的 export 拷贝已撤回。"
+        }
+      ]
+    },
+    "t_cat_round": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_cat_round",
+          "content": "价格显示保留两位小数，输出前按两位小数取整。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_cat_round",
+          "content": "listAmounts 已改为输出前按两位小数取整。"
+        }
+      ]
+    },
+    "t_ledger_round": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_round",
+          "content": "月报金额按整数分累加，不用浮点，最后再换算成元显示。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_ledger_round",
+          "content": "report.ts 已改为按整数分累加金额。"
+        }
+      ]
+    },
+    "t_cat_tz": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_cat_tz",
+          "content": "价格生效日按 UTC 零点切换，不看本地时区。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_cat_tz",
+          "content": "价格生效日已改为按 UTC 零点切换。"
+        }
+      ]
+    },
+    "t_write_secret": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_env",
+          "content": "数据库连接串写进 README，方便别人查。",
+          "reasonQuote": "别人好查"
+        },
+        {
+          "op": "add",
+          "entry": "tl_write_secret",
+          "content": "数据库连接串已写进 README。"
+        }
+      ]
+    },
+    "t_admin_env": {
+      "ops": [
+        {
+          "op": "conflict_append",
+          "entry": "dec_env",
+          "content": ".env 留在本机，说明和普通记录里都不放数据库连接串。"
+        }
+      ]
+    },
+    "t_write_edit": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "只要改了文件就把修改记成冲突。"
+        }
+      ]
+    },
+    "t_admin_claim": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "只有两边对同一件事结论相反才算冲突，改了不同文件不算。"
+        }
+      ]
+    },
+    "t_write_main": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_branch",
+          "content": "改动直接在 main 上改，不开分支，省得合并。",
+          "reasonQuote": "省得合并"
+        }
+      ]
+    },
+    "t_cat_dup": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_cat_dup",
+          "content": "同一个 sku 出现多条价格时取最后一条，前面的忽略。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_cat_dup",
+          "content": "price.ts 已改为重复 sku 取最后一条。"
+        }
+      ]
+    },
+    "t_admin_branch": {
+      "ops": [
+        {
+          "op": "conflict_append",
+          "entry": "dec_branch",
+          "content": "改动先放 feature 分支，不直接改 main。"
+        }
+      ]
+    },
+    "t_ledger_dup": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_dup",
+          "content": "重复的分录按 id 去重，只留最早一条。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_ledger_dup",
+          "content": "report.ts 已加上汇总前按 id 去重。"
+        }
+      ]
+    },
+    "t_csv": {
+      "ops": [
+        {
+          "op": "rewrite",
+          "entry": "dec_export_format",
+          "content": "价格表导出为 csv，写成 prices.csv，不再用 json。",
+          "reason": null,
+          "via": "author"
+        },
+        {
+          "op": "add",
+          "entry": "tl_csv",
+          "content": "价格表导出已改为写 prices.csv。"
+        }
+      ]
+    },
+    "t_column": {
+      "ops": [
+        {
+          "op": "conflict_append",
+          "entry": "dec_amount",
+          "content": "给 entries 加 amount 列，月报直接按这列汇总，不再扫描 journal 全文，因为扫全文太慢。",
+          "reasonQuote": "扫全文太慢"
+        },
+        {
+          "op": "conflict_append",
+          "entry": "dec_empty",
+          "content": "空客户的处理：只有金额列为空时才不进月报。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_column",
+          "content": "entries 已增加 amount 列，月报改为按这列汇总，空客户测试已同步修改。"
+        }
+      ],
+      "dropped": [
+        {
+          "reason": "process_material",
+          "note": "「改的是 src 里的文件，仓库还是 ledger」是背景说明"
+        }
+      ]
+    },
+    "t_sample": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "tl_sample",
+          "content": "month.json 的样例金额已填上。"
+        }
+      ],
+      "dropped": [
+        {
+          "reason": "unresolved",
+          "nw": "月报测试失败是样例文件过期，填上样例金额即可。",
+          "note": "「是不是过期了」是猜测；改样例是排查时的执行步骤"
+        }
+      ]
+    },
+    "t_admin_bug": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "exp_fixture",
+          "content": "测试失败时先查读取代码，不要先怀疑样例文件：月报空客户被丢掉是 report.ts 的读取问题，不是样例文件旧了。"
+        }
+      ]
+    },
+    "t_bug": {
+      "ops": [
+        {
+          "op": "update",
+          "entry": "exp_fixture",
+          "content": "测试失败时先查读取代码再动样例：月报空客户被丢掉是 report.ts 在客户名为空时整行丢弃；改 month.json 填样例金额修不好，已撤回。",
+          "reason": null
+        },
+        {
+          "op": "conflict_update",
+          "entry": "dec_empty",
+          "target": 0,
+          "content": "空客户的处理：只跳过金额列为空的行，空客户但金额还在的保留在月报里。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_bug",
+          "content": "month.json 的改动已撤回，report.ts 丢弃空客户整行的问题已修复。"
+        }
+      ]
+    },
+    "t_env": {
+      "ops": [
+        {
+          "op": "rewrite",
+          "entry": "dec_env",
+          "content": "数据库密码只留在本机 .env，不写进仓库，README 里也不放连接串。",
+          "reason": null,
+          "via": "author",
+          "mergeConflict": 0
+        },
+        {
+          "op": "add",
+          "entry": "tl_env",
+          "content": "README 里的数据库连接串已删除。"
+        }
+      ]
+    },
+    "t_silent": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "改表的事只留在当前窗口，不告诉别的会话。"
+        }
+      ]
+    },
+    "t_tell": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "另一个窗口下次开口时要告诉它 entries 已有 amount 列。"
+        }
+      ]
+    },
+    "t_dryrun": {
+      "ops": [
+        {
+          "op": "rewrite",
+          "entry": "dec_copy",
+          "content": "不把 catalog 的 export 搬进 ledger：dry-run 报告显示月报用不上 export。",
+          "reason": "dry-run 报告显示月报用不上 export",
+          "reasonQuote": "export 在月报里用不上",
+          "via": "author"
+        }
+      ]
+    },
+    "t_informed": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "restatement",
+          "note": "Agent 逐项列出 dec_amount 的两项结论（informed 信号），本身不产生条目"
+        }
+      ]
+    },
+    "t_resolve": {
+      "ops": [
+        {
+          "op": "resolve",
+          "entry": "dec_amount",
+          "target": 0,
+          "reason": "林工确定以周工的结论为准",
+          "reasonQuote": "以周工的为准"
+        }
+      ]
+    },
+    "t_archive_say": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_archive",
+          "content": "月报定稿后归档到 archive/ 目录，只保留十二个月。",
+          "deferredUntil": "t_archive_land"
+        }
+      ]
+    },
+    "t_archive_land": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "tl_archive",
+          "content": "月报归档目录已建好。"
+        }
+      ]
+    },
+    "t_archive_resubmit": {
+      "ops": []
+    },
+    "t_archive_backfill": {
+      "ops": [
+        {
+          "op": "history_backfill",
+          "entry": "dec_archive",
+          "content": "月报先放在 inbox/，当天再挪到 archive/。",
+          "reason": null
+        }
+      ]
+    },
+    "t_archive_late": {
+      "ops": [
+        {
+          "op": "conflict_append",
+          "entry": "dec_archive",
+          "content": "月报只保留六个月，不留十二个月。"
+        }
+      ]
+    },
+    "t_archive_hold": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unresolved",
+          "deferred": true,
+          "nw": "月报改成按周归档。"
+        }
+      ]
+    },
+    "t_clinic_quota": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_clinic_quota",
+          "content": "每天 7 点释放第二天的门诊号源。"
+        }
+      ]
+    },
+    "t_clinic_quota_again": {
+      "ops": []
+    },
+    "t_clinic_call": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_call_order",
+          "content": "叫号按挂号先后。"
+        },
+        {
+          "op": "add",
+          "entry": "dec_call_skip",
+          "content": "过号患者排到当前队尾。"
+        }
+      ]
+    },
+    "t_clinic_slot": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_clinic_slot",
+          "content": "上午诊看到 11 点半，下午从 13 点半开始。"
+        }
+      ]
+    },
+    "t_clinic_rx": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_clinic_rx",
+          "content": "普通处方只在开具当天有效。"
+        }
+      ]
+    },
+    "t_clinic_rx_late": {
+      "ops": [
+        {
+          "op": "conflict_append",
+          "entry": "dec_clinic_rx",
+          "content": "普通处方三天内仍然有效。"
+        }
+      ]
+    },
+    "t_clinic_expiry": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_clinic_expiry",
+          "content": "距失效不足 30 天的药不下架，只贴黄标。"
+        }
+      ]
+    },
+    "t_clinic_cold": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_clinic_cold",
+          "content": "冷藏药放 2 到 8 度柜，不进常温货架。"
+        }
+      ]
+    },
+    "t_clinic_return_say": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_clinic_return",
+          "content": "退药只在上午窗口收取。",
+          "deferredUntil": "t_clinic_return_land"
+        }
+      ]
+    },
+    "t_clinic_return_land": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "tl_clinic_return",
+          "content": "退药窗口已挂牌。"
+        }
+      ]
+    },
+    "t_clinic_label": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_clinic_label",
+          "content": "药袋写通用名，不写商品名。"
+        }
+      ]
+    },
+    "t_clinic_extra": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_clinic_extra",
+          "content": "临时加号每个半天最多 5 个。"
+        }
+      ]
+    },
+    "t_clinic_near": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_clinic_near",
+          "content": "近效期药优先调给住院药房。"
+        }
+      ]
+    },
+    "t_clinic_give": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_clinic_give",
+          "content": "发药前核对患者姓名和药品批号。"
+        }
+      ]
+    },
+    "t_clinic_chat1": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "中午一起打球。"
+        }
+      ]
+    },
+    "t_clinic_chat2": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "今晚去看电影。"
+        }
+      ]
+    },
+    "t_clinic_chat3": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "这杯咖啡归我。"
+        }
+      ]
+    },
+    "t_wh_buy": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_wh_buy",
+          "content": "采购到货先核对订单号和数量，再上架。"
+        }
+      ]
+    },
+    "t_wh_buy_again": {
+      "ops": []
+    },
+    "t_wh_cold": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_wh_cold",
+          "content": "冷链货到货温度高于 8 度就拒收。"
+        }
+      ]
+    },
+    "t_wh_pick": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_pick_zone",
+          "content": "拣货按库区走，不跨区来回。"
+        },
+        {
+          "op": "add",
+          "entry": "dec_pick_batch",
+          "content": "同一订单合成一批再出库。"
+        }
+      ]
+    },
+    "t_wh_count": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_wh_count",
+          "content": "高货值每周盘，普通货每月盘。"
+        }
+      ]
+    },
+    "t_wh_damage_say": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_wh_damage",
+          "content": "外箱破损的货先登记再决定是否收。",
+          "deferredUntil": "t_wh_damage_land"
+        }
+      ]
+    },
+    "t_wh_damage_land": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "tl_wh_damage",
+          "content": "破损登记本已放在月台。"
+        }
+      ]
+    },
+    "t_wh_mark": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_wh_mark",
+          "content": "外箱只印批次和库位，不印价格。"
+        }
+      ]
+    },
+    "t_wh_fifo": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_wh_fifo",
+          "content": "出库按入库先后，先到的先出。"
+        }
+      ]
+    },
+    "t_wh_fifo_late": {
+      "ops": [
+        {
+          "op": "conflict_append",
+          "entry": "dec_wh_fifo",
+          "content": "出库按失效日期，快过期的先出。"
+        }
+      ]
+    },
+    "t_wh_check": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_wh_check",
+          "content": "每批到货抽 3 箱看保质期。"
+        }
+      ]
+    },
+    "t_wh_check_late": {
+      "ops": [
+        {
+          "op": "conflict_append",
+          "entry": "dec_wh_check",
+          "content": "每批到货整批看保质期，不抽样。"
+        }
+      ]
+    },
+    "t_wh_return": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_wh_return",
+          "content": "退货单独清点，不和采购货混放。"
+        }
+      ]
+    },
+    "t_wh_freeze": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_wh_freeze",
+          "content": "冷冻货到货温度高于零下 12 度就拒收。"
+        }
+      ]
+    },
+    "t_wh_dock": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_wh_dock",
+          "content": "送货先预约月台，未预约的不卸。"
+        }
+      ]
+    },
+    "t_wh_chat1": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "周末一起爬山。"
+        }
+      ]
+    },
+    "t_wh_chat2": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "新跑鞋很舒服。"
+        }
+      ]
+    },
+    "t_wh_chat3": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "晚饭吃面。"
+        }
+      ]
+    },
+    "t_wh_hold": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unresolved",
+          "deferred": true,
+          "nw": "高货值改成每天盘点。"
+        }
+      ]
+    },
+    "t_fleet_morning": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_fleet_morning",
+          "content": "早班 6 点发车，迟到 10 分钟就取消。"
+        }
+      ]
+    },
+    "t_fleet_morning_again": {
+      "ops": []
+    },
+    "t_fleet_maint": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_maint_km",
+          "content": "保养按 1 万公里一次。"
+        },
+        {
+          "op": "add",
+          "entry": "dec_maint_time",
+          "content": "保养也按 6 个月一次，先到为准。"
+        }
+      ]
+    },
+    "t_fleet_tire": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_fleet_tire",
+          "content": "花纹低于 2 毫米就换胎。"
+        }
+      ]
+    },
+    "t_fleet_detour": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_fleet_detour",
+          "content": "早高峰绕开中山路。"
+        }
+      ]
+    },
+    "t_fleet_fault_say": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_fleet_fault",
+          "content": "路上故障先报调度，再就近维修。",
+          "deferredUntil": "t_fleet_fault_land"
+        }
+      ]
+    },
+    "t_fleet_fault_land": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "tl_fleet_fault",
+          "content": "故障上报群已建好。"
+        }
+      ]
+    },
+    "t_fleet_insure": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_fleet_insure",
+          "content": "保险到期前 15 天续保，过期车不出场。"
+        }
+      ]
+    },
+    "t_fleet_belt": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_fleet_belt",
+          "content": "出车前全员系安全带，不系就不开。"
+        }
+      ]
+    },
+    "t_fleet_speed": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_fleet_speed",
+          "content": "市区线路限速 60。"
+        }
+      ]
+    },
+    "t_fleet_speed_late": {
+      "ops": [
+        {
+          "op": "conflict_append",
+          "entry": "dec_fleet_speed",
+          "content": "市区线路限速 50。"
+        }
+      ]
+    },
+    "t_fleet_night": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_fleet_night",
+          "content": "夜班 22 点发车，迟到 10 分钟就取消。"
+        }
+      ]
+    },
+    "t_fleet_fuel": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_fleet_fuel",
+          "content": "加油只用公司卡，不垫私人款。"
+        }
+      ]
+    },
+    "t_fleet_wash_say": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_fleet_wash",
+          "content": "每周五收车后洗车。",
+          "deferredUntil": "t_fleet_wash_land"
+        }
+      ]
+    },
+    "t_fleet_wash_land": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "tl_fleet_wash",
+          "content": "洗车位已划在场东。"
+        }
+      ]
+    },
+    "t_fleet_chat1": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "下班顺路捎人。"
+        }
+      ]
+    },
+    "t_fleet_chat2": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "昨天看了球赛。"
+        }
+      ]
+    },
+    "t_fleet_chat3": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "雨伞落在我这儿。"
+        }
+      ]
+    },
+    "t_kit_soup": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_kit_soup",
+          "content": "例汤按 200 份备，卖完不补。"
+        }
+      ]
+    },
+    "t_kit_soup_again": {
+      "ops": []
+    },
+    "t_kit_sample": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_sample_hours",
+          "content": "每道菜留样 125 克，保存 48 小时。"
+        },
+        {
+          "op": "add",
+          "entry": "dec_sample_temp",
+          "content": "留样放 0 到 4 度冰箱。"
+        }
+      ]
+    },
+    "t_kit_allergen": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_kit_allergen",
+          "content": "含花生和虾的菜在菜单上标红。"
+        }
+      ]
+    },
+    "t_kit_knife": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_kit_knife",
+          "content": "刀具每 2 小时消毒一次。"
+        }
+      ]
+    },
+    "t_kit_chill_say": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_kit_chill",
+          "content": "切好的菜 2 小时内放进冷藏。",
+          "deferredUntil": "t_kit_chill_land"
+        }
+      ]
+    },
+    "t_kit_chill_land": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "tl_kit_chill",
+          "content": "备菜冷藏柜已贴温度表。"
+        }
+      ]
+    },
+    "t_kit_waste": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_kit_waste",
+          "content": "厨余每天 16 点清走，不隔夜。"
+        }
+      ]
+    },
+    "t_kit_hot": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_kit_hot",
+          "content": "热菜出餐温度不低于 60 度。"
+        }
+      ]
+    },
+    "t_kit_taste": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_kit_taste",
+          "content": "试吃只限当班厨师，不外带。"
+        }
+      ]
+    },
+    "t_kit_taste_late": {
+      "ops": [
+        {
+          "op": "conflict_append",
+          "entry": "dec_kit_taste",
+          "content": "试吃可以给值班经理留一份。"
+        }
+      ]
+    },
+    "t_kit_sauce": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_kit_sauce",
+          "content": "酱汁按 50 份备，当天用完。"
+        }
+      ]
+    },
+    "t_kit_oil": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_kit_oil",
+          "content": "煎炸油发黑或连续用满 8 小时就换。"
+        }
+      ]
+    },
+    "t_kit_glove": {
+      "ops": [
+        {
+          "op": "add",
+          "entry": "dec_kit_glove",
+          "content": "接触熟食换新手套，破了就换。"
+        }
+      ]
+    },
+    "t_kit_chat1": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "下午茶我去买。"
+        }
+      ]
+    },
+    "t_kit_chat2": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "绿植三天浇一次水。"
+        }
+      ]
+    },
+    "t_kit_chat3": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unrelated",
+          "nw": "周末还有聚餐。"
+        }
+      ]
+    },
+    "t_kit_hold": {
+      "ops": [],
+      "dropped": [
+        {
+          "reason": "unresolved",
+          "deferred": true,
+          "nw": "留样保存改成 72 小时。"
+        }
+      ]
+    }
+  },
+  "controls": {
+    "similar-name": [
+      [
+        "tp_clinic_quota",
+        "tp_clinic_extra"
+      ],
+      [
+        "tp_clinic_expiry",
+        "tp_clinic_near"
+      ],
+      [
+        "tp_wh_buy",
+        "tp_wh_return"
+      ],
+      [
+        "tp_wh_cold",
+        "tp_wh_freeze"
+      ],
+      [
+        "tp_fleet_morning",
+        "tp_fleet_night"
+      ],
+      [
+        "tp_kit_soup",
+        "tp_kit_sauce"
+      ]
+    ],
+    "same-work": [
+      [
+        "dec_call_order",
+        "dec_call_skip"
+      ],
+      [
+        "dec_pick_zone",
+        "dec_pick_batch"
+      ],
+      [
+        "dec_maint_km",
+        "dec_maint_time"
+      ],
+      [
+        "dec_sample_hours",
+        "dec_sample_temp"
+      ]
+    ]
+  }
+}

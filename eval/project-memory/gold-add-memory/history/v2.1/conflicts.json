@@ -1,0 +1,201 @@
+{
+  "datasetVersion": 2.1,
+  "rule": "v3 §2.2.9：规格没有成员权限。同一问题上出现不同结论时，按作者与会话信号决定动作：作者属于 content，或会话体现认可 → rewrite（原结论进 history）；作者属于 conflicts 某项 → conflict_update；都不属于且未认可 → conflict_append（两项结论并存）；已告知的会话中成员裁决 → resolve（清空 conflicts，其余各项进 history）。load-eval-set.mjs 按这条规则从作者与信号推出 expectedOp，并与 labels.json 中的 op 对照。",
+  "cases": [
+    {
+      "id": "cf_amount",
+      "decision": "dec_amount",
+      "incoming": "t_column",
+      "author": "u_zhou",
+      "contentAuthors": [
+        "u_lin"
+      ],
+      "approval": false,
+      "informed": false,
+      "expectedOp": "conflict_append"
+    },
+    {
+      "id": "cf_amount_resolve",
+      "decision": "dec_amount",
+      "incoming": "t_resolve",
+      "author": "u_lin",
+      "contentAuthors": [
+        "u_lin"
+      ],
+      "approval": false,
+      "informed": true,
+      "informedBy": "t_informed",
+      "expectedOp": "resolve"
+    },
+    {
+      "id": "cf_empty",
+      "decision": "dec_empty",
+      "incoming": "t_column",
+      "author": "u_zhou",
+      "contentAuthors": [
+        "u_lin"
+      ],
+      "approval": false,
+      "informed": false,
+      "expectedOp": "conflict_append"
+    },
+    {
+      "id": "cf_empty_update",
+      "decision": "dec_empty",
+      "incoming": "t_bug",
+      "author": "u_zhou",
+      "contentAuthors": [
+        "u_lin"
+      ],
+      "approval": false,
+      "informed": false,
+      "expectedOp": "conflict_update"
+    },
+    {
+      "id": "cf_copy",
+      "decision": "dec_copy",
+      "incoming": "t_wait",
+      "author": "u_zhou",
+      "contentAuthors": [
+        "u_lin"
+      ],
+      "approval": true,
+      "informed": false,
+      "expectedOp": "rewrite"
+    },
+    {
+      "id": "cf_copy_dryrun",
+      "decision": "dec_copy",
+      "incoming": "t_dryrun",
+      "author": "u_zhou",
+      "contentAuthors": [
+        "u_zhou"
+      ],
+      "approval": false,
+      "informed": false,
+      "expectedOp": "rewrite"
+    },
+    {
+      "id": "cf_env",
+      "decision": "dec_env",
+      "incoming": "t_admin_env",
+      "author": "u_zhou",
+      "contentAuthors": [
+        "u_lin"
+      ],
+      "approval": false,
+      "informed": false,
+      "expectedOp": "conflict_append"
+    },
+    {
+      "id": "cf_env_rewrite",
+      "decision": "dec_env",
+      "incoming": "t_env",
+      "author": "u_lin",
+      "contentAuthors": [
+        "u_lin"
+      ],
+      "approval": false,
+      "informed": false,
+      "expectedOp": "rewrite",
+      "note": "改写后与周工的 conflicts 项结论相同，按不变式 1 合并、user_ids 取并集；不合并也接受（labels.json alternatives）"
+    },
+    {
+      "id": "cf_branch",
+      "decision": "dec_branch",
+      "incoming": "t_admin_branch",
+      "author": "u_zhou",
+      "contentAuthors": [
+        "u_lin"
+      ],
+      "approval": false,
+      "informed": false,
+      "expectedOp": "conflict_append"
+    },
+    {
+      "id": "cf_csv",
+      "decision": "dec_export_format",
+      "incoming": "t_csv",
+      "author": "u_chen",
+      "contentAuthors": [
+        "u_chen"
+      ],
+      "approval": false,
+      "informed": false,
+      "expectedOp": "rewrite"
+    },
+    {
+      "id": "cf_archive_late",
+      "decision": "dec_archive",
+      "incoming": "t_archive_late",
+      "author": "u_zhou",
+      "contentAuthors": [
+        "u_lin"
+      ],
+      "approval": false,
+      "informed": false,
+      "expectedOp": "conflict_append",
+      "note": "chat_time 早于现行结论，submit_time 更晚，非作者只追加分歧，不改写"
+    },
+    {
+      "id": "cf_clinic_rx",
+      "decision": "dec_clinic_rx",
+      "incoming": "t_clinic_rx_late",
+      "author": "u_wu",
+      "contentAuthors": [
+        "u_zhao"
+      ],
+      "approval": false,
+      "informed": false,
+      "expectedOp": "conflict_append"
+    },
+    {
+      "id": "cf_wh_fifo",
+      "decision": "dec_wh_fifo",
+      "incoming": "t_wh_fifo_late",
+      "author": "u_zheng",
+      "contentAuthors": [
+        "u_sun"
+      ],
+      "approval": false,
+      "informed": false,
+      "expectedOp": "conflict_append"
+    },
+    {
+      "id": "cf_wh_check",
+      "decision": "dec_wh_check",
+      "incoming": "t_wh_check_late",
+      "author": "u_zheng",
+      "contentAuthors": [
+        "u_sun"
+      ],
+      "approval": false,
+      "informed": false,
+      "expectedOp": "conflict_append"
+    },
+    {
+      "id": "cf_fleet_speed",
+      "decision": "dec_fleet_speed",
+      "incoming": "t_fleet_speed_late",
+      "author": "u_sun",
+      "contentAuthors": [
+        "u_zhao"
+      ],
+      "approval": false,
+      "informed": false,
+      "expectedOp": "conflict_append"
+    },
+    {
+      "id": "cf_kit_taste",
+      "decision": "dec_kit_taste",
+      "incoming": "t_kit_taste_late",
+      "author": "u_zheng",
+      "contentAuthors": [
+        "u_wu"
+      ],
+      "approval": false,
+      "informed": false,
+      "expectedOp": "conflict_append"
+    }
+  ]
+}
