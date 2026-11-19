@@ -1,6 +1,6 @@
 ---
 id: 20261119-episode-gold-v3
-status: changes-requested
+status: ready-for-review
 owner: developer / Codex
 roadmap: 无
 branch: codex/project-memory-gold-v3
@@ -36,3 +36,4 @@ updated: 2026-11-19
 | --- | --- | --- | --- |
 | 2026-11-19 | ready-for-review | developer / Codex | [handoff-01.md](handoff-01.md) |
 | 2026-11-19 | changes-requested | reviewer / Codex | [review-01.md](review-01.md) |
+| 2026-11-19 | ready-for-review | developer / Codex | [handoff-02.md](handoff-02.md) |
