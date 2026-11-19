@@ -57,8 +57,7 @@
       "traces": [
         "t_write_main"
       ],
-      "quote": "直接在 main 上改吧，省得合并。",
-      "continues": "ep_ledger_credentials_start"
+      "quote": "直接在 main 上改吧，省得合并。"
     },
     {
       "id": "ep_ledger_report_dedup_debug",
@@ -69,7 +68,7 @@
         "t_sample"
       ],
       "quote": "重复的分录按 id 去重，留最早那条。",
-      "continues": "ep_ledger_round"
+      "continues": "ep_ledger_report_start"
     },
     {
       "id": "ep_ledger_credentials_fix",
@@ -79,7 +78,7 @@
         "t_env"
       ],
       "quote": "数据库密码别写进仓库。",
-      "continues": "ep_ledger_branch"
+      "continues": "ep_ledger_credentials_start"
     },
     {
       "id": "ep_ledger_report_resolve",
@@ -91,7 +90,7 @@
         "t_resolve"
       ],
       "quote": "别告诉另一个窗口我改了表。",
-      "continues": "ep_ledger_report_dedup_debug"
+      "continues": "ep_ledger_report_start"
     },
     {
       "id": "ep_ledger_archive",
@@ -158,8 +157,7 @@
       "traces": [
         "t_admin_branch"
       ],
-      "quote": "改动先放 feature 分支，别直接动 main。",
-      "continues": "ep_ledger_secret_objection"
+      "quote": "改动先放 feature 分支，别直接动 main。"
     },
     {
       "id": "ep_ledger_report_override",
@@ -171,8 +169,7 @@
         "t_bug",
         "t_tell"
       ],
-      "quote": "月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。",
-      "continues": "ep_ledger_report_follow"
+      "quote": "月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。"
     },
     {
       "id": "ep_ledger_copy_decide",
@@ -260,8 +257,7 @@
       "traces": [
         "t_clinic_slot"
       ],
-      "quote": "上午看到 11 点半，下午 13 点半再开诊。",
-      "continues": "ep_clinic_schedule_release"
+      "quote": "上午看到 11 点半，下午 13 点半再开诊。"
     },
     {
       "id": "ep_clinic_prescription_limit",
