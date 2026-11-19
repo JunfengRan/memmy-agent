@@ -12,7 +12,7 @@
 
 确定性参考回放使用 `submit_time ?? reply_time` 作为受理时间，`chat_time` 保留发言顺序与迟交证据。语义边界、空闲 15 分钟、8 轮或首轮等待 30 分钟关闭整理批次。离线时钟在截止时触发关段，并用固定 1 秒表示整理与提交。未有 Topic 时先暂存，同 Space 累计 10 段或过 2 小时且再次暂存时，从最新最多 50 段触发 Formation。参考回放使用标定的 Topic 和源证据执行 Formation，在提交点一次发布对应内容。语料结束时仍未满足 Formation 的条目保留在 `pendingEntries`。生成的 `processingBatches` 和 `visibilityEvents` 可用于逐条审查受理、关闭、暂存、提交和重发；时间值属于离线参考回放。
 
-检索金标只含 `askedAt` 已提交的条目和主题要点。`q48`、`q49`、`q50` 分别覆盖同一条价格口径在开放、暂存和 Formation 后的可见性；`q31` 与 `q31_after` 对照裁决前后。`visibility` 题的答案计分单独覆盖缺少相关记忆的情况。召回分母使用有可见预期的题目，提前披露计入 `search.prematureVisibility`。
+检索金标只含 `askedAt` 已提交的条目和主题要点。`q48`、`q49`、`q50` 分别覆盖同一条价格口径在开放、暂存和 Formation 后的可见性；`q31` 与 `q31_after` 对照裁决前后。`visibility` 题的答案计分单独覆盖缺少相关记忆的情况。召回分母使用有可见预期的题目，提前披露计入 `search.prematureVisibility`，包括已映射的改名 Topic、条目和摘要或描述里的待提交事实。
 
 ### v2.1（历史口径）
 

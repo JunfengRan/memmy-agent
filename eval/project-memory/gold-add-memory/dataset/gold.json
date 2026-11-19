@@ -4509,7 +4509,8 @@
       ],
       "pending": {
         "entry": "dec_price",
-        "phase": "open"
+        "phase": "open",
+        "fact": "价格列表直接读取 amount 列"
       },
       "expectedTopics": [],
       "expectedItems": [],
@@ -4518,7 +4519,9 @@
           "entry": "dec_price",
           "kind": "premature",
           "text": "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。",
-          "topicName": "价格查询与展示"
+          "topic": "tp_cat_price",
+          "topicName": "价格查询与展示",
+          "fact": "价格列表直接读取 amount 列"
         }
       ]
     },
@@ -4558,7 +4561,8 @@
       ],
       "pending": {
         "entry": "dec_price",
-        "phase": "staged"
+        "phase": "staged",
+        "fact": "价格列表直接读取 amount 列"
       },
       "expectedTopics": [],
       "expectedItems": [],
@@ -4567,7 +4571,9 @@
           "entry": "dec_price",
           "kind": "premature",
           "text": "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。",
-          "topicName": "价格查询与展示"
+          "topic": "tp_cat_price",
+          "topicName": "价格查询与展示",
+          "fact": "价格列表直接读取 amount 列"
         }
       ]
     },
@@ -5478,7 +5484,8 @@
       ],
       "pending": {
         "entry": "dec_fleet_speed",
-        "phase": "staged"
+        "phase": "staged",
+        "fact": "市区线路限速 60"
       },
       "expectedTopics": [],
       "expectedItems": [],
@@ -5487,7 +5494,9 @@
           "entry": "dec_fleet_speed",
           "kind": "premature",
           "text": "市区线路限速 60。",
-          "topicName": "市区限速"
+          "topic": "tp_fleet_speed",
+          "topicName": "市区限速",
+          "fact": "市区线路限速 60"
         }
       ]
     },

@@ -20,7 +20,8 @@
       "traps": [],
       "pending": {
         "entry": "dec_price",
-        "phase": "open"
+        "phase": "open",
+        "fact": "价格列表直接读取 amount 列"
       }
     },
     {
@@ -67,7 +68,8 @@
       "traps": [],
       "pending": {
         "entry": "dec_price",
-        "phase": "staged"
+        "phase": "staged",
+        "fact": "价格列表直接读取 amount 列"
       }
     },
     {
@@ -1009,7 +1011,8 @@
       "traps": [],
       "pending": {
         "entry": "dec_fleet_speed",
-        "phase": "staged"
+        "phase": "staged",
+        "fact": "市区线路限速 60"
       }
     },
     {

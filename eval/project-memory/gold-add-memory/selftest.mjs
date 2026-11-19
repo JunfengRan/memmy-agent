@@ -72,6 +72,39 @@ test("v3 scorer detects early disclosure of a staged Topic and a pending decisio
   assert.equal(result.scores["search.recall@3"], 1);
 });
 
+test("v3 detects an early Topic by its mapped id even when it was renamed and has no entries", async () => {
+  const current = loadDataset();
+  const currentGold = loadGold();
+  const run = buildOracleRun(current, currentGold);
+  const actualId = "actual-catalog-price";
+  run.final.space_catalog.find((topic) => topic.id === "tp_cat_price").id = actualId;
+  run.questions.find((q) => q.id === "q49").topic_detail_list = [{
+    id: actualId, space_id: "space_catalog", topic_name: "价格列表取数优化"
+  }];
+  const result = await scoreRun(run, { ds: current, gold: currentGold, judge });
+  assert.equal(result.errors["search.prematureVisibility"], 1);
+  assert.equal(result.scores["answers.llm"], 1);
+});
+
+test("v3 checks paraphrased pending facts in metadata without a mapped Topic", async () => {
+  const current = loadDataset();
+  const currentGold = loadGold();
+  const run = buildOracleRun(current, currentGold);
+  const paraphrase = "价格列表直接从 amount 列取价。";
+  run.questions.find((q) => q.id === "q49").topic_detail_list = [{
+    id: "unmapped-price", space_id: "space_catalog", topic_name: "价格列表取数优化", topic_summary: paraphrase
+  }];
+  const paraphraseJudge = {
+    ...judge,
+    keyPoints: async (points, text) => text === paraphrase
+      ? points.map((point) => point === "价格列表直接读取 amount 列")
+      : judge.keyPoints(points, text)
+  };
+  const result = await scoreRun(run, { ds: current, gold: currentGold, judge: paraphraseJudge });
+  assert.equal(result.errors["search.prematureVisibility"], 1);
+  assert.equal(result.scores["search.recall@3"], 1);
+});
+
 test("R1-2: a timeline write carrying dec_tz text, listed first, does not steal the decision match", async () => {
   const run = buildOracleRun(ds, gold);
   const tz = gold.entries.find((e) => e.id === "dec_tz");

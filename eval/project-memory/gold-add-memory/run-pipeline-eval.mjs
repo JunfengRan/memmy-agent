@@ -256,10 +256,11 @@ export async function scoreRun(run, { ds, gold, judge }) {
     const all = result.topic_detail_list ?? [];
     const list = all.slice(0, 9);
     const foreign = list.filter((t) => t.space_id !== undefined && reverse.get(t.space_id) !== q.space_id).length;
-    const mapped = list.map((t) => {
-      const space = reverse.get(t.space_id) ?? q.space_id;
-      return topicMap.get(`${space}#${t.id}`) ?? fallbackTopic(space, t);
-    });
+    const mapTopic = (topic) => {
+      const space = reverse.get(topic.space_id) ?? q.space_id;
+      return topicMap.get(`${space}#${topic.id}`) ?? fallbackTopic(space, topic);
+    };
+    const mapped = list.map(mapTopic);
     const recall = Object.fromEntries([1, 3, 9].map((k) => [k, ratio(q.expectedTopics.filter((id) => mapped.slice(0, k).includes(id)).length, Math.min(k, q.expectedTopics.length))]));
     const items = list.flatMap((t) => [
       ...(t.decisions ?? []).flatMap((d) => [{ text: d.content, part: "current" }, ...(d.conflicts ?? []).map((c) => ({ text: c.content, part: "conflicts" })), ...(d.history ?? []).map((h) => ({ text: h.content, part: "history" }))]),
@@ -283,18 +284,22 @@ export async function scoreRun(run, { ds, gold, judge }) {
     let staleHistory = 0;
     let leaks = 0;
     let premature = 0;
-    keys.forEach((key, i) => {
+    for (const [i, key] of keys.entries()) {
       const parts = found[i].map((it) => it.part);
       if (key.type === "expected" && parts.includes(key.item.part === "content" ? "current" : "conflicts")) itemHits += 1;
       if (key.type === "stale" && parts.includes("current")) staleCurrent += 1;
       if (key.type === "stale" && (parts.includes("history") || parts.includes("conflicts"))) staleHistory += 1;
       if (key.type === "cross-project" && parts.length) leaks += 1;
       if (key.type === "premature") {
-        const reveal = list.some((topic) => norm(topic.topic_name) === norm(key.trap.topicName) ||
-          [topic.topic_summary, topic.topic_description].some((text) => norm(text).includes(norm(key.text))));
-        if (parts.length || reveal) premature += 1;
+        const matchesTopic = all.some((topic) => mapTopic(topic) === key.trap.topic ||
+          norm(topic.topic_name) === norm(key.trap.topicName));
+        const metadata = all.flatMap((topic) => [topic.topic_summary, topic.topic_description]).filter(Boolean).join("\n");
+        const exactMetadata = norm(metadata).includes(norm(key.text));
+        if (parts.length || matchesTopic || exactMetadata || (metadata && (await judge.keyPoints([key.trap.fact ?? key.text], metadata))[0])) {
+          premature += 1;
+        }
       }
-    });
+    }
     const answer = await judge.answer(q, result.answer, trapTexts);
     const reply = String(result.answer ?? "");
     questionRows.push({

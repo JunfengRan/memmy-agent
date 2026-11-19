@@ -333,7 +333,7 @@ export function buildGold(ds) {
     }
     const trapItems = [];
     if (question.pending && timeline) {
-      const { entry: id, phase } = question.pending;
+      const { entry: id, phase, fact } = question.pending;
       const draftTrace = corpus.traces.find((trace) => labels.traces[trace.id]?.ops.some((op) => op.op === "add" && op.entry === id));
       const draft = draftTrace && labels.traces[draftTrace.id].ops.find((op) => op.op === "add" && op.entry === id);
       const release = draft?.deferredUntil ? traces.get(draft.deferredUntil) : draftTrace;
@@ -345,7 +345,8 @@ export function buildGold(ds) {
       if (!topic || topic.space_id !== question.space_id || (phase === "open" ? !open : phase === "staged" ? !staged : true) || snap.has(id)) {
         errors.push(`${question.id} does not ask while ${id} is ${phase} in the same Space`);
       } else {
-        trapItems.push({ entry: id, kind: "premature", text: draft.content, topicName: topic.topic_name });
+        if (fact !== undefined && (typeof fact !== "string" || !fact.trim())) errors.push(`${question.id} needs non-empty metadata evidence`);
+        trapItems.push({ entry: id, kind: "premature", text: draft.content, topic: topic.id, topicName: topic.topic_name, ...(fact ? { fact } : {}) });
       }
     }
     for (const trap of question.traps) {
