@@ -49,7 +49,25 @@ node load-eval-set.mjs
 
 ## 对着服务跑
 
-现有 `run-memmy-live-eval.mjs` 固定使用历史 v2.1 的逐轮口径。v3 的固定时钟回放由 `--oracle` 与 `--empty` 自测；评分器也接受显式标记 `datasetVersion: 3`、按各 `askedAt` 采集的运行文件。v3 运行文件的提问快照需观测 Episode 与提交时点。产品请求继续使用正常的接口字段。
+#### MemOS v3
+
+使用独立的 MemOS 服务和测试时钟。时钟接受 `POST /advance` 与 `{at}`，推进到指定时刻并处理到期或已关闭的 Episode。回放按受理时点发 Add，按 `askedAt` 查询，Add 后在同一时点再推进一次。服务通过正常的 `/product` 路由接收消息和查询，重发沿用原 Task 和消息 ID。
+
+```bash
+export MEMMY_EVAL_BASE=http://127.0.0.1:8000/product
+export MEMMY_EVAL_CLOCK_BASE=http://127.0.0.1:8001
+export MEMMY_EVAL_SUT_MODEL="your-sut-model"
+node run-memos-v3-live.mjs --out ../runs/memos-v3-local
+node run-pipeline-eval.mjs ../runs/memos-v3-local/live-run.json --dataset 3
+```
+
+配置 `MEMMY_EVAL_READER_PROVIDER`、`MEMMY_EVAL_READER_MODEL`、`MEMMY_EVAL_READER_BASE_URL` 和 `MEMMY_EVAL_READER_API_KEY` 供阅读模型使用。评分沿用独立的 `MEMMY_EVAL_JUDGE_*` 配置。产品和时钟接口的可选 Bearer 分别由 `MEMMY_EVAL_API_KEY` 和 `MEMMY_EVAL_CLOCK_TOKEN` 提供。
+
+运行文件保留逐轮回执、最终状态、失败和四项 HTTP 接口检查。中断时可用 `--resume ../runs/<run-id>/live-run.partial.json`，沿用同一服务、数据库和时钟。每次完整回放创建新的 Space，同一时点的 Add 重试会复用稳定 ID。回放期间的暂存及开放状态保留在逐轮记录里，最终读取以语料关段时间和问题时间的最后一个时点为准。虚拟时钟运行提供接口耗时和模型用量，缺少独立的业务完成延迟采样。
+
+#### 历史 Memmy v2.1
+
+`run-memmy-live-eval.mjs` 固定使用历史 v2.1 的逐轮口径。
 
 服务需要提供 `http://127.0.0.1:18960/api/openmem/v1/` 下的 `create/space`、`create/domains`、`list/domains`、`add/message`、`get/status`、`search/memory`、`get/memory`。
 
