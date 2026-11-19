@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { INVALID_PARAMS, DOMAIN_INVALID, runApiChecks } from "./api-checks.mjs";
-import { finalPointTexts, loadDataset, projectAddBody, replay, submittedTrace } from "./build-gold-baseline.mjs";
+import { buildGold, datasetDirectory, finalPointTexts, loadDataset, projectAddBody, renderGold, replay, submittedTrace } from "./build-gold-baseline.mjs";
 import { createJudge } from "./judge.mjs";
 import { createLlm } from "./llm.mjs";
 import { loadGold } from "./load-eval-set.mjs";
@@ -20,12 +20,20 @@ import { classifyOperation, costUsd, tokenBuckets } from "./metrics.mjs";
 import { efficiency, scoreRun } from "./run-pipeline-eval.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const ds = loadDataset();
-const gold = loadGold();
+const ds = loadDataset(datasetDirectory(2.1));
+const gold = loadGold(datasetDirectory(2.1));
 const judge = createJudge(createLlm({ config: null }));
 const pricing = JSON.parse(readFileSync(join(root, "pricing.json"), "utf8"));
 const cases = [];
 const test = (name, fn) => cases.push({ name, fn });
+
+test("v2.1 archive can reproduce its committed gold byte for byte", () => {
+  const archive = datasetDirectory(2.1);
+  const { gold: regenerated, errors } = buildGold(loadDataset(archive));
+  assert.deepEqual(errors, []);
+  assert.equal(renderGold(regenerated), readFileSync(join(archive, "gold.json"), "utf8"));
+  assert.equal(loadGold(archive).datasetVersion, 2.1);
+});
 
 test("R1-2: a timeline write carrying dec_tz text, listed first, does not steal the decision match", async () => {
   const run = buildOracleRun(ds, gold);

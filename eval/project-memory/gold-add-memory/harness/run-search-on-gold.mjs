@@ -16,7 +16,7 @@ import { loadMemmyConfig } from "../../../../Memory/src/config/index.js";
 import { createEmbedder } from "../../../../Memory/src/model/embedder.js";
 import { MemoryService } from "../../../../Memory/src/service/memory-service.js";
 import { MemoryDb } from "../../../../Memory/src/storage/db.js";
-import { activePointTexts, loadDataset, replay } from "../build-gold-baseline.mjs";
+import { activePointTexts, datasetDirectory, loadDataset, replay } from "../build-gold-baseline.mjs";
 import { createLlm, resolveModelConfig } from "../llm.mjs";
 import { loadGold } from "../load-eval-set.mjs";
 import { displayNames, oracleTopics } from "../oracle.mjs";
@@ -29,8 +29,8 @@ const MEMORY_LIMIT = 9;
 const here = dirname(fileURLToPath(import.meta.url));
 const evalConfigPath = join(here, "eval-config.yaml");
 
-const ds = loadDataset();
-const gold = loadGold();
+const ds = loadDataset(datasetDirectory(2.1));
+const gold = loadGold(datasetDirectory(2.1));
 const scored = gold.questions.filter((question) => !question.excluded);
 const names = displayNames(ds);
 const conversations = new Map(ds.corpus.conversations.map((conversation) => [conversation.id, conversation]));
@@ -416,7 +416,7 @@ async function main() {
 
   const spaces = ds.corpus.spaces.map((space) => space.space_id);
   const run = {
-    runVersion: 2,
+    runVersion: 2, datasetVersion: gold.datasetVersion,
     kind: "search-on-gold",
     startedAt,
     wallclockMs: performance.now() - wallStarted,

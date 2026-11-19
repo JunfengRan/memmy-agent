@@ -32,7 +32,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runApiChecks } from "./api-checks.mjs";
-import { loadDataset, orderedTraces, projectAddBody, submittedTrace, traceOrderTime } from "./build-gold-baseline.mjs";
+import { datasetDirectory, loadDataset, orderedTraces, projectAddBody, submittedTrace, traceOrderTime } from "./build-gold-baseline.mjs";
 import { createLlm, resolveModelConfig } from "./llm.mjs";
 import { loadGold } from "./load-eval-set.mjs";
 import { displayNames } from "./oracle.mjs";
@@ -63,8 +63,8 @@ class ApiError extends Error {
   }
 }
 
-const ds = loadDataset();
-const gold = loadGold();
+const ds = loadDataset(datasetDirectory(2.1));
+const gold = loadGold(datasetDirectory(2.1));
 let readerConfig = null;
 let readerLlm = null;
 let reader = null;
@@ -85,7 +85,7 @@ const conversations = new Map(ds.corpus.conversations.map((c) => [c.id, c]));
 const tracesById = new Map(ds.corpus.traces.map((trace) => [trace.id, trace]));
 const memberName = (id) => names.memberNames[id] ?? id;
 const run = {
-  runVersion: 2,
+  runVersion: 2, datasetVersion: gold.datasetVersion,
   runnerRevision: RUNNER_REVISION,
   kind: checksOnly ? "api-checks" : "live",
   startedAt: new Date().toISOString(),

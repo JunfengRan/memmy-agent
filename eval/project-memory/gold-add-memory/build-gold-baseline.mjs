@@ -13,6 +13,12 @@ const root = dirname(fileURLToPath(import.meta.url));
 export const DATASET_DIR = join(root, "dataset");
 export const GOLD_PATH = join(DATASET_DIR, "gold.json");
 
+export function datasetDirectory(version) {
+  if (version === undefined || Number(version) === 3) return DATASET_DIR;
+  if (Number(version) === 2.1) return join(root, "history", "v2.1");
+  throw new Error(`unsupported dataset version ${version}`);
+}
+
 export function loadDataset(dir = DATASET_DIR) {
   const read = (name) => JSON.parse(readFileSync(join(dir, name), "utf8"));
   return { corpus: read("corpus.json"), labels: read("labels.json"), conflicts: read("conflicts.json"), questions: read("questions.json") };

@@ -6,7 +6,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { finalPointTexts } from "./build-gold-baseline.mjs";
+import { datasetDirectory, finalPointTexts } from "./build-gold-baseline.mjs";
 import { loadGold } from "./load-eval-set.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -15,7 +15,9 @@ const option = (name) => { const i = args.indexOf(name); return i >= 0 ? args.sp
 const templatePath = option("--template") ?? process.env.MEMMY_EVAL_REPORT_TEMPLATE;
 const out = option("--out") ?? join(root, "..", "runs", "report.html");
 const reports = args.map((path) => ({ path, report: JSON.parse(readFileSync(path, "utf8")) }));
-const gold = loadGold();
+const versions = new Set(reports.map(({ report }) => Number(report.datasetVersion ?? 2.1)));
+if (versions.size > 1) throw new Error("report inputs use different dataset versions");
+const gold = loadGold(datasetDirectory(versions.values().next().value));
 
 const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ESCAPES[ch]);

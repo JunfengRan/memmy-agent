@@ -10,15 +10,15 @@
 //      MEMMY_EVAL_READER_{PROVIDER,MODEL,BASE_URL,API_KEY}, MEMMY_EVAL_SUT_MODEL.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadDataset, orderedTraces, traceOrderTime } from "../build-gold-baseline.mjs";
+import { datasetDirectory, loadDataset, orderedTraces, traceOrderTime } from "../build-gold-baseline.mjs";
 import { createLlm, resolveModelConfig } from "../llm.mjs";
 import { loadGold } from "../load-eval-set.mjs";
 import { displayNames } from "../oracle.mjs";
 import { createReader, renderTemplate3 } from "../reader.mjs";
 import { RUNS_DIR } from "../run-pipeline-eval.mjs";
 
-const ds = loadDataset();
-const gold = loadGold();
+const ds = loadDataset(datasetDirectory(2.1));
+const gold = loadGold(datasetDirectory(2.1));
 const endpoint = (process.env.MEMMY_EVAL_ENDPOINT ?? "http://127.0.0.1:18961").replace(/\/$/, "");
 const token = process.env.MEMMY_EVAL_TOKEN;
 const readerConfig = resolveModelConfig("MEMMY_EVAL_READER");
@@ -31,7 +31,7 @@ const namespace = { source: "codex", profileId: "default", userId: `project-memo
 const headers = { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) };
 const conversations = new Map(ds.corpus.conversations.map((c) => [c.id, c]));
 const run = {
-  runVersion: 2, kind: "control-main", startedAt: new Date().toISOString(), base: endpoint,
+  runVersion: 2, datasetVersion: gold.datasetVersion, kind: "control-main", startedAt: new Date().toISOString(), base: endpoint,
   sut: { model: process.env.MEMMY_EVAL_SUT_MODEL ?? null }, reader: { model: readerConfig.model, provider: readerConfig.provider },
   spaceMap: Object.fromEntries(ds.corpus.spaces.map((s) => [s.space_id, s.space_id])),
   final: Object.fromEntries(ds.corpus.spaces.map((s) => [s.space_id, []])),

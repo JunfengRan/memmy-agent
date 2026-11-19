@@ -2,8 +2,9 @@
 // Validates dataset v2.1 against the v3 rules it encodes and checks that dataset/gold.json is the
 // exact output of build-gold-baseline.mjs. Exit 0 only when there are no errors.
 import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { activePointTexts, buildGold, GOLD_PATH, loadDataset, orderedTraces, renderGold, replay, traceOrderTime, traceVisibleTime } from "./build-gold-baseline.mjs";
+import { activePointTexts, buildGold, datasetDirectory, loadDataset, orderedTraces, renderGold, replay, traceOrderTime, traceVisibleTime } from "./build-gold-baseline.mjs";
 
 export const LIMITS = { topic_name: 20, topic_summary: 80, topic_description: 400, decision: 100, timeline: 100, experience: 200 };
 export const length = (text) => [...String(text ?? "")].length;
@@ -15,11 +16,12 @@ const ISO_LOCAL = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+08:00$/;
 const ALPHA_FIELDS = ["memoryScope", "level", "supersedes", "needsTodolist", "mergedFrom", "workspacePath", "gitRoot", "projectId", "sessionId", "canSee"];
 const LABELED = /决策|主张|\bD\d|\bT\d/;
 
-export function loadGold() {
-  return JSON.parse(readFileSync(GOLD_PATH, "utf8"));
+export function loadGold(dir = datasetDirectory()) {
+  return JSON.parse(readFileSync(join(dir, "gold.json"), "utf8"));
 }
 
-export function validateDataset(ds) {
+export function validateDataset(ds, dir = datasetDirectory()) {
+  const goldPath = join(dir, "gold.json");
   const errors = [];
   const err = (message) => errors.push(message);
   const { corpus, labels, conflicts, questions } = ds;
@@ -233,8 +235,8 @@ export function validateDataset(ds) {
   // Gold derivation.
   const { gold, errors: goldErrors } = buildGold(ds);
   errors.push(...goldErrors.map((e) => `gold: ${e}`));
-  if (!existsSync(GOLD_PATH)) err("dataset/gold.json missing; run build-gold-baseline.mjs");
-  else if (readFileSync(GOLD_PATH, "utf8") !== renderGold(gold)) err("dataset/gold.json is out of date; run build-gold-baseline.mjs");
+  if (!existsSync(goldPath)) err("dataset/gold.json missing; run build-gold-baseline.mjs");
+  else if (readFileSync(goldPath, "utf8") !== renderGold(gold)) err("dataset/gold.json is out of date; run build-gold-baseline.mjs");
   for (const entry of gold.entries) {
     if (length(entry.content) > LIMITS[entry.kind]) err(`${entry.id} final content over limit`);
     for (const item of [...(entry.conflicts ?? []), ...(entry.history ?? [])]) if (length(item.content) > LIMITS[entry.kind]) err(`${entry.id} item over limit`);
@@ -288,8 +290,9 @@ export function validateDataset(ds) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const ds = loadDataset();
-  const { errors, gold } = validateDataset(ds);
+  const dir = datasetDirectory(process.argv[2]);
+  const ds = loadDataset(dir);
+  const { errors, gold } = validateDataset(ds, dir);
   const scored = gold.questions.filter((q) => !q.excluded);
   const byKind = Object.fromEntries([...new Set(scored.map((q) => q.kind))].sort().map((k) => [k, scored.filter((q) => q.kind === k).length]));
   const outcomes = Object.fromEntries(["written", "optional-only", "not-written"].map((o) => [o, gold.traceLabels.filter((t) => t.outcome === o).length]));

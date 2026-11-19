@@ -51,6 +51,7 @@ export function buildOracleRun(ds, gold) {
   });
   return {
     runVersion: 2,
+    datasetVersion: gold.datasetVersion,
     kind: "oracle",
     spaceMap: Object.fromEntries(spaces.map((s) => [s, s])),
     final: Object.fromEntries(spaces.map((s) => [s, oracleTopics(ds, "9999", s)])),
@@ -65,6 +66,7 @@ export function buildEmptyRun(ds, gold) {
   const spaces = ds.corpus.spaces.map((s) => s.space_id);
   return {
     runVersion: 2,
+    datasetVersion: gold.datasetVersion,
     kind: "empty",
     spaceMap: Object.fromEntries(spaces.map((s) => [s, s])),
     final: Object.fromEntries(spaces.map((s) => [s, []])),

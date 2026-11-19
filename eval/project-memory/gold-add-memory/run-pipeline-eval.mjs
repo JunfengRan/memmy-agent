@@ -20,7 +20,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { finalPointTexts, loadDataset } from "./build-gold-baseline.mjs";
+import { datasetDirectory, finalPointTexts, loadDataset } from "./build-gold-baseline.mjs";
 import { JUDGE_PROMPT_VERSION, createJudge } from "./judge.mjs";
 import { assertJudgeFamily, createLlm, omitsTemperature, resolveModelConfig } from "./llm.mjs";
 import { LIMITS, length, loadGold } from "./load-eval-set.mjs";
@@ -612,6 +612,8 @@ function parseArgs(argv) {
     else if (arg === "--gate") options.gate = true;
     else if (arg === "--prune-judge-cache") options.prune = true;
     else if (arg === "--out") options.out = argv[++i];
+    else if (arg === "--dataset") options.datasetVersion = argv[++i];
+    else if (name === "--dataset") options.datasetVersion = value;
     else if (arg === "--sut-usage") options.sutUsage = argv[++i];
     else if (name === "--sut-usage") options.sutUsage = value;
     else if (flags[name]) options.thresholds[flags[name]] = Number(value);
@@ -624,17 +626,24 @@ function parseArgs(argv) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const options = parseArgs(process.argv.slice(2));
-  const ds = loadDataset();
-  const gold = loadGold();
   let run;
+  if (!options.mode) {
+    if (!options.input) { console.error("usage: node run-pipeline-eval.mjs <live-run.json> [--out report.json] [--gate] | --oracle | --empty [--dataset <version>]"); process.exit(2); }
+    run = JSON.parse(readFileSync(options.input, "utf8"));
+    if (run.runVersion !== 2) throw new Error("run file is not runVersion 2");
+  }
+  const runDatasetVersion = run ? run.datasetVersion ?? 2.1 : undefined;
+  const dir = datasetDirectory(options.datasetVersion ?? runDatasetVersion);
+  const ds = loadDataset(dir);
+  const gold = loadGold(dir);
+  if (runDatasetVersion !== undefined && Number(runDatasetVersion) !== gold.datasetVersion) {
+    throw new Error(`run dataset version ${runDatasetVersion} does not match gold ${gold.datasetVersion}`);
+  }
   let llm;
   if (options.mode) {
     run = options.mode === "oracle" ? buildOracleRun(ds, gold) : buildEmptyRun(ds, gold);
     llm = createLlm({ config: null });
   } else {
-    if (!options.input) { console.error("usage: node run-pipeline-eval.mjs <live-run.json> [--out report.json] [--gate] | --oracle | --empty"); process.exit(2); }
-    run = JSON.parse(readFileSync(options.input, "utf8"));
-    if (run.runVersion !== 2) throw new Error("run file is not runVersion 2");
     const config = resolveModelConfig("MEMMY_EVAL_JUDGE");
     try {
       assertJudgeFamily(config, process.env.MEMMY_EVAL_SUT_MODEL ?? run.sut?.model);
@@ -655,6 +664,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const sutUsagePath = options.sutUsage ?? process.env.MEMMY_EVAL_SUT_USAGE ?? null;
   const report = {
     reportVersion: 2,
+    datasetVersion: gold.datasetVersion,
     run: { kind: run.kind ?? "live", input: options.input ?? null, startedAt: run.startedAt ?? null, base: run.base ?? null, sut: run.sut ?? null, reader: run.reader ?? null },
     judge: { model: llm.config?.model ?? null, family: llm.config?.family ?? null, promptVersion: JUDGE_PROMPT_VERSION, temperature: llm.config?.model && omitsTemperature(llm.config.model) ? null : 0 },
     ...result,

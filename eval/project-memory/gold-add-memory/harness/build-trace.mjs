@@ -2,6 +2,7 @@
 //   node harness/build-trace.mjs --run <run-dir>
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { datasetDirectory } from "../build-gold-baseline.mjs";
 import { loadGold } from "../load-eval-set.mjs";
 
 const arg = (name) => { const i = process.argv.indexOf(`--${name}`); return i >= 0 ? process.argv[i + 1] : undefined; };
@@ -18,7 +19,7 @@ function readJsonl(path) {
 
 const live = JSON.parse(readFileSync(join(runDir, "live-run.json"), "utf8"));
 const report = JSON.parse(readFileSync(join(runDir, "report.json"), "utf8"));
-const gold = loadGold();
+const gold = loadGold(datasetDirectory(live.datasetVersion ?? 2.1));
 const goldQuestions = new Map(gold.questions.map((item) => [item.id, item]));
 const goldEntries = new Map(gold.entries.map((item) => [item.id, item]));
 const reportQuestions = new Map((report.detail?.questions ?? []).map((item) => [item.id, item]));

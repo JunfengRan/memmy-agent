@@ -9,7 +9,7 @@ import { IndexedProjectMemoryStore } from "../../../../Memory/src/service/projec
 import { SqliteProjectMemoryStore } from "../../../../Memory/src/service/project-memory/store/sqlite/sqlite-store.ts";
 import { scoreProjectTopics } from "../../../../Memory/src/service/project-memory/retrieve/search.ts";
 import { normalizeForCompare } from "../../../../Memory/src/service/project-memory/text.ts";
-import { loadDataset } from "../build-gold-baseline.mjs";
+import { datasetDirectory, loadDataset } from "../build-gold-baseline.mjs";
 import { loadGold } from "../load-eval-set.mjs";
 
 const arg = (name) => { const i = process.argv.indexOf(`--${name}`); return i >= 0 ? process.argv[i + 1] : undefined; };
@@ -18,8 +18,8 @@ if (!runDir) { console.error("usage: --run <run-dir>"); process.exit(2); }
 
 const MEMORY_LIMIT = 9;
 const live = JSON.parse(readFileSync(join(runDir, "live-run.json"), "utf8"));
-const gold = loadGold();
-const ds = loadDataset();
+const gold = loadGold(datasetDirectory(live.datasetVersion ?? 2.1));
+const ds = loadDataset(datasetDirectory(live.datasetVersion ?? 2.1));
 const conversations = new Map(ds.corpus.conversations.map((item) => [item.id, item]));
 const questions = new Map(gold.questions.map((item) => [item.id, item]));
 const entries = new Map(gold.entries.map((item) => [item.id, item]));
