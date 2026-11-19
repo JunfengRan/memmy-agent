@@ -35,6 +35,29 @@ test("v2.1 archive can reproduce its committed gold byte for byte", () => {
   assert.equal(loadGold(archive).datasetVersion, 2.1);
 });
 
+test("v3 oracle sees committed state at the question time", () => {
+  const current = loadDataset();
+  const currentGold = loadGold();
+  const run = buildOracleRun(current, currentGold);
+  for (const id of ["q48", "q49"]) assert.equal(run.questions.find((q) => q.id === id).topic_detail_list.length, 0);
+  assert.ok(run.questions.find((q) => q.id === "q50").rendered.includes("amount 列"));
+  const before = run.questions.find((q) => q.id === "q31").topic_detail_list[0].decisions;
+  const after = run.questions.find((q) => q.id === "q31_after").topic_detail_list[0].decisions;
+  assert.ok(before.some((item) => item.content.includes("journal 正文") && item.conflicts.length === 1));
+  assert.ok(after.some((item) => item.content.includes("amount 列") && item.history.length === 1 && !item.conflicts.length));
+});
+
+test("v3 scorer detects early disclosure of a staged Topic and a pending decision", async () => {
+  const current = loadDataset();
+  const currentGold = loadGold();
+  const run = buildOracleRun(current, currentGold);
+  const probe = run.questions.find((q) => q.id === "q45");
+  probe.topic_detail_list = [{ id: "probe-speed", space_id: "space_fleet", topic_name: "市区限速" }];
+  const result = await scoreRun(run, { ds: current, gold: currentGold, judge });
+  assert.equal(result.errors["search.prematureVisibility"], 1);
+  assert.equal(result.scores["search.recall@3"], 1);
+});
+
 test("R1-2: a timeline write carrying dec_tz text, listed first, does not steal the decision match", async () => {
   const run = buildOracleRun(ds, gold);
   const tz = gold.entries.find((e) => e.id === "dec_tz");

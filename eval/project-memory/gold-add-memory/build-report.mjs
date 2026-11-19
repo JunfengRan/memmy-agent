@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Renders dataset v2 gold (and optionally scored reports) as one HTML page.
+// Renders versioned gold (and optionally scored reports) as one HTML page.
 //   node build-report.mjs [report.json ...] [--template <explainer.html>] [--out <file>]
 // Template: --template or MEMMY_EVAL_REPORT_TEMPLATE (the MemTensor explainer template); without one
 // a minimal standalone page is written. Output defaults to eval/project-memory/runs/report.html.
@@ -51,7 +51,7 @@ const questionHtml = table(["题目", "类型", "提问时间", "问题", "标�
 const negativeHtml = table(["不该写入", "轨迹", "原因"], gold.negatives.map((n) => [esc(n.text), code(n.trace), esc(n.reason)]));
 const resultHtml = reports.length ? reports.map(({ path, report }) => `<h3>${esc(report.run?.kind ?? "run")} ${code(path)}</h3><p>被测模型 ${code(report.run?.sut?.model ?? "—")} · 阅读模型 ${code(report.run?.reader?.model ?? "—")} · 评委 ${code(report.judge?.model ?? "rule-only")}</p>${table(["得分", "值"], Object.entries(report.scores).map(([k, v]) => [code(k), fmt(v)]))}${table(["错误", "值"], Object.entries(report.errors).map(([k, v]) => [code(k), fmt(v)]))}`).join("") : "<p>未传入评分报告。用法见 README。</p>";
 
-const title = "项目记忆评测数据集 v2";
+const title = `项目记忆评测数据集 v${gold.datasetVersion}`;
 const main = `
       <header class="doc-head"><p class="eyebrow">评测 ${tag("MemOS", "tag-memos")} ${tag("Memmy", "tag-memmy")}</p><h1>${title}</h1><div class="title-rule" aria-hidden="true"></div>
       <p class="lead">金标按 v3 §2.2.5–§2.2.9 从 ${gold.traceLabels.length} 条轨迹重推：${count((e) => e.kind === "decision")} 条决策、${count((e) => e.kind === "experience")} 条经验、${count((e) => e.kind === "timeline" && !e.optional)} 条必写进展（另 ${count((e) => e.optional)} 条可写可不写），${gold.topics.length} 个主题，${gold.negatives.length} 条不该写入的内容；${scored.length} 道计分题（${Object.entries(kinds).map(([k, v]) => `${k} ${v}`).join(" · ")}），${gold.apiChecks.length} 项接口检查。轨迹结果：${Object.entries(outcomes).map(([k, v]) => `${k} ${v}`).join(" · ")}。</p></header>

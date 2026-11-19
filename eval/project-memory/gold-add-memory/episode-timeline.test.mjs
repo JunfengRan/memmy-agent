@@ -54,3 +54,19 @@ test("episode gold rejects missing, repeated, noncontiguous and cross-conversati
   assert.match(validateEpisodeLabels(ds).join("\n"), /multiple episodes/);
   assert.match(validateEpisodeLabels(ds).join("\n"), /missing episode for b/);
 });
+
+test("turn limit, longest wait, and semantic switch each close an active batch", () => {
+  const left = Array.from({ length: 8 }, (_, i) => turn(`l${i}`, "left", `09:${String(3 * i).padStart(2, "0")}:00`));
+  const right = Array.from({ length: 4 }, (_, i) => turn(`r${i}`, "right", `09:${String(9 * i).padStart(2, "0")}:00`));
+  const closing = turn("next", "left", "09:32:00");
+  const switchTurn = turn("switch", "left", "09:34:00");
+  const ds = dataset([...left, ...right, closing, switchTurn], [
+    episode("left", left.map((trace) => trace.id)), episode("right", right.map((trace) => trace.id)),
+    episode("next", ["next"]), episode("switch", ["switch"], "other")
+  ]);
+  const { batchByTrace } = buildEpisodeTimeline(ds);
+  assert.equal(batchByTrace.get("l0").closeReason, "turn_count");
+  assert.equal(batchByTrace.get("r0").closeReason, "max_wait");
+  assert.equal(batchByTrace.get("next").closeReason, "task_boundary");
+  assert.equal(batchByTrace.get("next").closedAt, time("09:34:00"));
+});

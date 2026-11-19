@@ -249,9 +249,10 @@ export async function scoreRun(run, { ds, gold, judge }) {
   const questionRows = [];
   const scored = gold.questions.filter((q) => !q.excluded);
   for (const q of scored) {
+    const pending = Boolean(q.pending);
     const result = (run.questions ?? []).find((r) => r.id === q.id);
     const trapTexts = q.trapItems.flatMap((t) => t.texts ?? [t.text]);
-    if (!result) { questionRows.push({ id: q.id, kind: q.kind, missing: true, recall: { 1: 0, 3: 0, 9: 0 }, entryHit: 0, itemHits: 0, items: q.expectedItems.length, staleCurrent: 0, staleHistory: 0, staleTraps: q.trapItems.filter((t) => t.kind === "stale").length, leaks: 0, foreign: 0, overLimit: false, answer: { correct: false }, rubric: 0, tokenF1: 0 }); continue; }
+    if (!result) { questionRows.push({ id: q.id, kind: q.kind, pending, missing: true, recall: { 1: 0, 3: 0, 9: 0 }, entryHit: 0, itemHits: 0, items: q.expectedItems.length, staleCurrent: 0, staleHistory: 0, staleTraps: q.trapItems.filter((t) => t.kind === "stale").length, leaks: 0, foreign: 0, overLimit: false, answer: { correct: false }, rubric: 0, tokenF1: 0 }); continue; }
     const all = result.topic_detail_list ?? [];
     const list = all.slice(0, 9);
     const foreign = list.filter((t) => t.space_id !== undefined && reverse.get(t.space_id) !== q.space_id).length;
@@ -281,23 +282,30 @@ export async function scoreRun(run, { ds, gold, judge }) {
     let staleCurrent = 0;
     let staleHistory = 0;
     let leaks = 0;
+    let premature = 0;
     keys.forEach((key, i) => {
       const parts = found[i].map((it) => it.part);
       if (key.type === "expected" && parts.includes(key.item.part === "content" ? "current" : "conflicts")) itemHits += 1;
       if (key.type === "stale" && parts.includes("current")) staleCurrent += 1;
       if (key.type === "stale" && (parts.includes("history") || parts.includes("conflicts"))) staleHistory += 1;
       if (key.type === "cross-project" && parts.length) leaks += 1;
+      if (key.type === "premature") {
+        const reveal = list.some((topic) => norm(topic.topic_name) === norm(key.trap.topicName) ||
+          [topic.topic_summary, topic.topic_description].some((text) => norm(text).includes(norm(key.text))));
+        if (parts.length || reveal) premature += 1;
+      }
     });
     const answer = await judge.answer(q, result.answer, trapTexts);
     const reply = String(result.answer ?? "");
     questionRows.push({
-      id: q.id, kind: q.kind, missing: false, topics: list.length, recall,
+      id: q.id, kind: q.kind, pending, missing: false, topics: list.length, recall,
       entryHit: itemHits === q.expectedItems.length && q.expectedItems.length ? 1 : 0, itemHits, items: q.expectedItems.length,
-      staleCurrent, staleHistory, staleTraps: q.trapItems.filter((t) => t.kind === "stale").length, leaks, foreign, overLimit: all.length > 9,
+      staleCurrent, staleHistory, premature, staleTraps: q.trapItems.filter((t) => t.kind === "stale").length, leaks, foreign, overLimit: all.length > 9,
       answer, rubric: reply && q.mustInclude.every((phrase) => reply.includes(phrase)) ? 1 : 0, tokenF1: reply ? tokenF1(reply, q.goldAnswer) : 0
     });
   }
   const sum = (field) => questionRows.reduce((total, row) => total + (typeof row[field] === "number" ? row[field] : 0), 0);
+  const recallRows = questionRows.filter((row) => !row.pending);
   const byQuestionKind = Object.fromEntries([...new Set(questionRows.map((r) => r.kind))].sort().map((kind) => {
     const rows = questionRows.filter((r) => r.kind === kind);
     return [kind, { n: rows.length, answer: mean(rows.map((r) => (r.answer.correct ? 1 : 0))), tokenF1: mean(rows.map((r) => r.tokenF1)), entryHit: mean(rows.map((r) => r.entryHit)) }];
@@ -324,10 +332,10 @@ export async function scoreRun(run, { ds, gold, judge }) {
     "topics.bcubed.f1": bcubed.f1,
     "topics.domain": ratio(topicRows.filter((r) => r.domain).length, topicRows.length),
     "topics.keyPoints": ratio(keyPoints.filter(Boolean).length, keyPoints.length),
-    "search.recall@1": ratio(questionRows.reduce((t, r) => t + r.recall[1], 0), questionRows.length),
-    "search.recall@3": ratio(questionRows.reduce((t, r) => t + r.recall[3], 0), questionRows.length),
-    "search.recall@9": ratio(questionRows.reduce((t, r) => t + r.recall[9], 0), questionRows.length),
-    "search.entryHit": ratio(sum("entryHit"), questionRows.length),
+    "search.recall@1": ratio(recallRows.reduce((t, r) => t + r.recall[1], 0), recallRows.length),
+    "search.recall@3": ratio(recallRows.reduce((t, r) => t + r.recall[3], 0), recallRows.length),
+    "search.recall@9": ratio(recallRows.reduce((t, r) => t + r.recall[9], 0), recallRows.length),
+    "search.entryHit": ratio(sum("entryHit"), recallRows.length),
     "search.itemHit": ratio(sum("itemHits"), sum("items")),
     "search.staleTrapInHistory": ratio(sum("staleHistory"), sum("staleTraps")),
     "answers.llm": ratio(questionRows.filter((r) => r.answer.correct).length, questionRows.length),
@@ -355,6 +363,7 @@ export async function scoreRun(run, { ds, gold, judge }) {
     "search.staleShownAsCurrent": sum("staleCurrent"),
     "search.crossProjectLeak": sum("leaks"),
     "search.foreignTopics": sum("foreign"),
+    ...(gold.datasetVersion === 3 ? { "search.prematureVisibility": sum("premature") } : {}),
     "search.overLimit": questionRows.filter((r) => r.overLimit).length,
     "questions.missing": questionRows.filter((r) => r.missing).length
   };
@@ -679,6 +688,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   } else if (options.gate) {
     for (const [key, min] of Object.entries(options.thresholds)) if (!(report.scores[key] >= min)) failures.push(`${key}=${report.scores[key]} < ${min}`);
     for (const key of ["search.staleShownAsCurrent", "search.crossProjectLeak", "search.foreignTopics", "decisions.reasonFabricated", "topics.controlMerges", "writes.lateAsCurrent"]) if (report.errors[key] !== 0) failures.push(`${key}=${report.errors[key]} must be 0`);
+    if (gold.datasetVersion === 3 && report.errors["search.prematureVisibility"] !== 0) failures.push("search.prematureVisibility must be 0");
     if (!(report.errors["topics.duplicateRate"] <= options.maxDuplicateRate)) failures.push(`topics.duplicateRate=${report.errors["topics.duplicateRate"]} > ${options.maxDuplicateRate}`);
     if (!(report.errors["topics.wrongMergeRate"] <= options.maxWrongMergeRate)) failures.push(`topics.wrongMergeRate=${report.errors["topics.wrongMergeRate"]} > ${options.maxWrongMergeRate}`);
   }

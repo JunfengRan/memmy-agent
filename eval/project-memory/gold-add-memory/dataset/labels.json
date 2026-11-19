@@ -1,5 +1,5 @@
 {
-  "datasetVersion": 2.1,
+  "datasetVersion": 3,
   "spec": "项目记忆：端云协同架构与模块设计（v3）§2.2.5–§2.2.9",
   "rules": {
     "decision": "只记约束其他工作的选择：范围 / 对外约定 / 共同约定；局部实现、执行步骤、未采纳方案、未决事项不记",
@@ -152,17 +152,33 @@
       "id": "tp_clinic_quota",
       "space_id": "space_clinic",
       "domain": "门诊排班",
-      "topic_name": "门诊号源规则",
+      "topic_name": "门诊号源与时段配置",
       "summaryKeyPoints": [
         {
           "text": "约定门诊号源的释放时间",
           "since": "t_clinic_quota"
+        },
+        {
+          "text": "约定上午和下午门诊的起止时间",
+          "since": "t_clinic_slot"
+        },
+        {
+          "text": "约定临时加号每个半天的上限",
+          "since": "t_clinic_extra"
         }
       ],
       "descriptionKeyPoints": [
         {
           "text": "约定门诊号源的释放时间",
           "since": "t_clinic_quota"
+        },
+        {
+          "text": "约定上午和下午门诊的起止时间",
+          "since": "t_clinic_slot"
+        },
+        {
+          "text": "约定临时加号每个半天的上限",
+          "since": "t_clinic_extra"
         }
       ]
     },
@@ -181,24 +197,6 @@
         {
           "text": "叫号按挂号先后，过号排到当前队尾",
           "since": "t_clinic_call"
-        }
-      ]
-    },
-    {
-      "id": "tp_clinic_slot",
-      "space_id": "space_clinic",
-      "domain": "门诊排班",
-      "topic_name": "门诊时段",
-      "summaryKeyPoints": [
-        {
-          "text": "约定上午和下午门诊的起止时间",
-          "since": "t_clinic_slot"
-        }
-      ],
-      "descriptionKeyPoints": [
-        {
-          "text": "约定上午和下午门诊的起止时间",
-          "since": "t_clinic_slot"
         }
       ]
     },
@@ -293,24 +291,6 @@
       ]
     },
     {
-      "id": "tp_clinic_extra",
-      "space_id": "space_clinic",
-      "domain": "门诊排班",
-      "topic_name": "门诊加号规则",
-      "summaryKeyPoints": [
-        {
-          "text": "约定临时加号每个半天的上限",
-          "since": "t_clinic_extra"
-        }
-      ],
-      "descriptionKeyPoints": [
-        {
-          "text": "约定临时加号每个半天的上限",
-          "since": "t_clinic_extra"
-        }
-      ]
-    },
-    {
       "id": "tp_clinic_near",
       "space_id": "space_clinic",
       "domain": "药房管理",
@@ -368,17 +348,25 @@
       "id": "tp_wh_cold",
       "space_id": "space_warehouse",
       "domain": "入库验收",
-      "topic_name": "冷链温度上限",
+      "topic_name": "温控货到仓拒收",
       "summaryKeyPoints": [
         {
           "text": "约定冷链货到货的拒收温度",
           "since": "t_wh_cold"
+        },
+        {
+          "text": "约定冷冻货到货的拒收温度",
+          "since": "t_wh_freeze"
         }
       ],
       "descriptionKeyPoints": [
         {
           "text": "约定冷链货到货的拒收温度",
           "since": "t_wh_cold"
+        },
+        {
+          "text": "约定冷冻货到货的拒收温度",
+          "since": "t_wh_freeze"
         }
       ]
     },
@@ -509,24 +497,6 @@
       ]
     },
     {
-      "id": "tp_wh_freeze",
-      "space_id": "space_warehouse",
-      "domain": "入库验收",
-      "topic_name": "冷冻温度上限",
-      "summaryKeyPoints": [
-        {
-          "text": "约定冷冻货到货的拒收温度",
-          "since": "t_wh_freeze"
-        }
-      ],
-      "descriptionKeyPoints": [
-        {
-          "text": "约定冷冻货到货的拒收温度",
-          "since": "t_wh_freeze"
-        }
-      ]
-    },
-    {
       "id": "tp_wh_dock",
       "space_id": "space_warehouse",
       "domain": "入库验收",
@@ -548,17 +518,25 @@
       "id": "tp_fleet_morning",
       "space_id": "space_fleet",
       "domain": "线路调度",
-      "topic_name": "早班发车时刻",
+      "topic_name": "日夜班发车调度",
       "summaryKeyPoints": [
         {
           "text": "约定早班发车和取消的时点",
           "since": "t_fleet_morning"
+        },
+        {
+          "text": "约定夜班发车和取消的时点",
+          "since": "t_fleet_night"
         }
       ],
       "descriptionKeyPoints": [
         {
           "text": "约定早班发车和取消的时点",
           "since": "t_fleet_morning"
+        },
+        {
+          "text": "约定夜班发车和取消的时点",
+          "since": "t_fleet_night"
         }
       ]
     },
@@ -685,24 +663,6 @@
         {
           "text": "市区限速尚有另一项说法",
           "since": "t_fleet_speed_late"
-        }
-      ]
-    },
-    {
-      "id": "tp_fleet_night",
-      "space_id": "space_fleet",
-      "domain": "线路调度",
-      "topic_name": "夜班发车时刻",
-      "summaryKeyPoints": [
-        {
-          "text": "约定夜班发车和取消的时点",
-          "since": "t_fleet_night"
-        }
-      ],
-      "descriptionKeyPoints": [
-        {
-          "text": "约定夜班发车和取消的时点",
-          "since": "t_fleet_night"
         }
       ]
     },
@@ -1158,7 +1118,7 @@
       "category": "共同约定"
     },
     "dec_clinic_slot": {
-      "topic": "tp_clinic_slot",
+      "topic": "tp_clinic_quota",
       "kind": "decision",
       "category": "共同约定"
     },
@@ -1192,7 +1152,7 @@
       "category": "共同约定"
     },
     "dec_clinic_extra": {
-      "topic": "tp_clinic_extra",
+      "topic": "tp_clinic_quota",
       "kind": "decision",
       "category": "共同约定"
     },
@@ -1261,7 +1221,7 @@
       "category": "共同约定"
     },
     "dec_wh_freeze": {
-      "topic": "tp_wh_freeze",
+      "topic": "tp_wh_cold",
       "kind": "decision",
       "category": "对外约定"
     },
@@ -1320,7 +1280,7 @@
       "category": "共同约定"
     },
     "dec_fleet_night": {
-      "topic": "tp_fleet_night",
+      "topic": "tp_fleet_morning",
       "kind": "decision",
       "category": "对外约定"
     },
@@ -2568,24 +2528,12 @@
   "controls": {
     "similar-name": [
       [
-        "tp_clinic_quota",
-        "tp_clinic_extra"
-      ],
-      [
         "tp_clinic_expiry",
         "tp_clinic_near"
       ],
       [
         "tp_wh_buy",
         "tp_wh_return"
-      ],
-      [
-        "tp_wh_cold",
-        "tp_wh_freeze"
-      ],
-      [
-        "tp_fleet_morning",
-        "tp_fleet_night"
       ],
       [
         "tp_kit_soup",
@@ -2608,6 +2556,22 @@
       [
         "dec_sample_hours",
         "dec_sample_temp"
+      ],
+      [
+        "dec_clinic_quota",
+        "dec_clinic_slot"
+      ],
+      [
+        "dec_clinic_quota",
+        "dec_clinic_extra"
+      ],
+      [
+        "dec_wh_cold",
+        "dec_wh_freeze"
+      ],
+      [
+        "dec_fleet_morning",
+        "dec_fleet_night"
       ]
     ]
   }

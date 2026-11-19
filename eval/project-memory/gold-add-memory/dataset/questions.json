@@ -1,7 +1,28 @@
 {
-  "datasetVersion": 2.1,
+  "datasetVersion": 3,
   "rule": "每题在 askedAt 时刻从提问会话调用 search_memory（space_ids 为该题空间，memory_limit_number=9）。expect.topics 是应召回的 gold 主题；expect.entries 是该时刻主题内应出现的条目及部分（content / conflicts / history）。traps：stale 是已进 history 的旧结论，出现在 history 里是预期，作为当前结论出现是错误；cross-project 是另一个空间的相近条目，出现即越界。kind：plain 只看召回；stale 当前结论已改写或裁决；conflict 有未裁决的不一致结论，回答必须列出各项；cross-project 另一空间有相近说法。",
   "questions": [
+    {
+      "conversation": "catalog-ask",
+      "space_id": "space_catalog",
+      "question": "价格列表现在按什么字段读金额？",
+      "id": "q48",
+      "askedAt": "2026-10-21T11:50:00+08:00",
+      "kind": "visibility",
+      "goldAnswer": "目前没有已提交的相关项目记忆。",
+      "mustInclude": [
+        "没有已提交"
+      ],
+      "expect": {
+        "topics": [],
+        "entries": []
+      },
+      "traps": [],
+      "pending": {
+        "entry": "dec_price",
+        "phase": "open"
+      }
+    },
     {
       "id": "q03",
       "askedAt": "2026-10-21T12:00:00+08:00",
@@ -29,8 +50,81 @@
       "traps": []
     },
     {
+      "conversation": "catalog-ask",
+      "space_id": "space_catalog",
+      "question": "价格列表现在按什么字段读金额？",
+      "id": "q49",
+      "askedAt": "2026-10-21T13:00:00+08:00",
+      "kind": "visibility",
+      "goldAnswer": "目前没有已提交的相关项目记忆。",
+      "mustInclude": [
+        "没有已提交"
+      ],
+      "expect": {
+        "topics": [],
+        "entries": []
+      },
+      "traps": [],
+      "pending": {
+        "entry": "dec_price",
+        "phase": "staged"
+      }
+    },
+    {
       "id": "q01",
       "askedAt": "2026-10-21T14:00:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
+      "kind": "plain",
+      "question": "ledger 月报的金额现在是从哪里取的？",
+      "goldAnswer": "entries 表结构不变，金额继续写在 journal 正文里，月报读取时再从正文里挑出来。",
+      "mustInclude": [
+        "journal 正文"
+      ],
+      "expect": {
+        "topics": [
+          "tp_ledger_report"
+        ],
+        "entries": [
+          {
+            "entry": "dec_amount",
+            "parts": [
+              "content"
+            ]
+          }
+        ]
+      },
+      "traps": []
+    },
+    {
+      "conversation": "catalog-ask",
+      "space_id": "space_catalog",
+      "question": "价格列表现在按什么字段读金额？",
+      "id": "q50",
+      "kind": "plain",
+      "askedAt": "2026-10-21T14:20:00+08:00",
+      "goldAnswer": "价格表新增 amount 列，列表直接读取这个字段。",
+      "mustInclude": [
+        "amount 列"
+      ],
+      "expect": {
+        "topics": [
+          "tp_cat_price"
+        ],
+        "entries": [
+          {
+            "entry": "dec_price",
+            "parts": [
+              "content"
+            ]
+          }
+        ]
+      },
+      "traps": []
+    },
+    {
+      "id": "q01_after",
+      "askedAt": "2026-10-21T14:25:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
       "kind": "cross-project",
@@ -702,6 +796,40 @@
       "askedAt": "2026-10-21T20:40:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
+      "kind": "conflict",
+      "question": "ledger 月报的金额现在以什么为准？",
+      "goldAnswer": "目前仍有两项不一致结论：林工原先把金额保留在 journal 正文里；周工因为扫全文太慢主张改读 entries 的 amount 列。目前没有生效的裁决。",
+      "mustInclude": [
+        "journal 正文",
+        "amount 列",
+        "没有生效的裁决"
+      ],
+      "expect": {
+        "topics": [
+          "tp_ledger_report"
+        ],
+        "entries": [
+          {
+            "entry": "dec_amount",
+            "parts": [
+              "content",
+              "conflicts"
+            ]
+          }
+        ]
+      },
+      "traps": [
+        {
+          "entry": "dec_price",
+          "kind": "cross-project"
+        }
+      ]
+    },
+    {
+      "id": "q31_after",
+      "askedAt": "2026-10-21T20:50:00+08:00",
+      "conversation": "ledger-ask",
+      "space_id": "space_ledger",
       "kind": "stale",
       "question": "ledger 月报的金额现在以什么为准？",
       "goldAnswer": "以 entries 的 amount 列为准，月报按这列汇总。林工已确定以周工的结论为准，把金额留在 journal 正文里的旧结论已转入历史。",
@@ -868,26 +996,21 @@
       "askedAt": "2026-11-05T14:20:00+08:00",
       "conversation": "fleet-ask",
       "space_id": "space_fleet",
-      "kind": "plain",
+      "kind": "visibility",
       "question": "市区里跑的线路最高可以开多快？",
-      "goldAnswer": "市区线路限速 60。",
+      "goldAnswer": "目前没有已提交的相关项目记忆。",
       "mustInclude": [
-        "60"
+        "没有已提交"
       ],
       "expect": {
-        "topics": [
-          "tp_fleet_speed"
-        ],
-        "entries": [
-          {
-            "entry": "dec_fleet_speed",
-            "parts": [
-              "content"
-            ]
-          }
-        ]
+        "topics": [],
+        "entries": []
       },
-      "traps": []
+      "traps": [],
+      "pending": {
+        "entry": "dec_fleet_speed",
+        "phase": "staged"
+      }
     },
     {
       "id": "q46",

@@ -1,0 +1,777 @@
+{
+  "datasetVersion": 3,
+  "episodes": [
+    {
+      "id": "ep_ledger_report_start",
+      "topic": "tp_ledger_report",
+      "goal": "生成按客户过滤的月报并记录金额来源",
+      "traces": [
+        "t_journal",
+        "t_verbose",
+        "t_write_split",
+        "t_report"
+      ],
+      "quote": "月报先别改 entries 的表结构。金额继续写在 journal 正文里，读取时再挑出来。"
+    },
+    {
+      "id": "ep_ledger_export_start",
+      "topic": "tp_ledger_export",
+      "goal": "尝试把 catalog 导出迁入 ledger 月报",
+      "traces": [
+        "t_copy"
+      ],
+      "quote": "catalog 那个导出做法能用，我把它抄进 ledger。"
+    },
+    {
+      "id": "ep_ledger_round",
+      "topic": "tp_ledger_report",
+      "goal": "修正月报金额的计算精度",
+      "traces": [
+        "t_ledger_round"
+      ],
+      "quote": "月报金额按整数分算，别用浮点。",
+      "continues": "ep_ledger_report_start"
+    },
+    {
+      "id": "ep_ledger_credentials_start",
+      "topic": "tp_ledger_repo",
+      "goal": "决定仓库如何说明数据库连接配置",
+      "traces": [
+        "t_write_secret"
+      ],
+      "quote": "把连接串写进 README，别人好查。"
+    },
+    {
+      "id": "ep_ledger_conflict_assert",
+      "topic": null,
+      "goal": "尝试扩大冲突判定规则",
+      "traces": [
+        "t_write_edit"
+      ],
+      "quote": "只要改了文件就算冲突。"
+    },
+    {
+      "id": "ep_ledger_branch",
+      "topic": "tp_ledger_repo",
+      "goal": "为同一仓库确定改动分支",
+      "traces": [
+        "t_write_main"
+      ],
+      "quote": "直接在 main 上改吧，省得合并。",
+      "continues": "ep_ledger_credentials_start"
+    },
+    {
+      "id": "ep_ledger_report_dedup_debug",
+      "topic": "tp_ledger_report",
+      "goal": "修复月报重复分录并排查样例测试",
+      "traces": [
+        "t_ledger_dup",
+        "t_sample"
+      ],
+      "quote": "重复的分录按 id 去重，留最早那条。",
+      "continues": "ep_ledger_round"
+    },
+    {
+      "id": "ep_ledger_credentials_fix",
+      "topic": "tp_ledger_repo",
+      "goal": "纠正同一仓库的凭据存放方式",
+      "traces": [
+        "t_env"
+      ],
+      "quote": "数据库密码别写进仓库。",
+      "continues": "ep_ledger_branch"
+    },
+    {
+      "id": "ep_ledger_report_resolve",
+      "topic": "tp_ledger_report",
+      "goal": "核对月报金额来源并在讨论后裁决",
+      "traces": [
+        "t_silent",
+        "t_informed",
+        "t_resolve"
+      ],
+      "quote": "别告诉另一个窗口我改了表。",
+      "continues": "ep_ledger_report_dedup_debug"
+    },
+    {
+      "id": "ep_ledger_archive",
+      "topic": "tp_ledger_archive",
+      "goal": "确定月报归档位置和保留期并落地归档目录",
+      "traces": [
+        "t_archive_say",
+        "t_archive_land",
+        "t_archive_hold"
+      ],
+      "quote": "月报定稿后放到 archive/ 目录，只保留十二个月。"
+    },
+    {
+      "id": "ep_ledger_reply_style",
+      "topic": null,
+      "goal": "请求控制回复与拆段样式",
+      "traces": [
+        "t_short",
+        "t_admin_todo"
+      ],
+      "quote": "回复短一点，步骤放到清单里就行。"
+    },
+    {
+      "id": "ep_ledger_report_follow",
+      "topic": "tp_ledger_report",
+      "goal": "完善月报日期边界与产出路径",
+      "traces": [
+        "t_ledger_tz",
+        "t_ledger_loc"
+      ],
+      "quote": "月报的月初月末按东八区算，别用 UTC。"
+    },
+    {
+      "id": "ep_ledger_copy_wait",
+      "topic": "tp_ledger_export",
+      "goal": "撤回导出迁入并等待 dry-run 结果",
+      "traces": [
+        "t_wait"
+      ],
+      "quote": "先别抄，我跟林工确认过了。等 dry-run 报告出来再看要不要搬。"
+    },
+    {
+      "id": "ep_ledger_secret_objection",
+      "topic": "tp_ledger_repo",
+      "goal": "提出同一仓库不公开凭据的约束",
+      "traces": [
+        "t_admin_env"
+      ],
+      "quote": ".env 不能出现在说明里。"
+    },
+    {
+      "id": "ep_ledger_conflict_rule",
+      "topic": null,
+      "goal": "询问冲突的通用判定方式",
+      "traces": [
+        "t_admin_claim"
+      ],
+      "quote": "只有两边结论相反才算冲突。"
+    },
+    {
+      "id": "ep_ledger_branch_objection",
+      "topic": "tp_ledger_repo",
+      "goal": "复议同一仓库的分支规则",
+      "traces": [
+        "t_admin_branch"
+      ],
+      "quote": "改动先放 feature 分支，别直接动 main。",
+      "continues": "ep_ledger_secret_objection"
+    },
+    {
+      "id": "ep_ledger_report_override",
+      "topic": "tp_ledger_report",
+      "goal": "调整月报金额来源和空客户读取并跟进跨会话通知",
+      "traces": [
+        "t_column",
+        "t_admin_bug",
+        "t_bug",
+        "t_tell"
+      ],
+      "quote": "月报扫全文太慢了。还是给 entries 加上 amount 列，汇总改成直接读这一列。空客户那条测试也一起改掉。",
+      "continues": "ep_ledger_report_follow"
+    },
+    {
+      "id": "ep_ledger_copy_decide",
+      "topic": "tp_ledger_export",
+      "goal": "依据 dry-run 结果裁决导出迁入",
+      "traces": [
+        "t_dryrun"
+      ],
+      "quote": "dry-run 报告出来了，export 在月报里用不上。",
+      "continues": "ep_ledger_copy_wait"
+    },
+    {
+      "id": "ep_ledger_archive_follow",
+      "topic": "tp_ledger_archive",
+      "goal": "补记旧归档路径并提出不同保留期",
+      "traces": [
+        "t_archive_backfill",
+        "t_archive_late"
+      ],
+      "quote": "补充一下更早的做法：月报先放在 inbox/，当天再挪到 archive/。现在的规则不用改。"
+    },
+    {
+      "id": "ep_catalog_price_start",
+      "topic": "tp_cat_price",
+      "goal": "改善价格列表读取性能",
+      "traces": [
+        "t_price"
+      ],
+      "quote": "价格查询太慢。给 price 表加 amount 列，列表改成直接读这一列。"
+    },
+    {
+      "id": "ep_catalog_export_start",
+      "topic": "tp_cat_export",
+      "goal": "实现价格表文件导出",
+      "traces": [
+        "t_export"
+      ],
+      "quote": "导出价格表。目录没有就先建，再写文件。"
+    },
+    {
+      "id": "ep_catalog_price_contract",
+      "topic": "tp_cat_price",
+      "goal": "完善价格列表的 SKU、显示、时间与去重口径",
+      "traces": [
+        "t_cat_sku",
+        "t_cat_round",
+        "t_cat_tz",
+        "t_cat_dup"
+      ],
+      "quote": "sku 比较前统一转大写。",
+      "continues": "ep_catalog_price_start"
+    },
+    {
+      "id": "ep_catalog_export_change",
+      "topic": "tp_cat_export",
+      "goal": "修改同一价格表的导出格式",
+      "traces": [
+        "t_csv"
+      ],
+      "quote": "导出别写 json 了，改成 csv。",
+      "continues": "ep_catalog_export_start"
+    },
+    {
+      "id": "ep_clinic_schedule_release",
+      "topic": "tp_clinic_quota",
+      "goal": "设置次日号源释放时点",
+      "traces": [
+        "t_clinic_quota"
+      ],
+      "quote": "号源改到每天早上 7 点放第二天的。"
+    },
+    {
+      "id": "ep_clinic_call",
+      "topic": "tp_clinic_call",
+      "goal": "设置等待叫号及过号重排",
+      "traces": [
+        "t_clinic_call"
+      ],
+      "quote": "叫号按挂号先后。过号的人排到当前队尾。"
+    },
+    {
+      "id": "ep_clinic_schedule_hours",
+      "topic": "tp_clinic_quota",
+      "goal": "确定可预约的上午与下午接诊时段",
+      "traces": [
+        "t_clinic_slot"
+      ],
+      "quote": "上午看到 11 点半，下午 13 点半再开诊。",
+      "continues": "ep_clinic_schedule_release"
+    },
+    {
+      "id": "ep_clinic_prescription_limit",
+      "topic": "tp_clinic_rx",
+      "goal": "规定普通处方领取有效期",
+      "traces": [
+        "t_clinic_rx"
+      ],
+      "quote": "普通处方只在开出的当天有效。"
+    },
+    {
+      "id": "ep_clinic_expiry",
+      "topic": "tp_clinic_expiry",
+      "goal": "设置近效期存货标识",
+      "traces": [
+        "t_clinic_expiry"
+      ],
+      "quote": "离失效不到 30 天的药先别下架，贴上黄标。"
+    },
+    {
+      "id": "ep_clinic_fridge",
+      "topic": "tp_clinic_cold",
+      "goal": "设定冷藏药存储环境",
+      "traces": [
+        "t_clinic_cold"
+      ],
+      "quote": "冷藏药放 2 到 8 度的柜子，别放常温架。"
+    },
+    {
+      "id": "ep_clinic_returns",
+      "topic": "tp_clinic_return",
+      "goal": "确认退药窗口时间并挂牌",
+      "traces": [
+        "t_clinic_return_say",
+        "t_clinic_return_land"
+      ],
+      "quote": "退药只在上午那个窗口收。"
+    },
+    {
+      "id": "ep_clinic_medication_labels",
+      "topic": "tp_clinic_label",
+      "goal": "规定发药袋的名称写法",
+      "traces": [
+        "t_clinic_label"
+      ],
+      "quote": "药袋上写通用名，别写商品名。"
+    },
+    {
+      "id": "ep_clinic_smalltalk",
+      "topic": null,
+      "goal": "处理与门诊无关的日常闲聊",
+      "traces": [
+        "t_clinic_chat1",
+        "t_clinic_chat2",
+        "t_clinic_chat3"
+      ],
+      "quote": "中午一起去打球吗？"
+    },
+    {
+      "id": "ep_clinic_prescription_objection",
+      "topic": "tp_clinic_rx",
+      "goal": "对同一普通处方领取期限提出另一种结论",
+      "traces": [
+        "t_clinic_rx_late"
+      ],
+      "quote": "普通处方三天内都该能取药。"
+    },
+    {
+      "id": "ep_clinic_schedule_capacity",
+      "topic": "tp_clinic_quota",
+      "goal": "规定每半天可以额外释放的号量",
+      "traces": [
+        "t_clinic_extra"
+      ],
+      "quote": "临时加号每个半天最多加 5 个。"
+    },
+    {
+      "id": "ep_clinic_expiry_transfer",
+      "topic": "tp_clinic_near",
+      "goal": "选择临期药品的调拨去向",
+      "traces": [
+        "t_clinic_near"
+      ],
+      "quote": "快到期的药先调给住院药房。"
+    },
+    {
+      "id": "ep_clinic_dispense",
+      "topic": "tp_clinic_give",
+      "goal": "设定发药交付前的核对项",
+      "traces": [
+        "t_clinic_give"
+      ],
+      "quote": "发药前对一下患者姓名和批号。"
+    },
+    {
+      "id": "ep_warehouse_buy",
+      "topic": "tp_wh_buy",
+      "goal": "定采购到货核对并上架的流程",
+      "traces": [
+        "t_wh_buy"
+      ],
+      "quote": "采购到的货先对订单号和数量，再上架。"
+    },
+    {
+      "id": "ep_warehouse_cold",
+      "topic": "tp_wh_cold",
+      "goal": "定冷链到仓温检和拒收条件",
+      "traces": [
+        "t_wh_cold"
+      ],
+      "quote": "冷链货到了要是高于 8 度，整车退回。"
+    },
+    {
+      "id": "ep_warehouse_pick",
+      "topic": "tp_wh_pick",
+      "goal": "定拣货路径和订单合批策略",
+      "traces": [
+        "t_wh_pick"
+      ],
+      "quote": "拣货别跨区来回。同一个订单合成一批再出。"
+    },
+    {
+      "id": "ep_warehouse_count",
+      "topic": "tp_wh_count",
+      "goal": "定按货值区分的盘点周期",
+      "traces": [
+        "t_wh_count"
+      ],
+      "quote": "贵的货每周盘一次，普通货一个月盘一次。"
+    },
+    {
+      "id": "ep_warehouse_damage",
+      "topic": "tp_wh_damage",
+      "goal": "定到货破损登记并落实月台登记本",
+      "traces": [
+        "t_wh_damage_say",
+        "t_wh_damage_land"
+      ],
+      "quote": "箱子破了的先登记，再看收不收。"
+    },
+    {
+      "id": "ep_warehouse_mark",
+      "topic": "tp_wh_mark",
+      "goal": "规定外箱标识的字段",
+      "traces": [
+        "t_wh_mark"
+      ],
+      "quote": "外箱只印批次和库位，别印价格。"
+    },
+    {
+      "id": "ep_warehouse_fifo",
+      "topic": "tp_wh_fifo",
+      "goal": "选择库存的出库顺序",
+      "traces": [
+        "t_wh_fifo"
+      ],
+      "quote": "出库按进仓先后，先进来的先出去。"
+    },
+    {
+      "id": "ep_warehouse_shelf",
+      "topic": "tp_wh_check",
+      "goal": "规定到货保质期的抽检方法",
+      "traces": [
+        "t_wh_check"
+      ],
+      "quote": "每批货抽 3 箱看保质期就行。"
+    },
+    {
+      "id": "ep_warehouse_smalltalk",
+      "topic": null,
+      "goal": "处理与入库无关的日常闲聊",
+      "traces": [
+        "t_wh_chat1",
+        "t_wh_chat2",
+        "t_wh_chat3"
+      ],
+      "quote": "周末爬山还算我一个吗？"
+    },
+    {
+      "id": "ep_warehouse_count_pause",
+      "topic": "tp_wh_count",
+      "goal": "暂缓修改高货值货物的盘点周期",
+      "traces": [
+        "t_wh_hold"
+      ],
+      "quote": "高货值要不要改成每天都盘？先放着。",
+      "continues": "ep_warehouse_count"
+    },
+    {
+      "id": "ep_warehouse_return",
+      "topic": "tp_wh_return",
+      "goal": "规定退回货物入库时独立清点",
+      "traces": [
+        "t_wh_return"
+      ],
+      "quote": "退回来的货单独清点，别和采购货堆一起。"
+    },
+    {
+      "id": "ep_warehouse_frozen",
+      "topic": "tp_wh_cold",
+      "goal": "补充同一到仓温检对冷冻货适用的阈值",
+      "traces": [
+        "t_wh_freeze"
+      ],
+      "quote": "冷冻货高于零下 12 度就整车退回。"
+    },
+    {
+      "id": "ep_warehouse_dock",
+      "topic": "tp_wh_dock",
+      "goal": "设置月台卸货的预约门槛",
+      "traces": [
+        "t_wh_dock"
+      ],
+      "quote": "没预约月台的车不许卸货。"
+    },
+    {
+      "id": "ep_warehouse_fifo_objection",
+      "topic": "tp_wh_fifo",
+      "goal": "复议同一批货物的出库排序策略",
+      "traces": [
+        "t_wh_fifo_late"
+      ],
+      "quote": "出库该按失效日期，快过期的先出。"
+    },
+    {
+      "id": "ep_warehouse_shelf_objection",
+      "topic": "tp_wh_check",
+      "goal": "复议同一入库保质期检查改为全检",
+      "traces": [
+        "t_wh_check_late"
+      ],
+      "quote": "保质期要整批都看，不能只抽几箱。"
+    },
+    {
+      "id": "ep_fleet_depart_am",
+      "topic": "tp_fleet_morning",
+      "goal": "制定早班发车时间和迟到取消条件",
+      "traces": [
+        "t_fleet_morning"
+      ],
+      "quote": "早班 6 点发车，晚到 10 分钟这班就取消。"
+    },
+    {
+      "id": "ep_fleet_service",
+      "topic": "tp_fleet_maint",
+      "goal": "定义车辆常规保养的里程与时间周期",
+      "traces": [
+        "t_fleet_maint"
+      ],
+      "quote": "保养一万公里做一次，满 6 个月也要做，哪个先到听哪个。"
+    },
+    {
+      "id": "ep_fleet_tires",
+      "topic": "tp_fleet_tire",
+      "goal": "设置轮胎磨损换胎阈值",
+      "traces": [
+        "t_fleet_tire"
+      ],
+      "quote": "胎纹不到 2 毫米就换。"
+    },
+    {
+      "id": "ep_fleet_detour",
+      "topic": "tp_fleet_detour",
+      "goal": "避开指定道路设置早高峰绕行",
+      "traces": [
+        "t_fleet_detour"
+      ],
+      "quote": "早高峰别走中山路，绕开。"
+    },
+    {
+      "id": "ep_fleet_fault",
+      "topic": "tp_fleet_fault",
+      "goal": "制定路上故障报告及维修流程并跟进群落地",
+      "traces": [
+        "t_fleet_fault_say",
+        "t_fleet_fault_land"
+      ],
+      "quote": "路上坏了先报调度，再找近的地方修。"
+    },
+    {
+      "id": "ep_fleet_insurance",
+      "topic": "tp_fleet_insure",
+      "goal": "规定续保期限及保险失效时的放行条件",
+      "traces": [
+        "t_fleet_insure"
+      ],
+      "quote": "保险到期前 15 天就续上，过期的车不许出场。"
+    },
+    {
+      "id": "ep_fleet_belt",
+      "topic": "tp_fleet_belt",
+      "goal": "明确乘车系安全带与车辆发车条件",
+      "traces": [
+        "t_fleet_belt"
+      ],
+      "quote": "开车前每个人都系上安全带，有人不系就别发车。"
+    },
+    {
+      "id": "ep_fleet_speed",
+      "topic": "tp_fleet_speed",
+      "goal": "制定市区线路的速度上限",
+      "traces": [
+        "t_fleet_speed"
+      ],
+      "quote": "市区线路最高 60。"
+    },
+    {
+      "id": "ep_fleet_smalltalk",
+      "topic": null,
+      "goal": "处理与调度无关的日常闲聊",
+      "traces": [
+        "t_fleet_chat1",
+        "t_fleet_chat2",
+        "t_fleet_chat3"
+      ],
+      "quote": "下班顺路带我一程吗？"
+    },
+    {
+      "id": "ep_fleet_depart_pm",
+      "topic": "tp_fleet_morning",
+      "goal": "补充同一发车调度安排的夜班时点",
+      "traces": [
+        "t_fleet_night"
+      ],
+      "quote": "夜班 22 点发车，晚到 10 分钟这班取消。"
+    },
+    {
+      "id": "ep_fleet_fuel",
+      "topic": "tp_fleet_fuel",
+      "goal": "规定加油的支付方式",
+      "traces": [
+        "t_fleet_fuel"
+      ],
+      "quote": "加油刷公司卡，别先垫自己的钱。"
+    },
+    {
+      "id": "ep_fleet_wash",
+      "topic": "tp_fleet_wash",
+      "goal": "确定收车后洗车频次和洗车位",
+      "traces": [
+        "t_fleet_wash_say",
+        "t_fleet_wash_land"
+      ],
+      "quote": "每周五收车之后把车洗了。"
+    },
+    {
+      "id": "ep_fleet_speed_objection",
+      "topic": "tp_fleet_speed",
+      "goal": "对同一市区线路速度上限提出较低值",
+      "traces": [
+        "t_fleet_speed_late"
+      ],
+      "quote": "市区线路应该压到 50。"
+    },
+    {
+      "id": "ep_kitchen_soup",
+      "topic": "tp_kit_soup",
+      "goal": "决定例汤的制备量和补锅规则",
+      "traces": [
+        "t_kit_soup"
+      ],
+      "quote": "例汤备 200 份，卖完就停，不补锅。"
+    },
+    {
+      "id": "ep_kitchen_samples",
+      "topic": "tp_kit_sample",
+      "goal": "确定菜品留样量、保存时长与温度",
+      "traces": [
+        "t_kit_sample"
+      ],
+      "quote": "每道菜留 125 克，存 48 小时，放 0 到 4 度。"
+    },
+    {
+      "id": "ep_kitchen_allergens",
+      "topic": "tp_kit_allergen",
+      "goal": "在菜单明确两类过敏原标签",
+      "traces": [
+        "t_kit_allergen"
+      ],
+      "quote": "有花生或者虾的菜，菜单上用红字标出来。"
+    },
+    {
+      "id": "ep_kitchen_knives",
+      "topic": "tp_kit_knife",
+      "goal": "设定厨房刀具消毒频次",
+      "traces": [
+        "t_kit_knife"
+      ],
+      "quote": "刀每两个小时消一次毒。"
+    },
+    {
+      "id": "ep_kitchen_chilling",
+      "topic": "tp_kit_chill",
+      "goal": "确定切菜进冷藏时限并跟进温度表配置",
+      "traces": [
+        "t_kit_chill_say",
+        "t_kit_chill_land"
+      ],
+      "quote": "切好的菜两小时之内必须进冷藏。"
+    },
+    {
+      "id": "ep_kitchen_waste",
+      "topic": "tp_kit_waste",
+      "goal": "规定厨余清运时间",
+      "traces": [
+        "t_kit_waste"
+      ],
+      "quote": "厨余每天下午 4 点拉走，不许留到第二天。"
+    },
+    {
+      "id": "ep_kitchen_hot",
+      "topic": "tp_kit_hot",
+      "goal": "设置热菜出餐最低温度",
+      "traces": [
+        "t_kit_hot"
+      ],
+      "quote": "热菜出餐不能低于 60 度。"
+    },
+    {
+      "id": "ep_kitchen_tasting",
+      "topic": "tp_kit_taste",
+      "goal": "规定当班试吃资格和地点",
+      "traces": [
+        "t_kit_taste"
+      ],
+      "quote": "试吃只有当班厨师能尝，不许带出去。"
+    },
+    {
+      "id": "ep_kitchen_smalltalk",
+      "topic": null,
+      "goal": "处理与出餐无关的日常闲聊",
+      "traces": [
+        "t_kit_chat1",
+        "t_kit_chat2",
+        "t_kit_chat3"
+      ],
+      "quote": "下午茶谁去买？"
+    },
+    {
+      "id": "ep_kitchen_sample_pause",
+      "topic": "tp_kit_sample",
+      "goal": "暂缓改变同一留样保存时长",
+      "traces": [
+        "t_kit_hold"
+      ],
+      "quote": "留样要不要改成存 72 小时？先放着。",
+      "continues": "ep_kitchen_samples"
+    },
+    {
+      "id": "ep_kitchen_sauce",
+      "topic": "tp_kit_sauce",
+      "goal": "规定酱汁制备量和储存期限",
+      "traces": [
+        "t_kit_sauce"
+      ],
+      "quote": "酱汁备 50 份，当天必须用完。"
+    },
+    {
+      "id": "ep_kitchen_oil",
+      "topic": "tp_kit_oil",
+      "goal": "规定炸油更换的颜色和时长条件",
+      "traces": [
+        "t_kit_oil"
+      ],
+      "quote": "炸油发黑了，或者连续炸满 8 小时，就换新的。"
+    },
+    {
+      "id": "ep_kitchen_gloves",
+      "topic": "tp_kit_glove",
+      "goal": "设定接触熟食前的手套更换条件",
+      "traces": [
+        "t_kit_glove"
+      ],
+      "quote": "碰熟食就换一双新手套，破了也换。"
+    },
+    {
+      "id": "ep_kitchen_tasting_objection",
+      "topic": "tp_kit_taste",
+      "goal": "提议给经理放宽同一试吃范围",
+      "traces": [
+        "t_kit_taste_late"
+      ],
+      "quote": "试吃也该给值班经理留一份。"
+    }
+  ],
+  "topicRevisions": [
+    {
+      "keep": "tp_clinic_quota",
+      "merge": [
+        "tp_clinic_slot",
+        "tp_clinic_extra"
+      ],
+      "name": "门诊号源与时段配置",
+      "why": "号源释放、开诊时段、按半天加号上限共同定义同一份可预约号源配置。"
+    },
+    {
+      "keep": "tp_wh_cold",
+      "merge": [
+        "tp_wh_freeze"
+      ],
+      "name": "温控货到仓拒收",
+      "why": "两段都执行到仓测温后整车拒收的检查，按冷链与冷冻货分别保留不同阈值。"
+    },
+    {
+      "keep": "tp_fleet_morning",
+      "merge": [
+        "tp_fleet_night"
+      ],
+      "name": "日夜班发车调度",
+      "why": "早班与夜班是同一张发车安排的两个班次，并共用迟到 10 分钟取消的规则。"
+    }
+  ]
+}

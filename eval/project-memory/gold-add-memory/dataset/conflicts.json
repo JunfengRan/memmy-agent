@@ -1,5 +1,5 @@
 {
-  "datasetVersion": 2.1,
+  "datasetVersion": 3,
   "rule": "v3 §2.2.9：规格没有成员权限。同一问题上出现不同结论时，按作者与会话信号决定动作：作者属于 content，或会话体现认可 → rewrite（原结论进 history）；作者属于 conflicts 某项 → conflict_update；都不属于且未认可 → conflict_append（两项结论并存）；已告知的会话中成员裁决 → resolve（清空 conflicts，其余各项进 history）。load-eval-set.mjs 按这条规则从作者与信号推出 expectedOp，并与 labels.json 中的 op 对照。",
   "cases": [
     {

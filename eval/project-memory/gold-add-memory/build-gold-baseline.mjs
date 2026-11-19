@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Derives dataset v2.1 gold from the corpus and the per-trace labels by replaying the labelled
+// Derives the gold fixtures from the corpus and labelled memory operations. The v2.1 archive replays
 // M05 ops in submit order (v3 §2.2.9). The result is committed as dataset/gold.json;
 // load-eval-set.mjs rebuilds it and fails when the committed copy drifts.
 // Ordering uses submit_time ?? chat_time. A trace is visible once submit_time ?? reply_time
@@ -8,6 +8,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildEpisodeTimeline, validateEpisodeLabels } from "./episode-timeline.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
 export const DATASET_DIR = join(root, "dataset");
@@ -21,7 +22,10 @@ export function datasetDirectory(version) {
 
 export function loadDataset(dir = DATASET_DIR) {
   const read = (name) => JSON.parse(readFileSync(join(dir, name), "utf8"));
-  return { corpus: read("corpus.json"), labels: read("labels.json"), conflicts: read("conflicts.json"), questions: read("questions.json") };
+  const corpus = read("corpus.json");
+  const ds = { corpus, labels: read("labels.json"), conflicts: read("conflicts.json"), questions: read("questions.json") };
+  if (corpus.datasetVersion === 3) ds.episodes = read("episodes.json");
+  return ds;
 }
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -76,18 +80,24 @@ export function orderedTraces(corpus) {
     .map(({ trace }) => trace);
 }
 
-function pointActive(point, traces, at) {
+function visibilityOf(trace, timeline) {
+  return timeline ? timeline.commitByTrace.get(trace.id) : traceVisibleTime(trace);
+}
+
+function pointActive(point, traces, at, timeline) {
   const since = traces.get(point?.since);
-  if (!since || traceVisibleTime(since) > at) return false;
+  const visibleSince = since && visibilityOf(since, timeline);
+  if (!visibleSince || visibleSince > at) return false;
   if (!point.until) return true;
   const until = traces.get(point.until);
-  return !until || traceVisibleTime(until) > at;
+  const visibleUntil = until && visibilityOf(until, timeline);
+  return !visibleUntil || visibleUntil > at;
 }
 
 // Points whose since trace is visible at `at` and whose until trace is not.
-export function activePointTexts(points, traces, at) {
+export function activePointTexts(points, traces, at, timeline) {
   const map = traces instanceof Map ? traces : new Map((traces ?? []).map((trace) => [trace.id, trace]));
-  return (points ?? []).filter((point) => pointActive(point, map, at)).map((point) => point.text);
+  return (points ?? []).filter((point) => pointActive(point, map, at, timeline)).map((point) => point.text);
 }
 
 // Scoring uses the final wording: points that are not retired (no until).
@@ -104,12 +114,22 @@ export function isLateDecision(trace, entry) {
 // Replays labelled ops visible at or before `until` (submit_time ?? reply_time).
 // stopBeforeId cuts the replay just before that trace, in submit order.
 // Returns entry states keyed by gold entry id, plus rule violations found on the way.
-export function replay(ds, until = "9999", { stopBeforeId } = {}) {
+export function replay(ds, until = "9999", { stopBeforeId, traceMode = false, timeline } = {}) {
+  const episodeTimeline = !traceMode && ds.episodes ? timeline ?? buildEpisodeTimeline(ds) : null;
   const conversations = new Map(ds.corpus.conversations.map((c) => [c.id, c]));
   const meta = ds.labels.entries;
   const state = new Map();
   const errors = [];
   const informedConversations = new Set();
+  const informedTurns = new Map();
+  if (episodeTimeline) {
+    for (const trace of ds.corpus.traces) {
+      if (!trace.annotations?.some((note) => note.type === "informed")) continue;
+      const turns = informedTurns.get(trace.conversation) ?? [];
+      turns.push(trace);
+      informedTurns.set(trace.conversation, turns);
+    }
+  }
   const waiting = [];
 
   function apply(op, source, release) {
@@ -171,7 +191,10 @@ export function replay(ds, until = "9999", { stopBeforeId } = {}) {
       const picked = entry.conflicts[op.target];
       if (!picked) { errors.push(`${where} conflicts[${op.target}] missing`); return; }
       if (!notes.some((n) => n.type === "resolve")) errors.push(`${where} needs a resolve signal`);
-      if (!informedConversations.has(source.conversation)) errors.push(`${where} conversation was never informed`);
+      const informed = episodeTimeline
+        ? (informedTurns.get(source.conversation) ?? []).some((trace) => traceVisibleTime(trace) < traceVisibleTime(source))
+        : informedConversations.has(source.conversation);
+      if (!informed) errors.push(`${where} conversation was never informed`);
       const reason = op.reason ?? null;
       const losers = [{ content: entry.content, time: entry.time, timeWindow: entry.timeWindow, user_ids: entry.user_ids }, ...entry.conflicts.filter((_, i) => i !== op.target)];
       for (const loser of losers) entry.history.push({ ...loser, reason });
@@ -179,6 +202,18 @@ export function replay(ds, until = "9999", { stopBeforeId } = {}) {
     } else {
       errors.push(`${where} unknown op`);
     }
+  }
+
+  if (episodeTimeline) {
+    const traces = new Map(ds.corpus.traces.map((trace) => [trace.id, trace]));
+    const visible = orderedTraces(ds.corpus).flatMap((source) => (ds.labels.traces[source.id]?.ops ?? []).flatMap((op) => {
+      const release = op.deferredUntil ? traces.get(op.deferredUntil) : source;
+      const at = release && episodeTimeline.commitByTrace.get(release.id);
+      return at && at <= until ? [{ op, source, release, at }] : [];
+    }));
+    visible.sort((left, right) => left.at.localeCompare(right.at) || traceOrderTime(left.release).localeCompare(traceOrderTime(right.release)));
+    for (const { op, source, release } of visible) apply(op, source, release);
+    return { state, errors };
   }
 
   for (const trace of orderedTraces(ds.corpus)) {
@@ -213,12 +248,21 @@ export function replay(ds, until = "9999", { stopBeforeId } = {}) {
 
 export function buildGold(ds) {
   const { corpus, labels, questions } = ds;
-  const { state, errors } = replay(ds);
+  const timelineErrors = ds.episodes ? validateEpisodeLabels(ds) : [];
+  const timeline = ds.episodes && !timelineErrors.length ? buildEpisodeTimeline(ds) : null;
+  const { state, errors } = replay(ds, "9999", { timeline, traceMode: !timeline });
+  errors.push(...timelineErrors);
+  const allSourceOperations = timeline ? replay(ds, "9999", { traceMode: true }).state : null;
+  const pendingEntries = [];
   const topics = new Map(labels.topics.map((topic) => [topic.id, topic]));
   const conversations = new Map(corpus.conversations.map((c) => [c.id, c]));
   const entries = Object.entries(labels.entries).map(([id, meta]) => {
     const final = state.get(id);
-    if (!final) { errors.push(`${id} is labelled but never written`); return null; }
+    if (!final) {
+      if (allSourceOperations?.has(id)) pendingEntries.push({ id, topic: meta.topic });
+      else errors.push(`${id} is labelled but never written`);
+      return null;
+    }
     const topic = topics.get(meta.topic);
     if (!topic) errors.push(`${id} topic ${meta.topic} missing`);
     const staleVersions = [...final.history.map((item) => item.content), ...final.superseded];
@@ -259,10 +303,21 @@ export function buildGold(ds) {
     };
   });
 
-  const goldTopics = labels.topics.map((topic) => ({ ...topic, entries: entries.filter((entry) => entry.topic === topic.id).map((entry) => entry.id) }));
+  const goldTopics = labels.topics.flatMap((topic) => {
+    const added = entries.filter((entry) => entry.topic === topic.id).map((entry) => entry.id);
+    if (timeline && !added.length) return [];
+    const result = { ...topic, entries: added };
+    if (timeline) {
+      for (const field of ["summaryKeyPoints", "descriptionKeyPoints"]) {
+        result[field] = topic[field].filter((point) => timeline.commitByTrace.has(point.since)).map(({ until, ...point }) =>
+          until && timeline.commitByTrace.has(until) ? { ...point, until } : point);
+      }
+    }
+    return [result];
+  });
 
   const goldQuestions = questions.questions.map((question) => {
-    const { state: snap } = replay(ds, question.askedAt);
+    const { state: snap } = replay(ds, question.askedAt, { timeline, traceMode: !timeline });
     const expectedItems = [];
     for (const want of question.expect.entries) {
       const entry = snap.get(want.entry);
@@ -276,6 +331,21 @@ export function buildGold(ds) {
       }
     }
     const trapItems = [];
+    if (question.pending && timeline) {
+      const { entry: id, phase } = question.pending;
+      const draftTrace = corpus.traces.find((trace) => labels.traces[trace.id]?.ops.some((op) => op.op === "add" && op.entry === id));
+      const draft = draftTrace && labels.traces[draftTrace.id].ops.find((op) => op.op === "add" && op.entry === id);
+      const batch = draft && timeline.batchByTrace.get(draft.deferredUntil ?? draftTrace.id);
+      const topic = topics.get(labels.entries[id]?.topic);
+      const asked = question.askedAt;
+      const open = batch && batch.acceptedAt <= asked && batch.closedAt > asked;
+      const staged = batch?.stagedAt && batch.stagedAt <= asked && (!batch.committedAt || batch.committedAt > asked);
+      if (!topic || topic.space_id !== question.space_id || (phase === "open" ? !open : phase === "staged" ? !staged : true) || snap.has(id)) {
+        errors.push(`${question.id} does not ask while ${id} is ${phase} in the same Space`);
+      } else {
+        trapItems.push({ entry: id, kind: "premature", text: draft.content, topicName: topic.topic_name });
+      }
+    }
     for (const trap of question.traps) {
       const entry = snap.get(trap.entry);
       if (!entry) { errors.push(`${question.id} trap ${trap.entry} does not exist at askedAt`); continue; }
@@ -298,6 +368,7 @@ export function buildGold(ds) {
       goldAnswer: question.goldAnswer,
       mustInclude: question.mustInclude,
       ...(question.excluded ? { excluded: true, excludedReason: question.excludedReason } : {}),
+      ...(question.pending ? { pending: question.pending } : {}),
       expectedTopics: question.expect.topics,
       expectedItems,
       trapItems
@@ -306,8 +377,8 @@ export function buildGold(ds) {
 
   return {
     gold: {
-      datasetVersion: 2.1,
-      derivedFrom: ["dataset/corpus.json", "dataset/labels.json", "dataset/questions.json"],
+      datasetVersion: corpus.datasetVersion,
+      derivedFrom: ["dataset/corpus.json", "dataset/labels.json", "dataset/questions.json", ...(timeline ? ["dataset/episodes.json"] : [])],
       spaces: corpus.spaces,
       members: corpus.members,
       topics: goldTopics,
@@ -315,6 +386,7 @@ export function buildGold(ds) {
       negatives,
       traceLabels,
       questions: goldQuestions,
+      ...(timeline ? { episodeLabels: ds.episodes.episodes, topicRevisions: ds.episodes.topicRevisions, pendingEntries, processingBatches: timeline.batches, visibilityEvents: timeline.events } : {}),
       apiChecks: questions.apiChecks
     },
     errors

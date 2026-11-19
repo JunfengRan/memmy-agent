@@ -1,17 +1,18 @@
 #!/usr/bin/env node
-// Validates dataset v2.1 against the v3 rules it encodes and checks that dataset/gold.json is the
+// Validates a versioned dataset and checks that its gold.json is the
 // exact output of build-gold-baseline.mjs. Exit 0 only when there are no errors.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { activePointTexts, buildGold, datasetDirectory, loadDataset, orderedTraces, renderGold, replay, traceOrderTime, traceVisibleTime } from "./build-gold-baseline.mjs";
+import { buildEpisodeTimeline, validateEpisodeLabels } from "./episode-timeline.mjs";
 
 export const LIMITS = { topic_name: 20, topic_summary: 80, topic_description: 400, decision: 100, timeline: 100, experience: 200 };
 export const length = (text) => [...String(text ?? "")].length;
 
 const KINDS = new Set(["decision", "experience", "timeline"]);
 const CATEGORIES = new Set(["范围", "对外约定", "共同约定"]);
-const QUESTION_KINDS = new Set(["plain", "stale", "conflict", "cross-project"]);
+const QUESTION_KINDS = new Set(["plain", "stale", "conflict", "cross-project", "visibility"]);
 const ISO_LOCAL = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+08:00$/;
 const ALPHA_FIELDS = ["memoryScope", "level", "supersedes", "needsTodolist", "mergedFrom", "workspacePath", "gitRoot", "projectId", "sessionId", "canSee"];
 const LABELED = /决策|主张|\bD\d|\bT\d/;
@@ -25,7 +26,11 @@ export function validateDataset(ds, dir = datasetDirectory()) {
   const errors = [];
   const err = (message) => errors.push(message);
   const { corpus, labels, conflicts, questions } = ds;
-  for (const [name, file] of Object.entries(ds)) if (file.datasetVersion !== 2.1) err(`${name}.json datasetVersion must be 2.1`);
+  const version = corpus.datasetVersion;
+  if (![2.1, 3].includes(version)) err(`unsupported dataset version ${version}`);
+  for (const [name, file] of Object.entries(ds)) if (file.datasetVersion !== version) err(`${name}.json datasetVersion must be ${version}`);
+  const episodeErrors = ds.episodes ? validateEpisodeLabels(ds) : [];
+  const timeline = ds.episodes && !episodeErrors.length ? buildEpisodeTimeline(ds) : null;
 
   // Spaces, members, conversations.
   const spaces = new Map(corpus.spaces.map((space) => [space.space_id, space]));
@@ -137,7 +142,7 @@ export function validateDataset(ds, dir = datasetDirectory()) {
     }
     const moments = [...questions.questions.map((q) => q.askedAt), "9999"];
     for (const at of moments) {
-      if (length(activePointTexts(points, traces, at).join("；")) > limit) err(`${topic.id} ${field} active at ${at} over ${limit}`);
+      if (length(activePointTexts(points, traces, at, timeline).join("；")) > limit) err(`${topic.id} ${field} active at ${at} over ${limit}`);
     }
   };
   for (const topic of labels.topics) {
@@ -203,7 +208,7 @@ export function validateDataset(ds, dir = datasetDirectory()) {
   for (const item of conflicts.cases) {
     const trace = traces.get(item.incoming);
     if (!trace) { err(`${item.id} incoming ${item.incoming} missing`); continue; }
-    const before = (trace.submit_time ? replay(ds, "9999", { stopBeforeId: trace.id }).state : replay(ds, trace.chat_time).state).get(item.decision);
+    const before = (trace.submit_time ? replay(ds, "9999", { stopBeforeId: trace.id, traceMode: true }).state : replay(ds, trace.chat_time, { traceMode: true }).state).get(item.decision);
     if (!before) { err(`${item.id} ${item.decision} does not exist before ${item.incoming}`); continue; }
     const author = conversations.get(trace.conversation)?.user_id;
     if (author !== item.author) err(`${item.id} author should be ${author}`);
@@ -259,7 +264,12 @@ export function validateDataset(ds, dir = datasetDirectory()) {
     if (!question.mustInclude?.length) err(`${where} needs mustInclude`);
     for (const phrase of question.mustInclude ?? []) if (!question.goldAnswer.includes(phrase)) err(`${where} goldAnswer misses ${phrase}`);
     for (const sentence of replySentences) if (question.question.includes(sentence)) err(`${where} copies a reply`);
-    if (question.expect.topics.length !== 1) err(`${where} should expect exactly one topic`);
+    if (question.kind === "visibility") {
+      if (!timeline || !question.pending || question.expect.topics.length || question.expect.entries.length) err(`${where} requires a pending v3 entry without a visible topic`);
+    } else {
+      if (question.pending) err(`${where} has pending evidence outside a visibility question`);
+      if (question.expect.topics.length !== 1) err(`${where} should expect exactly one topic`);
+    }
     for (const topicId of question.expect.topics) if (topics.get(topicId)?.space_id !== question.space_id) err(`${where} expects ${topicId} from another space`);
     for (const want of question.expect.entries) {
       if (!question.expect.topics.includes(entryTopic.get(want.entry))) err(`${where} expects ${want.entry} outside the expected topics`);
@@ -298,7 +308,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const outcomes = Object.fromEntries(["written", "optional-only", "not-written"].map((o) => [o, gold.traceLabels.filter((t) => t.outcome === o).length]));
   process.stdout.write(`${JSON.stringify({
     errors,
-    datasetVersion: 2.1,
+    datasetVersion: gold.datasetVersion,
+    ...(gold.episodeLabels ? { episodes: gold.episodeLabels.length, annotatedTopics: ds.labels.topics.length, processingBatches: gold.processingBatches.length, pendingEntries: gold.pendingEntries.length } : {}),
     traces: orderedTraces(ds.corpus).length,
     traceOutcomes: outcomes,
     topics: gold.topics.length,

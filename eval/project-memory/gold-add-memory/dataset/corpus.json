@@ -1,5 +1,5 @@
 {
-  "datasetVersion": 2.1,
+  "datasetVersion": 3,
   "timezone": "+08:00",
   "note": "Trace text is the v1 corpus text; v2 adds identity, conversations, chat_time, caller-chosen domains, and three turns (t_wait approval wording, t_informed, t_resolve) so the dataset covers rewrite-by-approval and resolve. annotations are for gold validation only and are never sent to the system under test.",
   "spaces": [

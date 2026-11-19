@@ -1,10 +1,20 @@
-# 项目记忆评测数据集 v2（gold-add-memory）
+# 项目记忆评测数据集 v3（gold-add-memory）
 
 评测项目记忆的写入（`add_message` → M02/M04/M05）和检索（`search_memory` → M09）。金标按 v3 §2.2.5–§2.2.9 的判定与合并规则重推，检索与返回结构按 v3 §3.2、§3.3.4。决定见 ADR-0004。
 
 被测系统只通过规格接口调用；评测专用信息（轨迹 id、标注）不进任何请求。
 
-### v2.1
+### v3
+
+`dataset/episodes.json` 按原会话的讲述顺序标出语义 Episode。每段包含原始 Turn ID、工作目标、首轮原话、目标 Topic 和可选的同会话续接关系。Turn 可跨处理批次继续一项工作。五次重发通过 `resubmitOf` 指回原轮，闲聊和通用规则试探保留在原会话。
+
+本次复核得到 78 个语义 Episode，其中 18 个包含多轮。三组原 Topic 合并为同一工作，标签中的 Topic 数由 50 调整为 46。合并依据与原 ID 写在 `episodes.json` 的 `topicRevisions`。号源释放、开诊时段和加号上限一起定义门诊预约配置；冷链与冷冻货的拒收温度属于同一到仓温检流程；早班与夜班共用迟到取消规则。近效期药品的标识与调拨、采购入库与退货入库、汤品与酱汁备料各有独立交付，保留原归属。
+
+确定性参考回放使用 `submit_time ?? reply_time` 作为受理时间，`chat_time` 保留发言顺序与迟交证据。语义边界、空闲 15 分钟、8 轮或首轮等待 30 分钟关闭整理批次。离线时钟在截止时触发关段，并用固定 1 秒表示整理与提交。未有 Topic 时先暂存，同 Space 累计 10 段或过 2 小时且再次暂存时，从最新最多 50 段触发 Formation。参考回放使用标定的 Topic 和源证据执行 Formation，在提交点一次发布对应内容。语料结束时仍未满足 Formation 的条目保留在 `pendingEntries`。生成的 `processingBatches` 和 `visibilityEvents` 可用于逐条审查受理、关闭、暂存、提交和重发；时间值属于离线参考回放。
+
+检索金标只含 `askedAt` 已提交的条目和主题要点。`q48`、`q49`、`q50` 分别覆盖同一条价格口径在开放、暂存和 Formation 后的可见性；`q31` 与 `q31_after` 对照裁决前后。`visibility` 题的答案计分单独覆盖缺少相关记忆的情况。召回分母使用有可见预期的题目，提前披露计入 `search.prematureVisibility`。
+
+### v2.1（历史口径）
 
 要点是 `{text, since, until?}`，`since` / `until` 为轨迹 id。某要点在提问时有效，当且仅当 `since` 的 `submit_time ?? reply_time` 已不晚于 `askedAt`，且 `until` 还没有到。`oracle.mjs` 与阅读上限按这个时刻取要点；主题要点评分只用没有 `until` 的最终要点。
 
@@ -14,7 +24,7 @@
 
 语料在 ledger、catalog 之外增加门诊、仓储、车队、厨房，共 50 个主题、7 名成员。新题从 q40 起。q17 的标准答案同时说明丢行原因和空客户仍有未决分歧。q24 的标准答案在 v2.1 内改过：事实取自 dec_price，只把原因放到句首。R-20261110-02 和 R-20261110-03 用的是改之前的答案。上面各表里的轮数和题数是 v2 的，v2.1 以 `node load-eval-set.mjs` 的输出为准。
 
-换成大版本时，上一版整份冻在 `history/<版本>/`。v2 在 `history/v2/`。评分只读 `dataset/`。小改动不另存副本。
+换成大版本时，上一版整份冻在 `history/<版本>/`。v2 和 v2.1 各自存档，当前数据在 `dataset/`。评分器按运行文件版本加载金标；旧运行文件缺少版本字段时按 v2.1 处理。
 
 ## 快速开始
 
@@ -24,6 +34,10 @@ node load-eval-set.mjs                 # 校验数据集，errors 必须为 []
 node run-pipeline-eval.mjs --oracle    # 金标自身作答：每项得分 1、每项错误 0
 node run-pipeline-eval.mjs --empty     # 什么都不写、不答：每项得分 0
 node selftest.mjs                      # 评分与接口检查的自测（不需要服务、评委、阅读模型）
+node --test episode-timeline.test.mjs  # Episode 关闭、Formation 与证据索引
+node load-eval-set.mjs 2.1             # 校验冻结的 v2.1
+node run-pipeline-eval.mjs --oracle --dataset 2.1
+node run-pipeline-eval.mjs --empty --dataset 2.1
 ```
 
 改了 `dataset/` 下的任何输入，先重建金标再校验：
@@ -34,6 +48,8 @@ node load-eval-set.mjs
 ```
 
 ## 对着服务跑
+
+现有 `run-memmy-live-eval.mjs` 固定使用历史 v2.1 的逐轮口径。v3 的固定时钟回放由 `--oracle` 与 `--empty` 自测；评分器也接受显式标记 `datasetVersion: 3`、按各 `askedAt` 采集的运行文件。v3 运行文件的提问快照需观测 Episode 与提交时点。产品请求继续使用正常的接口字段。
 
 服务需要提供 `http://127.0.0.1:18960/api/openmem/v1/` 下的 `create/space`、`create/domains`、`list/domains`、`add/message`、`get/status`、`search/memory`、`get/memory`。
 
@@ -132,7 +148,7 @@ node run-memmy-live-eval.mjs --api-checks-only ../runs/<stamp>/live-run.json   #
   - 「已告知」要求同一会话有 `searchBefore` 和 informed 信号。
 - **金标**：`gold.json` 必须与重建结果逐字一致。
 - **题目**：
-  - 从本空间只提问的会话发问；只期望一个本空间主题；
+  - 从本空间只提问的会话发问；正例期望一个本空间主题，v3 可见性样本验证待提交的主题与证据；
   - 期望条目的证据早于 `askedAt`；
   - 题型与陷阱相符：stale 有旧版陷阱，cross-project 的陷阱来自另一空间，conflict 期望 conflicts，plain 无陷阱；
   - `mustInclude` 出现在标准答案中；题目不照抄回复。
@@ -162,6 +178,7 @@ node run-memmy-live-eval.mjs --api-checks-only ../runs/<stamp>/live-run.json   #
 | `decisions.reasonFabricated` | 没有会话依据的原因 |
 | `topics.duplicateTopics / wrongMerges` | 一个金标主题被拆成多个；一个主题混入多个金标主题 |
 | `search.staleShownAsCurrent` | 旧版本在检索结果中作为当前内容出现 |
+| `search.prematureVisibility` | v3 开放或暂存的预期主题或证据提前出现在检索结果中 |
 | `search.crossProjectLeak / foreignTopics / overLimit` | 别的空间的内容或主题出现在结果中；返回主题超过 9 个 |
 
 - **`--gate` 门槛**：`decisions.stateExact` ≥ 0.8、`topics.bcubed.f1` ≥ 0.8、`entries.f1` ≥ 0.8、`search.recall@3` ≥ 0.85、`answers.llm` ≥ 0.8、`api.passRate` = 1，且 `staleShownAsCurrent`、`crossProjectLeak`、`foreignTopics`、`reasonFabricated`、`wrongMerges` 为 0。可以用 `--min-*` 调整。
