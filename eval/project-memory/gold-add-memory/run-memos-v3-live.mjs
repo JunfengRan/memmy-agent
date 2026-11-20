@@ -209,9 +209,13 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
       if (!batch.length || topics.length >= (data.total ?? 0)) return topics;
     }
   };
+  let lastSearch = null;
   const search = (conversation, query, context = {}) => timed("search", async () => {
     await tag({ ...context, phase: "search", step: "search" });
-    return topicsOf((await call("/search", { phase: "search", body: bodies.search(conversation, query) })).data);
+    const { data } = await call("/search", { phase: "search", body: bodies.search(conversation, query) });
+    // Retrieval reports which channels answered and which degraded (for example vector timeouts).
+    lastSearch = { channels: data?.channels ?? null, degraded: data?.degraded ?? null, truncated: data?.truncated ?? null };
+    return topicsOf(data);
   });
   const fail = (kind, id, at, error) => {
     const failure = { kind, id, at, ...errorInfo(error) };
@@ -272,6 +276,7 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
       const item = { id: question.id, askedAt: question.askedAt, topic_detail_list: [], rendered: "", answer: "" };
       try {
         item.topic_detail_list = await search(question.conversation, question.question, event);
+        item.search = lastSearch;
         item.rendered = renderTemplate3({ topics: item.topic_detail_list, now: question.askedAt, ...names });
         await tag({ ...event, phase: "reader", step: "answer" });
         item.answer = await timed("reader", () => answer({ question: question.question, askedAt: question.askedAt }, item.rendered));
