@@ -184,7 +184,8 @@ async function checkApi({ call, ds, gold, run, bodies, readSpace }) {
   return results;
 }
 
-export async function executeReplay({ ds, gold, run, call, answer, checkpoint = () => {}, progress = () => {} }) {
+// tag(context) labels the system-under-test model calls that follow (see harness/usage-proxy.mjs).
+export async function executeReplay({ ds, gold, run, call, answer, checkpoint = () => {}, progress = () => {}, tag = async () => {} }) {
   const { events, finalAt } = replaySchedule(ds, gold);
   const bodies = requestsFor(ds, run);
   const timed = async (phase, fn) => {
@@ -193,6 +194,8 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
     finally { run.phaseMs[phase] = (run.phaseMs[phase] ?? 0) + performance.now() - start; }
   };
   const advance = (at) => timed("clock", () => call("/advance", { body: { at }, clock: true, phase: "clock" }));
+  run.events ??= [];
+  const snapshot = () => ({ ...run.phaseMs });
   const stateOf = async (taskId, userId, phase) => {
     const path = `/scheduler/status?${new URLSearchParams({ user_id: userId, task_id: taskId })}`;
     return taskDetails((await call(path, { method: "GET", phase })).data, taskId);
@@ -206,8 +209,10 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
       if (!batch.length || topics.length >= (data.total ?? 0)) return topics;
     }
   };
-  const search = (conversation, query) => timed("search", async () =>
-    topicsOf((await call("/search", { phase: "search", body: bodies.search(conversation, query) })).data));
+  const search = (conversation, query, context = {}) => timed("search", async () => {
+    await tag({ ...context, phase: "search", step: "search" });
+    return topicsOf((await call("/search", { phase: "search", body: bodies.search(conversation, query) })).data);
+  });
   const fail = (kind, id, at, error) => {
     const failure = { kind, id, at, ...errorInfo(error) };
     run.failures.push(failure);
@@ -233,21 +238,28 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
   for (let index = run.nextEvent; index < events.length; index += 1) {
     const { at, trace, question } = events[index];
     run.currentEvent = { at, id: trace?.id ?? question.id };
+    const event = { event: run.currentEvent.id, event_index: index, kind: trace ? "add" : "question", at };
+    const startedAt = new Date().toISOString();
+    const phasesBefore = snapshot();
+    // Closed Episodes are organized while the clock advances, so those model calls belong to Add.
+    await tag({ ...event, phase: "add", step: "process" });
     await advance(at);
     if (trace) {
       const body = bodies.add(trace);
       const item = { trace: trace.id, at, user_id: body.user_id, requested_task_id: body.task_id, resubmitOf: trace.resubmitOf ?? null };
       if (trace.searchBefore) {
-        try { item.searchBefore = (await search(trace.conversation, trace.searchBefore.query)).map((topic) => topic.id); }
+        try { item.searchBefore = (await search(trace.conversation, trace.searchBefore.query, event)).map((topic) => topic.id); }
         catch (error) { item.searchBeforeError = fail("search_before", trace.id, at, error); }
       }
       try {
+        await tag({ ...event, phase: "add", step: "accept" });
         const result = await timed("add", () => call("/add", { body, phase: "add" }));
         const receipt = projectOf(result.data);
         Object.assign(item, { task_id: receipt.task_id, add_status: receipt.status, acceptMs: result.ms });
         if (receipt.task_id !== body.task_id) throw new Error(`Add returned a different Task ID for ${trace.id}`);
       } catch (error) { item.failure = fail("add", trace.id, at, error); }
       // Also drain a closed Episode created by Add. Open Tasks remain in the accumulator.
+      await tag({ ...event, phase: "add", step: "process" });
       await advance(at);
       if (item.task_id) {
         try {
@@ -259,19 +271,27 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
     } else {
       const item = { id: question.id, askedAt: question.askedAt, topic_detail_list: [], rendered: "", answer: "" };
       try {
-        item.topic_detail_list = await search(question.conversation, question.question);
+        item.topic_detail_list = await search(question.conversation, question.question, event);
         item.rendered = renderTemplate3({ topics: item.topic_detail_list, now: question.askedAt, ...names });
+        await tag({ ...event, phase: "reader", step: "answer" });
         item.answer = await timed("reader", () => answer({ question: question.question, askedAt: question.askedAt }, item.rendered));
       } catch (error) { item.failure = fail("question", question.id, at, error); }
       run.questions.push(item);
     }
+    const phasesAfter = snapshot();
+    run.events.push({
+      ...event, startedAt, endedAt: new Date().toISOString(),
+      phaseMs: Object.fromEntries(Object.keys(phasesAfter).map((key) => [key, phasesAfter[key] - (phasesBefore[key] ?? 0)]).filter(([, ms]) => ms > 0))
+    });
     run.nextEvent = index + 1;
     checkpoint(run);
     progress(run, events.length);
   }
 
   run.currentEvent = { at: finalAt, id: "final" };
+  await tag({ event: "final", phase: "add", step: "process", at: finalAt });
   await advance(finalAt);
+  await tag({ event: "final", phase: "final", step: "read" });
   await timed("final", async () => {
     const statuses = new Map();
     for (const task of run.tasks) {
@@ -289,7 +309,9 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
     }
     for (const space of ds.corpus.spaces) run.final[space.space_id] = await readSpace(space.space_id);
   });
+  await tag({ event: "check", phase: "check", step: "api" });
   run.apiChecks = await timed("check", () => checkApi({ call, ds, gold, run, bodies, readSpace }));
+  await tag({ event: "done", phase: "idle", step: "idle" });
   run.finalAt = finalAt;
   delete run.currentEvent;
   run.state = run.failures.length || run.apiChecks.some((check) => !check.passed) ? "completed_with_failures" : "completed";
@@ -351,7 +373,12 @@ async function main() {
     delete run.error;
     checkpoint(partial);
     console.log(JSON.stringify({ runTag: run.runTag, directory: outDir, nextEvent: run.nextEvent }));
-    await executeReplay({ ds, gold, run, call, answer: createReader(llm).answer,
+    const proxy = process.env.MEMMY_EVAL_USAGE_PROXY?.replace(/\/+$/, "");
+    const tag = proxy ? async (context) => {
+      try { await fetch(`${proxy}/__eval/context`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(context), signal: AbortSignal.timeout(5_000) }); }
+      catch (error) { console.error(`usage tag failed: ${error.message}`); }
+    } : undefined;
+    await executeReplay({ ds, gold, run, call, answer: createReader(llm).answer, tag,
       checkpoint: () => checkpoint(partial),
       progress: (current, total) => { if (current.nextEvent % 10 === 0) console.log(`${current.nextEvent}/${total} events · ${current.failures.length} failures`); }
     });
