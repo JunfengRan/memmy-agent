@@ -146,7 +146,10 @@ export function buildReport({ run, proxyLines, judgeUsage, models, pricing }) {
       judgeCostUsd: phases.judge?.costUsd ?? null,
       allCostUsd: round(sum(Object.values(phases).map((phase) => phase.costUsd ?? 0))),
       unpricedCalls: sum(Object.values(phases).map((phase) => phase.unpricedCalls)),
-      failedCalls: sum(Object.values(phases).map((phase) => phase.failedCalls))
+      failedCalls: sum(Object.values(phases).map((phase) => phase.failedCalls)),
+      // Answers served from the reader or judge cache made no model call and are not priced.
+      readerCacheHits: run.usage?.reader?.cacheHits ?? null,
+      judgeCacheHits: judgeUsage?.cacheHits ?? null
     },
     wallMs: wall,
     requestLatencyMs: requestLatency,
@@ -170,7 +173,7 @@ export function renderMarkdown(report) {
     "",
     `被测与阅读模型 ${report.run.sutModel} / ${report.run.readerModel}，评委 ${report.run.judgeModel ?? "未评分"}。费用按 pricing.json 逐次计价，区分缓存命中与 DeepSeek 高峰时段；本地向量记 0。`,
     "",
-    `合计：被测系统（Add + Search + 阅读）${usd(report.totals.systemCostUsd)}，评委 ${usd(report.totals.judgeCostUsd)}，全部 ${usd(report.totals.allCostUsd)}。未计价调用 ${report.totals.unpricedCalls}，失败调用 ${report.totals.failedCalls}，未归属阶段的聊天调用 ${report.unattributedChatCalls}。`,
+    `合计：被测系统（Add + Search + 阅读）${usd(report.totals.systemCostUsd)}，评委 ${usd(report.totals.judgeCostUsd)}，全部 ${usd(report.totals.allCostUsd)}。未计价调用 ${report.totals.unpricedCalls}，失败调用 ${report.totals.failedCalls}，未归属阶段的聊天调用 ${report.unattributedChatCalls}。阅读与评委命中缓存 ${report.totals.readerCacheHits ?? "—"} / ${report.totals.judgeCacheHits ?? "—"} 次，这些没有调用模型，不计费。`,
     "",
     "## 墙钟",
     "",
