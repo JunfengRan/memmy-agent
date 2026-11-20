@@ -104,6 +104,7 @@
 
 | 记录 | 实际配置 | answers.llm | rubric | Recall@3 | entries.f1 | 主题 B³ F1 | 门禁 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| [R-20261120-01](#r-20261120-01) | 接入上游 project-memory 检索（评委 gpt-6-luna） | 0.7222 | 0.6111 | 0.9697 | 0.7639 | 0.5732 | 未通过（8 项） |
 | [R-20261119-02](#r-20261119-02) | 分批归属及关闭推理 | 0.5 | 0.4444 | 0.5758 | 0.7517 | 0.4159 | 未通过（11 项） |
 | [R-20261119-03](#r-20261119-03) | 跨 Domain 召回和披露修复 | 0.2778 | 0.2222 | 0.4545 | 0.6508 | 0.3677 | 未通过（10 项） |
 | [R-20261119-04](#r-20261119-04) | 复审后交付配置 | 0.3889 | 0.3889 | 0.6667 | 0.7519 | 0.464 | 未通过（10 项） |
@@ -142,6 +143,42 @@
 金标灌库的报告把 Search 费用写成 null，因为评分时没有用量文件。检索路径没有聊天调用，这里记 0。3.8 ms 是那 31 次检索请求的 P95。
 
 ## 记录
+
+### R-20261120-01
+
+**结果** MemOS v3 端到端，Add 写入后由上游 `project-memory` 分支的检索服务（`ProjectRetrieval` / `RetrievalStore`）读取。Add 113 次，答题 36 道，回放失败 0 条，接口 4/4 项通过，36 次检索 `degraded` 均为空。终态 Topic 57/43。门禁 8 项未达标。
+
+**版本** MemOS `ed4c3a4f`（feat/project-memory-add，已合并上游 project-memory #2647），Memmy 回放 `e4260c08`，金标 v3 `2d05426e`。
+
+**配置** 模型由 `harness/model-env.mjs` 从 `~/.deepseek.env`、`~/.openai.env`、`~/.claude.env` 依次探测选取：被测与阅读 `deepseek-v4.1-flash-1017`（推理关闭），评委 `gpt-6-luna`。向量为本地 `all-MiniLM-L6-v2`（384 维）。检索时间预算为生产默认值（`MEMOS_PROJECT_RETRIEVAL_TIME_SCALE=1`）。PostgreSQL 与 Redis 经 SSH 隧道。
+
+| 指标 | 19 日交付版（gpt-6-luna 重评） | 本地测试检索（exp5） | 本记录 |
+| --- | --- | --- | --- |
+| `answers.llm` | 0.417 | 0.750 | 0.722 |
+| `answers.rubric` | 0.389 | 0.694 | 0.611 |
+| `search.recall@3` | 0.667 | 1.000 | 0.970 |
+| `search.entryHit` | 0.455 | 0.727 | 0.758 |
+| `entries.f1` | 0.752 | 0.808 | 0.764 |
+| `entries.decision.f1` | 0.800 | 0.867 | 0.833 |
+| `entries.timeline.f1` | 0.571 | 0.483 | 0.348 |
+| `entries.experience.f1` | 0 | 1 | 0 |
+| `decisions.stateExact` | 0.656 | 0.754 | 0.738 |
+| `topics.bcubed.f1` | 0.464 | 0.612 | 0.573 |
+| 重复主题 / 错误合并 | 4 / 20 | 13 / 0 | 12 / 1 |
+| `writes.staleAsCurrent` / `search.staleShownAsCurrent` | 4 / 3 | 3 / 3 | 3 / 3 |
+
+题型正确率：conflict 0.25、cross-project 0.9、plain 0.71、stale 0.6、visibility 1。错题 q02、q03、q04、q09、q15、q16、q17、q25、q31、q31_after，集中在月报金额一条决策裁决后冲突未清空、空客户测试两处。本地测试检索已不在任何分支，仅作对照。
+
+**开销**（`harness/cost-report.mjs`，逐次按 pricing.json 计价；本次回放落在 DeepSeek 工作日高峰窗口，单价为平峰两倍）
+
+| 阶段 | 调用 | 未命中 / 命中输入 | 输出 | 模型耗时合计 | 费用 |
+| --- | --- | --- | --- | --- | --- |
+| Add（extract 97、assign 40、assign_batch 8、formation 14、decision_update 8、metadata 66） | 233 | 212,758 / 4,352 | 28,850 | 361.9 s | $0.0985 |
+| Search | 0（本地向量 1.1 s） | — | — | — | $0 |
+| 阅读 | 36 | 42,137 / 4,608 | 3,714 | 63.6 s | $0.0171 |
+| 评委 | 228 | 122,488 / 0 | 20,439 | 647.9 s | $0.0225 |
+
+墙钟：回放 462.6 s，其中时钟推进内整理 394.1 s；search 请求 P50 29 ms、P95 32 ms。被测系统合计 $0.1156，全部 $0.1381。逐次调用、逐事件表与模型选择记录在运行目录 `runs/20261120-memos-v3/exp7/`（`cost-report.md`、`usage/sut-calls.jsonl`、`models.json`）。
 
 ### R-20261119-04
 
