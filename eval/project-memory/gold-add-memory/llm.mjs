@@ -67,6 +67,8 @@ export function omitsTemperature(model) {
   return /^claude-[a-z]+-5/.test(name) || /^gpt-6/.test(name);
 }
 
+const REASONING_BUDGET = 8192;
+
 function usesMaxCompletionTokens(model) {
   return /^gpt-6/.test(String(model));
 }
@@ -87,14 +89,18 @@ async function callOnce(config, system, user, maxTokens) {
     headers: { "content-type": "application/json", authorization: `Bearer ${config.apiKey}` },
     body: JSON.stringify({
       model: config.model,
-      ...(usesMaxCompletionTokens(config.model) ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
+      // gpt-6 spends part of max_completion_tokens on reasoning, which can leave no visible answer.
+      ...(usesMaxCompletionTokens(config.model) ? { max_completion_tokens: Math.max(maxTokens, REASONING_BUDGET) } : { max_tokens: maxTokens }),
       ...(omitsTemperature(config.model) ? {} : { temperature: 0 }),
       messages: [{ role: "system", content: system }, { role: "user", content: user }]
     })
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`${config.model} ${response.status}: ${JSON.stringify(body).slice(0, 300)}`);
-  return { text: body.choices?.[0]?.message?.content ?? "", ...usageCounts(body.usage) };
+  const text = body.choices?.[0]?.message?.content ?? "";
+  // An empty answer is retried like a transport error instead of failing the JSON parse later.
+  if (!text.trim()) throw new Error(`${config.model} returned no content (finish_reason ${body.choices?.[0]?.finish_reason ?? "unknown"})`);
+  return { text, ...usageCounts(body.usage) };
 }
 
 // inputTokens stays the uncached/cache-miss count so existing pricing still reads it.
