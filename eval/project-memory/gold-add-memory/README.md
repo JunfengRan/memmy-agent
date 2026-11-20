@@ -14,6 +14,10 @@
 
 检索金标只含 `askedAt` 已提交的条目和主题要点。`q48`、`q49`、`q50` 分别覆盖同一条价格口径在开放、暂存和 Formation 后的可见性；`q31` 与 `q31_after` 对照裁决前后。`visibility` 题的答案计分单独覆盖缺少相关记忆的情况。召回分母使用有可见预期的题目，提前披露计入 `search.prematureVisibility`，包括已映射的改名 Topic、条目和摘要或描述里的待提交事实。
 
+`space-isolation` 是空间隔离用例。10 道计分题各自在一个 Space 内提问，金标只取该 Space 在提问时已经提交的内容。另一个 Space 的相似条目作为评测负例。例如，账本月报使用 `entries.amount` 的提案与商品目录读取 `price.amount` 的决策分别属于各自 Space。两个空间的查询由 `search_space_isolation` 分别发送，每次只传一个 Space，用原空间的命中作为正对照。
+
+旧 v3 报告把这组答题分记作 `answers.llm.cross-project`。当前使用 `answers.llm.space-isolation` 表示单空间答题正确率，泄漏单独计入 `search.crossProjectLeak`。回放保存完整检索响应供评分，阅读模型只接收请求 Space 的 Topic。评分检查完整响应中 Topic 的 `space_id` 和可核对的终态归属。若本空间 Topic 原样包含已标注且本空间金标没有的外部条目，也会被记为泄漏。外部条目不进入语义匹配或回答评委的负例，避免把本空间的相似决策误判为泄漏。冻结的 v2.1 沿用历史评分。 q09 和 q25 的旧回放使用旧题面，验证新版答题结果需要重新执行回放。
+
 ### v2.1（历史口径）
 
 要点是 `{text, since, until?}`，`since` / `until` 为轨迹 id。某要点在提问时有效，当且仅当 `since` 的 `submit_time ?? reply_time` 已不晚于 `askedAt`，且 `until` 还没有到。`oracle.mjs` 与阅读上限按这个时刻取要点；主题要点评分只用没有 `until` 的最终要点。
@@ -168,7 +172,7 @@ node run-memmy-live-eval.mjs --api-checks-only ../runs/<stamp>/live-run.json   #
 - **题目**：
   - 从本空间只提问的会话发问；正例期望一个本空间主题，v3 可见性样本验证待提交的主题与证据；
   - 期望条目的证据早于 `askedAt`；
-  - 题型与陷阱相符：stale 有旧版陷阱，cross-project 的陷阱来自另一空间，conflict 期望 conflicts，plain 无陷阱；
+  - 题型与陷阱相符：stale 有旧版陷阱，space-isolation 的负例来自另一空间，conflict 期望 conflicts，plain 无陷阱；
   - `mustInclude` 出现在标准答案中；题目不照抄回复。
 
 ## 指标（`run-pipeline-eval.mjs`）
@@ -186,7 +190,7 @@ node run-memmy-live-eval.mjs --api-checks-only ../runs/<stamp>/live-run.json   #
 | `search.entryHit / itemHit` | 期望条目出现在正确的位置（content 为当前内容，conflicts 为不一致结论） |
 | `search.staleTrapInHistory` | 旧版本出现在 history 或 conflicts 中（这是预期行为） |
 | `answers.llm / rubric / tokenF1` | 评委判对错；`mustInclude` 全部出现；与标准答案的字词 F1 |
-| `answers.llm.<题型>`、`answers.tokenF1.<题型>` | 按题型（conflict / cross-project / plain / stale）分别报评委分与 Token F1 |
+| `answers.llm.<题型>`、`answers.tokenF1.<题型>` | 按题型（v3 为 conflict / plain / space-isolation / stale / visibility）分别报评委分与 Token F1 |
 | `api.passRate` | 4 项接口检查通过率 |
 
 | 错误（oracle = 0） | 定义 |
@@ -197,7 +201,7 @@ node run-memmy-live-eval.mjs --api-checks-only ../runs/<stamp>/live-run.json   #
 | `topics.duplicateTopics / wrongMerges` | 一个金标主题被拆成多个；一个主题混入多个金标主题 |
 | `search.staleShownAsCurrent` | 旧版本在检索结果中作为当前内容出现 |
 | `search.prematureVisibility` | v3 开放或暂存的预期主题或证据提前出现在检索结果中 |
-| `search.crossProjectLeak / foreignTopics / overLimit` | 别的空间的内容或主题出现在结果中；返回主题超过 9 个 |
+| `search.crossProjectLeak / foreignTopics / overLimit` | v3 发生空间隔离违规的题数、完整响应中超出请求范围或缺少归属的 Topic 数、返回主题超过 9 个的题数 |
 
 - **`--gate` 门槛**：`decisions.stateExact` ≥ 0.8、`topics.bcubed.f1` ≥ 0.8、`entries.f1` ≥ 0.8、`search.recall@3` ≥ 0.85、`answers.llm` ≥ 0.8、`api.passRate` = 1，且 `staleShownAsCurrent`、`crossProjectLeak`、`foreignTopics`、`reasonFabricated`、`wrongMerges` 为 0。可以用 `--min-*` 调整。
 - **效率**（`report.efficiency`，覆盖 metrics.md「指标定义 … 效率」每一行，测不了的字段为 null，原因写在该块的 `reasons`）：

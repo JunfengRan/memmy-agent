@@ -12,7 +12,6 @@ export const length = (text) => [...String(text ?? "")].length;
 
 const KINDS = new Set(["decision", "experience", "timeline"]);
 const CATEGORIES = new Set(["范围", "对外约定", "共同约定"]);
-const QUESTION_KINDS = new Set(["plain", "stale", "conflict", "cross-project", "visibility"]);
 const ISO_LOCAL = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+08:00$/;
 const ALPHA_FIELDS = ["memoryScope", "level", "supersedes", "needsTodolist", "mergedFrom", "workspacePath", "gitRoot", "projectId", "sessionId", "canSee"];
 const LABELED = /决策|主张|\bD\d|\bT\d/;
@@ -248,6 +247,8 @@ export function validateDataset(ds, dir = datasetDirectory()) {
   }
 
   // Questions.
+  const isolationKind = version === 3 ? "space-isolation" : "cross-project";
+  const questionKinds = new Set(["plain", "stale", "conflict", isolationKind, "visibility"]);
   const questionIds = new Set();
   const entrySpace = new Map(gold.entries.map((e) => [e.id, e.space_id]));
   const entryTopic = new Map(gold.entries.map((e) => [e.id, e.topic]));
@@ -256,7 +257,7 @@ export function validateDataset(ds, dir = datasetDirectory()) {
     const where = question.id;
     if (questionIds.has(where)) err(`${where} duplicated`);
     questionIds.add(where);
-    if (!QUESTION_KINDS.has(question.kind)) err(`${where} kind ${question.kind} invalid`);
+    if (!questionKinds.has(question.kind)) err(`${where} kind ${question.kind} invalid`);
     const asker = conversations.get(question.conversation);
     if (!asker?.askOnly || asker.space_id !== question.space_id) err(`${where} must be asked from an empty ask-only conversation of its space`);
     if (!ISO_LOCAL.test(question.askedAt)) err(`${where} askedAt must be ISO 8601 with +08:00`);
@@ -276,12 +277,12 @@ export function validateDataset(ds, dir = datasetDirectory()) {
     }
     const traps = question.traps ?? [];
     for (const trap of traps) {
-      if (trap.kind === "cross-project" && entrySpace.get(trap.entry) === question.space_id) err(`${where} cross-project trap ${trap.entry} is in the same space`);
+      if (trap.kind === isolationKind && (!entrySpace.has(trap.entry) || entrySpace.get(trap.entry) === question.space_id)) err(`${where} ${isolationKind} trap ${trap.entry} must be an entry from another space`);
       if (trap.kind === "stale" && entrySpace.get(trap.entry) !== question.space_id) err(`${where} stale trap ${trap.entry} must be in the same space`);
     }
     if (question.kind === "plain" && traps.length) err(`${where} plain questions carry no trap`);
     if (question.kind === "stale" && !traps.some((t) => t.kind === "stale")) err(`${where} stale question needs a stale trap`);
-    if (question.kind === "cross-project" && !traps.some((t) => t.kind === "cross-project")) err(`${where} cross-project question needs a cross-project trap`);
+    if (question.kind === isolationKind && !traps.some((t) => t.kind === isolationKind)) err(`${where} ${isolationKind} question needs a ${isolationKind} trap`);
     if (question.kind === "conflict" && !question.expect.entries.some((e) => e.parts.includes("conflicts"))) err(`${where} conflict question must expect conflicts`);
     const asked = question.askedAt;
     const goldQuestion = gold.questions.find((q) => q.id === where);

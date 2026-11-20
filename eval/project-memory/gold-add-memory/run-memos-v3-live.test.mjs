@@ -10,7 +10,7 @@ const create = (gold) => createRun({
   base: "http://product.test/product", clockBase: "http://clock.test", runTag: "replay-test", gold, sutModel: "test"
 });
 
-function fakeService(finalAt, { dropClockAfterAdd = false, firstStatusFails = false } = {}) {
+function fakeService(finalAt, { dropClockAfterAdd = false, firstStatusFails = false, foreignTopic = null } = {}) {
   const added = [];
   const received = new Map();
   const events = [];
@@ -66,7 +66,7 @@ function fakeService(finalAt, { dropClockAfterAdd = false, firstStatusFails = fa
       case "/product/search":
         if (!body.space_ids) return failure(422, "SCOPE_REQUIRED");
         events.push({ search: body.query });
-        return success({ topic_detail_list: [topicFor(body.space_ids[0])] });
+        return success({ topic_detail_list: [topicFor(body.space_ids[0]), ...(foreignTopic ? [foreignTopic] : [])] });
       case "/product/get_memory": {
         const topics = [...received.values()].some((item) => item.space_ids.includes(body.space_id)) ? [topicFor(body.space_id)] : [];
         return success({ total: topics.length, topic_detail_list: topics });
@@ -103,6 +103,27 @@ test("MemOS v3 replay submits each source Turn with stable ids and observes as-o
   const first = server.events.findIndex((event) => event.added);
   assert.deepEqual(server.events[first - 1], server.events[first + 1]);
   assert.ok(run.requests.some((request) => request.call === "/scheduler/status" && request.poll));
+});
+
+test("the v3 reader sees only the requested Space while the raw response retains foreign Topics", async () => {
+  const ds = structuredClone(sourceDataset);
+  const question = ds.questions.questions.find((q) => q.id === "q24");
+  ds.corpus.traces = [ds.corpus.traces.find((trace) => trace.conversation === "ledger-build")];
+  ds.questions.questions = [question];
+  const gold = { ...sourceGold, apiChecks: [] };
+  const run = create(gold);
+  const { finalAt } = replaySchedule(ds, gold);
+  const foreignTopic = { id: "foreign-topic", space_id: "space_ledger", topic_name: "账本范围探针" };
+  const server = fakeService(finalAt, { foreignTopic });
+
+  await executeReplay({ ds, gold, run, call: server.wire(run), answer: async (_, rendered) => {
+    assert.match(rendered, /wire test/);
+    assert.doesNotMatch(rendered, /账本范围探针/);
+    return "测试答案";
+  } });
+
+  assert.equal(run.questions[0].answer, "测试答案");
+  assert.deepEqual(run.questions[0].topic_detail_list[1], foreignTopic);
 });
 
 test("an interruption after acceptance resumes the same Turn; failed statuses are retained", async () => {

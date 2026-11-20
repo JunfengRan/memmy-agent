@@ -45,6 +45,18 @@ function majority(counts, order) {
   return best;
 }
 
+function searchItems(topic) {
+  return [
+    ...(topic.decisions ?? []).flatMap((d) => [
+      { text: d.content, part: "current" },
+      ...(d.conflicts ?? []).map((c) => ({ text: c.content, part: "conflicts" })),
+      ...(d.history ?? []).map((h) => ({ text: h.content, part: "history" }))
+    ]),
+    ...(topic.experiences ?? []).map((e) => ({ text: e.content, part: "current" })),
+    ...(topic.timeline ?? []).map((e) => ({ text: e.content, part: "current" }))
+  ];
+}
+
 export async function scoreRun(run, { ds, gold, judge }) {
   const reverse = new Map(Object.entries(run.spaceMap ?? {}).map(([dataset, server]) => [server, dataset]));
   const traces = new Map(ds.corpus.traces.map((t) => [t.id, t]));
@@ -246,34 +258,40 @@ export async function scoreRun(run, { ds, gold, judge }) {
     }
     return majority(counts, topicOrder);
   };
+  const strictScope = gold.datasetVersion === 3;
+  const topicOwners = new Map(actualTopics.filter(({ topic }) => topic.id).map(({ topic, space }) => [topic.id, space]));
+  const allKnown = new Set(Object.values(knownTexts).flatMap((set) => [...set]));
   const questionRows = [];
   const scored = gold.questions.filter((q) => !q.excluded);
   for (const q of scored) {
     const pending = Boolean(q.pending);
     const result = (run.questions ?? []).find((r) => r.id === q.id);
-    const trapTexts = q.trapItems.flatMap((t) => t.texts ?? [t.text]);
+    const semanticTraps = q.trapItems.filter((trap) => !strictScope || trap.kind !== "space-isolation");
+    const trapTexts = semanticTraps.flatMap((trap) => trap.texts ?? [trap.text]);
     if (!result) { questionRows.push({ id: q.id, kind: q.kind, pending, missing: true, recall: { 1: 0, 3: 0, 9: 0 }, entryHit: 0, itemHits: 0, items: q.expectedItems.length, staleCurrent: 0, staleHistory: 0, staleTraps: q.trapItems.filter((t) => t.kind === "stale").length, leaks: 0, foreign: 0, overLimit: false, answer: { correct: false }, rubric: 0, tokenF1: 0 }); continue; }
     const all = result.topic_detail_list ?? [];
     const list = all.slice(0, 9);
-    const foreign = list.filter((t) => t.space_id !== undefined && reverse.get(t.space_id) !== q.space_id).length;
+    const expectedSpaceId = run.spaceMap?.[q.space_id] ?? q.space_id;
+    const inScope = (topic) => {
+      const owner = topicOwners.get(topic.id);
+      return !strictScope || (topic.space_id === expectedSpaceId && (owner === undefined || owner === q.space_id));
+    };
+    const scoped = all.filter(inScope);
+    const foreign = strictScope ? all.length - scoped.length
+      : list.filter((t) => t.space_id !== undefined && reverse.get(t.space_id) !== q.space_id).length;
     const mapTopic = (topic) => {
       const space = reverse.get(topic.space_id) ?? q.space_id;
       return topicMap.get(`${space}#${topic.id}`) ?? fallbackTopic(space, topic);
     };
-    const mapped = list.map(mapTopic);
+    const mapped = list.map((topic) => inScope(topic) ? mapTopic(topic) : null);
     const recall = Object.fromEntries([1, 3, 9].map((k) => [k, ratio(q.expectedTopics.filter((id) => mapped.slice(0, k).includes(id)).length, Math.min(k, q.expectedTopics.length))]));
-    const items = list.flatMap((t) => [
-      ...(t.decisions ?? []).flatMap((d) => [{ text: d.content, part: "current" }, ...(d.conflicts ?? []).map((c) => ({ text: c.content, part: "conflicts" })), ...(d.history ?? []).map((h) => ({ text: h.content, part: "history" }))]),
-      ...(t.experiences ?? []).map((e) => ({ text: e.content, part: "current" })),
-      ...(t.timeline ?? []).map((e) => ({ text: e.content, part: "current" }))
-    ]);
+    const items = list.filter(inScope).flatMap(searchItems);
     const keys = [
       ...q.expectedItems.map((item) => ({ type: "expected", item, text: item.text })),
-      ...q.trapItems.flatMap((trap) => (trap.texts ?? [trap.text]).map((text) => ({ type: trap.kind, trap, text })))
+      ...semanticTraps.flatMap((trap) => (trap.texts ?? [trap.text]).map((text) => ({ type: trap.kind, trap, text })))
     ];
     const found = keys.map((key) => items.filter((it) => norm(it.text) === norm(key.text)));
     const open = keys.map((_, i) => i).filter((i) => !found[i].length);
-    const allKnown = new Set(Object.values(knownTexts).flatMap((set) => [...set]));
     const unknown = items.filter((it) => !allKnown.has(norm(it.text)));
     if (open.length && unknown.length) {
       const aligned = await judge.align(open.map((i) => keys[i].text), unknown.map((it) => it.text));
@@ -282,7 +300,16 @@ export async function scoreRun(run, { ds, gold, judge }) {
     let itemHits = 0;
     let staleCurrent = 0;
     let staleHistory = 0;
+    // Foreign fixtures are negative controls. Wording similarity cannot establish provenance.
     let leaks = 0;
+    if (strictScope) {
+      const localTexts = new Set([...(knownTexts[q.space_id] ?? []), ...q.expectedItems.map((item) => norm(item.text))]);
+      const foreignTexts = new Set(q.trapItems.filter((trap) => trap.kind === "space-isolation")
+        .flatMap((trap) => trap.texts).map(norm).filter((text) => text && !localTexts.has(text)));
+      const copiedFixture = foreignTexts.size > 0 && scoped.some((topic) => searchItems(topic)
+        .some((item) => foreignTexts.has(norm(item.text))));
+      leaks = Number(foreign > 0 || copiedFixture);
+    }
     let premature = 0;
     for (const [i, key] of keys.entries()) {
       const parts = found[i].map((it) => it.part);
@@ -291,9 +318,9 @@ export async function scoreRun(run, { ds, gold, judge }) {
       if (key.type === "stale" && (parts.includes("history") || parts.includes("conflicts"))) staleHistory += 1;
       if (key.type === "cross-project" && parts.length) leaks += 1;
       if (key.type === "premature") {
-        const matchesTopic = all.some((topic) => mapTopic(topic) === key.trap.topic ||
+        const matchesTopic = scoped.some((topic) => mapTopic(topic) === key.trap.topic ||
           norm(topic.topic_name) === norm(key.trap.topicName));
-        const metadata = all.flatMap((topic) => [topic.topic_summary, topic.topic_description]).filter(Boolean).join("\n");
+        const metadata = scoped.flatMap((topic) => [topic.topic_summary, topic.topic_description]).filter(Boolean).join("\n");
         const exactMetadata = norm(metadata).includes(norm(key.text));
         if (parts.length || matchesTopic || exactMetadata || (metadata && (await judge.keyPoints([key.trap.fact ?? key.text], metadata))[0])) {
           premature += 1;

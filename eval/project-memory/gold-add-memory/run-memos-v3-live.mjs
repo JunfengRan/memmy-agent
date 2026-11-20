@@ -277,7 +277,9 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
       try {
         item.topic_detail_list = await search(question.conversation, question.question, event);
         item.search = lastSearch;
-        item.rendered = renderTemplate3({ topics: item.topic_detail_list, now: question.askedAt, ...names });
+        // Keep the raw response for isolation scoring. The reader only receives this Space.
+        const scopedTopics = item.topic_detail_list.filter((topic) => topic.space_id === run.spaceMap[question.space_id]);
+        item.rendered = renderTemplate3({ topics: scopedTopics, now: question.askedAt, ...names });
         await tag({ ...event, phase: "reader", step: "answer" });
         item.answer = await timed("reader", () => answer({ question: question.question, askedAt: question.askedAt }, item.rendered));
       } catch (error) { item.failure = fail("question", question.id, at, error); }

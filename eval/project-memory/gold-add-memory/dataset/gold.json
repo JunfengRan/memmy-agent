@@ -4625,7 +4625,7 @@
     },
     {
       "id": "q01_after",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "askedAt": "2026-10-21T14:25:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
@@ -4647,7 +4647,7 @@
       "trapItems": [
         {
           "entry": "dec_price",
-          "kind": "cross-project",
+          "kind": "space-isolation",
           "texts": [
             "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。"
           ]
@@ -4685,7 +4685,7 @@
       "trapItems": [
         {
           "entry": "dec_price",
-          "kind": "cross-project",
+          "kind": "space-isolation",
           "texts": [
             "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。"
           ]
@@ -4724,7 +4724,7 @@
     },
     {
       "id": "q05",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "askedAt": "2026-10-21T19:30:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
@@ -4746,7 +4746,7 @@
       "trapItems": [
         {
           "entry": "dec_cat_round",
-          "kind": "cross-project",
+          "kind": "space-isolation",
           "texts": [
             "价格显示保留两位小数，输出前按两位小数取整。"
           ]
@@ -4755,7 +4755,7 @@
     },
     {
       "id": "q06",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "askedAt": "2026-10-21T19:31:00+08:00",
       "conversation": "catalog-ask",
       "space_id": "space_catalog",
@@ -4777,7 +4777,7 @@
       "trapItems": [
         {
           "entry": "dec_round",
-          "kind": "cross-project",
+          "kind": "space-isolation",
           "texts": [
             "月报金额按整数分累加，不用浮点，最后再换算成元显示。"
           ]
@@ -4819,8 +4819,8 @@
       "askedAt": "2026-10-21T19:34:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
-      "question": "catalog 的导出做法抄进 ledger 了吗，后面还搬吗？",
-      "goldAnswer": "不搬了。林工曾把 catalog 的 export 抄进 ledger；周工和林工确认后撤回了拷贝，等 dry-run 报告；报告出来后确定月报用不上 export，不再恢复，也不往 ledger 搬。",
+      "question": "账本月报之前试过接入导出功能，后来怎么处理的，还会恢复吗？",
+      "goldAnswer": "林工曾把 export 接到月报里。周工和林工确认后撤回，等 dry-run 报告。报告出来后确定月报用不上 export，决定不再恢复。",
       "mustInclude": [
         "用不上 export"
       ],
@@ -5006,7 +5006,7 @@
     },
     {
       "id": "q21",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "askedAt": "2026-10-21T19:48:00+08:00",
       "conversation": "catalog-ask",
       "space_id": "space_catalog",
@@ -5030,7 +5030,7 @@
       "trapItems": [
         {
           "entry": "dec_amount",
-          "kind": "cross-project",
+          "kind": "space-isolation",
           "texts": [
             "entries 表结构不变，月报金额继续写在 journal 正文里，读取时再从正文挑出。",
             "给 entries 加 amount 列，月报直接按这列汇总，不再扫描 journal 全文，因为扫全文太慢。"
@@ -5063,7 +5063,7 @@
     },
     {
       "id": "q24",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "askedAt": "2026-10-21T19:52:00+08:00",
       "conversation": "catalog-ask",
       "space_id": "space_catalog",
@@ -5085,7 +5085,7 @@
       "trapItems": [
         {
           "entry": "dec_amount",
-          "kind": "cross-project",
+          "kind": "space-isolation",
           "texts": [
             "entries 表结构不变，月报金额继续写在 journal 正文里，读取时再从正文挑出。",
             "给 entries 加 amount 列，月报直接按这列汇总，不再扫描 journal 全文，因为扫全文太慢。"
@@ -5095,11 +5095,11 @@
     },
     {
       "id": "q25",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "askedAt": "2026-10-21T19:53:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
-      "question": "月报为什么后来要改成直接读 entries 的一列？",
+      "question": "账本月报里，周工为什么建议直接读 entries 的 amount 列？当时定下来了吗？",
       "goldAnswer": "因为月报扫 journal 全文太慢。这是周工的结论，和林工把金额留在 journal 正文的结论之间还没有裁决。",
       "mustInclude": [
         "全文太慢"
@@ -5118,7 +5118,7 @@
       "trapItems": [
         {
           "entry": "dec_price",
-          "kind": "cross-project",
+          "kind": "space-isolation",
           "texts": [
             "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。"
           ]
@@ -5127,7 +5127,7 @@
     },
     {
       "id": "q26",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "askedAt": "2026-10-21T19:54:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
@@ -5149,7 +5149,7 @@
       "trapItems": [
         {
           "entry": "dec_cat_tz",
-          "kind": "cross-project",
+          "kind": "space-isolation",
           "texts": [
             "价格生效日按 UTC 零点切换，不看本地时区。"
           ]
@@ -5158,7 +5158,7 @@
     },
     {
       "id": "q27",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "askedAt": "2026-10-21T19:55:00+08:00",
       "conversation": "catalog-ask",
       "space_id": "space_catalog",
@@ -5180,7 +5180,7 @@
       "trapItems": [
         {
           "entry": "dec_tz",
-          "kind": "cross-project",
+          "kind": "space-isolation",
           "texts": [
             "月报的月初月末按 UTC+8（东八区）切分，不用 UTC。"
           ]
@@ -5189,7 +5189,7 @@
     },
     {
       "id": "q28",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "askedAt": "2026-10-21T19:56:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
@@ -5211,7 +5211,7 @@
       "trapItems": [
         {
           "entry": "dec_export_format",
-          "kind": "cross-project",
+          "kind": "space-isolation",
           "texts": [
             "价格表导出为 csv，写成 prices.csv，不再用 json。",
             "价格表导出写到 output 目录下的 prices.json。"
@@ -5221,7 +5221,7 @@
     },
     {
       "id": "q29",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "askedAt": "2026-10-21T19:57:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
@@ -5243,7 +5243,7 @@
       "trapItems": [
         {
           "entry": "dec_cat_dup",
-          "kind": "cross-project",
+          "kind": "space-isolation",
           "texts": [
             "同一个 sku 出现多条价格时取最后一条，前面的忽略。"
           ]
@@ -5252,7 +5252,7 @@
     },
     {
       "id": "q30",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "askedAt": "2026-10-21T19:58:00+08:00",
       "conversation": "catalog-ask",
       "space_id": "space_catalog",
@@ -5274,7 +5274,7 @@
       "trapItems": [
         {
           "entry": "dec_dup",
-          "kind": "cross-project",
+          "kind": "space-isolation",
           "texts": [
             "重复的分录按 id 去重，只留最早一条。"
           ]
@@ -5313,7 +5313,7 @@
       "trapItems": [
         {
           "entry": "dec_price",
-          "kind": "cross-project",
+          "kind": "space-isolation",
           "texts": [
             "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。"
           ]
@@ -5349,7 +5349,7 @@
         },
         {
           "entry": "dec_price",
-          "kind": "cross-project",
+          "kind": "space-isolation",
           "texts": [
             "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。"
           ]

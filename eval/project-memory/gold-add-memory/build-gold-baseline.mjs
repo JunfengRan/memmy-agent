@@ -317,6 +317,7 @@ export function buildGold(ds) {
     return [result];
   });
 
+  const isolationKind = corpus.datasetVersion === 3 ? "space-isolation" : "cross-project";
   const goldQuestions = questions.questions.map((question) => {
     const { state: snap } = replay(ds, question.askedAt, { timeline, traceMode: !timeline });
     const expectedItems = [];
@@ -356,9 +357,9 @@ export function buildGold(ds) {
         const item = entry.history[trap.history];
         if (!item) errors.push(`${question.id} stale trap ${trap.entry} history[${trap.history}] missing at askedAt`);
         else trapItems.push({ entry: trap.entry, kind: "stale", text: item.content });
-      } else if (trap.kind === "cross-project") {
+      } else if (trap.kind === isolationKind) {
         const texts = [entry.content, ...entry.conflicts.map((c) => c.content), ...entry.history.map((h) => h.content)];
-        trapItems.push({ entry: trap.entry, kind: "cross-project", texts });
+        trapItems.push({ entry: trap.entry, kind: isolationKind, texts });
       } else errors.push(`${question.id} unknown trap kind ${trap.kind}`);
     }
     return {

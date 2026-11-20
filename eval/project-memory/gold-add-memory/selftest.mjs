@@ -47,6 +47,84 @@ test("v3 oracle sees committed state at the question time", () => {
   assert.ok(after.some((item) => item.content.includes("amount 列") && item.history.length === 1 && !item.conflicts.length));
 });
 
+test("v3 does not ask the judge to match local price facts against another Space", async () => {
+  const current = loadDataset();
+  const currentGold = loadGold();
+  const run = buildOracleRun(current, currentGold);
+  const question = currentGold.questions.find((q) => q.id === "q24");
+  const probe = run.questions.find((q) => q.id === question.id);
+  const paraphrase = "给 price 表加 amount 列，列表改成直接读这一列。";
+  const forbidden = question.trapItems.flatMap((trap) => trap.texts);
+  const decision = probe.topic_detail_list[0].decisions.find((item) => item.content === question.expectedItems[0].text);
+  decision.content = paraphrase;
+  let checked = false;
+  const scopedJudge = {
+    ...judge,
+    align: async (left, right) => {
+      if (!right.includes(paraphrase)) return judge.align(left, right);
+      checked = true;
+      assert.deepEqual(left, [question.expectedItems[0].text]);
+      assert.ok(left.every((text) => !forbidden.includes(text)));
+      return [right.indexOf(paraphrase)];
+    },
+    answer: async (q, answer, traps) => {
+      if (q.id === question.id) assert.deepEqual(traps, []);
+      return judge.answer(q, answer, traps);
+    }
+  };
+  const result = await scoreRun(run, { ds: current, gold: currentGold, judge: scopedJudge });
+  const row = result.detail.questions.find((q) => q.id === question.id);
+  assert.equal(checked, true);
+  assert.equal(row.kind, "space-isolation");
+  assert.equal(row.entryHit, 1);
+  assert.equal(row.leaks, 0);
+  assert.equal(row.foreign, 0);
+});
+
+test("v3 flags foreign Topics anywhere in the response and withholds recall credit", async () => {
+  const current = loadDataset();
+  const currentGold = loadGold();
+  const run = buildOracleRun(current, currentGold);
+  const probe = run.questions.find((q) => q.id === "q24");
+  const local = probe.topic_detail_list[0];
+  const ledger = run.final.space_ledger.find((topic) => topic.id === "tp_ledger_report");
+  probe.topic_detail_list = [
+    { ...local, space_id: run.spaceMap.space_ledger },
+    { ...local, id: ledger.id },
+    ...Array.from({ length: 7 }, (_, i) => ({ id: `other-${i}`, space_id: local.space_id })),
+    ledger
+  ];
+
+  const result = await scoreRun(run, { ds: current, gold: currentGold, judge });
+  const row = result.detail.questions.find((q) => q.id === probe.id);
+  assert.equal(row.foreign, 3);
+  assert.equal(row.leaks, 1);
+  assert.equal(row.recall[9], 0);
+  assert.equal(row.entryHit, 0);
+});
+
+test("v3 detects an exact foreign fixture inside a local Topic without flagging shared local evidence", async () => {
+  const current = loadDataset();
+  const currentGold = loadGold();
+  const run = buildOracleRun(current, currentGold);
+  const question = currentGold.questions.find((q) => q.id === "q24");
+  const topic = run.questions.find((q) => q.id === question.id).topic_detail_list[0];
+  const foreign = question.trapItems[0].texts[0];
+  topic.decisions.push({ content: foreign });
+  question.trapItems[0].texts.push(question.expectedItems[0].text);
+
+  const score = async () => (await scoreRun(run, { ds: current, gold: currentGold, judge }))
+    .detail.questions.find((q) => q.id === question.id);
+  const leaked = await score();
+  assert.equal(leaked.leaks, 1);
+  assert.equal(leaked.foreign, 0);
+
+  topic.decisions.pop();
+  const local = await score();
+  assert.equal(local.leaks, 0);
+  assert.equal(local.entryHit, 1);
+});
+
 test("v3 open visibility starts at the entry's own effective Turn acceptance", () => {
   const current = loadDataset();
   const question = current.questions.questions.find((item) => item.id === "q48");

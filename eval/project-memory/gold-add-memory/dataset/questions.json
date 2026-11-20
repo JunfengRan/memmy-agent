@@ -1,6 +1,6 @@
 {
   "datasetVersion": 3,
-  "rule": "每题在 askedAt 时刻从提问会话调用 search_memory（space_ids 为该题空间，memory_limit_number=9）。expect.topics 是应召回的 gold 主题；expect.entries 是该时刻主题内应出现的条目及部分（content / conflicts / history）。traps：stale 是已进 history 的旧结论，出现在 history 里是预期，作为当前结论出现是错误；cross-project 是另一个空间的相近条目，出现即越界。kind：plain 只看召回；stale 当前结论已改写或裁决；conflict 有未裁决的不一致结论，回答必须列出各项；cross-project 另一空间有相近说法。",
+  "rule": "每题从归属该 Space 的只读会话，按 askedAt 调用 search_memory，space_ids 只含该 Space，memory_limit_number=9。期望主题、条目与答案证据来自这个 Space。stale 检查旧结论是否被当成当前结论；conflict 要列出本 Space 内未裁决的结论；space-isolation 用另一 Space 的相似条目作为隔离负例；visibility 检查未提交内容是否被提前读到。",
   "questions": [
     {
       "conversation": "catalog-ask",
@@ -129,7 +129,7 @@
       "askedAt": "2026-10-21T14:25:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "question": "ledger 月报的金额现在是从哪里取的？",
       "goldAnswer": "entries 表结构不变，金额继续写在 journal 正文里，月报读取时再从正文里挑出来。",
       "mustInclude": [
@@ -151,7 +151,7 @@
       "traps": [
         {
           "entry": "dec_price",
-          "kind": "cross-project"
+          "kind": "space-isolation"
         }
       ]
     },
@@ -184,7 +184,7 @@
       "traps": [
         {
           "entry": "dec_price",
-          "kind": "cross-project"
+          "kind": "space-isolation"
         }
       ]
     },
@@ -221,7 +221,7 @@
       "askedAt": "2026-10-21T19:30:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "question": "ledger 月报里的金额是怎么算的，精度上有什么要求？",
       "goldAnswer": "金额按整数分累加，不用浮点，最后再换算成元显示。",
       "mustInclude": [
@@ -243,7 +243,7 @@
       "traps": [
         {
           "entry": "dec_cat_round",
-          "kind": "cross-project"
+          "kind": "space-isolation"
         }
       ]
     },
@@ -252,7 +252,7 @@
       "askedAt": "2026-10-21T19:31:00+08:00",
       "conversation": "catalog-ask",
       "space_id": "space_catalog",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "question": "价格列表里的金额怎么取整？",
       "goldAnswer": "价格显示保留两位小数，输出前按两位小数取整。",
       "mustInclude": [
@@ -274,7 +274,7 @@
       "traps": [
         {
           "entry": "dec_round",
-          "kind": "cross-project"
+          "kind": "space-isolation"
         }
       ]
     },
@@ -316,8 +316,8 @@
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
       "kind": "stale",
-      "question": "catalog 的导出做法抄进 ledger 了吗，后面还搬吗？",
-      "goldAnswer": "不搬了。林工曾把 catalog 的 export 抄进 ledger；周工和林工确认后撤回了拷贝，等 dry-run 报告；报告出来后确定月报用不上 export，不再恢复，也不往 ledger 搬。",
+      "question": "账本月报之前试过接入导出功能，后来怎么处理的，还会恢复吗？",
+      "goldAnswer": "林工曾把 export 接到月报里。周工和林工确认后撤回，等 dry-run 报告。报告出来后确定月报用不上 export，决定不再恢复。",
       "mustInclude": [
         "用不上 export"
       ],
@@ -522,7 +522,7 @@
       "askedAt": "2026-10-21T19:48:00+08:00",
       "conversation": "catalog-ask",
       "space_id": "space_catalog",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "excluded": true,
       "excludedReason": "与 q24 问同一条决策，v1 起就排除在评分外；runner 不提问、scorer 不计分",
       "question": "catalog 的价格列表现在是怎么读金额的？",
@@ -546,7 +546,7 @@
       "traps": [
         {
           "entry": "dec_amount",
-          "kind": "cross-project"
+          "kind": "space-isolation"
         }
       ]
     },
@@ -581,7 +581,7 @@
       "askedAt": "2026-10-21T19:52:00+08:00",
       "conversation": "catalog-ask",
       "space_id": "space_catalog",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "question": "catalog 的价格表为什么要新增一列金额？",
       "goldAnswer": "因为价格查询太慢。price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字。",
       "mustInclude": [
@@ -603,7 +603,7 @@
       "traps": [
         {
           "entry": "dec_amount",
-          "kind": "cross-project"
+          "kind": "space-isolation"
         }
       ]
     },
@@ -612,8 +612,8 @@
       "askedAt": "2026-10-21T19:53:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
-      "kind": "cross-project",
-      "question": "月报为什么后来要改成直接读 entries 的一列？",
+      "kind": "space-isolation",
+      "question": "账本月报里，周工为什么建议直接读 entries 的 amount 列？当时定下来了吗？",
       "goldAnswer": "因为月报扫 journal 全文太慢。这是周工的结论，和林工把金额留在 journal 正文的结论之间还没有裁决。",
       "mustInclude": [
         "全文太慢"
@@ -634,7 +634,7 @@
       "traps": [
         {
           "entry": "dec_price",
-          "kind": "cross-project"
+          "kind": "space-isolation"
         }
       ]
     },
@@ -643,7 +643,7 @@
       "askedAt": "2026-10-21T19:54:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "question": "月报的月初月末按哪个时区切？",
       "goldAnswer": "按 UTC+8（东八区）切月初月末，不用 UTC。",
       "mustInclude": [
@@ -665,7 +665,7 @@
       "traps": [
         {
           "entry": "dec_cat_tz",
-          "kind": "cross-project"
+          "kind": "space-isolation"
         }
       ]
     },
@@ -674,7 +674,7 @@
       "askedAt": "2026-10-21T19:55:00+08:00",
       "conversation": "catalog-ask",
       "space_id": "space_catalog",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "question": "价格的生效日按哪个时间切换？",
       "goldAnswer": "按 UTC 零点切换，不看本地时区。",
       "mustInclude": [
@@ -696,7 +696,7 @@
       "traps": [
         {
           "entry": "dec_tz",
-          "kind": "cross-project"
+          "kind": "space-isolation"
         }
       ]
     },
@@ -705,7 +705,7 @@
       "askedAt": "2026-10-21T19:56:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "question": "月报结果写到哪里？",
       "goldAnswer": "写到 reports/ 目录下，文件按月份命名，比如 2026-10.txt。",
       "mustInclude": [
@@ -727,7 +727,7 @@
       "traps": [
         {
           "entry": "dec_export_format",
-          "kind": "cross-project"
+          "kind": "space-isolation"
         }
       ]
     },
@@ -736,7 +736,7 @@
       "askedAt": "2026-10-21T19:57:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "question": "月报里重复的分录怎么处理？",
       "goldAnswer": "按 id 去重，只留最早一条。",
       "mustInclude": [
@@ -758,7 +758,7 @@
       "traps": [
         {
           "entry": "dec_cat_dup",
-          "kind": "cross-project"
+          "kind": "space-isolation"
         }
       ]
     },
@@ -767,7 +767,7 @@
       "askedAt": "2026-10-21T19:58:00+08:00",
       "conversation": "catalog-ask",
       "space_id": "space_catalog",
-      "kind": "cross-project",
+      "kind": "space-isolation",
       "question": "同一个 sku 出现多条价格怎么取？",
       "goldAnswer": "取最后一条，前面的忽略。",
       "mustInclude": [
@@ -789,7 +789,7 @@
       "traps": [
         {
           "entry": "dec_dup",
-          "kind": "cross-project"
+          "kind": "space-isolation"
         }
       ]
     },
@@ -823,7 +823,7 @@
       "traps": [
         {
           "entry": "dec_price",
-          "kind": "cross-project"
+          "kind": "space-isolation"
         }
       ]
     },
@@ -859,7 +859,7 @@
         },
         {
           "entry": "dec_price",
-          "kind": "cross-project"
+          "kind": "space-isolation"
         }
       ]
     },
