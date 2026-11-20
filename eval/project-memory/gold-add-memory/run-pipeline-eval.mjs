@@ -701,6 +701,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const out = options.out ?? (options.input ? join(dirname(options.input), "report.json") : join(RUNS_DIR, `${options.mode}-report.json`));
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
+  // Per-call judge usage, priced by harness/cost-report.mjs. Cache hits made no call.
+  if (!options.mode) writeFileSync(join(dirname(out), "judge-usage.json"), `${JSON.stringify(llm.usage, null, 2)}\n`);
   process.stdout.write(`${JSON.stringify({ out, scores: report.scores, errors: report.errors, failures })}\n`);
   process.exit(failures.length ? 1 : 0);
 }
