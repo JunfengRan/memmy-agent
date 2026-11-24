@@ -9,7 +9,7 @@ const FORMATION_COUNT = 10;
 const FORMATION_LIMIT = 50;
 
 // Whether gold is derived under the flushing replay (see buildEpisodeTimeline).
-export const FLUSH_BY_DEFAULT = false;
+export const FLUSH_BY_DEFAULT = true;
 
 export const acceptedTime = (trace) => trace.submit_time ?? trace.reply_time;
 const timestamp = (at) => `${new Date(at + 8 * 60 * MINUTE).toISOString().slice(0, 19)}+08:00`;

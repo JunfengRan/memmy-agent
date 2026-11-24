@@ -413,6 +413,8 @@ export function buildGold(ds, { flush = FLUSH_BY_DEFAULT } = {}) {
   return {
     gold: {
       datasetVersion: corpus.datasetVersion,
+      // Revision 2: gold under the flushing replay, with the v3 own-change conflict policy.
+      ...(timeline ? { goldRevision: 2, processing: timeline.flush ? "flush" : "natural" } : {}),
       derivedFrom: ["dataset/corpus.json", "dataset/labels.json", "dataset/questions.json", ...(timeline ? ["dataset/episodes.json"] : [])],
       spaces: corpus.spaces,
       members: corpus.members,
@@ -433,15 +435,22 @@ export function renderGold(gold) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const { gold, errors } = buildGold(loadDataset());
+  // --natural prints the timer-only derivation instead of writing dataset/gold.json.
+  const natural = process.argv.includes("--natural");
+  const { gold, errors } = buildGold(loadDataset(), { flush: !natural });
   if (errors.length) {
     console.error(JSON.stringify({ errors }, null, 2));
     process.exit(1);
+  }
+  if (natural) {
+    process.stdout.write(renderGold(gold));
+    process.exit(0);
   }
   writeFileSync(GOLD_PATH, renderGold(gold));
   const count = (kind, optional) => gold.entries.filter((e) => e.kind === kind && e.optional === optional).length;
   console.log(JSON.stringify({
     output: "dataset/gold.json",
+    processing: gold.processing,
     topics: gold.topics.length,
     decisions: count("decision", false),
     experiences: count("experience", false),

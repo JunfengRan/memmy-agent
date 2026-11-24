@@ -97,7 +97,9 @@ function fakeService(finalAt, { dropClockAfterAdd = false, firstStatusFails = fa
 test("MemOS v3 replay submits each source Turn with stable ids and observes as-of snapshots", async () => {
   const { events, finalAt } = replaySchedule(sourceDataset, sourceGold);
   assert.equal(Date.parse(finalAt), Date.parse(sourceGold.visibilityEvents.at(-1).at));
-  assert.equal(events.length, 149);
+  assert.equal(sourceGold.processing, "flush");
+  assert.equal(events.some((event) => event.question?.id === "q49"), false, "q49 is excluded under flush");
+  assert.equal(events.length, 148);
   const server = fakeService(finalAt);
   const run = create(sourceGold);
   let checkpoints = 0;
@@ -107,17 +109,17 @@ test("MemOS v3 replay submits each source Turn with stable ids and observes as-o
       return "测试答案";
     }, checkpoint: () => { checkpoints += 1; } });
   assert.equal(run.state, "completed");
-  assert.equal(run.nextEvent, 149);
+  assert.equal(run.nextEvent, 148);
   assert.equal(run.tasks.length, 113);
-  assert.equal(run.questions.length, 36);
+  assert.equal(run.questions.length, 35);
   assert.equal(new Set(server.added.map((body) => body.task_id)).size, 108);
   assert.equal(run.tasks[0].memory_views.project.open_episode_messages, 2);
   assert.equal(run.tasks[0].final.memory_views.project.open_episode_messages, 0);
-  assert.equal(checkpoints, 155);
+  assert.equal(checkpoints, 154);
   assert.equal(run.runnerRevision, 2);
   assert.equal(run.processing, "flush");
   // One settled flush per question, then one per Space before the final read.
-  assert.equal(server.flushes.length, 36 + 6);
+  assert.equal(server.flushes.length, 35 + 6);
   assert.ok(run.questions.every((item) => item.flush.settled && item.flush.rounds.length === 1));
   assert.deepEqual(Object.keys(run.finalFlush).sort(), sourceDataset.corpus.spaces.map((space) => space.space_id).sort());
   for (const [index, event] of server.events.entries()) {

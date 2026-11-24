@@ -45,7 +45,8 @@ export function displayNames(ds) {
 export function buildOracleRun(ds, gold) {
   const spaces = ds.corpus.spaces.map((s) => s.space_id);
   const names = displayNames(ds);
-  const timeline = ds.episodes && buildEpisodeTimeline(ds);
+  // Answer at the state the gold was derived for (flush or timer-only processing).
+  const timeline = ds.episodes && buildEpisodeTimeline(ds, { flush: gold.processing !== "natural" });
   const questions = gold.questions.filter((q) => !q.excluded).map((question) => {
     const topics = oracleTopics(ds, question.askedAt, question.space_id, timeline);
     const ranked = question.pending ? [] : [...topics.filter((t) => question.expectedTopics.includes(t.id)), ...topics.filter((t) => !question.expectedTopics.includes(t.id))].slice(0, 9);

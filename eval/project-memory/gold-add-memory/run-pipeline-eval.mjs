@@ -23,7 +23,7 @@ import { fileURLToPath } from "node:url";
 import { datasetDirectory, finalPointTexts, loadDataset } from "./build-gold-baseline.mjs";
 import { JUDGE_PROMPT_VERSION, createJudge } from "./judge.mjs";
 import { assertJudgeFamily, createLlm, omitsTemperature, resolveModelConfig } from "./llm.mjs";
-import { LIMITS, length, loadGold } from "./load-eval-set.mjs";
+import { LIMITS, goldFor, length } from "./load-eval-set.mjs";
 import { mean, percentile, priceCalls, priceUsage, prf, resolveModelPrice, tokenBuckets, tokenF1 } from "./metrics.mjs";
 import { buildEmptyRun, buildOracleRun } from "./oracle.mjs";
 
@@ -676,7 +676,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const runDatasetVersion = run ? run.datasetVersion ?? 2.1 : undefined;
   const dir = datasetDirectory(options.datasetVersion ?? runDatasetVersion);
   const ds = loadDataset(dir);
-  const gold = loadGold(dir);
+  // A v3 live run is scored against the gold for its processing: runner revision 2 records
+  // "flush"; --no-flush and older runs used timer-only processing ("natural").
+  const gold = goldFor(ds, { dir, flush: run && ds.episodes ? run.processing === "flush" : undefined });
   if (runDatasetVersion !== undefined && Number(runDatasetVersion) !== gold.datasetVersion) {
     throw new Error(`run dataset version ${runDatasetVersion} does not match gold ${gold.datasetVersion}`);
   }
@@ -706,6 +708,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const report = {
     reportVersion: 2,
     datasetVersion: gold.datasetVersion,
+    ...(gold.processing ? { goldProcessing: gold.processing, goldRevision: gold.goldRevision } : {}),
     run: { kind: run.kind ?? "live", input: options.input ?? null, startedAt: run.startedAt ?? null, base: run.base ?? null, sut: run.sut ?? null, reader: run.reader ?? null },
     judge: { model: llm.config?.model ?? null, family: llm.config?.family ?? null, promptVersion: JUDGE_PROMPT_VERSION, temperature: llm.config?.model && omitsTemperature(llm.config.model) ? null : 0 },
     ...result,

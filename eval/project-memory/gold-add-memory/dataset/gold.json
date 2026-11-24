@@ -1,5 +1,7 @@
 {
   "datasetVersion": 3,
+  "goldRevision": 2,
+  "processing": "flush",
   "derivedFrom": [
     "dataset/corpus.json",
     "dataset/labels.json",
@@ -430,6 +432,49 @@
       ]
     },
     {
+      "id": "tp_clinic_return",
+      "space_id": "space_clinic",
+      "domain": "药房管理",
+      "topic_name": "退药窗口",
+      "summaryKeyPoints": [
+        {
+          "text": "约定退药只在上午窗口收取",
+          "since": "t_clinic_return_land"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定退药只在上午窗口收取",
+          "since": "t_clinic_return_land"
+        }
+      ],
+      "entries": [
+        "dec_clinic_return",
+        "tl_clinic_return"
+      ]
+    },
+    {
+      "id": "tp_clinic_label",
+      "space_id": "space_clinic",
+      "domain": "药房管理",
+      "topic_name": "药袋标签",
+      "summaryKeyPoints": [
+        {
+          "text": "约定药袋上写通用名",
+          "since": "t_clinic_label"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "约定药袋上写通用名",
+          "since": "t_clinic_label"
+        }
+      ],
+      "entries": [
+        "dec_clinic_label"
+      ]
+    },
+    {
       "id": "tp_clinic_near",
       "space_id": "space_clinic",
       "domain": "药房管理",
@@ -848,6 +893,27 @@
       ],
       "entries": [
         "dec_fleet_belt"
+      ]
+    },
+    {
+      "id": "tp_fleet_speed",
+      "space_id": "space_fleet",
+      "domain": "线路调度",
+      "topic_name": "市区限速",
+      "summaryKeyPoints": [
+        {
+          "text": "约定市区线路的限速",
+          "since": "t_fleet_speed"
+        }
+      ],
+      "descriptionKeyPoints": [
+        {
+          "text": "市区限速尚有另一项说法",
+          "since": "t_fleet_speed_late"
+        }
+      ],
+      "entries": [
+        "dec_fleet_speed"
       ]
     },
     {
@@ -2253,6 +2319,74 @@
       ]
     },
     {
+      "id": "dec_clinic_return",
+      "kind": "decision",
+      "category": "对外约定",
+      "optional": false,
+      "topic": "tp_clinic_return",
+      "space_id": "space_clinic",
+      "content": "退药只在上午窗口收取。",
+      "time": "2026-11-03T11:00:00+08:00",
+      "timeWindow": [
+        "2026-11-03T11:00:00+08:00",
+        "2026-11-03T11:02:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhao"
+      ],
+      "conflicts": [],
+      "history": [],
+      "staleVersions": [],
+      "sources": [
+        "t_clinic_return_say",
+        "t_clinic_return_land"
+      ],
+      "deferred": true
+    },
+    {
+      "id": "tl_clinic_return",
+      "kind": "timeline",
+      "optional": false,
+      "topic": "tp_clinic_return",
+      "space_id": "space_clinic",
+      "content": "退药窗口已挂牌。",
+      "time": "2026-11-03T11:20:00+08:00",
+      "timeWindow": [
+        "2026-11-03T11:20:00+08:00",
+        "2026-11-03T11:22:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhao"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_clinic_return_land"
+      ]
+    },
+    {
+      "id": "dec_clinic_label",
+      "kind": "decision",
+      "category": "共同约定",
+      "optional": false,
+      "topic": "tp_clinic_label",
+      "space_id": "space_clinic",
+      "content": "药袋写通用名，不写商品名。",
+      "time": "2026-11-03T11:40:00+08:00",
+      "timeWindow": [
+        "2026-11-03T11:40:00+08:00",
+        "2026-11-03T11:42:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhao"
+      ],
+      "conflicts": [],
+      "history": [],
+      "staleVersions": [],
+      "sources": [
+        "t_clinic_label"
+      ]
+    },
+    {
       "id": "dec_clinic_extra",
       "kind": "decision",
       "category": "共同约定",
@@ -2851,6 +2985,43 @@
       "staleVersions": [],
       "sources": [
         "t_fleet_belt"
+      ]
+    },
+    {
+      "id": "dec_fleet_speed",
+      "kind": "decision",
+      "category": "共同约定",
+      "optional": false,
+      "topic": "tp_fleet_speed",
+      "space_id": "space_fleet",
+      "content": "市区线路限速 60。",
+      "time": "2026-11-05T14:00:00+08:00",
+      "timeWindow": [
+        "2026-11-05T14:00:00+08:00",
+        "2026-11-05T14:02:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhao"
+      ],
+      "conflicts": [
+        {
+          "content": "市区线路限速 50。",
+          "time": "2026-11-05T13:40:00+08:00",
+          "timeWindow": [
+            "2026-11-05T13:40:00+08:00",
+            "2026-11-05T13:42:00+08:00"
+          ],
+          "user_ids": [
+            "u_sun"
+          ],
+          "late": true
+        }
+      ],
+      "history": [],
+      "staleVersions": [],
+      "sources": [
+        "t_fleet_speed",
+        "t_fleet_speed_late"
       ]
     },
     {
@@ -4596,32 +4767,26 @@
   "questions": [
     {
       "id": "q48",
-      "kind": "visibility",
+      "kind": "plain",
       "askedAt": "2026-10-21T11:50:00+08:00",
       "conversation": "catalog-ask",
       "space_id": "space_catalog",
       "question": "价格列表现在按什么字段读金额？",
-      "goldAnswer": "目前没有已提交的相关项目记忆。",
+      "goldAnswer": "价格表新增 amount 列，列表直接读取这个字段。",
       "mustInclude": [
-        "没有已提交"
+        "amount 列"
       ],
-      "pending": {
-        "entry": "dec_price",
-        "phase": "open",
-        "fact": "价格列表直接读取 amount 列"
-      },
-      "expectedTopics": [],
-      "expectedItems": [],
-      "trapItems": [
+      "expectedTopics": [
+        "tp_cat_price"
+      ],
+      "expectedItems": [
         {
           "entry": "dec_price",
-          "kind": "premature",
-          "text": "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。",
-          "topic": "tp_cat_price",
-          "topicName": "价格查询与展示",
-          "fact": "价格列表直接读取 amount 列"
+          "part": "content",
+          "text": "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。"
         }
-      ]
+      ],
+      "trapItems": []
     },
     {
       "id": "q03",
@@ -4648,32 +4813,28 @@
     },
     {
       "id": "q49",
-      "kind": "visibility",
+      "kind": "plain",
       "askedAt": "2026-10-21T13:00:00+08:00",
       "conversation": "catalog-ask",
       "space_id": "space_catalog",
       "question": "价格列表现在按什么字段读金额？",
-      "goldAnswer": "目前没有已提交的相关项目记忆。",
+      "goldAnswer": "价格表新增 amount 列，列表直接读取这个字段。",
       "mustInclude": [
-        "没有已提交"
+        "amount 列"
       ],
-      "pending": {
-        "entry": "dec_price",
-        "phase": "staged",
-        "fact": "价格列表直接读取 amount 列"
-      },
-      "expectedTopics": [],
-      "expectedItems": [],
-      "trapItems": [
+      "excluded": true,
+      "excludedReason": "flush 下 q48 在 11:50 已把 dec_price 整理提交，13:00 不再有暂存内容可测，题面与 q50 重复；runner 不提问、scorer 不计分",
+      "expectedTopics": [
+        "tp_cat_price"
+      ],
+      "expectedItems": [
         {
           "entry": "dec_price",
-          "kind": "premature",
-          "text": "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。",
-          "topic": "tp_cat_price",
-          "topicName": "价格查询与展示",
-          "fact": "价格列表直接读取 amount 列"
+          "part": "content",
+          "text": "price 表增加 amount 列，价格列表直接读这一列、不再拼装说明文字，因为价格查询太慢。"
         }
-      ]
+      ],
+      "trapItems": []
     },
     {
       "id": "q01",
@@ -5382,16 +5543,14 @@
     },
     {
       "id": "q31",
-      "kind": "conflict",
+      "kind": "stale",
       "askedAt": "2026-10-21T20:40:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
       "question": "ledger 月报的金额现在以什么为准？",
-      "goldAnswer": "目前仍有两项不一致结论：林工原先把金额保留在 journal 正文里；周工因为扫全文太慢主张改读 entries 的 amount 列。目前没有生效的裁决。",
+      "goldAnswer": "以 entries 的 amount 列为准，月报按这列汇总。林工刚确定以周工的结论为准，把金额留在 journal 正文里的旧结论已转入历史。",
       "mustInclude": [
-        "journal 正文",
-        "amount 列",
-        "没有生效的裁决"
+        "amount 列"
       ],
       "expectedTopics": [
         "tp_ledger_report"
@@ -5400,16 +5559,15 @@
         {
           "entry": "dec_amount",
           "part": "content",
-          "text": "entries 表结构不变，月报金额继续写在 journal 正文里，读取时再从正文挑出。"
-        },
-        {
-          "entry": "dec_amount",
-          "part": "conflicts",
-          "index": 0,
           "text": "给 entries 加 amount 列，月报直接按这列汇总，不再扫描 journal 全文，因为扫全文太慢。"
         }
       ],
       "trapItems": [
+        {
+          "entry": "dec_amount",
+          "kind": "stale",
+          "text": "entries 表结构不变，月报金额继续写在 journal 正文里，读取时再从正文挑出。"
+        },
         {
           "entry": "dec_price",
           "kind": "space-isolation",
@@ -5572,32 +5730,26 @@
     },
     {
       "id": "q45",
-      "kind": "visibility",
+      "kind": "plain",
       "askedAt": "2026-11-05T14:20:00+08:00",
       "conversation": "fleet-ask",
       "space_id": "space_fleet",
       "question": "市区里跑的线路最高可以开多快？",
-      "goldAnswer": "目前没有已提交的相关项目记忆。",
+      "goldAnswer": "市区线路最高限速 60。",
       "mustInclude": [
-        "没有已提交"
+        "60"
       ],
-      "pending": {
-        "entry": "dec_fleet_speed",
-        "phase": "staged",
-        "fact": "市区线路限速 60"
-      },
-      "expectedTopics": [],
-      "expectedItems": [],
-      "trapItems": [
+      "expectedTopics": [
+        "tp_fleet_speed"
+      ],
+      "expectedItems": [
         {
           "entry": "dec_fleet_speed",
-          "kind": "premature",
-          "text": "市区线路限速 60。",
-          "topic": "tp_fleet_speed",
-          "topicName": "市区限速",
-          "fact": "市区线路限速 60"
+          "part": "content",
+          "text": "市区线路限速 60。"
         }
-      ]
+      ],
+      "trapItems": []
     },
     {
       "id": "q46",
@@ -6416,24 +6568,7 @@
       "why": "早班与夜班是同一张发车安排的两个班次，并共用迟到 10 分钟取消的规则。"
     }
   ],
-  "pendingEntries": [
-    {
-      "id": "dec_clinic_return",
-      "topic": "tp_clinic_return"
-    },
-    {
-      "id": "tl_clinic_return",
-      "topic": "tp_clinic_return"
-    },
-    {
-      "id": "dec_clinic_label",
-      "topic": "tp_clinic_label"
-    },
-    {
-      "id": "dec_fleet_speed",
-      "topic": "tp_fleet_speed"
-    }
-  ],
+  "pendingEntries": [],
   "processingBatches": [
     {
       "id": "batch_t_journal",
@@ -6549,10 +6684,10 @@
         "t_price"
       ],
       "acceptedAt": "2026-10-21T11:42:00+08:00",
-      "closedAt": "2026-10-21T11:57:00+08:00",
-      "closeReason": "idle",
-      "stagedAt": "2026-10-21T11:57:01+08:00",
-      "committedAt": "2026-10-21T14:17:01+08:00"
+      "closedAt": "2026-10-21T11:50:00+08:00",
+      "closeReason": "flush",
+      "stagedAt": "2026-10-21T11:50:00+08:00",
+      "committedAt": "2026-10-21T11:50:00+08:00"
     },
     {
       "id": "batch_t_export",
@@ -6568,7 +6703,7 @@
       "closedAt": "2026-10-21T12:27:00+08:00",
       "closeReason": "idle",
       "stagedAt": "2026-10-21T12:27:01+08:00",
-      "committedAt": "2026-10-21T14:17:01+08:00"
+      "committedAt": "2026-10-21T14:20:00+08:00"
     },
     {
       "id": "batch_t_cat_sku",
@@ -6583,8 +6718,7 @@
       "acceptedAt": "2026-10-21T12:42:00+08:00",
       "closedAt": "2026-10-21T12:57:00+08:00",
       "closeReason": "idle",
-      "stagedAt": "2026-10-21T12:57:01+08:00",
-      "committedAt": "2026-10-21T14:17:01+08:00"
+      "committedAt": "2026-10-21T12:57:01+08:00"
     },
     {
       "id": "batch_t_ledger_loc",
@@ -6646,8 +6780,7 @@
       "acceptedAt": "2026-10-21T13:32:00+08:00",
       "closedAt": "2026-10-21T13:47:00+08:00",
       "closeReason": "idle",
-      "stagedAt": "2026-10-21T13:47:01+08:00",
-      "committedAt": "2026-10-21T14:17:01+08:00"
+      "committedAt": "2026-10-21T13:47:01+08:00"
     },
     {
       "id": "batch_t_ledger_round",
@@ -6677,7 +6810,6 @@
       "acceptedAt": "2026-10-21T14:02:00+08:00",
       "closedAt": "2026-10-21T14:17:00+08:00",
       "closeReason": "idle",
-      "stagedAt": "2026-10-21T14:17:01+08:00",
       "committedAt": "2026-10-21T14:17:01+08:00"
     },
     {
@@ -6694,7 +6826,7 @@
       "closedAt": "2026-10-21T14:42:00+08:00",
       "closeReason": "idle",
       "stagedAt": "2026-10-21T14:42:01+08:00",
-      "committedAt": "2026-10-21T18:02:01+08:00"
+      "committedAt": "2026-10-21T17:00:00+08:00"
     },
     {
       "id": "batch_t_admin_env",
@@ -6710,7 +6842,7 @@
       "closedAt": "2026-10-21T14:52:00+08:00",
       "closeReason": "task_boundary",
       "stagedAt": "2026-10-21T14:52:01+08:00",
-      "committedAt": "2026-10-21T18:02:01+08:00"
+      "committedAt": "2026-10-21T17:00:00+08:00"
     },
     {
       "id": "batch_t_write_edit",
@@ -6769,7 +6901,7 @@
       "closedAt": "2026-10-21T15:17:00+08:00",
       "closeReason": "idle",
       "stagedAt": "2026-10-21T15:17:01+08:00",
-      "committedAt": "2026-10-21T18:02:01+08:00"
+      "committedAt": "2026-10-21T17:00:00+08:00"
     },
     {
       "id": "batch_t_admin_branch",
@@ -6785,7 +6917,7 @@
       "closedAt": "2026-10-21T15:27:00+08:00",
       "closeReason": "idle",
       "stagedAt": "2026-10-21T15:27:01+08:00",
-      "committedAt": "2026-10-21T18:02:01+08:00"
+      "committedAt": "2026-10-21T17:00:00+08:00"
     },
     {
       "id": "batch_t_ledger_dup",
@@ -6890,7 +7022,6 @@
       "acceptedAt": "2026-10-21T17:52:00+08:00",
       "closedAt": "2026-10-21T18:02:00+08:00",
       "closeReason": "task_boundary",
-      "stagedAt": "2026-10-21T18:02:01+08:00",
       "committedAt": "2026-10-21T18:02:01+08:00"
     },
     {
@@ -6932,9 +7063,9 @@
         "t_dryrun"
       ],
       "acceptedAt": "2026-10-21T19:12:00+08:00",
-      "closedAt": "2026-10-21T19:27:00+08:00",
-      "closeReason": "idle",
-      "committedAt": "2026-10-21T19:27:01+08:00"
+      "closedAt": "2026-10-21T19:20:00+08:00",
+      "closeReason": "flush",
+      "committedAt": "2026-10-21T19:20:00+08:00"
     },
     {
       "id": "batch_t_informed",
@@ -6948,9 +7079,9 @@
         "t_resolve"
       ],
       "acceptedAt": "2026-10-21T20:22:00+08:00",
-      "closedAt": "2026-10-21T20:47:00+08:00",
-      "closeReason": "idle",
-      "committedAt": "2026-10-21T20:47:01+08:00"
+      "closedAt": "2026-10-21T20:40:00+08:00",
+      "closeReason": "flush",
+      "committedAt": "2026-10-21T20:40:00+08:00"
     },
     {
       "id": "batch_t_archive_say",
@@ -7186,7 +7317,8 @@
       "acceptedAt": "2026-11-03T11:22:00+08:00",
       "closedAt": "2026-11-03T11:37:00+08:00",
       "closeReason": "idle",
-      "stagedAt": "2026-11-03T11:37:01+08:00"
+      "stagedAt": "2026-11-03T11:37:01+08:00",
+      "committedAt": "2026-11-03T12:30:00+08:00"
     },
     {
       "id": "batch_t_clinic_label",
@@ -7201,7 +7333,8 @@
       "acceptedAt": "2026-11-03T11:42:00+08:00",
       "closedAt": "2026-11-03T11:57:00+08:00",
       "closeReason": "idle",
-      "stagedAt": "2026-11-03T11:57:01+08:00"
+      "stagedAt": "2026-11-03T11:57:01+08:00",
+      "committedAt": "2026-11-03T12:30:00+08:00"
     },
     {
       "id": "batch_t_clinic_chat1",
@@ -7375,7 +7508,7 @@
       "closedAt": "2026-11-04T11:57:00+08:00",
       "closeReason": "idle",
       "stagedAt": "2026-11-04T11:57:01+08:00",
-      "committedAt": "2026-11-04T14:17:01+08:00"
+      "committedAt": "2026-11-04T12:50:00+08:00"
     },
     {
       "id": "batch_t_wh_fifo",
@@ -7391,7 +7524,7 @@
       "closedAt": "2026-11-04T12:17:00+08:00",
       "closeReason": "idle",
       "stagedAt": "2026-11-04T12:17:01+08:00",
-      "committedAt": "2026-11-04T14:17:01+08:00"
+      "committedAt": "2026-11-04T12:50:00+08:00"
     },
     {
       "id": "batch_t_wh_fifo_late",
@@ -7407,7 +7540,7 @@
       "closedAt": "2026-11-04T12:45:00+08:00",
       "closeReason": "idle",
       "stagedAt": "2026-11-04T12:45:01+08:00",
-      "committedAt": "2026-11-04T14:17:01+08:00"
+      "committedAt": "2026-11-04T12:50:00+08:00"
     },
     {
       "id": "batch_t_wh_check",
@@ -7423,7 +7556,7 @@
       "closedAt": "2026-11-04T14:17:00+08:00",
       "closeReason": "idle",
       "stagedAt": "2026-11-04T14:17:01+08:00",
-      "committedAt": "2026-11-04T14:17:01+08:00"
+      "committedAt": "2026-11-06T15:57:01+08:00"
     },
     {
       "id": "batch_t_wh_check_late",
@@ -7438,7 +7571,8 @@
       "acceptedAt": "2026-11-04T14:30:00+08:00",
       "closedAt": "2026-11-04T14:45:00+08:00",
       "closeReason": "idle",
-      "committedAt": "2026-11-04T14:45:01+08:00"
+      "stagedAt": "2026-11-04T14:45:01+08:00",
+      "committedAt": "2026-11-06T15:57:01+08:00"
     },
     {
       "id": "batch_t_wh_chat1",
@@ -7610,7 +7744,7 @@
       "closedAt": "2026-11-05T12:17:00+08:00",
       "closeReason": "idle",
       "stagedAt": "2026-11-05T12:17:01+08:00",
-      "committedAt": "2026-11-05T13:37:01+08:00"
+      "committedAt": "2026-11-05T12:40:00+08:00"
     },
     {
       "id": "batch_t_fleet_belt",
@@ -7626,7 +7760,7 @@
       "closedAt": "2026-11-05T12:37:00+08:00",
       "closeReason": "idle",
       "stagedAt": "2026-11-05T12:37:01+08:00",
-      "committedAt": "2026-11-05T13:37:01+08:00"
+      "committedAt": "2026-11-05T12:40:00+08:00"
     },
     {
       "id": "batch_t_fleet_wash_say",
@@ -7656,7 +7790,7 @@
       "closedAt": "2026-11-05T13:37:00+08:00",
       "closeReason": "idle",
       "stagedAt": "2026-11-05T13:37:01+08:00",
-      "committedAt": "2026-11-05T13:37:01+08:00"
+      "committedAt": "2026-11-05T14:20:00+08:00"
     },
     {
       "id": "batch_t_fleet_speed",
@@ -7671,7 +7805,8 @@
       "acceptedAt": "2026-11-05T14:02:00+08:00",
       "closedAt": "2026-11-05T14:17:00+08:00",
       "closeReason": "idle",
-      "stagedAt": "2026-11-05T14:17:01+08:00"
+      "stagedAt": "2026-11-05T14:17:01+08:00",
+      "committedAt": "2026-11-05T14:20:00+08:00"
     },
     {
       "id": "batch_t_fleet_speed_late",
@@ -7686,7 +7821,7 @@
       "acceptedAt": "2026-11-05T14:30:00+08:00",
       "closedAt": "2026-11-05T14:45:00+08:00",
       "closeReason": "idle",
-      "stagedAt": "2026-11-05T14:45:01+08:00"
+      "committedAt": "2026-11-05T14:45:01+08:00"
     },
     {
       "id": "batch_t_fleet_chat1",
@@ -7860,7 +7995,7 @@
       "closedAt": "2026-11-06T12:17:00+08:00",
       "closeReason": "idle",
       "stagedAt": "2026-11-06T12:17:01+08:00",
-      "committedAt": "2026-11-06T14:17:01+08:00"
+      "committedAt": "2026-11-06T12:40:00+08:00"
     },
     {
       "id": "batch_t_kit_hot",
@@ -7876,7 +8011,7 @@
       "closedAt": "2026-11-06T12:37:00+08:00",
       "closeReason": "idle",
       "stagedAt": "2026-11-06T12:37:01+08:00",
-      "committedAt": "2026-11-06T14:17:01+08:00"
+      "committedAt": "2026-11-06T12:40:00+08:00"
     },
     {
       "id": "batch_t_kit_taste",
@@ -7892,7 +8027,7 @@
       "closedAt": "2026-11-06T14:17:00+08:00",
       "closeReason": "idle",
       "stagedAt": "2026-11-06T14:17:01+08:00",
-      "committedAt": "2026-11-06T14:17:01+08:00"
+      "committedAt": "2026-11-06T14:45:01+08:00"
     },
     {
       "id": "batch_t_kit_taste_late",
@@ -7907,6 +8042,7 @@
       "acceptedAt": "2026-11-06T14:30:00+08:00",
       "closedAt": "2026-11-06T14:45:00+08:00",
       "closeReason": "idle",
+      "stagedAt": "2026-11-06T14:45:01+08:00",
       "committedAt": "2026-11-06T14:45:01+08:00"
     },
     {
@@ -8095,14 +8231,44 @@
     },
     {
       "kind": "close",
-      "at": "2026-10-21T11:57:00+08:00",
+      "at": "2026-10-21T11:50:00+08:00",
       "batch": "batch_t_price",
-      "reason": "idle"
+      "reason": "flush"
     },
     {
       "kind": "stage",
-      "at": "2026-10-21T11:57:01+08:00",
+      "at": "2026-10-21T11:50:00+08:00",
       "batch": "batch_t_price"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T11:50:00+08:00",
+      "space": "space_catalog",
+      "question": "q48"
+    },
+    {
+      "kind": "formation",
+      "at": "2026-10-21T11:50:00+08:00",
+      "trigger": "flush:q48",
+      "topics": [
+        "tp_cat_price"
+      ],
+      "batches": [
+        "batch_t_price"
+      ]
+    },
+    {
+      "kind": "commit",
+      "at": "2026-10-21T11:50:00+08:00",
+      "batch": "batch_t_price",
+      "topic": "tp_cat_price",
+      "formation": "flush:q48"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T12:00:00+08:00",
+      "space": "space_ledger",
+      "question": "q03"
     },
     {
       "kind": "accept",
@@ -8140,9 +8306,10 @@
       "reason": "idle"
     },
     {
-      "kind": "stage",
+      "kind": "commit",
       "at": "2026-10-21T12:57:01+08:00",
-      "batch": "batch_t_cat_sku"
+      "batch": "batch_t_cat_sku",
+      "topic": "tp_cat_price"
     },
     {
       "kind": "accept",
@@ -8235,9 +8402,10 @@
       "reason": "idle"
     },
     {
-      "kind": "stage",
+      "kind": "commit",
       "at": "2026-10-21T13:47:01+08:00",
-      "batch": "batch_t_cat_round"
+      "batch": "batch_t_cat_round",
+      "topic": "tp_cat_price"
     },
     {
       "kind": "close",
@@ -8252,6 +8420,12 @@
       "topic": "tp_ledger_report"
     },
     {
+      "kind": "flush",
+      "at": "2026-10-21T14:00:00+08:00",
+      "space": "space_ledger",
+      "question": "q01"
+    },
+    {
       "kind": "accept",
       "at": "2026-10-21T14:02:00+08:00",
       "trace": "t_cat_tz",
@@ -8264,60 +8438,40 @@
       "reason": "idle"
     },
     {
-      "kind": "stage",
+      "kind": "commit",
       "at": "2026-10-21T14:17:01+08:00",
-      "batch": "batch_t_cat_tz"
+      "batch": "batch_t_cat_tz",
+      "topic": "tp_cat_price"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T14:20:00+08:00",
+      "space": "space_catalog",
+      "question": "q50"
     },
     {
       "kind": "formation",
-      "at": "2026-10-21T14:17:01+08:00",
-      "trigger": "batch_t_cat_tz",
+      "at": "2026-10-21T14:20:00+08:00",
+      "trigger": "flush:q50",
       "topics": [
-        "tp_cat_price",
         "tp_cat_export"
       ],
       "batches": [
-        "batch_t_price",
-        "batch_t_cat_sku",
-        "batch_t_cat_round",
-        "batch_t_cat_tz",
         "batch_t_export"
       ]
     },
     {
       "kind": "commit",
-      "at": "2026-10-21T14:17:01+08:00",
-      "batch": "batch_t_price",
-      "topic": "tp_cat_price",
-      "formation": "batch_t_cat_tz"
-    },
-    {
-      "kind": "commit",
-      "at": "2026-10-21T14:17:01+08:00",
-      "batch": "batch_t_cat_sku",
-      "topic": "tp_cat_price",
-      "formation": "batch_t_cat_tz"
-    },
-    {
-      "kind": "commit",
-      "at": "2026-10-21T14:17:01+08:00",
-      "batch": "batch_t_cat_round",
-      "topic": "tp_cat_price",
-      "formation": "batch_t_cat_tz"
-    },
-    {
-      "kind": "commit",
-      "at": "2026-10-21T14:17:01+08:00",
-      "batch": "batch_t_cat_tz",
-      "topic": "tp_cat_price",
-      "formation": "batch_t_cat_tz"
-    },
-    {
-      "kind": "commit",
-      "at": "2026-10-21T14:17:01+08:00",
+      "at": "2026-10-21T14:20:00+08:00",
       "batch": "batch_t_export",
       "topic": "tp_cat_export",
-      "formation": "batch_t_cat_tz"
+      "formation": "flush:q50"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T14:25:00+08:00",
+      "space": "space_ledger",
+      "question": "q01_after"
     },
     {
       "kind": "accept",
@@ -8494,6 +8648,54 @@
       "topic": "tp_ledger_report"
     },
     {
+      "kind": "flush",
+      "at": "2026-10-21T17:00:00+08:00",
+      "space": "space_ledger",
+      "question": "q02"
+    },
+    {
+      "kind": "formation",
+      "at": "2026-10-21T17:00:00+08:00",
+      "trigger": "flush:q02",
+      "topics": [
+        "tp_ledger_repo"
+      ],
+      "batches": [
+        "batch_t_write_secret",
+        "batch_t_admin_env",
+        "batch_t_write_main",
+        "batch_t_admin_branch"
+      ]
+    },
+    {
+      "kind": "commit",
+      "at": "2026-10-21T17:00:00+08:00",
+      "batch": "batch_t_write_secret",
+      "topic": "tp_ledger_repo",
+      "formation": "flush:q02"
+    },
+    {
+      "kind": "commit",
+      "at": "2026-10-21T17:00:00+08:00",
+      "batch": "batch_t_admin_env",
+      "topic": "tp_ledger_repo",
+      "formation": "flush:q02"
+    },
+    {
+      "kind": "commit",
+      "at": "2026-10-21T17:00:00+08:00",
+      "batch": "batch_t_write_main",
+      "topic": "tp_ledger_repo",
+      "formation": "flush:q02"
+    },
+    {
+      "kind": "commit",
+      "at": "2026-10-21T17:00:00+08:00",
+      "batch": "batch_t_admin_branch",
+      "topic": "tp_ledger_repo",
+      "formation": "flush:q02"
+    },
+    {
       "kind": "accept",
       "at": "2026-10-21T17:07:00+08:00",
       "trace": "t_sample",
@@ -8566,59 +8768,10 @@
       "batch": "batch_t_silent"
     },
     {
-      "kind": "stage",
-      "at": "2026-10-21T18:02:01+08:00",
-      "batch": "batch_t_env"
-    },
-    {
-      "kind": "formation",
-      "at": "2026-10-21T18:02:01+08:00",
-      "trigger": "batch_t_env",
-      "topics": [
-        "tp_ledger_repo"
-      ],
-      "batches": [
-        "batch_t_write_secret",
-        "batch_t_admin_env",
-        "batch_t_write_main",
-        "batch_t_admin_branch",
-        "batch_t_env"
-      ]
-    },
-    {
-      "kind": "commit",
-      "at": "2026-10-21T18:02:01+08:00",
-      "batch": "batch_t_write_secret",
-      "topic": "tp_ledger_repo",
-      "formation": "batch_t_env"
-    },
-    {
-      "kind": "commit",
-      "at": "2026-10-21T18:02:01+08:00",
-      "batch": "batch_t_admin_env",
-      "topic": "tp_ledger_repo",
-      "formation": "batch_t_env"
-    },
-    {
-      "kind": "commit",
-      "at": "2026-10-21T18:02:01+08:00",
-      "batch": "batch_t_write_main",
-      "topic": "tp_ledger_repo",
-      "formation": "batch_t_env"
-    },
-    {
-      "kind": "commit",
-      "at": "2026-10-21T18:02:01+08:00",
-      "batch": "batch_t_admin_branch",
-      "topic": "tp_ledger_repo",
-      "formation": "batch_t_env"
-    },
-    {
       "kind": "commit",
       "at": "2026-10-21T18:02:01+08:00",
       "batch": "batch_t_env",
-      "topic": "tp_ledger_repo",
-      "formation": "batch_t_env"
+      "topic": "tp_ledger_repo"
     },
     {
       "kind": "close",
@@ -8656,15 +8809,129 @@
     },
     {
       "kind": "close",
-      "at": "2026-10-21T19:27:00+08:00",
+      "at": "2026-10-21T19:20:00+08:00",
       "batch": "batch_t_dryrun",
-      "reason": "idle"
+      "reason": "flush"
     },
     {
       "kind": "commit",
-      "at": "2026-10-21T19:27:01+08:00",
+      "at": "2026-10-21T19:20:00+08:00",
       "batch": "batch_t_dryrun",
       "topic": "tp_ledger_export"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:20:00+08:00",
+      "space": "space_ledger",
+      "question": "q04"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:30:00+08:00",
+      "space": "space_ledger",
+      "question": "q05"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:31:00+08:00",
+      "space": "space_catalog",
+      "question": "q06"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:32:00+08:00",
+      "space": "space_catalog",
+      "question": "q07"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:34:00+08:00",
+      "space": "space_ledger",
+      "question": "q09"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:39:00+08:00",
+      "space": "space_ledger",
+      "question": "q13"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:40:00+08:00",
+      "space": "space_ledger",
+      "question": "q14"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:41:00+08:00",
+      "space": "space_ledger",
+      "question": "q15"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:42:00+08:00",
+      "space": "space_ledger",
+      "question": "q16"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:43:00+08:00",
+      "space": "space_ledger",
+      "question": "q17"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:45:00+08:00",
+      "space": "space_ledger",
+      "question": "q19"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:51:00+08:00",
+      "space": "space_catalog",
+      "question": "q23"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:52:00+08:00",
+      "space": "space_catalog",
+      "question": "q24"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:53:00+08:00",
+      "space": "space_ledger",
+      "question": "q25"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:54:00+08:00",
+      "space": "space_ledger",
+      "question": "q26"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:55:00+08:00",
+      "space": "space_catalog",
+      "question": "q27"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:56:00+08:00",
+      "space": "space_ledger",
+      "question": "q28"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:57:00+08:00",
+      "space": "space_ledger",
+      "question": "q29"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T19:58:00+08:00",
+      "space": "space_catalog",
+      "question": "q30"
     },
     {
       "kind": "accept",
@@ -8680,15 +8947,27 @@
     },
     {
       "kind": "close",
-      "at": "2026-10-21T20:47:00+08:00",
+      "at": "2026-10-21T20:40:00+08:00",
       "batch": "batch_t_informed",
-      "reason": "idle"
+      "reason": "flush"
     },
     {
       "kind": "commit",
-      "at": "2026-10-21T20:47:01+08:00",
+      "at": "2026-10-21T20:40:00+08:00",
       "batch": "batch_t_informed",
       "topic": "tp_ledger_report"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T20:40:00+08:00",
+      "space": "space_ledger",
+      "question": "q31"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-10-21T20:50:00+08:00",
+      "space": "space_ledger",
+      "question": "q31_after"
     },
     {
       "kind": "accept",
@@ -9102,6 +9381,45 @@
       "batch": "batch_t_clinic_label"
     },
     {
+      "kind": "flush",
+      "at": "2026-11-03T12:30:00+08:00",
+      "space": "space_clinic",
+      "question": "q40"
+    },
+    {
+      "kind": "formation",
+      "at": "2026-11-03T12:30:00+08:00",
+      "trigger": "flush:q40",
+      "topics": [
+        "tp_clinic_return",
+        "tp_clinic_label"
+      ],
+      "batches": [
+        "batch_t_clinic_return_land",
+        "batch_t_clinic_label"
+      ]
+    },
+    {
+      "kind": "commit",
+      "at": "2026-11-03T12:30:00+08:00",
+      "batch": "batch_t_clinic_return_land",
+      "topic": "tp_clinic_return",
+      "formation": "flush:q40"
+    },
+    {
+      "kind": "commit",
+      "at": "2026-11-03T12:30:00+08:00",
+      "batch": "batch_t_clinic_label",
+      "topic": "tp_clinic_label",
+      "formation": "flush:q40"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-11-03T12:40:00+08:00",
+      "space": "space_clinic",
+      "question": "q41"
+    },
+    {
       "kind": "accept",
       "at": "2026-11-03T15:02:00+08:00",
       "trace": "t_clinic_chat1",
@@ -9421,6 +9739,53 @@
       "batch": "batch_t_wh_fifo_late"
     },
     {
+      "kind": "flush",
+      "at": "2026-11-04T12:50:00+08:00",
+      "space": "space_warehouse",
+      "question": "q42"
+    },
+    {
+      "kind": "formation",
+      "at": "2026-11-04T12:50:00+08:00",
+      "trigger": "flush:q42",
+      "topics": [
+        "tp_wh_mark",
+        "tp_wh_fifo"
+      ],
+      "batches": [
+        "batch_t_wh_mark",
+        "batch_t_wh_fifo",
+        "batch_t_wh_fifo_late"
+      ]
+    },
+    {
+      "kind": "commit",
+      "at": "2026-11-04T12:50:00+08:00",
+      "batch": "batch_t_wh_mark",
+      "topic": "tp_wh_mark",
+      "formation": "flush:q42"
+    },
+    {
+      "kind": "commit",
+      "at": "2026-11-04T12:50:00+08:00",
+      "batch": "batch_t_wh_fifo",
+      "topic": "tp_wh_fifo",
+      "formation": "flush:q42"
+    },
+    {
+      "kind": "commit",
+      "at": "2026-11-04T12:50:00+08:00",
+      "batch": "batch_t_wh_fifo_late",
+      "topic": "tp_wh_fifo",
+      "formation": "flush:q42"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-11-04T13:00:00+08:00",
+      "space": "space_warehouse",
+      "question": "q43"
+    },
+    {
       "kind": "accept",
       "at": "2026-11-04T14:02:00+08:00",
       "trace": "t_wh_check",
@@ -9438,50 +9803,6 @@
       "batch": "batch_t_wh_check"
     },
     {
-      "kind": "formation",
-      "at": "2026-11-04T14:17:01+08:00",
-      "trigger": "batch_t_wh_check",
-      "topics": [
-        "tp_wh_mark",
-        "tp_wh_fifo",
-        "tp_wh_check"
-      ],
-      "batches": [
-        "batch_t_wh_mark",
-        "batch_t_wh_fifo",
-        "batch_t_wh_fifo_late",
-        "batch_t_wh_check"
-      ]
-    },
-    {
-      "kind": "commit",
-      "at": "2026-11-04T14:17:01+08:00",
-      "batch": "batch_t_wh_mark",
-      "topic": "tp_wh_mark",
-      "formation": "batch_t_wh_check"
-    },
-    {
-      "kind": "commit",
-      "at": "2026-11-04T14:17:01+08:00",
-      "batch": "batch_t_wh_fifo",
-      "topic": "tp_wh_fifo",
-      "formation": "batch_t_wh_check"
-    },
-    {
-      "kind": "commit",
-      "at": "2026-11-04T14:17:01+08:00",
-      "batch": "batch_t_wh_fifo_late",
-      "topic": "tp_wh_fifo",
-      "formation": "batch_t_wh_check"
-    },
-    {
-      "kind": "commit",
-      "at": "2026-11-04T14:17:01+08:00",
-      "batch": "batch_t_wh_check",
-      "topic": "tp_wh_check",
-      "formation": "batch_t_wh_check"
-    },
-    {
       "kind": "accept",
       "at": "2026-11-04T14:30:00+08:00",
       "trace": "t_wh_check_late",
@@ -9494,10 +9815,9 @@
       "reason": "idle"
     },
     {
-      "kind": "commit",
+      "kind": "stage",
       "at": "2026-11-04T14:45:01+08:00",
-      "batch": "batch_t_wh_check_late",
-      "topic": "tp_wh_check"
+      "batch": "batch_t_wh_check_late"
     },
     {
       "kind": "accept",
@@ -9793,6 +10113,39 @@
       "batch": "batch_t_fleet_belt"
     },
     {
+      "kind": "flush",
+      "at": "2026-11-05T12:40:00+08:00",
+      "space": "space_fleet",
+      "question": "q44"
+    },
+    {
+      "kind": "formation",
+      "at": "2026-11-05T12:40:00+08:00",
+      "trigger": "flush:q44",
+      "topics": [
+        "tp_fleet_insure",
+        "tp_fleet_belt"
+      ],
+      "batches": [
+        "batch_t_fleet_insure",
+        "batch_t_fleet_belt"
+      ]
+    },
+    {
+      "kind": "commit",
+      "at": "2026-11-05T12:40:00+08:00",
+      "batch": "batch_t_fleet_insure",
+      "topic": "tp_fleet_insure",
+      "formation": "flush:q44"
+    },
+    {
+      "kind": "commit",
+      "at": "2026-11-05T12:40:00+08:00",
+      "batch": "batch_t_fleet_belt",
+      "topic": "tp_fleet_belt",
+      "formation": "flush:q44"
+    },
+    {
       "kind": "accept",
       "at": "2026-11-05T13:02:00+08:00",
       "trace": "t_fleet_wash_say",
@@ -9827,42 +10180,6 @@
       "batch": "batch_t_fleet_wash_land"
     },
     {
-      "kind": "formation",
-      "at": "2026-11-05T13:37:01+08:00",
-      "trigger": "batch_t_fleet_wash_land",
-      "topics": [
-        "tp_fleet_insure",
-        "tp_fleet_belt",
-        "tp_fleet_wash"
-      ],
-      "batches": [
-        "batch_t_fleet_insure",
-        "batch_t_fleet_belt",
-        "batch_t_fleet_wash_land"
-      ]
-    },
-    {
-      "kind": "commit",
-      "at": "2026-11-05T13:37:01+08:00",
-      "batch": "batch_t_fleet_insure",
-      "topic": "tp_fleet_insure",
-      "formation": "batch_t_fleet_wash_land"
-    },
-    {
-      "kind": "commit",
-      "at": "2026-11-05T13:37:01+08:00",
-      "batch": "batch_t_fleet_belt",
-      "topic": "tp_fleet_belt",
-      "formation": "batch_t_fleet_wash_land"
-    },
-    {
-      "kind": "commit",
-      "at": "2026-11-05T13:37:01+08:00",
-      "batch": "batch_t_fleet_wash_land",
-      "topic": "tp_fleet_wash",
-      "formation": "batch_t_fleet_wash_land"
-    },
-    {
       "kind": "accept",
       "at": "2026-11-05T14:02:00+08:00",
       "trace": "t_fleet_speed",
@@ -9880,6 +10197,39 @@
       "batch": "batch_t_fleet_speed"
     },
     {
+      "kind": "flush",
+      "at": "2026-11-05T14:20:00+08:00",
+      "space": "space_fleet",
+      "question": "q45"
+    },
+    {
+      "kind": "formation",
+      "at": "2026-11-05T14:20:00+08:00",
+      "trigger": "flush:q45",
+      "topics": [
+        "tp_fleet_wash",
+        "tp_fleet_speed"
+      ],
+      "batches": [
+        "batch_t_fleet_wash_land",
+        "batch_t_fleet_speed"
+      ]
+    },
+    {
+      "kind": "commit",
+      "at": "2026-11-05T14:20:00+08:00",
+      "batch": "batch_t_fleet_wash_land",
+      "topic": "tp_fleet_wash",
+      "formation": "flush:q45"
+    },
+    {
+      "kind": "commit",
+      "at": "2026-11-05T14:20:00+08:00",
+      "batch": "batch_t_fleet_speed",
+      "topic": "tp_fleet_speed",
+      "formation": "flush:q45"
+    },
+    {
       "kind": "accept",
       "at": "2026-11-05T14:30:00+08:00",
       "trace": "t_fleet_speed_late",
@@ -9892,9 +10242,10 @@
       "reason": "idle"
     },
     {
-      "kind": "stage",
+      "kind": "commit",
       "at": "2026-11-05T14:45:01+08:00",
-      "batch": "batch_t_fleet_speed_late"
+      "batch": "batch_t_fleet_speed_late",
+      "topic": "tp_fleet_speed"
     },
     {
       "kind": "accept",
@@ -10200,6 +10551,45 @@
       "batch": "batch_t_kit_hot"
     },
     {
+      "kind": "flush",
+      "at": "2026-11-06T12:40:00+08:00",
+      "space": "space_kitchen",
+      "question": "q46"
+    },
+    {
+      "kind": "formation",
+      "at": "2026-11-06T12:40:00+08:00",
+      "trigger": "flush:q46",
+      "topics": [
+        "tp_kit_waste",
+        "tp_kit_hot"
+      ],
+      "batches": [
+        "batch_t_kit_waste",
+        "batch_t_kit_hot"
+      ]
+    },
+    {
+      "kind": "commit",
+      "at": "2026-11-06T12:40:00+08:00",
+      "batch": "batch_t_kit_waste",
+      "topic": "tp_kit_waste",
+      "formation": "flush:q46"
+    },
+    {
+      "kind": "commit",
+      "at": "2026-11-06T12:40:00+08:00",
+      "batch": "batch_t_kit_hot",
+      "topic": "tp_kit_hot",
+      "formation": "flush:q46"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-11-06T12:50:00+08:00",
+      "space": "space_kitchen",
+      "question": "q47"
+    },
+    {
       "kind": "accept",
       "at": "2026-11-06T14:02:00+08:00",
       "trace": "t_kit_taste",
@@ -10217,42 +10607,6 @@
       "batch": "batch_t_kit_taste"
     },
     {
-      "kind": "formation",
-      "at": "2026-11-06T14:17:01+08:00",
-      "trigger": "batch_t_kit_taste",
-      "topics": [
-        "tp_kit_waste",
-        "tp_kit_hot",
-        "tp_kit_taste"
-      ],
-      "batches": [
-        "batch_t_kit_waste",
-        "batch_t_kit_hot",
-        "batch_t_kit_taste"
-      ]
-    },
-    {
-      "kind": "commit",
-      "at": "2026-11-06T14:17:01+08:00",
-      "batch": "batch_t_kit_waste",
-      "topic": "tp_kit_waste",
-      "formation": "batch_t_kit_taste"
-    },
-    {
-      "kind": "commit",
-      "at": "2026-11-06T14:17:01+08:00",
-      "batch": "batch_t_kit_hot",
-      "topic": "tp_kit_hot",
-      "formation": "batch_t_kit_taste"
-    },
-    {
-      "kind": "commit",
-      "at": "2026-11-06T14:17:01+08:00",
-      "batch": "batch_t_kit_taste",
-      "topic": "tp_kit_taste",
-      "formation": "batch_t_kit_taste"
-    },
-    {
       "kind": "accept",
       "at": "2026-11-06T14:30:00+08:00",
       "trace": "t_kit_taste_late",
@@ -10265,10 +10619,35 @@
       "reason": "idle"
     },
     {
+      "kind": "stage",
+      "at": "2026-11-06T14:45:01+08:00",
+      "batch": "batch_t_kit_taste_late"
+    },
+    {
+      "kind": "formation",
+      "at": "2026-11-06T14:45:01+08:00",
+      "trigger": "batch_t_kit_taste_late",
+      "topics": [
+        "tp_kit_taste"
+      ],
+      "batches": [
+        "batch_t_kit_taste",
+        "batch_t_kit_taste_late"
+      ]
+    },
+    {
+      "kind": "commit",
+      "at": "2026-11-06T14:45:01+08:00",
+      "batch": "batch_t_kit_taste",
+      "topic": "tp_kit_taste",
+      "formation": "batch_t_kit_taste_late"
+    },
+    {
       "kind": "commit",
       "at": "2026-11-06T14:45:01+08:00",
       "batch": "batch_t_kit_taste_late",
-      "topic": "tp_kit_taste"
+      "topic": "tp_kit_taste",
+      "formation": "batch_t_kit_taste_late"
     },
     {
       "kind": "accept",
@@ -10315,6 +10694,38 @@
       "kind": "skip",
       "at": "2026-11-06T15:57:01+08:00",
       "batch": "batch_t_kit_hold"
+    },
+    {
+      "kind": "flush",
+      "at": "2026-11-06T15:57:01+08:00",
+      "space": null,
+      "final": true
+    },
+    {
+      "kind": "formation",
+      "at": "2026-11-06T15:57:01+08:00",
+      "trigger": "flush:final",
+      "topics": [
+        "tp_wh_check"
+      ],
+      "batches": [
+        "batch_t_wh_check",
+        "batch_t_wh_check_late"
+      ]
+    },
+    {
+      "kind": "commit",
+      "at": "2026-11-06T15:57:01+08:00",
+      "batch": "batch_t_wh_check",
+      "topic": "tp_wh_check",
+      "formation": "flush:final"
+    },
+    {
+      "kind": "commit",
+      "at": "2026-11-06T15:57:01+08:00",
+      "batch": "batch_t_wh_check_late",
+      "topic": "tp_wh_check",
+      "formation": "flush:final"
     }
   ],
   "apiChecks": [

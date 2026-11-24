@@ -12,7 +12,7 @@ import { INVALID_PARAMS, DOMAIN_INVALID, runApiChecks } from "./api-checks.mjs";
 import { buildGold, datasetDirectory, finalPointTexts, loadDataset, projectAddBody, renderGold, replay, submittedTrace } from "./build-gold-baseline.mjs";
 import { createJudge } from "./judge.mjs";
 import { createLlm } from "./llm.mjs";
-import { loadGold } from "./load-eval-set.mjs";
+import { goldFor, loadGold } from "./load-eval-set.mjs";
 import { buildOracleRun, oracleTopics } from "./oracle.mjs";
 import { diffTables } from "./harness/store-diff.mjs";
 import { buildTraceRecord } from "./harness/usage-proxy.mjs";
@@ -35,10 +35,18 @@ test("v2.1 archive can reproduce its committed gold byte for byte", () => {
   assert.equal(loadGold(archive).datasetVersion, 2.1);
 });
 
-test("v3 oracle sees committed state at the question time", () => {
+// The timer-only derivation (flush: false) keeps the open / staged visibility questions.
+const naturalGold = () => buildGold(loadDataset(), { flush: false }).gold;
+
+test("v3 oracle sees committed state at the question time, with and without flush", () => {
   const current = loadDataset();
-  const currentGold = loadGold();
-  const run = buildOracleRun(current, currentGold);
+  const flushed = buildOracleRun(current, loadGold());
+  assert.ok(flushed.questions.find((q) => q.id === "q48").rendered.includes("amount 列"));
+  assert.equal(flushed.questions.some((q) => q.id === "q49"), false);
+  const resolved = flushed.questions.find((q) => q.id === "q31").topic_detail_list[0].decisions;
+  assert.ok(resolved.some((item) => item.content.includes("amount 列") && item.history.length === 1 && !item.conflicts.length));
+
+  const run = buildOracleRun(current, naturalGold());
   for (const id of ["q48", "q49"]) assert.equal(run.questions.find((q) => q.id === id).topic_detail_list.length, 0);
   assert.ok(run.questions.find((q) => q.id === "q50").rendered.includes("amount 列"));
   const before = run.questions.find((q) => q.id === "q31").topic_detail_list[0].decisions;
@@ -125,6 +133,16 @@ test("v3 detects an exact foreign fixture inside a local Topic without flagging 
   assert.equal(local.entryHit, 1);
 });
 
+test("goldFor rebuilds the timer-only gold for a --no-flush run and reuses gold.json for flush", () => {
+  const current = loadDataset();
+  assert.equal(goldFor(current, { flush: true }).processing, "flush");
+  const natural = goldFor(current, { flush: false });
+  assert.equal(natural.processing, "natural");
+  assert.ok(natural.pendingEntries.some((entry) => entry.id === "dec_fleet_speed"));
+  assert.equal(natural.questions.find((q) => q.id === "q45").kind, "visibility");
+  assert.equal(goldFor(current, {}).processing, "flush");
+});
+
 test("v3 open visibility starts at the entry's own effective Turn acceptance", () => {
   const current = loadDataset();
   const question = current.questions.questions.find((item) => item.id === "q48");
@@ -132,11 +150,11 @@ test("v3 open visibility starts at the entry's own effective Turn acceptance", (
     conversation: "ledger-ask", space_id: "space_ledger", askedAt: "2026-10-21T21:02:00+08:00",
     pending: { entry: "tl_archive", phase: "open" }
   });
-  assert.ok(buildGold(current).errors.includes("q48 does not ask while tl_archive is open in the same Space"));
+  assert.ok(buildGold(current, { flush: false }).errors.includes("q48 does not ask while tl_archive is open in the same Space"));
   question.pending.entry = "dec_archive";
-  assert.ok(buildGold(current).errors.includes("q48 does not ask while dec_archive is open in the same Space"));
+  assert.ok(buildGold(current, { flush: false }).errors.includes("q48 does not ask while dec_archive is open in the same Space"));
   question.askedAt = "2026-10-21T21:12:00+08:00";
-  assert.deepEqual(buildGold(current).errors, []);
+  assert.deepEqual(buildGold(current, { flush: false }).errors, []);
 });
 
 test("v3 conflict policy: a relayed approval does not rewrite, and own changes are recorded", () => {
@@ -159,7 +177,7 @@ test("v3 conflict policy: a relayed approval does not rewrite, and own changes a
 
 test("v3 scorer detects early disclosure of a staged Topic and a pending decision", async () => {
   const current = loadDataset();
-  const currentGold = loadGold();
+  const currentGold = naturalGold();
   const run = buildOracleRun(current, currentGold);
   const probe = run.questions.find((q) => q.id === "q45");
   probe.topic_detail_list = [{ id: "probe-speed", space_id: "space_fleet", topic_name: "市区限速" }];
@@ -170,7 +188,7 @@ test("v3 scorer detects early disclosure of a staged Topic and a pending decisio
 
 test("v3 detects an early Topic by its mapped id even when it was renamed and has no entries", async () => {
   const current = loadDataset();
-  const currentGold = loadGold();
+  const currentGold = naturalGold();
   const run = buildOracleRun(current, currentGold);
   const actualId = "actual-catalog-price";
   run.final.space_catalog.find((topic) => topic.id === "tp_cat_price").id = actualId;
@@ -184,7 +202,7 @@ test("v3 detects an early Topic by its mapped id even when it was renamed and ha
 
 test("v3 checks paraphrased pending facts in metadata without a mapped Topic", async () => {
   const current = loadDataset();
-  const currentGold = loadGold();
+  const currentGold = naturalGold();
   const run = buildOracleRun(current, currentGold);
   const paraphrase = "价格列表直接从 amount 列取价。";
   run.questions.find((q) => q.id === "q49").topic_detail_list = [{

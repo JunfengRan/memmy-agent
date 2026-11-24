@@ -5,7 +5,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { activePointTexts, buildGold, datasetDirectory, loadDataset, orderedTraces, renderGold, replay, traceOrderTime, traceVisibleTime } from "./build-gold-baseline.mjs";
-import { buildEpisodeTimeline, validateEpisodeLabels } from "./episode-timeline.mjs";
+import { FLUSH_BY_DEFAULT, buildEpisodeTimeline, effectiveQuestions, validateEpisodeLabels } from "./episode-timeline.mjs";
+
+const OVERRIDABLE = new Set(["kind", "goldAnswer", "mustInclude", "expect", "traps", "pending", "excluded", "excludedReason"]);
 
 export const LIMITS = { topic_name: 20, topic_summary: 80, topic_description: 400, decision: 100, timeline: 100, experience: 200 };
 export const length = (text) => [...String(text ?? "")].length;
@@ -31,16 +33,22 @@ export function goldFor(ds, { flush, dir = datasetDirectory() } = {}) {
   return built;
 }
 
-export function validateDataset(ds, dir = datasetDirectory()) {
+// flush selects the derivation to validate. Only the default one is compared with gold.json.
+export function validateDataset(ds, dir = datasetDirectory(), { flush = FLUSH_BY_DEFAULT } = {}) {
   const goldPath = join(dir, "gold.json");
   const errors = [];
   const err = (message) => errors.push(message);
-  const { corpus, labels, conflicts, questions } = ds;
+  const { corpus, labels, conflicts } = ds;
+  for (const question of ds.questions.questions) {
+    for (const key of Object.keys(question.underFlush ?? {})) if (!OVERRIDABLE.has(key)) err(`${question.id} underFlush cannot change ${key}`);
+    if (question.underFlush && !ds.episodes) err(`${question.id} underFlush needs v3 Episodes`);
+  }
+  const questions = { ...ds.questions, questions: effectiveQuestions(ds, { flush: flush && Boolean(ds.episodes) }) };
   const version = corpus.datasetVersion;
   if (![2.1, 3].includes(version)) err(`unsupported dataset version ${version}`);
   for (const [name, file] of Object.entries(ds)) if (file.datasetVersion !== version) err(`${name}.json datasetVersion must be ${version}`);
   const episodeErrors = ds.episodes ? validateEpisodeLabels(ds) : [];
-  const timeline = ds.episodes && !episodeErrors.length ? buildEpisodeTimeline(ds) : null;
+  const timeline = ds.episodes && !episodeErrors.length ? buildEpisodeTimeline(ds, { flush }) : null;
 
   // Spaces, members, conversations.
   const spaces = new Map(corpus.spaces.map((space) => [space.space_id, space]));
@@ -262,9 +270,11 @@ export function validateDataset(ds, dir = datasetDirectory()) {
   }
 
   // Gold derivation.
-  const { gold, errors: goldErrors } = buildGold(ds);
+  const { gold, errors: goldErrors } = buildGold(ds, { flush });
   errors.push(...goldErrors.map((e) => `gold: ${e}`));
-  if (!existsSync(goldPath)) err("dataset/gold.json missing; run build-gold-baseline.mjs");
+  if (flush !== FLUSH_BY_DEFAULT && ds.episodes) {
+    // The other derivation is rebuilt in memory (goldFor) and is not committed.
+  } else if (!existsSync(goldPath)) err("dataset/gold.json missing; run build-gold-baseline.mjs");
   else if (readFileSync(goldPath, "utf8") !== renderGold(gold)) err("dataset/gold.json is out of date; run build-gold-baseline.mjs");
   for (const entry of gold.entries) {
     if (length(entry.content) > LIMITS[entry.kind]) err(`${entry.id} final content over limit`);
@@ -326,15 +336,18 @@ export function validateDataset(ds, dir = datasetDirectory()) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const dir = datasetDirectory(process.argv[2]);
+  // node load-eval-set.mjs [version] [--natural]: --natural validates the timer-only derivation.
+  const args = process.argv.slice(2);
+  const dir = datasetDirectory(args.find((arg) => !arg.startsWith("--")));
   const ds = loadDataset(dir);
-  const { errors, gold } = validateDataset(ds, dir);
+  const { errors, gold } = validateDataset(ds, dir, { flush: !args.includes("--natural") });
   const scored = gold.questions.filter((q) => !q.excluded);
   const byKind = Object.fromEntries([...new Set(scored.map((q) => q.kind))].sort().map((k) => [k, scored.filter((q) => q.kind === k).length]));
   const outcomes = Object.fromEntries(["written", "optional-only", "not-written"].map((o) => [o, gold.traceLabels.filter((t) => t.outcome === o).length]));
   process.stdout.write(`${JSON.stringify({
     errors,
     datasetVersion: gold.datasetVersion,
+    ...(gold.processing ? { processing: gold.processing, goldRevision: gold.goldRevision } : {}),
     ...(gold.episodeLabels ? { episodes: gold.episodeLabels.length, annotatedTopics: ds.labels.topics.length, processingBatches: gold.processingBatches.length, pendingEntries: gold.pendingEntries.length } : {}),
     traces: orderedTraces(ds.corpus).length,
     traceOutcomes: outcomes,

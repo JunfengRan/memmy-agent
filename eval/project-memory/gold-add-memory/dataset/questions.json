@@ -1,6 +1,6 @@
 {
   "datasetVersion": 3,
-  "rule": "每题从归属该 Space 的只读会话，按 askedAt 调用 search_memory，space_ids 只含该 Space，memory_limit_number=9。期望主题、条目与答案证据来自这个 Space。stale 检查旧结论是否被当成当前结论；conflict 要列出本 Space 内未裁决的结论；space-isolation 用另一 Space 的相似条目作为隔离负例；visibility 检查未提交内容是否被提前读到。",
+  "rule": "每题从归属该 Space 的只读会话，按 askedAt 调用 search_memory，space_ids 只含该 Space，memory_limit_number=9。期望主题、条目与答案证据来自这个 Space。stale 检查旧结论是否被当成当前结论；conflict 要列出本 Space 内未裁决的结论；space-isolation 用另一 Space 的相似条目作为隔离负例；visibility 检查未提交内容是否被提前读到。 v3 金标按 flush 回放推出：每题提问前先 flush 该 Space，提问时之前的 Add 都已整理提交；只在不 flush 时成立的题面写在 underFlush 里（q31、q45、q48 改题，q49 排除），不 flush 的旧推导用 --natural 重建。",
   "questions": [
     {
       "conversation": "catalog-ask",
@@ -22,6 +22,27 @@
         "entry": "dec_price",
         "phase": "open",
         "fact": "价格列表直接读取 amount 列"
+      },
+      "underFlush": {
+        "kind": "plain",
+        "pending": null,
+        "goldAnswer": "价格表新增 amount 列，列表直接读取这个字段。",
+        "mustInclude": [
+          "amount 列"
+        ],
+        "expect": {
+          "topics": [
+            "tp_cat_price"
+          ],
+          "entries": [
+            {
+              "entry": "dec_price",
+              "parts": [
+                "content"
+              ]
+            }
+          ]
+        }
       }
     },
     {
@@ -70,6 +91,29 @@
         "entry": "dec_price",
         "phase": "staged",
         "fact": "价格列表直接读取 amount 列"
+      },
+      "underFlush": {
+        "kind": "plain",
+        "pending": null,
+        "goldAnswer": "价格表新增 amount 列，列表直接读取这个字段。",
+        "mustInclude": [
+          "amount 列"
+        ],
+        "expect": {
+          "topics": [
+            "tp_cat_price"
+          ],
+          "entries": [
+            {
+              "entry": "dec_price",
+              "parts": [
+                "content"
+              ]
+            }
+          ]
+        },
+        "excluded": true,
+        "excludedReason": "flush 下 q48 在 11:50 已把 dec_price 整理提交，13:00 不再有暂存内容可测，题面与 q50 重复；runner 不提问、scorer 不计分"
       }
     },
     {
@@ -822,7 +866,38 @@
           "entry": "dec_price",
           "kind": "space-isolation"
         }
-      ]
+      ],
+      "underFlush": {
+        "kind": "stale",
+        "goldAnswer": "以 entries 的 amount 列为准，月报按这列汇总。林工刚确定以周工的结论为准，把金额留在 journal 正文里的旧结论已转入历史。",
+        "mustInclude": [
+          "amount 列"
+        ],
+        "expect": {
+          "topics": [
+            "tp_ledger_report"
+          ],
+          "entries": [
+            {
+              "entry": "dec_amount",
+              "parts": [
+                "content"
+              ]
+            }
+          ]
+        },
+        "traps": [
+          {
+            "entry": "dec_amount",
+            "kind": "stale",
+            "history": 0
+          },
+          {
+            "entry": "dec_price",
+            "kind": "space-isolation"
+          }
+        ]
+      }
     },
     {
       "id": "q31_after",
@@ -1010,6 +1085,27 @@
         "entry": "dec_fleet_speed",
         "phase": "staged",
         "fact": "市区线路限速 60"
+      },
+      "underFlush": {
+        "kind": "plain",
+        "pending": null,
+        "goldAnswer": "市区线路最高限速 60。",
+        "mustInclude": [
+          "60"
+        ],
+        "expect": {
+          "topics": [
+            "tp_fleet_speed"
+          ],
+          "entries": [
+            {
+              "entry": "dec_fleet_speed",
+              "parts": [
+                "content"
+              ]
+            }
+          ]
+        }
       }
     },
     {
