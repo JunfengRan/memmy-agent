@@ -49,7 +49,11 @@ const questionHtml = table(["题目", "类型", "提问时间", "问题", "标�
   q.expectedItems.map((i) => `${code(i.entry)} ${esc(i.part)}`).join("<br>"), q.trapItems.map((i) => `${code(i.entry)} ${esc(i.kind)}`).join("<br>")
 ]));
 const negativeHtml = table(["不该写入", "轨迹", "原因"], gold.negatives.map((n) => [esc(n.text), code(n.trace), esc(n.reason)]));
-const resultHtml = reports.length ? reports.map(({ path, report }) => `<h3>${esc(report.run?.kind ?? "run")} ${code(path)}</h3><p>被测模型 ${code(report.run?.sut?.model ?? "—")} · 阅读模型 ${code(report.run?.reader?.model ?? "—")} · 评委 ${code(report.judge?.model ?? "rule-only")}</p>${table(["得分", "值"], Object.entries(report.scores).map(([k, v]) => [code(k), fmt(v)]))}${table(["错误", "值"], Object.entries(report.errors).map(([k, v]) => [code(k), fmt(v)]))}`).join("") : "<p>未传入评分报告。用法见 README。</p>";
+// Informational split (no conflict-resolution step in project memory); the gate uses overall numbers.
+const conflictHtml = (split) => split ? `<h4>分歧 / 非分歧分组（仅供参考）</h4>${table(["分组", "条目 P", "条目 P（含未归属）", "条目 R", "条目 F1", "决策 stateExact", "答题", "rubric", "检索 entryHit"],
+  [["conflict", "分歧"], ["nonConflict", "非分歧"]].map(([key, name]) => [esc(name), fmt(split.entries[key].precision), fmt(split.entries[key].precisionWithUnattributed), fmt(split.entries[key].recall), fmt(split.entries[key].f1),
+    fmt(split.entries[key].decisions.stateExact), fmt(split.questions[key].answer), fmt(split.questions[key].rubric), fmt(split.questions[key].entryHit)]))}<p class="muted">未归属写入 ${fmt(split.entries.unattributed.writes)} 条。${esc(split.note)}</p>` : "";
+const resultHtml = reports.length ? reports.map(({ path, report }) => `<h3>${esc(report.run?.kind ?? "run")} ${code(path)}</h3><p>被测模型 ${code(report.run?.sut?.model ?? "—")} · 阅读模型 ${code(report.run?.reader?.model ?? "—")} · 评委 ${code(report.judge?.model ?? "rule-only")}</p>${table(["得分", "值"], Object.entries(report.scores).map(([k, v]) => [code(k), fmt(v)]))}${table(["错误", "值"], Object.entries(report.errors).map(([k, v]) => [code(k), fmt(v)]))}${conflictHtml(report.byConflict)}`).join("") : "<p>未传入评分报告。用法见 README。</p>";
 
 const title = `项目记忆评测数据集 v${gold.datasetVersion}`;
 const main = `

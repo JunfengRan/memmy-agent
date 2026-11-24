@@ -308,6 +308,31 @@ test("replay: defer, resubmit, history backfill and late conflict", () => {
   assert.equal(early.has("dec_archive"), false);
 });
 
+test("conflict split: oracle is 1 in both groups; a stale write lowers only the conflict group", async () => {
+  const current = loadDataset();
+  const currentGold = loadGold();
+  const split = (await scoreRun(buildOracleRun(current, currentGold), { ds: current, gold: currentGold, judge })).detail.byConflict;
+  for (const group of ["conflict", "nonConflict"]) {
+    assert.equal(split.entries[group].f1, 1, group);
+    assert.equal(split.entries[group].decisions.stateExact, 1, group);
+    assert.equal(split.questions[group].answer, 1, group);
+  }
+  assert.ok(split.entries.conflict.ids.includes("tl_copy_change") && split.entries.conflict.ids.includes("dec_fleet_speed"));
+  assert.ok(split.entries.nonConflict.ids.includes("dec_price"));
+  assert.deepEqual(split.questions.conflict.ids, ["q02", "q04", "q09", "q19", "q25"]);
+
+  const run = buildOracleRun(current, currentGold);
+  const exported = run.final.space_ledger.find((topic) => topic.id === "tp_ledger_export");
+  // Zhou's superseded wait position written as a current decision: stale, tied to dec_copy.
+  exported.decisions.push({ content: "先不把 catalog 的 export 搬进 ledger，等 dry-run 报告出来再决定。", time: "2026-10-21T13:20:00+08:00", user_ids: ["u_zhou"], conflicts: [], history: [] });
+  exported.timeline.push({ content: "无关的一条进展。", time: "2026-10-21T13:20:00+08:00", user_ids: ["u_zhou"] });
+  const probe = (await scoreRun(run, { ds: current, gold: currentGold, judge })).detail.byConflict;
+  assert.ok(probe.entries.conflict.precision < 1);
+  assert.equal(probe.entries.nonConflict.precision, 1);
+  assert.equal(probe.entries.unattributed.writes, 1);
+  assert.ok(probe.entries.nonConflict.precisionWithUnattributed < 1);
+});
+
 test("R1-4: per-kind LLM and Token F1 scores are in scores", async () => {
   const { scores } = await scoreRun(buildOracleRun(ds, gold), { ds, gold, judge });
   for (const kind of new Set(gold.questions.filter((q) => !q.excluded).map((q) => q.kind))) {

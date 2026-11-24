@@ -343,6 +343,8 @@ export async function scoreRun(run, { ds, gold, judge }) {
     return [kind, { n: rows.length, answer: mean(rows.map((r) => (r.answer.correct ? 1 : 0))), tokenF1: mean(rows.map((r) => r.tokenF1)), entryHit: mean(rows.map((r) => r.entryHit)) }];
   }));
 
+  const byConflict = conflictSplit({ ds, gold, required, actual, counted, owner, goldById, requiredPairs, decisionRows, questionRows });
+
   const apiPassed = gold.apiChecks.filter((check) => (run.apiChecks ?? []).find((r) => r.id === check.id)?.passed === true).length;
 
   const scores = {
@@ -405,6 +407,7 @@ export async function scoreRun(run, { ds, gold, judge }) {
     detail: {
       counts: { requiredEntries: required.length, actualEntries: actual.length, goldTopics: gold.topics.length, actualTopics: actualTopics.length, negatives: gold.negatives.length, questions: questionRows.length },
       byQuestionKind,
+      byConflict,
       decisions: decisionRows,
       topics: topicRows.map(({ keyPoints: points, ...row }) => ({ ...row, keyPoints: ratio(points.filter(Boolean).length, points.length) })),
       writes: actual.map((a) => ({ uid: a.uid, kind: a.kind, content: a.content, label: a.attr.label, ids: a.attr.ids, matched: owner.get(a.uid) ?? null, source: a.attr.source, reason: a.attr.reason })),
@@ -414,6 +417,80 @@ export async function scoreRun(run, { ds, gold, judge }) {
       apiChecks: run.apiChecks ?? []
     }
   };
+}
+
+export const CONFLICT_SPLIT_NOTE = "Project memory has no conflict-resolution step, so conflict cases are reported apart. " +
+  "Entries: conflict = a decision with conflicts (in gold or any alternative), a decision in conflicts.json, or a change record (conflictCase). " +
+  "A write counts in the group of the gold entry it matched; an unmatched write that the judge tied to a gold entry (stale, conflict-as-entry, duplicate) counts in that entry's group; " +
+  "the rest (label none / negative) form the unattributed bucket. precision excludes that bucket; precisionWithUnattributed adds the whole bucket to each group's denominator (a lower bound). " +
+  "Questions: conflict = kind conflict or any expected conflicts item; entryHit leaves out pending (visibility) questions as search.entryHit does.";
+
+// Conflict vs non-conflict split of Entry P/R/F1, decision state, answers and search hits.
+// Informational: --gate thresholds stay on the overall numbers.
+export function conflictSplit({ ds, gold, required, actual, counted, owner, goldById, requiredPairs, decisionRows, questionRows }) {
+  const caseDecisions = new Set((ds.conflicts?.cases ?? []).map((item) => item.decision));
+  const isConflictEntry = (entry) => Boolean(entry.conflictCase) || caseDecisions.has(entry.id) ||
+    (entry.kind === "decision" && [entry, ...(entry.alternatives ?? [])].some((variant) => (variant.conflicts ?? []).length > 0));
+  const groupOf = (entry) => (isConflictEntry(entry) ? "conflict" : "nonConflict");
+  const writeGroup = (write) => {
+    const id = owner.get(write.uid) ?? write.attr.ids.find((item) => goldById.has(item));
+    return id ? groupOf(goldById.get(id)) : null;
+  };
+  const unattributed = counted.filter((write) => writeGroup(write) === null);
+  const entries = {};
+  for (const group of ["conflict", "nonConflict"]) {
+    const gold = required.filter((entry) => groupOf(entry) === group);
+    const writes = counted.filter((write) => writeGroup(write) === group);
+    const pairs = requiredPairs.filter(({ g }) => groupOf(g) === group);
+    const overall = prf(pairs.length, writes.length, gold.length);
+    const byKind = Object.fromEntries(["decision", "experience", "timeline"].map((kind) => [kind, prf(
+      pairs.filter(({ g, a }) => g.kind === kind && a.kind === kind).length,
+      writes.filter((write) => write.kind === kind).length,
+      gold.filter((entry) => entry.kind === kind).length
+    )]));
+    const rows = decisionRows.filter((row) => groupOf(goldById.get(row.id)) === group);
+    const exact = rows.filter((row) => row.content && row.conflicts && row.history && row.userIds && row.time).length;
+    entries[group] = {
+      gold: gold.length, writes: writes.length, matched: pairs.length,
+      precision: overall.precision, recall: overall.recall, f1: overall.f1,
+      precisionWithUnattributed: ratio(pairs.length, writes.length + unattributed.length),
+      f1WithUnattributed: prf(pairs.length, writes.length + unattributed.length, gold.length).f1,
+      byKind,
+      decisions: { n: rows.length, stateExact: ratio(exact, rows.length) },
+      ids: gold.map((entry) => entry.id)
+    };
+  }
+  const labels = {};
+  for (const write of unattributed) labels[write.attr.label] = (labels[write.attr.label] ?? 0) + 1;
+  const expectedById = new Map(gold.questions.map((q) => [q.id, q]));
+  const isConflictQuestion = (row) => {
+    const q = expectedById.get(row.id);
+    return q.kind === "conflict" || q.expectedItems.some((item) => item.part === "conflicts");
+  };
+  const questions = {};
+  for (const [group, conflict] of [["conflict", true], ["nonConflict", false]]) {
+    const rows = questionRows.filter((row) => isConflictQuestion(row) === conflict);
+    const searched = rows.filter((row) => !row.pending);
+    questions[group] = {
+      n: rows.length,
+      answer: ratio(rows.filter((row) => row.answer.correct).length, rows.length),
+      rubric: ratio(rows.reduce((total, row) => total + (row.rubric ?? 0), 0), rows.length),
+      entryHit: ratio(searched.reduce((total, row) => total + (row.entryHit ?? 0), 0), searched.length),
+      ids: rows.map((row) => row.id)
+    };
+  }
+  return { note: CONFLICT_SPLIT_NOTE, entries: { ...entries, unattributed: { writes: unattributed.length, byLabel: labels } }, questions };
+}
+
+// Compact view for logs and the HTML report.
+export function conflictSummary(split) {
+  const row = (group) => ({
+    entriesF1: split.entries[group].f1, entriesPrecision: split.entries[group].precision,
+    entriesPrecisionWithUnattributed: split.entries[group].precisionWithUnattributed, entriesRecall: split.entries[group].recall,
+    stateExact: split.entries[group].decisions.stateExact, answer: split.questions[group].answer,
+    rubric: split.questions[group].rubric, entryHit: split.questions[group].entryHit
+  });
+  return { conflict: row("conflict"), nonConflict: row("nonConflict"), unattributedWrites: split.entries.unattributed.writes };
 }
 
 // SUT model usage recorded by harness/usage-proxy.mjs, one JSON object per line:
@@ -728,11 +805,13 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     if (!(report.errors["topics.wrongMergeRate"] <= options.maxWrongMergeRate)) failures.push(`topics.wrongMergeRate=${report.errors["topics.wrongMergeRate"]} > ${options.maxWrongMergeRate}`);
   }
   report.check = { mode: options.mode ?? (options.gate ? "gate" : "report"), failures };
+  // Informational: the gate stays on overall numbers.
+  report.byConflict = result.detail.byConflict;
   const out = options.out ?? (options.input ? join(dirname(options.input), "report.json") : join(RUNS_DIR, `${options.mode}-report.json`));
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
   // Per-call judge usage, priced by harness/cost-report.mjs. Cache hits made no call.
   if (!options.mode) writeFileSync(join(dirname(out), "judge-usage.json"), `${JSON.stringify(llm.usage, null, 2)}\n`);
-  process.stdout.write(`${JSON.stringify({ out, scores: report.scores, errors: report.errors, failures })}\n`);
+  process.stdout.write(`${JSON.stringify({ out, scores: report.scores, errors: report.errors, byConflict: conflictSummary(report.byConflict), failures })}\n`);
   process.exit(failures.length ? 1 : 0);
 }
