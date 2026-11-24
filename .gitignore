@@ -64,5 +64,12 @@ App/memmy-agent/extra-dependencies/office-rendering/*/native/
 # Eval outputs (runs, reports, judge and reader caches) go to eval/project-memory/runs/ and are
 # regenerated per run; only dataset/gold.json and metrics.md summaries are committed.
 /eval/project-memory/gold-add-memory/generated/
-/eval/project-memory/runs/
+/eval/project-memory/runs/*
+# The local MemOS v3 replay launcher and its servers are kept; that run's outputs are not.
+!/eval/project-memory/runs/20261120-memos-v3/
+/eval/project-memory/runs/20261120-memos-v3/*
+!/eval/project-memory/runs/20261120-memos-v3/launch_eval.py
+!/eval/project-memory/runs/20261120-memos-v3/run-e2e-wt.zsh
+!/eval/project-memory/runs/20261120-memos-v3/replay_app.py
+!/eval/project-memory/runs/20261120-memos-v3/embed_server.py
 /eval/project-memory/gold-add-memory/harness/memory-service/
