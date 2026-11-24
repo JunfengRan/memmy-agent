@@ -8,7 +8,7 @@ import { parseArgs } from "node:util";
 import { loadDataset, submittedTrace } from "./build-gold-baseline.mjs";
 import { acceptedTime } from "./episode-timeline.mjs";
 import { createLlm, resolveModelConfig } from "./llm.mjs";
-import { loadGold } from "./load-eval-set.mjs";
+import { goldFor } from "./load-eval-set.mjs";
 import { displayNames } from "./oracle.mjs";
 import { createReader, renderTemplate3 } from "./reader.mjs";
 import { RUNS_DIR } from "./run-pipeline-eval.mjs";
@@ -31,19 +31,26 @@ const errorInfo = (error) => ({
   ...(error.call ? { call: error.call, status: error.status, code: error.code, reason: error.reason } : {})
 });
 
+const FLUSH_ROUNDS = 5;
+const FLUSH_WAIT_SECONDS = 120;
+
+// Questions come from the gold in use, so a mode's exclusions and wording apply to the replay.
 export function replaySchedule(ds, gold) {
   const events = [
     ...ds.corpus.traces.map((trace) => ({ at: acceptedTime(trace), trace })),
-    ...ds.questions.questions.filter((question) => !question.excluded).map((question) => ({ at: question.askedAt, question }))
+    ...gold.questions.filter((question) => !question.excluded).map((question) => ({ at: question.askedAt, question }))
   ].sort((left, right) => Date.parse(left.at) - Date.parse(right.at));
   const end = Math.max(Date.parse(events.at(-1)?.at), Date.parse(gold.visibilityEvents.at(-1)?.at));
   if (!Number.isFinite(end)) throw new Error("Dataset has no valid final clock checkpoint");
   return { events, finalAt: new Date(end).toISOString() };
 }
 
-export function createRun({ base, clockBase, runTag, gold, sutModel, reader }) {
+// Revision 2 flushes a question's Space before it searches and every Space before the final read
+// (processing "flush"); flush: false keeps revision 1's timer-only processing for comparison.
+export function createRun({ base, clockBase, runTag, gold, sutModel, reader, flush = true }) {
   return {
-    runVersion: 2, datasetVersion: 3, datasetDigest: digest(JSON.stringify(gold)), runnerRevision: 1,
+    runVersion: 2, datasetVersion: 3, datasetDigest: digest(JSON.stringify(gold)), runnerRevision: 2,
+    processing: flush ? "flush" : "natural",
     kind: "live", startedAt: new Date().toISOString(), base, clockBase, runTag,
     sut: { model: sutModel ?? null }, reader: reader ?? null,
     spaceMap: {}, tasks: [], questions: [], final: {}, apiChecks: [], requests: [], phaseMs: {}, usage: {},
@@ -222,6 +229,32 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
     run.failures.push(failure);
     return failure;
   };
+  // Flush closes the Space's open Episodes and forms its staged ones. Formation waits while
+  // Episodes are in flight, so advance the clock (its settle drains stages) and flush again.
+  const flushing = run.processing === "flush";
+  const flushSpace = async (datasetSpace, at, context) => {
+    const rounds = [];
+    for (let round = 0; round < FLUSH_ROUNDS; round += 1) {
+      await tag({ ...context, phase: "add", step: "flush" });
+      const { data } = await timed("add", () => call("/flush_project_memory", { phase: "add", body: {
+        space_id: run.spaceMap[datasetSpace], wait_seconds: FLUSH_WAIT_SECONDS
+      } }));
+      rounds.push(data ?? null);
+      await tag({ ...context, phase: "add", step: "process" });
+      await advance(at);
+      if (!data?.pending_episode_ids?.length && data?.formation?.reason !== "EPISODES_IN_FLIGHT") return { settled: true, rounds };
+    }
+    return { settled: false, rounds };
+  };
+  const settleSpace = async (datasetSpace, at, id, context) => {
+    try {
+      const result = await flushSpace(datasetSpace, at, context);
+      if (!result.settled) result.failure = fail("flush", id, at, new Error(`${datasetSpace} still had Episodes in flight after ${FLUSH_ROUNDS} flushes`));
+      return result;
+    } catch (error) {
+      return { settled: false, failure: fail("flush", id, at, error) };
+    }
+  };
 
   await timed("setup", async () => {
     for (const space of ds.corpus.spaces) {
@@ -274,6 +307,8 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
       run.tasks.push(item);
     } else {
       const item = { id: question.id, askedAt: question.askedAt, topic_detail_list: [], rendered: "", answer: "" };
+      // Answers see every earlier Add of this Space fully processed (gold uses the same rule).
+      if (flushing) item.flush = await settleSpace(question.space_id, at, question.id, event);
       try {
         item.topic_detail_list = await search(question.conversation, question.question, event);
         item.search = lastSearch;
@@ -298,6 +333,12 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
   run.currentEvent = { at: finalAt, id: "final" };
   await tag({ event: "final", phase: "add", step: "process", at: finalAt });
   await advance(finalAt);
+  if (flushing) {
+    run.finalFlush = {};
+    for (const space of ds.corpus.spaces) {
+      run.finalFlush[space.space_id] = await settleSpace(space.space_id, finalAt, "final", { event: "final", at: finalAt });
+    }
+  }
   await tag({ event: "final", phase: "final", step: "read" });
   await timed("final", async () => {
     const statuses = new Map();
@@ -326,9 +367,11 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
 }
 
 async function main() {
-  const { values } = parseArgs({ options: { out: { type: "string" }, resume: { type: "string" }, help: { type: "boolean", short: "h" } } });
+  const { values } = parseArgs({ options: { out: { type: "string" }, resume: { type: "string" }, "no-flush": { type: "boolean" }, help: { type: "boolean", short: "h" } } });
   if (values.help) {
-    console.log("Usage: node run-memos-v3-live.mjs [--out <directory>] [--resume <live-run.partial.json>]\nSet MEMMY_EVAL_BASE, MEMMY_EVAL_CLOCK_BASE, and MEMMY_EVAL_READER_*.");
+    console.log("Usage: node run-memos-v3-live.mjs [--out <directory>] [--resume <live-run.partial.json>] [--no-flush]\n" +
+      "Flushes each question's Space before it searches; --no-flush replays the timer-only processing of runner revision 1.\n" +
+      "Set MEMMY_EVAL_BASE, MEMMY_EVAL_CLOCK_BASE, and MEMMY_EVAL_READER_*.");
     return 0;
   }
   if (values.resume && values.out) throw new Error("--resume already selects the checkpoint directory");
@@ -340,15 +383,18 @@ async function main() {
   const config = resolveModelConfig("MEMMY_EVAL_READER");
   if (!config) throw new Error("Configure MEMMY_EVAL_READER_PROVIDER, _MODEL, _BASE_URL and _API_KEY");
   const ds = loadDataset();
-  const gold = loadGold();
+  const prior = values.resume ? JSON.parse(readFileSync(values.resume, "utf8")) : null;
+  if (prior && values["no-flush"] && prior.processing !== "natural") throw new Error("--no-flush does not match the checkpoint");
+  const flush = prior ? prior.processing === "flush" : !values["no-flush"];
+  const gold = goldFor(ds, { flush });
   if (ds.corpus.datasetVersion !== 3 || gold.datasetVersion !== 3) throw new Error("MemOS live replay requires v3 fixtures");
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const outDir = values.resume ? dirname(resolve(values.resume)) : resolve(values.out ?? join(RUNS_DIR, stamp));
   const partial = join(outDir, "live-run.partial.json");
   const final = join(outDir, "live-run.json");
   const reader = { model: config.model, provider: config.provider };
-  const run = values.resume ? JSON.parse(readFileSync(values.resume, "utf8")) : createRun({
-    base, clockBase, runTag: process.env.MEMMY_EVAL_RUN_TAG ?? stamp, gold, sutModel: process.env.MEMMY_EVAL_SUT_MODEL, reader
+  const run = prior ?? createRun({
+    base, clockBase, runTag: process.env.MEMMY_EVAL_RUN_TAG ?? stamp, gold, sutModel: process.env.MEMMY_EVAL_SUT_MODEL, reader, flush
   });
   if (values.resume) {
     if (!["interrupted", "in_progress"].includes(run.state) || run.base !== base || run.clockBase !== clockBase ||

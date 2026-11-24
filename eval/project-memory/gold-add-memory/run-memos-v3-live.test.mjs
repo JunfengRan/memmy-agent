@@ -6,15 +6,19 @@ import { createRun, executeReplay, makeWire, replaySchedule } from "./run-memos-
 
 const sourceDataset = loadDataset();
 const sourceGold = loadGold();
-const create = (gold) => createRun({
-  base: "http://product.test/product", clockBase: "http://clock.test", runTag: "replay-test", gold, sutModel: "test"
+const create = (gold, options = {}) => createRun({
+  base: "http://product.test/product", clockBase: "http://clock.test", runTag: "replay-test", gold, sutModel: "test", ...options
 });
+const onlyQuestions = (gold, ids) => ({ ...gold, questions: gold.questions.filter((q) => ids.includes(q.id)) });
 
-function fakeService(finalAt, { dropClockAfterAdd = false, firstStatusFails = false, foreignTopic = null } = {}) {
+// inFlight: how many flush calls in a row report Episodes still in flight before one settles.
+function fakeService(finalAt, { dropClockAfterAdd = false, firstStatusFails = false, foreignTopic = null, inFlight = 0, flushFails = false } = {}) {
   const added = [];
   const received = new Map();
   const events = [];
   const statuses = [];
+  const flushes = [];
+  let streak = 0;
   let now = -Infinity;
   const success = (data) => Response.json({ code: 200, data });
   const failure = (status, reason) => Response.json({ code: status, reason }, { status });
@@ -63,6 +67,18 @@ function fakeService(finalAt, { dropClockAfterAdd = false, firstStatusFails = fa
         return success([{ task_id: id, status: firstStatusFails && statuses.length === 1 ? "failed" : "completed",
           memory_views: { project: { open_episode_messages: now < Date.parse(finalAt) ? 2 : 0, memory_ids: [] } } }]);
       }
+      case "/product/flush_project_memory": {
+        assert.deepEqual(Object.keys(body).sort(), ["space_id", "wait_seconds"]);
+        assert.equal(body.wait_seconds, 120);
+        flushes.push({ space: body.space_id, at: now });
+        events.push({ flush: body.space_id, at: now });
+        if (flushFails) return failure(404, "NOT_FOUND");
+        const busy = streak < inFlight;
+        streak = busy ? streak + 1 : 0;
+        return success({ space_id: body.space_id, closed_episode_ids: busy ? ["ep1"] : [], pending_episode_ids: busy ? ["ep1"] : [],
+          formation: busy ? { space_id: body.space_id, ran: false, reason: "EPISODES_IN_FLIGHT" } : { space_id: body.space_id, ran: false, reason: "NO_STAGED" },
+          staged_remaining: 0 });
+      }
       case "/product/search":
         if (!body.space_ids) return failure(422, "SCOPE_REQUIRED");
         events.push({ search: body.query });
@@ -74,7 +90,7 @@ function fakeService(finalAt, { dropClockAfterAdd = false, firstStatusFails = fa
       default: throw new Error(`unexpected test path ${request.pathname}`);
     }
   };
-  return { added, events, statuses, wire: (run) => makeWire({ run, fetchImpl,
+  return { added, events, statuses, flushes, wire: (run) => makeWire({ run, fetchImpl,
     productHeaders: { authorization: "Bearer product-only" }, clockHeaders: { authorization: "Bearer clock-only" } }) };
 }
 
@@ -98,6 +114,20 @@ test("MemOS v3 replay submits each source Turn with stable ids and observes as-o
   assert.equal(run.tasks[0].memory_views.project.open_episode_messages, 2);
   assert.equal(run.tasks[0].final.memory_views.project.open_episode_messages, 0);
   assert.equal(checkpoints, 155);
+  assert.equal(run.runnerRevision, 2);
+  assert.equal(run.processing, "flush");
+  // One settled flush per question, then one per Space before the final read.
+  assert.equal(server.flushes.length, 36 + 6);
+  assert.ok(run.questions.every((item) => item.flush.settled && item.flush.rounds.length === 1));
+  assert.deepEqual(Object.keys(run.finalFlush).sort(), sourceDataset.corpus.spaces.map((space) => space.space_id).sort());
+  for (const [index, event] of server.events.entries()) {
+    if (!event.flush) continue;
+    // Each flush is followed by an advance to the same instant (the clock's settle drains stages).
+    assert.deepEqual(server.events[index + 1], { clock: event.at });
+  }
+  const firstSearch = server.events.findIndex((event) => event.search);
+  assert.ok(server.events[firstSearch - 2].flush, "the Space is flushed right before a question searches");
+  assert.ok(run.requests.filter((request) => request.call === "/flush_project_memory").every((request) => request.phase === "add"));
   assert.equal(Object.keys(run.final).length, 6);
   assert.deepEqual(run.apiChecks.map(({ passed }) => passed), [true, true, true, true]);
   const first = server.events.findIndex((event) => event.added);
@@ -110,7 +140,7 @@ test("the v3 reader sees only the requested Space while the raw response retains
   const question = ds.questions.questions.find((q) => q.id === "q24");
   ds.corpus.traces = [ds.corpus.traces.find((trace) => trace.conversation === "ledger-build")];
   ds.questions.questions = [question];
-  const gold = { ...sourceGold, apiChecks: [] };
+  const gold = { ...onlyQuestions(sourceGold, ["q24"]), apiChecks: [] };
   const run = create(gold);
   const { finalAt } = replaySchedule(ds, gold);
   const foreignTopic = { id: "foreign-topic", space_id: "space_ledger", topic_name: "账本范围探针" };
@@ -130,7 +160,7 @@ test("an interruption after acceptance resumes the same Turn; failed statuses ar
   const ds = structuredClone(sourceDataset);
   ds.corpus.traces = ds.corpus.traces.slice(0, 3);
   ds.questions.questions = [];
-  const gold = { ...sourceGold, apiChecks: [] };
+  const gold = { ...onlyQuestions(sourceGold, []), apiChecks: [] };
   const run = create(gold);
   const { finalAt } = replaySchedule(ds, gold);
   const server = fakeService(finalAt, { dropClockAfterAdd: true, firstStatusFails: true });
@@ -145,4 +175,46 @@ test("an interruption after acceptance resumes the same Turn; failed statuses ar
   assert.equal(run.tasks[0].failure.kind, "task");
   assert.equal(run.failures.length, 1);
   assert.equal(run.state, "completed_with_failures");
+});
+
+test("flush repeats while Episodes are in flight, then searches; an unsettled Space is a failure", async () => {
+  const ds = structuredClone(sourceDataset);
+  ds.corpus.traces = [ds.corpus.traces.find((trace) => trace.conversation === "ledger-build")];
+  const gold = { ...onlyQuestions(sourceGold, ["q24"]), apiChecks: [] };
+  const { finalAt } = replaySchedule(ds, gold);
+
+  const busy = fakeService(finalAt, { inFlight: 2 });
+  const run = create(gold);
+  await executeReplay({ ds, gold, run, call: busy.wire(run), answer: async () => "测试答案" });
+  assert.equal(run.questions[0].flush.settled, true);
+  assert.equal(run.questions[0].flush.rounds.length, 3);
+  assert.equal(run.questions[0].flush.rounds[0].formation.reason, "EPISODES_IN_FLIGHT");
+  assert.equal(run.state, "completed");
+
+  const stuck = fakeService(finalAt, { inFlight: 99 });
+  const stuckRun = create(gold);
+  await executeReplay({ ds, gold, run: stuckRun, call: stuck.wire(stuckRun), answer: async () => "测试答案" });
+  assert.equal(stuckRun.questions[0].flush.rounds.length, 5);
+  assert.equal(stuckRun.questions[0].answer, "测试答案", "the question is still asked");
+  assert.equal(stuckRun.failures[0].kind, "flush");
+  assert.equal(stuckRun.state, "completed_with_failures");
+
+  const broken = fakeService(finalAt, { flushFails: true });
+  const brokenRun = create(gold);
+  await executeReplay({ ds, gold, run: brokenRun, call: broken.wire(brokenRun), answer: async () => "测试答案" });
+  assert.match(brokenRun.questions[0].flush.failure.message, /flush_project_memory returned HTTP 404/);
+});
+
+test("--no-flush keeps the timer-only replay of runner revision 1", async () => {
+  const ds = structuredClone(sourceDataset);
+  ds.corpus.traces = ds.corpus.traces.slice(0, 3);
+  const gold = { ...onlyQuestions(sourceGold, ["q24"]), apiChecks: [] };
+  const { finalAt } = replaySchedule(ds, gold);
+  const server = fakeService(finalAt);
+  const run = create(gold, { flush: false });
+  await executeReplay({ ds, gold, run, call: server.wire(run), answer: async () => "测试答案" });
+  assert.equal(run.processing, "natural");
+  assert.equal(server.flushes.length, 0);
+  assert.equal(run.questions[0].flush, undefined);
+  assert.equal(run.finalFlush, undefined);
 });

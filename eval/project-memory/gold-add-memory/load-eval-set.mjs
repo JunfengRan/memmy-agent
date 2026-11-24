@@ -20,6 +20,17 @@ export function loadGold(dir = datasetDirectory()) {
   return JSON.parse(readFileSync(join(dir, "gold.json"), "utf8"));
 }
 
+// The gold for a replay's processing: the committed gold.json when it was derived the same way,
+// otherwise the other derivation rebuilt in memory (v3 only; v2.1 has a single derivation).
+export function goldFor(ds, { flush, dir = datasetDirectory() } = {}) {
+  const gold = loadGold(dir);
+  if (!ds.episodes || flush === undefined) return gold;
+  if ((gold.processing ?? "natural") === (flush ? "flush" : "natural")) return gold;
+  const { gold: built, errors } = buildGold(ds, { flush });
+  if (errors.length) throw new Error(`gold under ${flush ? "flush" : "natural"} processing has errors: ${errors.join("; ")}`);
+  return built;
+}
+
 export function validateDataset(ds, dir = datasetDirectory()) {
   const goldPath = join(dir, "gold.json");
   const errors = [];
