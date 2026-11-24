@@ -133,6 +133,11 @@ export function replay(ds, until = "9999", { stopBeforeId, traceMode = false, ti
     }
   }
   const waiting = [];
+  // `${trace}:${decision}` where a member replaced their own position; each needs a change record.
+  const changes = new Set();
+  // v3 has no permission or arbitration step. The frozen v2.1 still lets a relayed approval
+  // rewrite and has no change records.
+  const v3Policy = ds.corpus.datasetVersion >= 3;
 
   function apply(op, source, release) {
     const conversation = conversations.get(source.conversation);
@@ -160,8 +165,20 @@ export function replay(ds, until = "9999", { stopBeforeId, traceMode = false, ti
     entry.sources = union(entry.sources, sourceIds);
     const inContent = entry.user_ids.includes(by);
     const conflictIndex = entry.conflicts.findIndex((item) => item.user_ids.includes(by));
-    const approval = notes.some((n) => n.type === "approval");
     const late = isLateDecision(source, entry);
+    const approval = !v3Policy && notes.some((n) => n.type === "approval");
+    // Project memory has no permission or arbitration step: only a member's own position can be
+    // replaced by that member, and every such replacement is recorded as a timeline entry.
+    const picked = op.op === "resolve" ? entry.conflicts[op.target] : null;
+    const ownChange = op.op === "rewrite" ? inContent && op.content !== entry.content
+      : op.op === "conflict_update" ? Boolean(entry.conflicts[op.target]?.user_ids.includes(by)) && op.content !== entry.conflicts[op.target].content
+        : op.op === "resolve" && picked ? (inContent && !picked.user_ids.includes(by)) || entry.conflicts.some((item, i) => i !== op.target && item.user_ids.includes(by))
+          : false;
+    if (ownChange && v3Policy) {
+      changes.add(`${source.id}:${op.entry}`);
+      const recorded = (ds.labels.traces[source.id]?.ops ?? []).some((other) => other.op === "add" && meta[other.entry]?.changeOf === op.entry);
+      if (!recorded) errors.push(`${where} replaces the member's own position; add a timeline entry with changeOf ${op.entry}`);
+    }
     if (op.op === "history_backfill") {
       entry.history.push({ content: op.content, time: op.time ?? source.chat_time, timeWindow: at.timeWindow, user_ids: [by], reason: op.reason ?? null });
       entry.history.sort((a, b) => a.time.localeCompare(b.time) || a.content.localeCompare(b.content));
@@ -179,7 +196,8 @@ export function replay(ds, until = "9999", { stopBeforeId, traceMode = false, ti
     } else if (op.op === "rewrite" || op.op === "update") {
       if (op.op === "rewrite" && kind !== "decision") errors.push(`${where} rewrite is for decisions`);
       if (op.op === "update" && kind !== "experience") errors.push(`${where} update is for experiences`);
-      if (op.op === "rewrite" && !inContent && !approval) errors.push(`${where} neither author nor approved; must be conflict_append`);
+      // A relayed agreement ("I checked with the author") does not authorize a rewrite.
+      if (op.op === "rewrite" && !inContent && !approval) errors.push(`${where} only the author rewrites; must be conflict_append`);
       if (op.op === "rewrite" && op.via !== (inContent ? "author" : "approval")) errors.push(`${where} via should be ${inContent ? "author" : "approval"}`);
       if (op.reason === undefined) errors.push(`${where} must state reason (null when the conversation gives none)`);
       entry.history.push({ content: entry.content, time: entry.time, timeWindow: entry.timeWindow, user_ids: entry.user_ids, reason: op.reason ?? null });
@@ -190,7 +208,6 @@ export function replay(ds, until = "9999", { stopBeforeId, traceMode = false, ti
         else entry.user_ids = union(entry.user_ids, merged.user_ids);
       }
     } else if (op.op === "resolve") {
-      const picked = entry.conflicts[op.target];
       if (!picked) { errors.push(`${where} conflicts[${op.target}] missing`); return; }
       if (!notes.some((n) => n.type === "resolve")) errors.push(`${where} needs a resolve signal`);
       const informed = episodeTimeline
@@ -215,7 +232,7 @@ export function replay(ds, until = "9999", { stopBeforeId, traceMode = false, ti
     }));
     visible.sort((left, right) => left.at.localeCompare(right.at) || traceOrderTime(left.release).localeCompare(traceOrderTime(right.release)));
     for (const { op, source, release } of visible) apply(op, source, release);
-    return { state, errors };
+    return { state, errors, changes };
   }
 
   for (const trace of orderedTraces(ds.corpus)) {
@@ -245,7 +262,7 @@ export function replay(ds, until = "9999", { stopBeforeId, traceMode = false, ti
     if (!target) errors.push(`${item.trace.id}:${item.op.op}:${item.op.entry} deferredUntil ${item.op.deferredUntil} missing`);
     else if (!stopBeforeId && traceVisibleTime(target) <= until) errors.push(`${item.trace.id}:${item.op.op}:${item.op.entry} deferredUntil ${target.id} did not apply`);
   }
-  return { state, errors };
+  return { state, errors, changes };
 }
 
 // flush derives the expected state under the v3 replay that flushes each question's Space before
@@ -258,7 +275,14 @@ export function buildGold(ds, { flush = FLUSH_BY_DEFAULT } = {}) {
   const timeline = ds.episodes && !timelineErrors.length ? buildEpisodeTimeline(ds, { flush }) : null;
   const { state, errors } = replay(ds, "9999", { timeline, traceMode: !timeline });
   errors.push(...timelineErrors);
-  const allSourceOperations = timeline ? replay(ds, "9999", { traceMode: true }).state : null;
+  const sourceReplay = replay(ds, "9999", { traceMode: true });
+  const allSourceOperations = timeline ? sourceReplay.state : null;
+  for (const [trace, label] of Object.entries(labels.traces)) {
+    for (const op of label.ops ?? []) {
+      const decision = labels.entries[op.entry]?.changeOf;
+      if (decision && !sourceReplay.changes.has(`${trace}:${decision}`)) errors.push(`${trace}:${op.entry} records a change but the member did not replace their own position on ${decision}`);
+    }
+  }
   const pendingEntries = [];
   const topics = new Map(labels.topics.map((topic) => [topic.id, topic]));
   const traces = new Map(corpus.traces.map((trace) => [trace.id, trace]));
@@ -289,6 +313,7 @@ export function buildGold(ds, { flush = FLUSH_BY_DEFAULT } = {}) {
       staleVersions,
       sources: final.sources,
       ...(final.deferred ? { deferred: true } : {}),
+      ...(meta.changeOf ? { changeOf: meta.changeOf, conflictCase: true } : {}),
       ...(meta.alternatives ? { alternatives: meta.alternatives } : {})
     };
   }).filter(Boolean);

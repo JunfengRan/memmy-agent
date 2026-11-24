@@ -1,6 +1,6 @@
 {
   "datasetVersion": 3,
-  "rule": "v3 §2.2.9：规格没有成员权限。同一问题上出现不同结论时，按作者与会话信号决定动作：作者属于 content，或会话体现认可 → rewrite（原结论进 history）；作者属于 conflicts 某项 → conflict_update；都不属于且未认可 → conflict_append（两项结论并存）；已告知的会话中成员裁决 → resolve（清空 conflicts，其余各项进 history）。load-eval-set.mjs 按这条规则从作者与信号推出 expectedOp，并与 labels.json 中的 op 对照。",
+  "rule": "v3 §2.2.9：规格没有成员权限，项目记忆也没有人工或 Agent 的裁决流程。同一问题上出现不同结论时，按作者与会话信号决定动作：作者属于 content → rewrite（原结论进 history）；作者属于 conflicts 某项 → conflict_update；都不属于 → conflict_append（两项结论并存），会话里转述别人的认可（approval 信号）不改变这一点；已告知的会话中成员裁决 → resolve（清空 conflicts，其余各项进 history）。作者本人的结论（content 或自己那一项 conflicts）被换成不同内容时，同一轮另记一条进展（changeRecord，labels.json 里 changeOf 指向该决策）。load-eval-set.mjs 按这条规则从作者与信号推出 expectedOp，并与 labels.json 中的 op 和 changeRecord 对照。",
   "cases": [
     {
       "id": "cf_amount",
@@ -25,7 +25,8 @@
       "approval": false,
       "informed": true,
       "informedBy": "t_informed",
-      "expectedOp": "resolve"
+      "expectedOp": "resolve",
+      "changeRecord": "tl_amount_change"
     },
     {
       "id": "cf_empty",
@@ -49,7 +50,8 @@
       ],
       "approval": false,
       "informed": false,
-      "expectedOp": "conflict_update"
+      "expectedOp": "conflict_update",
+      "changeRecord": "tl_empty_change"
     },
     {
       "id": "cf_copy",
@@ -61,7 +63,8 @@
       ],
       "approval": true,
       "informed": false,
-      "expectedOp": "rewrite"
+      "expectedOp": "conflict_append",
+      "note": "周工转述「我跟林工确认过了」：别人的同意不由成员转述生效，林工的结论保持现行，周工的说法进 conflicts"
     },
     {
       "id": "cf_copy_dryrun",
@@ -69,11 +72,12 @@
       "incoming": "t_dryrun",
       "author": "u_zhou",
       "contentAuthors": [
-        "u_zhou"
+        "u_lin"
       ],
       "approval": false,
       "informed": false,
-      "expectedOp": "rewrite"
+      "expectedOp": "conflict_update",
+      "changeRecord": "tl_copy_change"
     },
     {
       "id": "cf_env",
@@ -98,7 +102,8 @@
       "approval": false,
       "informed": false,
       "expectedOp": "rewrite",
-      "note": "改写后与周工的 conflicts 项结论相同，按不变式 1 合并、user_ids 取并集；不合并也接受（labels.json alternatives）"
+      "note": "改写后与周工的 conflicts 项结论相同，按不变式 1 合并、user_ids 取并集；不合并也接受（labels.json alternatives）",
+      "changeRecord": "tl_env_change"
     },
     {
       "id": "cf_branch",
@@ -122,7 +127,8 @@
       ],
       "approval": false,
       "informed": false,
-      "expectedOp": "rewrite"
+      "expectedOp": "rewrite",
+      "changeRecord": "tl_csv_change"
     },
     {
       "id": "cf_archive_late",

@@ -172,6 +172,10 @@ export function validateDataset(ds, dir = datasetDirectory()) {
     if (meta.kind !== "decision" && meta.category) err(`${id} only decisions carry a category`);
     if (!topics.has(meta.topic)) err(`${id} topic ${meta.topic} missing`);
     if (meta.optional && meta.kind === "decision") err(`${id} decisions cannot be optional`);
+    if (meta.changeOf !== undefined) {
+      const target = labels.entries[meta.changeOf];
+      if (meta.kind !== "timeline" || target?.kind !== "decision" || target.topic !== meta.topic || meta.optional) err(`${id} changeOf must be a required timeline entry about a decision in its topic`);
+    }
   }
   for (const [name, pairs] of Object.entries(labels.controls ?? {})) {
     if (!["similar-name", "same-work"].includes(name)) err(`unknown control group ${name}`);
@@ -232,13 +236,23 @@ export function validateDataset(ds, dir = datasetDirectory()) {
       informed = Boolean(by?.searchBefore) && by.conversation === trace.conversation && (by.annotations ?? []).some((n) => n.type === "informed");
     }
     if (informed !== item.informed) err(`${item.id} informed flag needs a same-conversation trace with searchBefore and an informed signal`);
-    const derived = informed && notes.some((n) => n.type === "resolve") ? "resolve"
-      : before.user_ids.includes(author) || approval ? "rewrite"
+    // v3 has no permissions and no arbitration step: a relayed approval ("I checked with the
+    // author") does not let a non-author rewrite, so it stays conflict_append. v2.1 is frozen.
+    const resolve = notes.find((n) => n.type === "resolve");
+    const derived = informed && resolve ? "resolve"
+      : before.user_ids.includes(author) || (approval && version < 3) ? "rewrite"
       : before.conflicts.some((c) => c.user_ids.includes(author)) ? "conflict_update"
       : "conflict_append";
     if (derived !== item.expectedOp) err(`${item.id} expectedOp should be ${derived}`);
     const op = labels.traces[item.incoming]?.ops.find((o) => o.entry === item.decision);
     if (op?.op !== item.expectedOp) err(`${item.id} label op is ${op?.op}, case says ${item.expectedOp}`);
+    // The member's own conclusion is replaced: their rewrite or own conflict update, or a resolve
+    // that picks someone else's. Such a change is recorded as a timeline entry in the same Turn.
+    const ownChange = version >= 3 && (derived === "rewrite" || derived === "conflict_update" ||
+      (derived === "resolve" && resolve.pick !== author && (before.user_ids.includes(author) || before.conflicts.some((c) => c.user_ids.includes(author)))));
+    const recorded = labels.traces[item.incoming]?.ops.find((o) => o.op === "add" && labels.entries[o.entry]?.changeOf === item.decision)?.entry;
+    if (ownChange && (!item.changeRecord || recorded !== item.changeRecord)) err(`${item.id} needs changeRecord ${recorded ?? "(a timeline entry with changeOf)"}`);
+    if (!ownChange && (item.changeRecord || recorded)) err(`${item.id} is not a change of the member's own position; no changeRecord`);
     covered.add(`${item.incoming}:${item.decision}`);
   }
   for (const [traceId, label] of Object.entries(labels.traces)) {

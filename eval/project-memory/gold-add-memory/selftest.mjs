@@ -139,6 +139,24 @@ test("v3 open visibility starts at the entry's own effective Turn acceptance", (
   assert.deepEqual(buildGold(current).errors, []);
 });
 
+test("v3 conflict policy: a relayed approval does not rewrite, and own changes are recorded", () => {
+  const current = loadDataset();
+  const copy = loadGold().entries.find((entry) => entry.id === "dec_copy");
+  assert.deepEqual(copy.user_ids, ["u_lin"]);
+  assert.deepEqual(copy.history, []);
+  assert.deepEqual(copy.conflicts.map((item) => item.user_ids), [["u_zhou"]]);
+  const relayed = structuredClone(current);
+  const wait = relayed.labels.traces.t_wait.ops.find((op) => op.entry === "dec_copy");
+  Object.assign(wait, { op: "rewrite", reason: null, via: "approval" });
+  assert.ok(buildGold(relayed).errors.includes("t_wait:rewrite:dec_copy only the author rewrites; must be conflict_append"));
+  const unrecorded = structuredClone(current);
+  unrecorded.labels.traces.t_env.ops = unrecorded.labels.traces.t_env.ops.filter((op) => op.entry !== "tl_env_change");
+  assert.ok(buildGold(unrecorded).errors.some((error) => error.startsWith("t_env:rewrite:dec_env replaces the member's own position")));
+  const spurious = structuredClone(current);
+  spurious.labels.traces.t_column.ops.push({ op: "add", entry: "tl_env_change", content: "x" });
+  assert.ok(buildGold(spurious).errors.some((error) => error.startsWith("t_column:tl_env_change records a change")));
+});
+
 test("v3 scorer detects early disclosure of a staged Topic and a pending decision", async () => {
   const current = loadDataset();
   const currentGold = loadGold();

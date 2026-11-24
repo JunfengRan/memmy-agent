@@ -4,10 +4,10 @@
   "rules": {
     "decision": "只记约束其他工作的选择：范围 / 对外约定 / 共同约定；局部实现、执行步骤、未采纳方案、未决事项不记",
     "experience": "脱离当前背景仍能指导同类工作才记；先写应该怎么做，再写被否定的做法及原因",
-    "timeline": "只记产出的状态变化（完成 / 提交 / 合并 / 通过 / 上线 / 暂停 / 恢复 / 作废）；文档只记初稿、评审、定稿、发布。较早的轨迹不是过时内容",
+    "timeline": "只记产出的状态变化（完成 / 提交 / 合并 / 通过 / 上线 / 暂停 / 恢复 / 作废）；文档只记初稿、评审、定稿、发布。成员改了自己先前的结论（改写自己的结论、更新自己的分歧项、裁决时放弃自己的结论）也记一条，写明谁把什么结论改成了什么（changeOf 指向那条决策）。较早的轨迹不是过时内容",
     "author": "user_ids 记作出决策或交办、采纳该内容的成员，不记 Agent",
     "reason": "取自会话，没说就为空；每个非空 reason 都带 reasonQuote（会话原文片段）",
-    "ops": "非作者且未经认可的不同结论只进 conflicts（conflict_append）；作者本人或会话体现认可 → rewrite，旧结论进 history；已告知后成员裁决 → resolve，清空 conflicts 并写 history",
+    "ops": "项目记忆没有成员权限，也没有人工或 Agent 的裁决流程。只有作者本人改自己的结论才 rewrite（旧结论进 history）或 conflict_update（自己那一项分歧）；非作者的不同结论只进 conflicts（conflict_append），转述别人同意改（如「我跟林工确认过了」）也不算授权；已告知后成员裁决 → resolve，清空 conflicts 并写 history",
     "optional": "optional 的条目写不写都对：写了不算误写，不写不算漏写（边界情况，见 README「规格含糊处」）"
   },
   "dropReasons": {
@@ -59,7 +59,7 @@
       ],
       "descriptionKeyPoints": [
         {
-          "text": "dry-run 报告显示月报用不上 export，不搬进 ledger",
+          "text": "周工按 dry-run 报告主张不把 export 搬进 ledger，与林工复用 export 的结论尚未定",
           "since": "t_dryrun"
         },
         {
@@ -976,15 +976,7 @@
     "dec_copy": {
       "topic": "tp_ledger_export",
       "kind": "decision",
-      "category": "范围",
-      "alternatives": [
-        {
-          "user_ids": [
-            "u_zhou",
-            "u_lin"
-          ]
-        }
-      ]
+      "category": "范围"
     },
     "tl_copy": {
       "topic": "tp_ledger_export",
@@ -1361,6 +1353,31 @@
       "topic": "tp_kit_glove",
       "kind": "decision",
       "category": "共同约定"
+    },
+    "tl_env_change": {
+      "topic": "tp_ledger_repo",
+      "kind": "timeline",
+      "changeOf": "dec_env"
+    },
+    "tl_csv_change": {
+      "topic": "tp_cat_export",
+      "kind": "timeline",
+      "changeOf": "dec_export_format"
+    },
+    "tl_empty_change": {
+      "topic": "tp_ledger_report",
+      "kind": "timeline",
+      "changeOf": "dec_empty"
+    },
+    "tl_amount_change": {
+      "topic": "tp_ledger_report",
+      "kind": "timeline",
+      "changeOf": "dec_amount"
+    },
+    "tl_copy_change": {
+      "topic": "tp_ledger_export",
+      "kind": "timeline",
+      "changeOf": "dec_copy"
     }
   },
   "traces": {
@@ -1523,11 +1540,9 @@
     "t_wait": {
       "ops": [
         {
-          "op": "rewrite",
+          "op": "conflict_append",
           "entry": "dec_copy",
-          "content": "先不把 catalog 的 export 搬进 ledger，等 dry-run 报告出来再决定。",
-          "reason": null,
-          "via": "approval"
+          "content": "先不把 catalog 的 export 搬进 ledger，等 dry-run 报告出来再决定。"
         },
         {
           "op": "add",
@@ -1680,6 +1695,11 @@
           "op": "add",
           "entry": "tl_csv",
           "content": "价格表导出已改为写 prices.csv。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_csv_change",
+          "content": "陈工把价格表导出格式从 prices.json 改为 csv，写成 prices.csv。"
         }
       ]
     },
@@ -1752,6 +1772,11 @@
           "op": "add",
           "entry": "tl_bug",
           "content": "month.json 的改动已撤回，report.ts 丢弃空客户整行的问题已修复。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_empty_change",
+          "content": "周工把自己对空客户的结论改为只跳过金额列为空的行，空客户但金额还在的保留在月报里。"
         }
       ]
     },
@@ -1769,6 +1794,11 @@
           "op": "add",
           "entry": "tl_env",
           "content": "README 里的数据库连接串已删除。"
+        },
+        {
+          "op": "add",
+          "entry": "tl_env_change",
+          "content": "林工把数据库连接串的做法改为只留在本机 .env，不再写进 README。"
         }
       ]
     },
@@ -1793,12 +1823,16 @@
     "t_dryrun": {
       "ops": [
         {
-          "op": "rewrite",
+          "op": "conflict_update",
           "entry": "dec_copy",
+          "target": 0,
           "content": "不把 catalog 的 export 搬进 ledger：dry-run 报告显示月报用不上 export。",
-          "reason": "dry-run 报告显示月报用不上 export",
-          "reasonQuote": "export 在月报里用不上",
-          "via": "author"
+          "reasonQuote": "export 在月报里用不上"
+        },
+        {
+          "op": "add",
+          "entry": "tl_copy_change",
+          "content": "周工把 export 是否搬进 ledger 的结论从等 dry-run 报告再定改为不搬，因为月报用不上 export。"
         }
       ]
     },
@@ -1819,6 +1853,11 @@
           "target": 0,
           "reason": "林工确定以周工的结论为准",
           "reasonQuote": "以周工的为准"
+        },
+        {
+          "op": "add",
+          "entry": "tl_amount_change",
+          "content": "林工把月报金额来源的结论从留在 journal 正文改为以周工的 entries amount 列为准。"
         }
       ]
     },

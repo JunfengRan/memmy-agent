@@ -131,11 +131,11 @@ node run-memmy-live-eval.mjs --api-checks-only ../runs/<stamp>/live-run.json   #
 
 - **决策**只记范围、对外约定、共同约定三类（§2.2.5）。局部实现、执行步骤、未采纳、未决、重复、过程材料、无关内容不写入，每轮注明原因。
 - **输出约定算决策**：月报路径、导出格式都是决策；「不把 catalog 的 export 搬进 ledger」是范围决策（`dec_copy`）。
-- **进展**的 kind 名为 `timeline`，只记产出状态变化。较早的进展不是过时内容，不当陷阱。部分进展标 `optional`，写不写都对。
+- **进展**的 kind 名为 `timeline`，只记产出状态变化。较早的进展不是过时内容，不当陷阱。部分进展标 `optional`，写不写都对。v3 另有一类必写进展：成员改了自己先前的结论（改写自己的结论、更新自己那一项分歧、裁决时放弃自己的结论）时，同一轮记一条「谁把结论从什么改为什么」，条目带 `changeOf`（指向那条决策），金标里标 `conflictCase`。v3 中有 5 条：`tl_env_change`、`tl_csv_change`、`tl_empty_change`、`tl_amount_change`、`tl_copy_change`。
 - **作者**：`user_ids` 记交办或采纳的成员（不记 Agent），`time` 取用户消息的 `chat_time`，允许落在回复之前的 2 分钟窗口内。
 - **原因**只取自会话，每个非空 `reason` 都附 `reasonQuote`（会话原文），会话没说就留 `null`。
-- **分歧**（§2.2.9，规格不设成员权限）：
-  - 作者已在 content 中，或会话体现认可 → `rewrite`，旧结论进 history；
+- **分歧**（§2.2.9，规格不设成员权限，项目记忆也没有人工或 Agent 的裁决流程）：
+  - 作者已在 content 中 → `rewrite`，旧结论进 history；转述别人的认可（「我跟林工确认过了」）不算授权，v3 按非作者处理（冻结的 v2.1 仍按认可改写）；
   - 作者在某一项 conflicts 中 → `conflict_update`；
   - 都不是 → `conflict_append`；
   - 已告知后成员裁决 → `resolve`，清空 conflicts 并写 history。
@@ -225,7 +225,7 @@ node run-memmy-live-eval.mjs --api-checks-only ../runs/<stamp>/live-run.json   #
 下面这些按注明的方式处理；以后规格明确了，再改标注并重建金标。
 
 1. **`dec_env` 是 join 还是 rewrite 加合并**：林工先定「连接串写进 README」（t_write_secret），周工给出相反结论「.env 留在本机、说明里不放连接串」（t_admin_env，`conflict_append`）。之后林工自己改成与周工一致（t_env）。金标按作者 `rewrite`，再按不变式 1 把变得相同的那项 conflicts 合并进 content，user_ids 为林工、周工；`alternatives` 也接受不合并、保留 conflicts 的结果。合并掉的那项不进 history，规格没说要不要留痕。
-2. **认可者是否进 user_ids**：t_wait 周工经林工认可改写。金标只记周工，`dec_copy` 的 `alternatives` 也接受「周工、林工」。
+2. **转述的认可算不算授权**：t_wait 周工说「我跟林工确认过了」。项目记忆没有成员权限和裁决流程，无法核实转述，v3 金标不把它当作授权：林工 t_copy 的结论保持现行（user_ids 只有林工），t_wait 是周工的 `conflict_append`，t_dryrun 是周工更新自己那一项（`conflict_update`，并记 `tl_copy_change`）。最终 `dec_copy` 的 conflicts 只有周工的 dry-run 结论，history 为空，不再有 `alternatives`。`tl_copy` 与 `tl_wait` 照记：Agent 确实抄进又撤回了拷贝，这是进展事实，与谁有权定结论无关。q09 据此改为 conflict 题。
 3. **决策时间**：取用户消息还是回复的 `chat_time`。金标取用户消息，评分接受两者之间的 2 分钟窗口。
 4. **resolve 后的 user_ids**：林工裁决选周工的结论后，金标的 user_ids 只记周工，不加入裁决者。
 5. **t_bug 用 `conflict_update` 还是 join**：周工更新的是自己那一项不一致结论，金标按 `conflict_update`。

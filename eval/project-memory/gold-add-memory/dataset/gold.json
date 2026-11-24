@@ -163,7 +163,9 @@
         "tl_ledger_tz",
         "tl_ledger_loc",
         "tl_ledger_round",
-        "tl_ledger_dup"
+        "tl_ledger_dup",
+        "tl_empty_change",
+        "tl_amount_change"
       ]
     },
     {
@@ -179,7 +181,7 @@
       ],
       "descriptionKeyPoints": [
         {
-          "text": "dry-run 报告显示月报用不上 export，不搬进 ledger",
+          "text": "周工按 dry-run 报告主张不把 export 搬进 ledger，与林工复用 export 的结论尚未定",
           "since": "t_dryrun"
         },
         {
@@ -190,7 +192,8 @@
       "entries": [
         "dec_copy",
         "tl_copy",
-        "tl_wait"
+        "tl_wait",
+        "tl_copy_change"
       ]
     },
     {
@@ -218,7 +221,8 @@
         "dec_env",
         "dec_branch",
         "tl_env",
-        "tl_write_secret"
+        "tl_write_secret",
+        "tl_env_change"
       ]
     },
     {
@@ -271,7 +275,8 @@
       "entries": [
         "dec_export_format",
         "tl_export",
-        "tl_csv"
+        "tl_csv",
+        "tl_csv_change"
       ]
     },
     {
@@ -1498,58 +1503,36 @@
       "optional": false,
       "topic": "tp_ledger_export",
       "space_id": "space_ledger",
-      "content": "不把 catalog 的 export 搬进 ledger：dry-run 报告显示月报用不上 export。",
-      "time": "2026-10-21T19:10:00+08:00",
+      "content": "ledger 的月报导出复用 catalog 的 export 做法，把它抄进 ledger。",
+      "time": "2026-10-21T13:00:00+08:00",
       "timeWindow": [
-        "2026-10-21T19:10:00+08:00",
-        "2026-10-21T19:12:00+08:00"
+        "2026-10-21T13:00:00+08:00",
+        "2026-10-21T13:02:00+08:00"
       ],
       "user_ids": [
-        "u_zhou"
+        "u_lin"
       ],
-      "conflicts": [],
-      "history": [
+      "conflicts": [
         {
-          "content": "ledger 的月报导出复用 catalog 的 export 做法，把它抄进 ledger。",
-          "time": "2026-10-21T13:00:00+08:00",
+          "content": "不把 catalog 的 export 搬进 ledger：dry-run 报告显示月报用不上 export。",
+          "time": "2026-10-21T19:10:00+08:00",
           "timeWindow": [
-            "2026-10-21T13:00:00+08:00",
-            "2026-10-21T13:02:00+08:00"
-          ],
-          "user_ids": [
-            "u_lin"
-          ],
-          "reason": null
-        },
-        {
-          "content": "先不把 catalog 的 export 搬进 ledger，等 dry-run 报告出来再决定。",
-          "time": "2026-10-21T13:20:00+08:00",
-          "timeWindow": [
-            "2026-10-21T13:20:00+08:00",
-            "2026-10-21T13:22:00+08:00"
+            "2026-10-21T19:10:00+08:00",
+            "2026-10-21T19:12:00+08:00"
           ],
           "user_ids": [
             "u_zhou"
-          ],
-          "reason": "dry-run 报告显示月报用不上 export"
+          ]
         }
       ],
+      "history": [],
       "staleVersions": [
-        "ledger 的月报导出复用 catalog 的 export 做法，把它抄进 ledger。",
         "先不把 catalog 的 export 搬进 ledger，等 dry-run 报告出来再决定。"
       ],
       "sources": [
         "t_copy",
         "t_wait",
         "t_dryrun"
-      ],
-      "alternatives": [
-        {
-          "user_ids": [
-            "u_zhou",
-            "u_lin"
-          ]
-        }
       ]
     },
     {
@@ -3272,6 +3255,116 @@
       "sources": [
         "t_kit_glove"
       ]
+    },
+    {
+      "id": "tl_env_change",
+      "kind": "timeline",
+      "optional": false,
+      "topic": "tp_ledger_repo",
+      "space_id": "space_ledger",
+      "content": "林工把数据库连接串的做法改为只留在本机 .env，不再写进 README。",
+      "time": "2026-10-21T17:50:00+08:00",
+      "timeWindow": [
+        "2026-10-21T17:50:00+08:00",
+        "2026-10-21T17:52:00+08:00"
+      ],
+      "user_ids": [
+        "u_lin"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_env"
+      ],
+      "changeOf": "dec_env",
+      "conflictCase": true
+    },
+    {
+      "id": "tl_csv_change",
+      "kind": "timeline",
+      "optional": false,
+      "topic": "tp_cat_export",
+      "space_id": "space_catalog",
+      "content": "陈工把价格表导出格式从 prices.json 改为 csv，写成 prices.csv。",
+      "time": "2026-10-21T16:20:00+08:00",
+      "timeWindow": [
+        "2026-10-21T16:20:00+08:00",
+        "2026-10-21T16:22:00+08:00"
+      ],
+      "user_ids": [
+        "u_chen"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_csv"
+      ],
+      "changeOf": "dec_export_format",
+      "conflictCase": true
+    },
+    {
+      "id": "tl_empty_change",
+      "kind": "timeline",
+      "optional": false,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "周工把自己对空客户的结论改为只跳过金额列为空的行，空客户但金额还在的保留在月报里。",
+      "time": "2026-10-21T17:40:00+08:00",
+      "timeWindow": [
+        "2026-10-21T17:40:00+08:00",
+        "2026-10-21T17:42:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhou"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_bug"
+      ],
+      "changeOf": "dec_empty",
+      "conflictCase": true
+    },
+    {
+      "id": "tl_amount_change",
+      "kind": "timeline",
+      "optional": false,
+      "topic": "tp_ledger_report",
+      "space_id": "space_ledger",
+      "content": "林工把月报金额来源的结论从留在 journal 正文改为以周工的 entries amount 列为准。",
+      "time": "2026-10-21T20:30:00+08:00",
+      "timeWindow": [
+        "2026-10-21T20:30:00+08:00",
+        "2026-10-21T20:32:00+08:00"
+      ],
+      "user_ids": [
+        "u_lin"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_resolve"
+      ],
+      "changeOf": "dec_amount",
+      "conflictCase": true
+    },
+    {
+      "id": "tl_copy_change",
+      "kind": "timeline",
+      "optional": false,
+      "topic": "tp_ledger_export",
+      "space_id": "space_ledger",
+      "content": "周工把 export 是否搬进 ledger 的结论从等 dry-run 报告再定改为不搬，因为月报用不上 export。",
+      "time": "2026-10-21T19:10:00+08:00",
+      "timeWindow": [
+        "2026-10-21T19:10:00+08:00",
+        "2026-10-21T19:12:00+08:00"
+      ],
+      "user_ids": [
+        "u_zhou"
+      ],
+      "staleVersions": [],
+      "sources": [
+        "t_dryrun"
+      ],
+      "changeOf": "dec_copy",
+      "conflictCase": true
     }
   ],
   "negatives": [
@@ -3579,7 +3672,7 @@
       "space_id": "space_ledger",
       "outcome": "written",
       "ops": [
-        "rewrite:dec_copy",
+        "conflict_append:dec_copy",
         "add:tl_wait"
       ],
       "dropped": []
@@ -3695,7 +3788,8 @@
       "outcome": "written",
       "ops": [
         "rewrite:dec_export_format",
-        "add:tl_csv"
+        "add:tl_csv",
+        "add:tl_csv_change"
       ],
       "dropped": []
     },
@@ -3739,7 +3833,8 @@
       "ops": [
         "update:exp_fixture",
         "conflict_update:dec_empty",
-        "add:tl_bug"
+        "add:tl_bug",
+        "add:tl_empty_change"
       ],
       "dropped": []
     },
@@ -3749,7 +3844,8 @@
       "outcome": "written",
       "ops": [
         "rewrite:dec_env",
-        "add:tl_env"
+        "add:tl_env",
+        "add:tl_env_change"
       ],
       "dropped": []
     },
@@ -3776,7 +3872,8 @@
       "space_id": "space_ledger",
       "outcome": "written",
       "ops": [
-        "rewrite:dec_copy"
+        "conflict_update:dec_copy",
+        "add:tl_copy_change"
       ],
       "dropped": []
     },
@@ -3794,7 +3891,8 @@
       "space_id": "space_ledger",
       "outcome": "written",
       "ops": [
-        "resolve:dec_amount"
+        "resolve:dec_amount",
+        "add:tl_amount_change"
       ],
       "dropped": []
     },
@@ -4815,13 +4913,14 @@
     },
     {
       "id": "q09",
-      "kind": "stale",
+      "kind": "conflict",
       "askedAt": "2026-10-21T19:34:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
       "question": "账本月报之前试过接入导出功能，后来怎么处理的，还会恢复吗？",
-      "goldAnswer": "林工曾把 export 接到月报里。周工和林工确认后撤回，等 dry-run 报告。报告出来后确定月报用不上 export，决定不再恢复。",
+      "goldAnswer": "这件事还没有定论，有两项不一致结论：林工的结论是复用 catalog 的 export 做法，把它抄进 ledger；周工先撤回了 ledger 里的 export 拷贝等 dry-run 报告，报告出来后他的结论是不搬进 ledger，因为月报用不上 export。需要成员确认以哪项为准。",
       "mustInclude": [
+        "抄进 ledger",
         "用不上 export"
       ],
       "expectedTopics": [
@@ -4831,21 +4930,21 @@
         {
           "entry": "dec_copy",
           "part": "content",
-          "text": "不把 catalog 的 export 搬进 ledger：dry-run 报告显示月报用不上 export。"
-        }
-      ],
-      "trapItems": [
-        {
-          "entry": "dec_copy",
-          "kind": "stale",
           "text": "ledger 的月报导出复用 catalog 的 export 做法，把它抄进 ledger。"
         },
         {
           "entry": "dec_copy",
-          "kind": "stale",
-          "text": "先不把 catalog 的 export 搬进 ledger，等 dry-run 报告出来再决定。"
+          "part": "conflicts",
+          "index": 0,
+          "text": "不把 catalog 的 export 搬进 ledger：dry-run 报告显示月报用不上 export。"
+        },
+        {
+          "entry": "tl_wait",
+          "part": "content",
+          "text": "ledger 里的 export 拷贝已撤回。"
         }
-      ]
+      ],
+      "trapItems": []
     },
     {
       "id": "q13",

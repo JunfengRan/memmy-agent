@@ -315,10 +315,11 @@
       "askedAt": "2026-10-21T19:34:00+08:00",
       "conversation": "ledger-ask",
       "space_id": "space_ledger",
-      "kind": "stale",
+      "kind": "conflict",
       "question": "账本月报之前试过接入导出功能，后来怎么处理的，还会恢复吗？",
-      "goldAnswer": "林工曾把 export 接到月报里。周工和林工确认后撤回，等 dry-run 报告。报告出来后确定月报用不上 export，决定不再恢复。",
+      "goldAnswer": "这件事还没有定论，有两项不一致结论：林工的结论是复用 catalog 的 export 做法，把它抄进 ledger；周工先撤回了 ledger 里的 export 拷贝等 dry-run 报告，报告出来后他的结论是不搬进 ledger，因为月报用不上 export。需要成员确认以哪项为准。",
       "mustInclude": [
+        "抄进 ledger",
         "用不上 export"
       ],
       "expect": {
@@ -329,23 +330,19 @@
           {
             "entry": "dec_copy",
             "parts": [
+              "content",
+              "conflicts"
+            ]
+          },
+          {
+            "entry": "tl_wait",
+            "parts": [
               "content"
             ]
           }
         ]
       },
-      "traps": [
-        {
-          "entry": "dec_copy",
-          "kind": "stale",
-          "history": 0
-        },
-        {
-          "entry": "dec_copy",
-          "kind": "stale",
-          "history": 1
-        }
-      ]
+      "traps": []
     },
     {
       "id": "q13",
