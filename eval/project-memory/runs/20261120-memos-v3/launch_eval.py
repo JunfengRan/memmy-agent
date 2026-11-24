@@ -25,6 +25,14 @@ settings.update({
     "PROJECT_MEMORY_GRAPH_DB": "postgres",
     "PROJECT_MEMORY_PROJECT_ID": "add-verify",
     "PROJECT_MEMORY_POSTGRES_DSN": "postgresql://add_verify@127.0.0.1:55439/add_verify",
+    # MemOS since 9893b6a7 builds the shared project DB (memos.project_dbs) at startup from
+    # PROJECT_DB_*; the local pgvector image has no zhparser, so use the simple parser.
+    "PROJECT_DB_HOST": "127.0.0.1",
+    "PROJECT_DB_PORT": "55439",
+    "PROJECT_DB_USER": "add_verify",
+    "PROJECT_DB_PASSWORD": "",
+    "PROJECT_DB_NAME": "add_verify",
+    "PROJECT_DB_TEXT_SEARCH_PARSER": "simple",
     "PROJECT_MEMORY_POSTGRES_SCHEMA": "add_runtime_verify",
     "PROJECT_MEMORY_EPISODE_MAX_TURNS": "2",
     "PROJECT_MEMORY_EPISODE_IDLE_SECONDS": "15",
