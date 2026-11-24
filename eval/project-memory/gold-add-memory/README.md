@@ -12,7 +12,9 @@
 
 确定性参考回放使用 `submit_time ?? reply_time` 作为受理时间，`chat_time` 保留发言顺序与迟交证据。语义边界、空闲 15 分钟、8 轮或首轮等待 30 分钟关闭整理批次。离线时钟在截止时触发关段，并用固定 1 秒表示整理与提交。未有 Topic 时先暂存，同 Space 累计 10 段或过 2 小时且再次暂存时，从最新最多 50 段触发 Formation。参考回放使用标定的 Topic 和源证据执行 Formation，在提交点一次发布对应内容。语料结束时仍未满足 Formation 的条目保留在 `pendingEntries`。生成的 `processingBatches` 和 `visibilityEvents` 可用于逐条审查受理、关闭、暂存、提交和重发；时间值属于离线参考回放。
 
-检索金标只含 `askedAt` 已提交的条目和主题要点。`q48`、`q49`、`q50` 分别覆盖同一条价格口径在开放、暂存和 Formation 后的可见性；`q31` 与 `q31_after` 对照裁决前后。`visibility` 题的答案计分单独覆盖缺少相关记忆的情况。召回分母使用有可见预期的题目，提前披露计入 `search.prematureVisibility`，包括已映射的改名 Topic、条目和摘要或描述里的待提交事实。
+检索金标只含 `askedAt` 已提交的条目和主题要点。
+
+**flush 口径（金标 revision 2，默认）**：回放在每题检索前 flush 该题的 Space，在最终读取前 flush 全部 Space，所以金标按「提问前该 Space 的 Add 都已关段、整理并完成 Formation」推出。离线时钟在每道计分题的 `askedAt` 关掉该 Space 还开着的段（关段原因 `flush`），已关的段在这一刻前处理完，再对该 Space 的暂存段强制 Formation；语料结束后再 flush 一次全部 Space，`pendingEntries` 为空。`gold.json` 带 `goldRevision: 2` 与 `processing: "flush"`。只在不 flush 时成立的题面写在 questions.json 的 `underFlush` 里：`q48`、`q45` 改为 plain，期望刚写入的价格与限速决策；`q49` 排除（q48 的 flush 已提交 dec_price，13:00 没有暂存内容可测，题面与 q50 重复）；`q31` 改为与 `q31_after` 相同的裁决后状态。旧口径（只按计时关段与 Formation）仍可重建：`buildGold(ds, {flush: false})`、`node build-gold-baseline.mjs --natural`、`node load-eval-set.mjs --natural`。在旧口径下 `q48`、`q49`、`q50` 分别覆盖同一条价格口径在开放、暂存和 Formation 后的可见性，`q31` 与 `q31_after` 对照裁决前后。`visibility` 题的答案计分单独覆盖缺少相关记忆的情况。召回分母使用有可见预期的题目，提前披露计入 `search.prematureVisibility`，包括已映射的改名 Topic、条目和摘要或描述里的待提交事实。
 
 `space-isolation` 是空间隔离用例。10 道计分题各自在一个 Space 内提问，金标只取该 Space 在提问时已经提交的内容。另一个 Space 的相似条目作为评测负例。例如，账本月报使用 `entries.amount` 的提案与商品目录读取 `price.amount` 的决策分别属于各自 Space。两个空间的查询由 `search_space_isolation` 分别发送，每次只传一个 Space，用原空间的命中作为正对照。
 
@@ -34,7 +36,8 @@
 
 ```bash
 cd eval/project-memory/gold-add-memory
-node load-eval-set.mjs                 # 校验数据集，errors 必须为 []
+node load-eval-set.mjs                 # 校验数据集（flush 口径），errors 必须为 []
+node load-eval-set.mjs --natural       # 校验不 flush 的旧口径（内存重建，不对比 gold.json）
 node run-pipeline-eval.mjs --oracle    # 金标自身作答：每项得分 1、每项错误 0
 node run-pipeline-eval.mjs --empty     # 什么都不写、不答：每项得分 0
 node selftest.mjs                      # 评分与接口检查的自测（不需要服务、评委、阅读模型）
@@ -56,6 +59,10 @@ node load-eval-set.mjs
 #### MemOS v3
 
 使用独立的 MemOS 服务和测试时钟。时钟接受 `POST /advance` 与 `{at}`，推进到指定时刻并处理到期或已关闭的 Episode。回放按受理时点发 Add，按 `askedAt` 查询，Add 后在同一时点再推进一次。服务通过正常的 `/product` 路由接收消息和查询，重发沿用原 Task 和消息 ID。
+
+回放器 revision 2 在每题 `advance(askedAt)` 之后、检索之前 flush 该题的 Space：`POST /flush_project_memory {space_id, wait_seconds: 120}`（模型调用记为 add 阶段的 `flush` 步），再 `advance(askedAt)` 让时钟的 settle 跑完各阶段，最多重复 5 次，直到 `pending_episode_ids` 为空且 `formation.reason` 不是 `EPISODES_IN_FLIGHT`。最后 `advance(finalAt)` 之后同样 flush 每个 Space，再读 `get_memory`。每题的 flush 回执记在 `questions[].flush`，最终的记在 `finalFlush`；5 次仍未处理完或接口报错记为 `flush` 失败，题目照常提问。服务需设 `PROJECT_MEMORY_ENABLE_FLUSH=true`（`launch_eval.py` 已设）。`--no-flush` 回到 revision 1 的只按计时处理，运行文件记 `processing: "natural"`，评分自动换用旧口径金标（`report.goldProcessing`）。
+
+本地一键运行：`../runs/20261120-memos-v3/run-e2e-wt.zsh` 起用量代理、MemOS 回放服务（`launch_eval.py` + 同目录的 `replay_app.py` 时钟）、回放和评分，需要 `WT=<MemOS 工作树>`，嵌入服务 `embed_server.py` 需先在 58112 端口运行，Postgres、Redis、Neo4j、Qdrant 用 `launch_eval.py` 里的本地端口。额外参数（如 `--no-flush`）传给回放器。
 
 ```bash
 export MEMMY_EVAL_BASE=http://127.0.0.1:8000/product
@@ -192,6 +199,8 @@ node run-memmy-live-eval.mjs --api-checks-only ../runs/<stamp>/live-run.json   #
 | `answers.llm / rubric / tokenF1` | 评委判对错；`mustInclude` 全部出现；与标准答案的字词 F1 |
 | `answers.llm.<题型>`、`answers.tokenF1.<题型>` | 按题型（v3 为 conflict / plain / space-isolation / stale / visibility）分别报评委分与 Token F1 |
 | `api.passRate` | 4 项接口检查通过率 |
+
+**分歧 / 非分歧分组**（`report.byConflict`，仅供参考，`--gate` 仍看总体数）：项目记忆没有裁决流程，分歧场景最容易出错，所以单独报。条目分组：带 conflicts 的决策（金标或任一 `alternatives`）、`conflicts.json` 里的决策、改了自己结论的进展记录（`conflictCase`）属于 conflict，其余属于 nonConflict。每组报条目 P/R/F1、按 kind 的 P/R/F1 和决策 `stateExact`。写入按配上的金标条目分组；没配上但评委归到某条金标（旧版本、分歧单独成条、重复）的按那条金标分组；评委归不到任何金标的进 unattributed。`precision` 不含 unattributed，`precisionWithUnattributed` 把整个 unattributed 加到每组分母（下界）。题目分组：`kind` 为 conflict 或期望 conflicts 的题属于 conflict，每组报答题正确率、rubric 和检索 `entryHit`。
 
 | 错误（oracle = 0） | 定义 |
 | --- | --- |
