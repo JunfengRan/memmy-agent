@@ -8,6 +8,9 @@ const MAX_TURNS = 8;
 const FORMATION_COUNT = 10;
 const FORMATION_LIMIT = 50;
 
+// Whether gold is derived under the flushing replay (see buildEpisodeTimeline).
+export const FLUSH_BY_DEFAULT = false;
+
 export const acceptedTime = (trace) => trace.submit_time ?? trace.reply_time;
 const timestamp = (at) => `${new Date(at + 8 * 60 * MINUTE).toISOString().slice(0, 19)}+08:00`;
 
@@ -63,7 +66,7 @@ export function validateEpisodeLabels(ds) {
   return errors;
 }
 
-function closeBatches(ds, events) {
+function closeBatches(ds, events, points) {
   const homes = new Map(ds.corpus.conversations.map((conversation) => [conversation.id, conversation.space_id]));
   const semantic = new Map(ds.episodes.episodes.flatMap((episode) => episode.traces.map((id) => [id, episode])));
   const open = new Map();
@@ -90,7 +93,21 @@ function closeBatches(ds, events) {
     }
   }
 
+  // A flush closes every open Episode of its Space at the flush time. Adds accepted at the same
+  // instant come first: the replay submits them before it asks the question.
+  let next = 0;
+  function flushBefore(limit) {
+    while (next < points.length && points[next].at < limit) {
+      const point = points[next++];
+      expire(point.at);
+      for (const [conversation, batch] of open) {
+        if (point.space === null || batch.space === point.space) close(conversation, batch, point.at, "flush");
+      }
+    }
+  }
+
   for (const { trace, at } of acceptOrder) {
+    flushBefore(at);
     expire(at);
     if (trace.resubmitOf) {
       events.push({ kind: "resubmit", at: timestamp(at), trace: trace.id, original: trace.resubmitOf });
@@ -115,13 +132,37 @@ function closeBatches(ds, events) {
     events.push({ kind: "accept", at: timestamp(at), trace: trace.id, batch: batch.id });
     if (batch.traces.length >= MAX_TURNS) close(trace.conversation, batch, at, "turn_count");
   }
+  flushBefore(Infinity);
   expire(Infinity);
   return batches.sort((left, right) => left.closedAt.localeCompare(right.closedAt) || left.id.localeCompare(right.id));
 }
 
-export function buildEpisodeTimeline(ds) {
+// Questions with per-mode wording. Under flush, `underFlush` replaces the listed fields; a null
+// value removes the field (for example `pending`, which flush makes visible).
+export function effectiveQuestions(ds, { flush = FLUSH_BY_DEFAULT } = {}) {
+  return (ds.questions?.questions ?? []).map(({ underFlush, ...question }) => {
+    if (!flush || !underFlush) return question;
+    const merged = { ...question, ...underFlush };
+    for (const [key, value] of Object.entries(merged)) if (value === null) delete merged[key];
+    return merged;
+  });
+}
+
+// The replay flushes a question's Space right before it searches, so every earlier Add of that
+// Space is closed, organized, and formed. The final read flushes every Space.
+export function flushPoints(ds, { flush = FLUSH_BY_DEFAULT } = {}) {
+  if (!flush) return [];
+  return effectiveQuestions(ds, { flush }).filter((question) => !question.excluded)
+    .map((question) => ({ at: Date.parse(question.askedAt), space: question.space_id, question: question.id }))
+    .sort((left, right) => left.at - right.at);
+}
+
+// flush: true models the replay that flushes before each question and before the final read;
+// false is the earlier derivation where Episodes close and form only on their own timers.
+export function buildEpisodeTimeline(ds, { flush = FLUSH_BY_DEFAULT } = {}) {
   const events = [];
-  const batches = closeBatches(ds, events);
+  const points = flushPoints(ds, { flush });
+  const batches = closeBatches(ds, events, points);
   const batchByTrace = new Map(batches.flatMap((batch) => batch.traces.map((id) => [id, batch])));
   const commitByTrace = new Map();
   const stagedBySpace = new Map();
@@ -144,25 +185,8 @@ export function buildEpisodeTimeline(ds) {
     events.push({ kind: "commit", at, batch: batch.id, topic: batch.topic, ...(formation ? { formation } : {}) });
   }
 
-  for (const batch of batches) {
-    const now = Date.parse(batch.closedAt) + PROCESS_MS;
+  function form(pool, now, trigger) {
     const at = timestamp(now);
-    if (!batch.topic || !drafts(batch).length) {
-      events.push({ kind: "skip", at, batch: batch.id });
-      continue;
-    }
-    if (committedTopics.has(batch.topic)) {
-      commit(batch, at);
-      continue;
-    }
-    batch.stagedAt = at;
-    const pool = stagedBySpace.get(batch.space) ?? { since: now, additions: 0, batches: [] };
-    pool.additions += 1;
-    pool.batches.push(batch);
-    stagedBySpace.set(batch.space, pool);
-    events.push({ kind: "stage", at, batch: batch.id });
-    if (pool.additions < FORMATION_COUNT && now - pool.since < FORMATION_MS) continue;
-
     const groups = new Map();
     for (const staged of pool.batches.slice(-FORMATION_LIMIT)) {
       const group = groups.get(staged.topic) ?? [];
@@ -179,12 +203,58 @@ export function buildEpisodeTimeline(ds) {
       return hasDurableContent && (turnIds.size >= 2 || hasMemberDecision);
     });
     const moved = new Set(forming.flatMap((group) => group.map((item) => item.id)));
-    events.push({ kind: "formation", at, trigger: batch.id, topics: forming.map((group) => group[0].topic), batches: [...moved] });
-    for (const group of forming) for (const staged of group) commit(staged, at, batch.id);
+    events.push({ kind: "formation", at, trigger, topics: forming.map((group) => group[0].topic), batches: [...moved] });
+    for (const group of forming) for (const staged of group) commit(staged, at, trigger);
     pool.additions = 0;
     pool.since = now;
     pool.batches = pool.batches.filter((item) => !moved.has(item.id));
   }
+
+  function process(batch, now) {
+    const at = timestamp(now);
+    if (!batch.topic || !drafts(batch).length) {
+      events.push({ kind: "skip", at, batch: batch.id });
+      return;
+    }
+    if (committedTopics.has(batch.topic)) {
+      commit(batch, at);
+      return;
+    }
+    batch.stagedAt = at;
+    const pool = stagedBySpace.get(batch.space) ?? { since: now, additions: 0, batches: [] };
+    pool.additions += 1;
+    pool.batches.push(batch);
+    stagedBySpace.set(batch.space, pool);
+    events.push({ kind: "stage", at, batch: batch.id });
+    if (pool.additions >= FORMATION_COUNT || now - pool.since >= FORMATION_MS) form(pool, now, batch.id);
+  }
+
+  // A closed Episode is organized PROCESS_MS later. A flush waits for Episodes already closed in
+  // its Space, so those finish no later than the flush, then a forced Formation runs.
+  const work = batches.map((batch) => {
+    const closed = Date.parse(batch.closedAt);
+    let at = closed + (batch.closeReason === "flush" ? 0 : PROCESS_MS);
+    const point = points.find((item) => (item.space === null || item.space === batch.space) && item.at >= closed && item.at < at);
+    if (point) at = point.at;
+    return { at, order: 0, batch };
+  });
+  work.push(...points.map((point) => ({ at: point.at, order: 1, point })));
+  if (flush) {
+    const last = Math.max(...work.map((item) => item.at), ...ds.corpus.traces.map((trace) => Date.parse(acceptedTime(trace))));
+    if (Number.isFinite(last)) {
+      work.push({ at: last, order: 1, point: { at: last, space: null, question: null } });
+    }
+  }
+  work.sort((left, right) => left.at - right.at || left.order - right.order);
+  for (const item of work) {
+    if (item.batch) { process(item.batch, item.at); continue; }
+    const trigger = `flush:${item.point.question ?? "final"}`;
+    events.push({ kind: "flush", at: timestamp(item.at), space: item.point.space, ...(item.point.question ? { question: item.point.question } : { final: true }) });
+    for (const [space, pool] of stagedBySpace) {
+      if ((item.point.space === null || item.point.space === space) && pool.batches.length) form(pool, item.at, trigger);
+    }
+  }
+  const staged = [...stagedBySpace.values()].flatMap((pool) => pool.batches.map((batch) => batch.id));
   events.sort((left, right) => left.at.localeCompare(right.at));
-  return { events, batches, batchByTrace, commitByTrace };
+  return { events, batches, batchByTrace, commitByTrace, flush, staged };
 }

@@ -8,7 +8,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildEpisodeTimeline, validateEpisodeLabels } from "./episode-timeline.mjs";
+import { FLUSH_BY_DEFAULT, buildEpisodeTimeline, effectiveQuestions, validateEpisodeLabels } from "./episode-timeline.mjs";
+
+export { effectiveQuestions };
 
 const root = dirname(fileURLToPath(import.meta.url));
 export const DATASET_DIR = join(root, "dataset");
@@ -114,8 +116,8 @@ export function isLateDecision(trace, entry) {
 // Replays labelled ops visible at or before `until` (submit_time ?? reply_time).
 // stopBeforeId cuts the replay just before that trace, in submit order.
 // Returns entry states keyed by gold entry id, plus rule violations found on the way.
-export function replay(ds, until = "9999", { stopBeforeId, traceMode = false, timeline } = {}) {
-  const episodeTimeline = !traceMode && ds.episodes ? timeline ?? buildEpisodeTimeline(ds) : null;
+export function replay(ds, until = "9999", { stopBeforeId, traceMode = false, timeline, flush = FLUSH_BY_DEFAULT } = {}) {
+  const episodeTimeline = !traceMode && ds.episodes ? timeline ?? buildEpisodeTimeline(ds, { flush }) : null;
   const conversations = new Map(ds.corpus.conversations.map((c) => [c.id, c]));
   const meta = ds.labels.entries;
   const state = new Map();
@@ -246,10 +248,14 @@ export function replay(ds, until = "9999", { stopBeforeId, traceMode = false, ti
   return { state, errors };
 }
 
-export function buildGold(ds) {
-  const { corpus, labels, questions } = ds;
+// flush derives the expected state under the v3 replay that flushes each question's Space before
+// it searches and every Space before the final read. flush: false is the earlier derivation in
+// which Episodes close and form only on their own timers.
+export function buildGold(ds, { flush = FLUSH_BY_DEFAULT } = {}) {
+  const { corpus, labels } = ds;
+  const questions = { ...ds.questions, questions: effectiveQuestions(ds, { flush: flush && Boolean(ds.episodes) }) };
   const timelineErrors = ds.episodes ? validateEpisodeLabels(ds) : [];
-  const timeline = ds.episodes && !timelineErrors.length ? buildEpisodeTimeline(ds) : null;
+  const timeline = ds.episodes && !timelineErrors.length ? buildEpisodeTimeline(ds, { flush }) : null;
   const { state, errors } = replay(ds, "9999", { timeline, traceMode: !timeline });
   errors.push(...timelineErrors);
   const allSourceOperations = timeline ? replay(ds, "9999", { traceMode: true }).state : null;

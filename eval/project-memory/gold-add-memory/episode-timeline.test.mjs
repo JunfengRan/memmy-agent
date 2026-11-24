@@ -1,16 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildEpisodeTimeline, validateEpisodeLabels } from "./episode-timeline.mjs";
+import { buildEpisodeTimeline, effectiveQuestions, validateEpisodeLabels } from "./episode-timeline.mjs";
 
 const time = (clock) => `2026-11-01T${clock}+08:00`;
 const turn = (id, conversation, clock, extra = {}) => ({
   id, conversation, domain: "领域", query: id, chat_time: time(clock), reply_time: time(clock), ...extra
 });
 const episode = (id, traces, topic = "topic") => ({ id, traces, topic, goal: id, quote: traces[0] });
-function dataset(traces, episodes, ops = {}) {
+function dataset(traces, episodes, ops = {}, questions = []) {
   return {
+    questions: { questions },
     corpus: {
-      conversations: ["left", "right"].map((id) => ({ id, space_id: "space" })),
+      conversations: [...["left", "right"].map((id) => ({ id, space_id: "space" })), { id: "elsewhere", space_id: "other_space" }],
       traces
     },
     labels: {
@@ -69,4 +70,35 @@ test("turn limit, longest wait, and semantic switch each close an active batch",
   assert.equal(batchByTrace.get("r0").closeReason, "max_wait");
   assert.equal(batchByTrace.get("next").closeReason, "task_boundary");
   assert.equal(batchByTrace.get("next").closedAt, time("09:34:00"));
+});
+
+test("a flush closes its Space's open Episodes and forms every staged one at the question time", () => {
+  const turns = [turn("a", "left", "09:00:00"), turn("b", "right", "09:20:00"), turn("c", "elsewhere", "09:21:00")];
+  const ask = (id, clock, space = "space", extra = {}) => ({ id, askedAt: time(clock), space_id: space, ...extra });
+  const ds = dataset(turns, [episode("first", ["a"]), episode("next", ["b"], "other"), episode("away", ["c"], null)], {
+    a: [{ op: "add", entry: "dec" }], b: [{ op: "add", entry: "other" }]
+  }, [ask("q1", "09:25:00"), ask("skipped", "09:22:00", "space", { excluded: true })]);
+  const natural = buildEpisodeTimeline(ds, { flush: false });
+  assert.equal(natural.commitByTrace.has("a"), false);
+  assert.deepEqual(natural.events.filter((event) => event.kind === "flush"), []);
+
+  const flushed = buildEpisodeTimeline(ds, { flush: true });
+  // a went idle at 09:15 and was staged at 09:15:01; b is still open when q1 flushes.
+  assert.equal(flushed.batchByTrace.get("a").closeReason, "idle");
+  assert.equal(flushed.batchByTrace.get("b").closeReason, "flush");
+  assert.equal(flushed.batchByTrace.get("b").closedAt, time("09:25:00"));
+  assert.equal(flushed.commitByTrace.get("a"), time("09:25:00"));
+  assert.equal(flushed.commitByTrace.get("b"), time("09:25:00"));
+  // The other Space is not flushed by q1; it closes on its own timer, then the final flush runs.
+  assert.equal(flushed.batchByTrace.get("c").closeReason, "idle");
+  assert.deepEqual(flushed.staged, []);
+  const flushes = flushed.events.filter((event) => event.kind === "flush");
+  assert.deepEqual(flushes.map((event) => event.question ?? "final"), ["q1", "final"]);
+  assert.equal(flushed.events.at(-1).kind, "flush");
+});
+
+test("under flush a question's override replaces its fields, and null removes one", () => {
+  const ds = { questions: { questions: [{ id: "q", kind: "visibility", pending: { entry: "dec" }, underFlush: { kind: "plain", pending: null } }] } };
+  assert.deepEqual(effectiveQuestions(ds, { flush: false }), [{ id: "q", kind: "visibility", pending: { entry: "dec" } }]);
+  assert.deepEqual(effectiveQuestions(ds, { flush: true }), [{ id: "q", kind: "plain" }]);
 });
