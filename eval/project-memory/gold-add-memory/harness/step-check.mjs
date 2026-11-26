@@ -106,7 +106,10 @@ export function createStepChecker({ ds, gold, outDir, knownPath, judge, saveJudg
       cache[key] = verdict.label !== "none" ? verdict
         : { ...item.attr, label: label === "match" ? "early" : label, source: `${verdict.source}:final` };
     }
-    const verdict = cache[key];
+    let verdict = cache[key];
+    // The write is the entry's final current version but gold has not committed it yet (MemOS ran
+    // ahead of gold's timers): an early write, not a stale or conflicting one.
+    if (label === "match" && ["stale", "conflict"].includes(verdict.label)) verdict = { ...verdict, label: "early", ids: [entry] };
     return { ...verdict, ids: verdict.label === "match" ? [...new Set([...verdict.ids, ...visible])] : verdict.ids, final: item.attr };
   };
 
