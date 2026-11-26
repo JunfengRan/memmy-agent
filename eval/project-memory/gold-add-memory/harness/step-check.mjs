@@ -25,7 +25,7 @@ import { createLlm, resolveModelConfig } from "../llm.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIELDS = [["decisions", "decision"], ["experiences", "experience"], ["timeline", "timeline"]];
-const NOTE_TYPES = new Set(["topic_merge", "kind_mismatch", "early_write"]);
+const NOTE_TYPES = new Set(["topic_merge", "kind_mismatch", "early_write", "timeline_split", "restates_conflict"]);
 const norm = (text) => String(text ?? "").replace(/\s+/g, "").trim();
 const short = (text, n = 80) => { const s = String(text ?? ""); return s.length > n ? `${s.slice(0, n)}…` : s; };
 
@@ -198,7 +198,8 @@ export function createStepChecker({ ds, gold, outDir, knownPath, judge, saveJudg
         const base = { trace, op: opName, entry, kind, expected: expected.content, expectedTopic, ...context };
         if (!hits.length) { add({ type: "missing", ...base }); continue; }
         const sameKind = hits.filter((item) => item.kind === kind);
-        if (sameKind.length > 1) add({ type: "duplicate_entry", ...base, actual: sameKind.map((item) => ({ topic: item.topicName, content: item.content })) });
+        // One gold timeline entry may be reported as one entry per fact: a note, not a duplicate.
+        if (sameKind.length > 1) add({ type: kind === "timeline" ? "timeline_split" : "duplicate_entry", ...base, actual: sameKind.map((item) => ({ topic: item.topicName, content: item.content })) });
         const hit = sameKind[0] ?? hits[0];
         if (hit.kind !== kind) add({ type: "kind_mismatch", ...base, actualKind: hit.kind, actual: hit.content });
         const hostGold = majority(hit.topicId);
@@ -228,7 +229,7 @@ export function createStepChecker({ ds, gold, outDir, knownPath, judge, saveJudg
       const { label, ids } = item.attr;
       const where = { uid: item.uid, space: item.space, topic: item.topicName, kind: item.kind, actual: item.content, ids, reason: item.attr.reason };
       if (label === "stale") add({ type: "stale_as_current", ...where, key: `stale_as_current:${norm(item.content)}` });
-      else if (label === "conflict") add({ type: "conflict_as_entry", ...where, key: `conflict_as_entry:${norm(item.content)}` });
+      else if (label === "conflict") add({ type: item.kind === "decision" ? "conflict_as_entry" : "restates_conflict", ...where, key: `conflict_as_entry:${norm(item.content)}` });
       else if (label === "negative") add({ type: "negative_write", ...where, key: `negative_write:${norm(item.content)}` });
       else if (label === "none") add({ type: "unattributed", ...where, key: `unattributed:${norm(item.content)}` });
       else if (label === "early") add({ type: "early_write", ...where, key: `early_write:${ids[0]}` });
@@ -253,12 +254,16 @@ export function createStepChecker({ ds, gold, outDir, knownPath, judge, saveJudg
       question.stepVerdict = verdict;
       if (!verdict.correct) {
         const retrieved = (question.topic_detail_list ?? []).map((topic) => topic.id);
+        // Search returns only the matched entries of each Topic, so a fact counts as retrieved when
+        // its entry (or, for a conflict, its decision with conflicts) came back, not just its Topic.
+        const returned = new Set((question.topic_detail_list ?? []).flatMap((topic) => FIELDS.flatMap(([field]) => (topic[field] ?? []).map((raw) => raw.id ?? norm(raw.content)))));
         const facts = q.expectedItems.map((expectedItem) => {
-          const stored = items.filter((item) => item.space === q.space_id && item.attr.label === "match" && item.attr.ids.includes(expectedItem.entry));
+          const stored = items.filter((item) => item.space === q.space_id && item.attr.label === "match" && item.attr.ids.includes(expectedItem.entry) &&
+            (expectedItem.part !== "conflicts" || (item.kind === "decision" && (item.raw.conflicts ?? []).length > 0)));
           return {
             entry: expectedItem.entry, part: expectedItem.part, text: expectedItem.text,
             stored: stored.map((item) => ({ topic: item.topicName, content: item.content, conflicts: (item.raw.conflicts ?? []).map((c) => c.content) })),
-            retrieved: stored.some((item) => retrieved.includes(item.topicId)),
+            retrieved: stored.some((item) => returned.has(item.raw.id ?? norm(item.content))),
             rank: stored.map((item) => retrieved.indexOf(item.topicId)).filter((i) => i >= 0).sort((a, b) => a - b)[0] ?? null
           };
         });
