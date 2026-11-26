@@ -18,6 +18,8 @@
 
 按收益排序的修改意见见第 6 节。前三项（Topic 按工作或产出物粒度建、Formation 只按对象命名并在建后补一道「同一事项」判定、merge 不把复述当改写）预计能同时改善 topic F1、duplicateTopics、conflictAsEntry 和 conflict 类答题。
 
+**修改后的复测与空白对照（2026-11-26，详见 4.1 节）：** 按第 6 节改过的 MemOS（`promem_dev-rjf@31a38794`）完整跑了 3 次 v3。答题是 0.857（0.914 / 0.857 / 0.800），topic F1 0.667，entries.f1 0.806，recall@3 0.971，都明显高于 11-24 的 flush 运行，重复 Topic 也从 7–15 个降到 3–11 个。但不接任何记忆、只给原始会话文件的空白对照组，答题达到 0.924（3 次），比 MemOS 高。在 v3 这样每个 Space 只有几十轮会话的规模上，直接读原文又便宜又准。MemOS 的优势只能在 reader 每题输入 token 上体现（约 1.5k，对照组约 4.8k），而且需要更长的历史才能拉开。这次修改还引入了一个新问题：同一 Topic 里不同对象的兄弟规则（早班和夜班、冷链和冷冻）被 merge 当成同一事项，记成了冲突，q43、q44 三次全错。
+
 ## 2. 数据集 v3
 
 数据集模拟一个团队的多位成员，在多个 Space 里通过各自的 Agent 会话推进工作。被测系统只能通过规格接口（create_space / add / scheduler status / flush / get_memory / search）看到对话，看不到任何标注。
@@ -82,6 +84,50 @@ flowchart LR
 | 11-24 d（抽取 prompt D） | flush | 0.77–0.79 | 0.77–0.80 | ~0.62 | — | 0.54–0.57 |
 
 11-24 的四组运行每次都有 7–15 个重复 Topic、4–7 条旧版本被当成当前、6–10 条冲突被单独写成条目；conflict 题的正确率只有 0.2–0.4，gate 全部没过。这些运行的目录随旧 worktree 一起删除了，数字来自删除前的记录。冲突组的条目 F1 约 0.4、stateExact 0.08–0.17，非冲突组约 0.9 / 0.82，说明问题集中在冲突链和 Topic 结构上，这正是这次逐事件 review 要查清的。
+
+### 4.1 修改后的复测与空白对照（2026-11-26）
+
+被测：MemOS `promem_dev-rjf@31a38794`，即第 6 节的 7 项修改，worktree `MemOS-eval-new`。SUT 和 reader 是 `deepseek-v4.1-flash-1017`，judge 是 `gpt-6-luna`。完整 flush 回放（148 个事件），共 3 次，每次各用一个独立的本地库。
+
+| 运行 | entries.f1 | stateExact | topic F1 | recall@3 | answers | conflict / stale / plain / 隔离 | 重复 Topic / 错误合并 | 冲突单独成条 / 旧版当前 |
+|---|---|---|---|---|---|---|---|---|
+| MemOS run 1 | 0.809 | 0.797 | 0.672 | 0.943 | 0.914 | 1.00 / 0.80 / 0.88 / 1.00 | 3 / 2 | 7 / 2 |
+| MemOS run 2 | 0.798 | 0.781 | 0.635 | 1.000 | 0.857 | 0.75 / 0.80 / 0.81 / 1.00 | 11 / 0 | 9 / 2 |
+| MemOS run 3 | 0.811 | 0.797 | 0.694 | 0.971 | 0.800 | 0.75 / 0.60 / 0.75 / 1.00 | 6 / 0 | 7 / 3 |
+| **MemOS 均值** | **0.806** | **0.792** | **0.667** | **0.971** | **0.857** | 0.83 / 0.73 / 0.81 / 1.00 | 6.7 / 0.7 | 7.7 / 2.3 |
+| 空白对照 ×3（均值） | — | — | — | — | **0.924**（0.943 / 0.886 / 0.943） | 0.75 / 0.93 / 0.92 / 1.00 | — | — |
+
+**空白对照组**（`eval/project-memory/gold-add-memory/history-baseline.mjs`，prompt 版本 2）：
+- 不接任何记忆系统。reader 只知道有 6 个项目、每个项目的目录，以及会话记录在各自的 `sessions/` 下（一个会话一个文件）。
+- 文件是提问时刻之前已经提交的原始轮次，按「时间 成员：请求 / 时间 Agent：回复」逐行排列，覆盖所有项目。
+- 工具只有通用的 `list_dir`、`read_file`（带行号）和 `grep`（子串匹配），最多 12 步，最后一步必须作答。
+- 回答规则和 MemOS 的 reader 相同，judge、gold 答案和陷阱文本也相同，所以 answers.llm 可以一一对照。
+- 没有任何摘要、概要、去重或裁决，也不展示 MemOS 产出的任何内容。
+- 第一版对照组（v1）设计偏多：带首轮请求的会话索引、截到 80 字的逐轮概要、只看本 Space、提示「以时间更晚的为当前状态」。按评审意见改成了现在的版本。v1 三次的答题为 0.886 / 0.857 / 0.914，只作参考。
+
+**错题对照：**
+
+| 题目 | 类型 | MemOS（3 次里错几次） | 空白对照 | 原因 |
+|---|---|---|---|---|
+| q07 | stale | 3 | 0 | MemOS 的 timeline 里还留着「写成 prices.json」，reader 判成两处不一致。这是第 6 节的「X 会…」口径改动带来的：旧格式的完成描述被记成了 timeline |
+| q43、q44 | plain | 3、3 | 1、1 | **新回归**：冷链和冷冻、早班和夜班进了同一个 Topic（和 gold 一致），但 dec.update 把不同对象的兄弟规则当成同一事项，记成了冲突，reader 于是答「尚未定论」 |
+| q09 | conflict | 2 | 3 | 两边都没稳定答出林工和周工两种结论 |
+| q17 | plain | 2 | 0 | 空客户仍有分歧这一点，MemOS 没有稳定呈现 |
+| q13、q15 | — | 1、1 | 1、2 | 偶发 |
+
+**开销（每次 v3 运行，35 道题；按 pricing.json 逐次计价）：**
+
+| 项 | MemOS（run 3） | 空白对照（v2 ×3） |
+|---|---|---|
+| 写入（Add） | 419 次调用；输入 481k + 缓存 83k，输出 46k；$0.0999；整理 462 s（发生在写入侧，提问时不需要等） | 无 |
+| 检索 | 36 次 search，P50 27 ms，不调模型 | 无（读文件计入 reader） |
+| 回答（reader） | 35 次调用；输入 54k（约 1.5k/题），输出 3.8k；$0.0103；共 52 s（约 1.5 s/题） | 120–125 次调用；输入 163–173k（其中缓存命中 96–119k，约 4.8k/题），输出 14–15k；$0.016–0.019；每题 4.9–5.2 s（P95 6.5–6.7 s） |
+| 合计 | $0.110 | $0.016–0.019 |
+
+**结论：**
+1. 修改后的 MemOS 比 11-24 的 flush 运行（答题 0.54–0.57，topic F1 约 0.6）明显好，但 gate 仍然没过：stateExact 0.79、topic F1 0.67，重复 Topic 和冲突单独成条都还在。
+2. 在 v3 的规模上（每个 Space 几十轮），空白对照组答题 0.924，高于 MemOS 的 0.857，总花费只有 MemOS 的约 1/6。MemOS 的长处在 reader 侧：每题输入 token 只有对照组的约 1/3，并且不随历史变长而增长。但这个数据集太小，体现不出这个长处。要说明项目记忆的价值，需要历史长到原文读不完的数据，比如更长的 v3 语料或 FrontierMemory。
+3. 下一步要修的问题：merge 判断「同一件事」时没有锁定对象（早班和夜班、冷链和冷冻）；timeline 口径改动后，旧格式的完成描述没有被新的格式取代（q07）。
 
 ## 5. 本次逐事件 review
 
@@ -194,6 +240,13 @@ node eval/project-memory/gold-add-memory/harness/show-pause.mjs eval/project-mem
 eval/project-memory/runs/20261120-memos-v3/step-run.zsh eval/project-memory/runs/<run> 58100 --resume --known $PWD/eval/project-memory/runs/<run>/known.json
 ```
 
+空白对照组（不需要 MemOS 服务）：
+
+```bash
+cd eval/project-memory/gold-add-memory
+node harness/model-env.mjs --out ../runs/<run>/models.json -- node history-baseline.mjs --out ../runs/<run>
+```
+
 - `known.json` 里可以写 `skipTypes` 和 `skipKeys`，让已经确认的根因只记录、不再暂停。
 - 全部跑完后，用 `run-pipeline-eval.mjs <run>/live-run.json --dataset 3 --gate` 出总分。
 - SUT 模型不可用时，设 `MEMOS_SUT_PROFILE=openai`（或 `claude`），用 step-serve 重启服务。时钟保存在库里，`--resume` 会从断点继续。
@@ -209,4 +262,5 @@ eval/project-memory/runs/20261120-memos-v3/step-run.zsh eval/project-memory/runs
 | `eval/project-memory/gold-add-memory/harness/{show-pause.mjs,inspect-memos.py,triage-missing.py}` | 暂停现场展示、MemOS 只读查看、draft 丢弃原因复现 |
 | `eval/project-memory/gold-add-memory/harness/model-env.mjs` | 模型选择、`--pin` 与回落（带测试） |
 | `eval/project-memory/runs/20261120-memos-v3/` | `launch_eval.py`、`replay_app.py`（逻辑时钟）、`step-serve.zsh`、`step-run.zsh`、`run-e2e-wt.zsh` |
+| `eval/project-memory/gold-add-memory/history-baseline.mjs` | 空白对照组：只给项目目录和原始会话文件，reader 用通用文件工具作答，记录 token、耗时和费用（带测试） |
 | `docs/project-memory/v3-flush-stepwise-notes.md` | 本次 review 的逐案例笔记 |
