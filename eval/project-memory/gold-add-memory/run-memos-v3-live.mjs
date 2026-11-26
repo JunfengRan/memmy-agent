@@ -194,7 +194,10 @@ async function checkApi({ call, ds, gold, run, bodies, readSpace }) {
 }
 
 // tag(context) labels the system-under-test model calls that follow (see harness/usage-proxy.mjs).
-export async function executeReplay({ ds, gold, run, call, answer, checkpoint = () => {}, progress = () => {}, tag = async () => {} }) {
+// afterEvent(run, index, context) runs once an event is checkpointed; returning "pause" stops the replay
+// there with state "paused" (resume continues at the next event). context.call/context.readSpace are
+// the replay's own wire, so a checker reads the same server the same way.
+export async function executeReplay({ ds, gold, run, call, answer, checkpoint = () => {}, progress = () => {}, tag = async () => {}, afterEvent }) {
   const { events, finalAt } = replaySchedule(ds, gold);
   const bodies = requestsFor(ds, run);
   const timed = async (phase, fn) => {
@@ -330,7 +333,15 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
     run.nextEvent = index + 1;
     checkpoint(run);
     progress(run, events.length);
+    if (afterEvent && await afterEvent(run, index, { event: events[index], events, call, readSpace, stateOf }) === "pause") {
+      run.state = "paused";
+      run.pausedAfter = { event_index: index, id: run.currentEvent.id, at: run.currentEvent.at };
+      delete run.currentEvent;
+      checkpoint(run);
+      return run;
+    }
   }
+  delete run.pausedAfter;
 
   run.currentEvent = { at: finalAt, id: "final" };
   await tag({ event: "final", phase: "add", step: "process", at: finalAt });
@@ -369,9 +380,15 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
 }
 
 async function main() {
-  const { values } = parseArgs({ options: { out: { type: "string" }, resume: { type: "string" }, "no-flush": { type: "boolean" }, help: { type: "boolean", short: "h" } } });
+  const { values } = parseArgs({ options: {
+    out: { type: "string" }, resume: { type: "string" }, "no-flush": { type: "boolean" },
+    "stop-at": { type: "string" },
+    help: { type: "boolean", short: "h" }
+  } });
   if (values.help) {
     console.log("Usage: node run-memos-v3-live.mjs [--out <directory>] [--resume <live-run.partial.json>] [--no-flush]\n" +
+      "  [--stop-at <trace or question id>]\n" +
+      "--stop-at pauses (exit 3) after that event. Resume a paused run with --resume.\n" +
       "Flushes each question's Space before it searches; --no-flush replays the timer-only processing of runner revision 1.\n" +
       "Set MEMMY_EVAL_BASE, MEMMY_EVAL_CLOCK_BASE, and MEMMY_EVAL_READER_*.");
     return 0;
@@ -400,7 +417,7 @@ async function main() {
     projectId: process.env.MEMMY_EVAL_PROJECT_ID
   });
   if (values.resume) {
-    if (!["interrupted", "in_progress"].includes(run.state) || run.base !== base || run.clockBase !== clockBase ||
+    if (!["interrupted", "in_progress", "paused"].includes(run.state) || run.base !== base || run.clockBase !== clockBase ||
         run.datasetDigest !== digest(JSON.stringify(gold)) || run.reader?.model !== reader.model || run.reader?.provider !== reader.provider) {
       throw new Error("Resume requires an unfinished checkpoint with matching server, clock, dataset, and reader");
     }
@@ -434,11 +451,17 @@ async function main() {
       try { await fetch(`${proxy}/__eval/context`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(context), signal: AbortSignal.timeout(5_000) }); }
       catch (error) { console.error(`usage tag failed: ${error.message}`); }
     } : undefined;
-    await executeReplay({ ds, gold, run, call, answer: createReader(llm).answer, tag,
+    const afterEvent = async (current, index, context) =>
+      values["stop-at"] === context.event.trace?.id || values["stop-at"] === context.event.question?.id ? "pause" : null;
+    await executeReplay({ ds, gold, run, call, answer: createReader(llm).answer, tag, afterEvent,
       checkpoint: () => checkpoint(partial),
       progress: (current, total) => { if (current.nextEvent % 10 === 0) console.log(`${current.nextEvent}/${total} events · ${current.failures.length} failures`); }
     });
     checkpoint(partial);
+    if (run.state === "paused") {
+      console.log(JSON.stringify({ paused: run.pausedAfter, partial, nextEvent: run.nextEvent }));
+      return 3;
+    }
     renameSync(partial, final);
     console.log(JSON.stringify({ out: final, runTag: run.runTag, state: run.state, tasks: run.tasks.length,
       questions: run.questions.length, failures: run.failures.length, apiChecks: run.apiChecks.map((check) => `${check.id}:${check.passed}`) }));

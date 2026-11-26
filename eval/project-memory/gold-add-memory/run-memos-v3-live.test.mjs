@@ -221,3 +221,31 @@ test("--no-flush keeps the timer-only replay of runner revision 1", async () => 
   assert.equal(run.questions[0].flush, undefined);
   assert.equal(run.finalFlush, undefined);
 });
+
+test("afterEvent pauses after the event it flags, and the run resumes at the next event", async () => {
+  const ds = structuredClone(sourceDataset);
+  ds.corpus.traces = ds.corpus.traces.slice(0, 3);
+  const gold = { ...onlyQuestions(sourceGold, []), apiChecks: [] };
+  const { finalAt, events } = replaySchedule(ds, gold);
+  const service = fakeService(finalAt);
+  const run = create(gold);
+  const seen = [];
+  const afterEvent = async (current, index, context) => {
+    seen.push(index);
+    assert.equal(typeof context.readSpace, "function");
+    return context.event.trace?.id === events[1].trace.id && !current.resumed ? "pause" : null;
+  };
+  await executeReplay({ ds, gold, run, call: service.wire(run), answer: async () => "", afterEvent });
+  assert.equal(run.state, "paused");
+  assert.deepEqual(run.pausedAfter, { event_index: 1, id: events[1].trace.id, at: events[1].at });
+  assert.equal(run.nextEvent, 2);
+  assert.equal(run.tasks.length, 2);
+  assert.deepEqual(run.final, {}, "a paused run does not read the final state");
+
+  run.resumed = true;
+  await executeReplay({ ds, gold, run, call: service.wire(run), answer: async () => "", afterEvent });
+  assert.equal(run.state, "completed");
+  assert.equal(run.pausedAfter, undefined);
+  assert.deepEqual(seen, [0, 1, 2]);
+  assert.equal(run.tasks.length, 3);
+});
