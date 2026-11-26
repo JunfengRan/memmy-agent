@@ -1,13 +1,11 @@
 #!/usr/bin/env node
-// Blank control for the v3 eval: no memory system at all. Each question's reader sees only the raw
-// sessions of its own Space that were submitted before the question, through progressive disclosure:
-//   list_sessions  → one line per session (who, agent, time span, turn count, first request)
-//   open_session   → one line per turn (time, member request cut to 80 characters)
-//   read_turns     → full text of chosen turns (member request and Agent reply)
-//   search_history → turns whose text contains a keyword (plain substring, no ranking model)
-// Nothing is summarized, deduplicated, merged or resolved: whatever the answer needs about current
-// state, stale versions or conflicts has to be read out of the history itself. Answers are judged with
-// the same judge, gold answers and trap texts as run-pipeline-eval.mjs, so answers.llm compares 1:1.
+// Blank control for the v3 eval: no memory system at all. The reader is told how many projects there
+// are, where each project's directory is, and that its sessions are files under sessions/; it reads them
+// with generic file tools (list_dir, read_file, grep). Session files are raw transcripts of the turns
+// submitted before the question was asked, one file per session. Nothing is summarized, outlined,
+// deduplicated or resolved, and nothing produced by MemOS is shown. The answer rules are the MemOS
+// reader's, and answers are judged with the same judge, gold answers and trap texts as
+// run-pipeline-eval.mjs, so answers.llm compares 1:1.
 //
 //   node harness/model-env.mjs --out <run>/models.json -- node history-baseline.mjs --out <run> [--only q01,q02]
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -20,76 +18,88 @@ import { createJudge } from "./judge.mjs";
 import { assertJudgeFamily, createLlm, resolveModelConfig } from "./llm.mjs";
 import { goldFor } from "./load-eval-set.mjs";
 import { percentile, priceCalls, tokenBuckets } from "./metrics.mjs";
+import { displayNames } from "./oracle.mjs";
 
-export const HISTORY_PROMPT_VERSION = 1;
+// v1 (structured session index, turn outlines, scoped to the question's Space) is in git history.
+export const HISTORY_PROMPT_VERSION = 2;
 export const MAX_STEPS = 12;
-const OUTLINE_CHARS = 80;
+const ROOT = "/history";
+const READ_LINES = 200;
+const GREP_HITS = 30;
 const PRICING_PATH = fileURLToPath(new URL("./pricing.json", import.meta.url));
 
-export const HISTORY_SYSTEM = `你是一个编码 Agent，正在回答项目成员的问题。你没有整理过的项目记忆，只能查看这个项目空间里成员们和 Agent 的历史会话。
-历史会话按渐进式披露提供：先用 list_sessions 看有哪些会话，再用 open_session 看某个会话每一轮的概要，需要细节时用 read_turns 读原文；
-也可以用 search_history 按关键词找相关的轮次。只能依据读到的历史回答，不能用常识补充项目细节。
-- 同一件事前后说法不同时，以时间更晚的为当前状态；同一件事不同成员结论相反、又没有人拍板时，列出各项结论及其成员，说明尚未确定。
-- 用一到三句中文直接回答当前状态。历史里没有能回答问题的内容时，只回答「记忆中没有相关内容」。`;
-
-export const HISTORY_TOOLS = [
-  { type: "function", function: { name: "list_sessions", description: "列出本空间在提问时刻之前的全部会话：会话 ID、成员、Agent、起止时间、轮数和第一轮的请求。", parameters: { type: "object", properties: {} } } },
-  { type: "function", function: { name: "open_session", description: "查看一个会话每一轮的时间和成员请求的开头。", parameters: { type: "object", properties: { session_id: { type: "string" } }, required: ["session_id"] } } },
-  { type: "function", function: { name: "read_turns", description: "读取一个会话中指定轮次（从 1 开始）的完整原文。", parameters: { type: "object", properties: { session_id: { type: "string" }, turns: { type: "array", items: { type: "integer" } } }, required: ["session_id", "turns"] } } },
-  { type: "function", function: { name: "search_history", description: "按关键词（原文子串）查找本空间历史中包含它的轮次。", parameters: { type: "object", properties: { keyword: { type: "string" } }, required: ["keyword"] } } }
-];
-
 const minute = (iso) => String(iso ?? "").slice(0, 16).replace("T", " ");
-const cut = (text, n) => { const s = String(text ?? "").replace(/\s+/g, " ").trim(); return s.length > n ? `${s.slice(0, n)}…` : s; };
 
-// The history one question may see: its Space's Traces submitted before askedAt, grouped by session.
-// A resubmitted Trace stays in the history as the member sent it; nothing is deduplicated.
-export function historyFor(ds, question) {
-  const conversations = new Map(ds.corpus.conversations.map((c) => [c.id, c]));
-  const names = Object.fromEntries(ds.corpus.members.map((m) => [m.user_id, m.name]));
-  const visible = ds.corpus.traces
-    .filter((trace) => conversations.get(trace.conversation)?.space_id === question.space_id)
-    .filter((trace) => Date.parse(acceptedTime(trace)) <= Date.parse(question.askedAt))
-    .sort((a, b) => Date.parse(a.chat_time) - Date.parse(b.chat_time) || a.id.localeCompare(b.id));
-  const sessions = new Map();
-  for (const trace of visible) {
-    const conversation = conversations.get(trace.conversation);
-    const session = sessions.get(conversation.id) ?? {
-      id: conversation.id, member: names[conversation.user_id] ?? conversation.user_id, agent: conversation.agent_id, turns: []
-    };
-    session.turns.push({ n: session.turns.length + 1, time: trace.chat_time, request: trace.query, reply: trace.answer });
-    sessions.set(conversation.id, session);
+// The files one question may see: every project's sessions, holding only turns submitted (accepted)
+// before askedAt. Returns {projects: [{name, dir}], files: Map(path → text)}.
+export function historyFiles(ds, question) {
+  const { spaceNames, memberNames } = displayNames(ds);
+  const files = new Map();
+  for (const conversation of ds.corpus.conversations) {
+    const turns = ds.corpus.traces
+      .filter((trace) => trace.conversation === conversation.id && Date.parse(acceptedTime(trace)) <= Date.parse(question.askedAt))
+      .sort((a, b) => Date.parse(a.chat_time) - Date.parse(b.chat_time) || a.id.localeCompare(b.id));
+    if (!turns.length) continue;
+    const member = memberNames[conversation.user_id] ?? conversation.user_id;
+    const lines = [`# 会话 ${conversation.id}（成员 ${member}，Agent ${conversation.agent_id}）`, ""];
+    for (const trace of turns) {
+      lines.push(`[${minute(trace.chat_time)}] ${member}：${trace.query}`);
+      lines.push(`[${minute(trace.reply_time)}] Agent：${trace.answer}`);
+    }
+    files.set(`${ROOT}/${spaceNames[conversation.space_id]}/sessions/${conversation.id}.md`, `${lines.join("\n")}\n`);
   }
-  return [...sessions.values()];
+  const projects = ds.corpus.spaces.map((space) => ({ name: spaceNames[space.space_id], dir: `${ROOT}/${spaceNames[space.space_id]}` }));
+  return { projects, files, current: spaceNames[question.space_id] };
 }
 
-// Tool handlers over one question's history. Unknown sessions and turns answer with an error text
-// the model can read, never an exception.
-export function historyTools(sessions) {
-  const byId = new Map(sessions.map((s) => [s.id, s]));
-  const turnLine = (s, t) => `[${s.id} #${t.n}] ${minute(t.time)} ${s.member}：${cut(t.request, OUTLINE_CHARS)}`;
+export function historySystem({ projects, current }) {
+  return `你是一个编码 Agent，正在回答项目成员的问题。你没有整理过的项目记忆，只有各项目的历史会话记录文件，可以用 list_dir、read_file、grep 查看。
+项目历史在 ${ROOT} 下，共 ${projects.length} 个项目：${projects.map((p) => `${p.name}（${p.dir}）`).join("、")}。每个项目的会话记录在该项目目录的 sessions/ 下，一个会话一个文件。
+这个问题来自项目 ${current}。只能依据读到的历史回答，不能用常识补充项目细节。
+- 用一到三句中文直接回答当前状态。
+- 历史里某项做法带有不一致结论且与问题相关时，列出各项结论及其成员，说明尚未确定。
+- 历史里没有能回答问题的内容时，只回答「记忆中没有相关内容」。`;
+}
+
+export const HISTORY_TOOLS = [
+  { type: "function", function: { name: "list_dir", description: "列出目录下的子目录和文件（文件带行数）。", parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] } } },
+  { type: "function", function: { name: "read_file", description: `读取文件，带行号；可给起止行号（从 1 开始），一次最多 ${READ_LINES} 行。`, parameters: { type: "object", properties: { path: { type: "string" }, start: { type: "integer" }, end: { type: "integer" } }, required: ["path"] } } },
+  { type: "function", function: { name: "grep", description: `在目录或文件里按关键词（子串，不区分大小写）查找行，返回 路径:行号: 内容，最多 ${GREP_HITS} 条。`, parameters: { type: "object", properties: { pattern: { type: "string" }, path: { type: "string" } }, required: ["pattern"] } } }
+];
+
+// Generic file tools over one question's files. Bad paths answer with an error text the model can
+// read, never an exception.
+export function historyTools({ files }) {
+  const norm = (path) => `/${String(path ?? ROOT).split("/").filter(Boolean).join("/")}`;
+  const under = (dir) => [...files.keys()].filter((path) => path === dir || path.startsWith(`${dir}/`));
   return {
-    list_sessions() {
-      if (!sessions.length) return "这个空间在提问时刻之前没有历史会话。";
-      return sessions.map((s) => `${s.id}｜${s.member}｜${s.agent}｜${minute(s.turns[0].time)} ~ ${minute(s.turns.at(-1).time)}｜${s.turns.length} 轮｜首轮：${cut(s.turns[0].request, OUTLINE_CHARS)}`).join("\n");
+    list_dir({ path }) {
+      const dir = norm(path);
+      if (files.has(dir)) return `${dir} 是文件。`;
+      const entries = new Map();
+      for (const file of under(dir)) {
+        const [head, ...rest] = file.slice(dir.length + 1).split("/");
+        entries.set(head, rest.length ? `${head}/` : `${head}（${files.get(file).split("\n").length - 1} 行）`);
+      }
+      return entries.size ? [...entries.values()].sort().join("\n") : `${dir} 不存在或为空。`;
     },
-    open_session({ session_id }) {
-      const s = byId.get(session_id);
-      return s ? s.turns.map((t) => turnLine(s, t)).join("\n") : `没有会话 ${session_id}。`;
+    read_file({ path, start = 1, end }) {
+      const file = norm(path);
+      const text = files.get(file);
+      if (text === undefined) return `没有文件 ${file}。`;
+      const lines = text.split("\n").slice(0, -1);
+      const from = Math.max(1, Number(start) || 1);
+      const to = Math.min(lines.length, Number(end) || lines.length, from + READ_LINES - 1);
+      return lines.slice(from - 1, to).map((line, i) => `${from + i}: ${line}`).join("\n") || "（没有内容）";
     },
-    read_turns({ session_id, turns }) {
-      const s = byId.get(session_id);
-      if (!s) return `没有会话 ${session_id}。`;
-      const wanted = (Array.isArray(turns) ? turns : [turns]).map(Number);
-      const rows = s.turns.filter((t) => wanted.includes(t.n));
-      if (!rows.length) return `会话 ${session_id} 没有第 ${wanted.join("、")} 轮。`;
-      return rows.map((t) => `[${s.id} #${t.n}] ${minute(t.time)}\n${s.member}：${t.request}\nAgent：${t.reply}`).join("\n\n");
-    },
-    search_history({ keyword }) {
-      const word = String(keyword ?? "").trim();
+    grep({ pattern, path }) {
+      const word = String(pattern ?? "").trim().toLowerCase();
       if (!word) return "关键词为空。";
-      const hits = sessions.flatMap((s) => s.turns.filter((t) => `${t.request}\n${t.reply}`.includes(word)).map((t) => turnLine(s, t)));
-      return hits.length ? hits.slice(0, 20).join("\n") : `没有包含「${word}」的轮次。`;
+      const hits = [];
+      for (const file of under(norm(path)).sort()) {
+        files.get(file).split("\n").forEach((line, i) => { if (line.toLowerCase().includes(word)) hits.push(`${file}:${i + 1}: ${line}`); });
+      }
+      return hits.length ? hits.slice(0, GREP_HITS).join("\n") : `没有包含「${pattern}」的行。`;
     }
   };
 }
@@ -116,10 +126,10 @@ async function chatWithRetry(config, messages, options) {
 
 // One question: the model calls tools until it answers or runs out of steps; the last step forbids
 // tools so it must answer from what it has read.
-export async function answerFromHistory({ question, sessions, call }) {
-  const tools = historyTools(sessions);
+export async function answerFromHistory({ question, history, call }) {
+  const tools = historyTools(history);
   const messages = [
-    { role: "system", content: HISTORY_SYSTEM },
+    { role: "system", content: historySystem(history) },
     { role: "user", content: `# System Context\n- 当前时间：${question.askedAt}\n\n# 问题\n${question.question}` }
   ];
   const trace = [];
@@ -214,10 +224,10 @@ async function main() {
   const queue = questions.filter((q) => !finished.has(q.id));
   async function worker() {
     for (let q = queue.shift(); q; q = queue.shift()) {
-      const sessions = historyFor(ds, q);
-      const result = await answerFromHistory({ question: q, sessions, call });
+      const history = historyFiles(ds, q);
+      const result = await answerFromHistory({ question: q, history, call });
       const verdict = await judge.answer(q, result.answer, trapTextsOf(q));
-      done.rows.push({ id: q.id, kind: q.kind, askedAt: q.askedAt, sessions: sessions.length, turns: sessions.reduce((t, s) => t + s.turns.length, 0), ...result, verdict });
+      done.rows.push({ id: q.id, kind: q.kind, askedAt: q.askedAt, files: history.files.size, ...result, verdict });
       writeFileSync(partial, `${JSON.stringify(done, null, 2)}\n`);
       console.log(`${done.rows.length}/${questions.length} ${q.id} ${verdict.correct ? "OK " : "BAD"} steps=${result.steps}`);
     }
