@@ -70,3 +70,19 @@ test("summary reports answer accuracy overall and by kind", () => {
   assert.equal(scores["answers.llm.conflict"], 1);
   assert.equal(scores.meanSteps, 3);
 });
+
+test("each question keeps its reader tokens and time; the summary prices them per call", async () => {
+  const q = question("q01");
+  const result = await answerFromHistory({ question: q, sessions: historyFor(ds, q), call: async () => ({
+    choices: [{ message: { content: "答" } }], usage: { prompt_tokens: 1000, completion_tokens: 50, prompt_cache_hit_tokens: 400 }
+  }) });
+  assert.equal(result.usage.perCall.length, 1);
+  assert.ok(Number.isFinite(result.usage.perCall[0].latencyMs));
+  assert.ok(Number.isFinite(result.wallclockMs));
+  const pricing = { models: { m: { input: 1, cachedInput: 0.1, output: 2 } } };
+  const scores = summarize([{ kind: "plain", verdict: { correct: true }, steps: 1, ...result }], { model: "m", pricing });
+  const call = result.usage.perCall[0];
+  assert.equal(scores.readerCostUsd, (call.inputTokens * 1 + call.cachedInputTokens * 0.1 + call.outputTokens * 2) / 1e6);
+  assert.equal(scores.questionWallclockMs.total, result.wallclockMs);
+  assert.equal(summarize([{ kind: "plain", verdict: { correct: true }, steps: 1, ...result }]).readerCostUsd, null);
+});

@@ -19,11 +19,12 @@ import { acceptedTime } from "./episode-timeline.mjs";
 import { createJudge } from "./judge.mjs";
 import { assertJudgeFamily, createLlm, resolveModelConfig } from "./llm.mjs";
 import { goldFor } from "./load-eval-set.mjs";
-import { tokenBuckets } from "./metrics.mjs";
+import { percentile, priceCalls, tokenBuckets } from "./metrics.mjs";
 
 export const HISTORY_PROMPT_VERSION = 1;
 export const MAX_STEPS = 12;
 const OUTLINE_CHARS = 80;
+const PRICING_PATH = fileURLToPath(new URL("./pricing.json", import.meta.url));
 
 export const HISTORY_SYSTEM = `你是一个编码 Agent，正在回答项目成员的问题。你没有整理过的项目记忆，只能查看这个项目空间里成员们和 Agent 的历史会话。
 历史会话按渐进式披露提供：先用 list_sessions 看有哪些会话，再用 open_session 看某个会话每一轮的概要，需要细节时用 read_turns 读原文；
@@ -122,18 +123,25 @@ export async function answerFromHistory({ question, sessions, call }) {
     { role: "user", content: `# System Context\n- 当前时间：${question.askedAt}\n\n# 问题\n${question.question}` }
   ];
   const trace = [];
-  const usage = { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0 };
+  // Every reader call keeps its own tokens and latency, so cost tiers and percentiles apply per call.
+  const usage = { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, perCall: [] };
+  const started = performance.now();
+  const done = (fields) => ({ ...fields, trace, usage, wallclockMs: Math.round(performance.now() - started) });
   for (let step = 0; step < MAX_STEPS; step += 1) {
     const last = step === MAX_STEPS - 1;
+    const callStarted = performance.now();
+    const at = new Date().toISOString();
     const body = await call(last ? [...messages, { role: "user", content: "请直接根据已读到的历史作答，不再调用工具。" }] : messages, { withTools: !last });
+    const latencyMs = Math.round(performance.now() - callStarted);
     const buckets = tokenBuckets(body.usage) ?? { cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 };
     usage.calls += 1;
     usage.inputTokens += buckets.cacheWriteTokens;
     usage.cachedInputTokens += buckets.cacheReadTokens;
     usage.outputTokens += buckets.outputTokens;
+    usage.perCall.push({ at, latencyMs, inputTokens: buckets.cacheWriteTokens, cachedInputTokens: buckets.cacheReadTokens, outputTokens: buckets.outputTokens });
     const message = body.choices?.[0]?.message ?? {};
     const calls = message.tool_calls ?? [];
-    if (!calls.length) return { answer: String(message.content ?? "").trim(), steps: step + 1, trace, usage };
+    if (!calls.length) return done({ answer: String(message.content ?? "").trim(), steps: step + 1 });
     messages.push({ role: "assistant", content: message.content ?? "", tool_calls: calls });
     for (const toolCall of calls) {
       let args = {};
@@ -144,15 +152,21 @@ export async function answerFromHistory({ question, sessions, call }) {
       messages.push({ role: "tool", tool_call_id: toolCall.id, content: result });
     }
   }
-  return { answer: "", steps: MAX_STEPS, trace, usage, exhausted: true };
+  return done({ answer: "", steps: MAX_STEPS, exhausted: true });
 }
 
 export function trapTextsOf(question) {
   return question.trapItems.filter((trap) => trap.kind !== "space-isolation").flatMap((trap) => trap.texts ?? [trap.text]);
 }
 
-export function summarize(rows) {
+// Answer accuracy plus the reader's cost of reading raw history: tokens, calls, time and USD
+// (pricing.json, per call; null when the model has no price). The judge is not part of the cost.
+export function summarize(rows, { model = null, pricing = null } = {}) {
   const ratio = (n, d) => (d ? n / d : 0);
+  const calls = rows.flatMap((r) => (r.usage.perCall ?? []).map((c) => ({ ...c, model })));
+  const priced = pricing && model ? priceCalls(calls, pricing) : { costUsd: null, reason: "no pricing" };
+  const times = rows.map((r) => r.wallclockMs).filter((ms) => Number.isFinite(ms));
+  const latencies = calls.map((c) => c.latencyMs).filter((ms) => Number.isFinite(ms));
   const byKind = {};
   for (const row of rows) (byKind[row.kind] ??= []).push(row);
   const tokens = rows.reduce((t, r) => ({ calls: t.calls + r.usage.calls, input: t.input + r.usage.inputTokens + r.usage.cachedInputTokens, output: t.output + r.usage.outputTokens }), { calls: 0, input: 0, output: 0 });
@@ -164,7 +178,15 @@ export function summarize(rows) {
     exhausted: rows.filter((r) => r.exhausted).length,
     readerCalls: tokens.calls,
     readerInputTokensPerQuestion: Math.round(ratio(tokens.input, rows.length)),
-    readerOutputTokensPerQuestion: Math.round(ratio(tokens.output, rows.length))
+    readerOutputTokensPerQuestion: Math.round(ratio(tokens.output, rows.length)),
+    readerInputTokens: tokens.input,
+    readerCachedInputTokens: rows.reduce((t, r) => t + r.usage.cachedInputTokens, 0),
+    readerOutputTokens: tokens.output,
+    readerCostUsd: priced.costUsd,
+    readerCostPerQuestionUsd: priced.costUsd === null ? null : ratio(priced.costUsd, rows.length),
+    ...(priced.reason ? { readerCostNote: priced.reason } : {}),
+    questionWallclockMs: { total: times.reduce((t, ms) => t + ms, 0), mean: Math.round(ratio(times.reduce((t, ms) => t + ms, 0), times.length)), p50: percentile(times, 50), p95: percentile(times, 95) },
+    readerCallLatencyMs: { p50: percentile(latencies, 50), p95: percentile(latencies, 95) }
   };
 }
 
@@ -188,6 +210,7 @@ async function main() {
   const finished = new Set(done.rows.map((r) => r.id));
   const call = (messages, options) => chatWithRetry(reader, messages, options);
   const width = Math.max(1, Number(values.concurrency ?? 3));
+  const runStarted = new Date();
   const queue = questions.filter((q) => !finished.has(q.id));
   async function worker() {
     for (let q = queue.shift(); q; q = queue.shift()) {
@@ -202,10 +225,13 @@ async function main() {
   await Promise.all(Array.from({ length: width }, worker));
   judgeLlm.save();
   done.rows.sort((a, b) => questions.findIndex((q) => q.id === a.id) - questions.findIndex((q) => q.id === b.id));
+  const pricing = JSON.parse(readFileSync(PRICING_PATH, "utf8"));
   const report = {
     kind: "history-baseline", promptVersion: HISTORY_PROMPT_VERSION, maxSteps: MAX_STEPS,
+    // Wall time of this invocation (questions run `concurrency` at a time; judge calls included).
+    startedAt: runStarted.toISOString(), endedAt: new Date().toISOString(), wallclockMs: Date.now() - runStarted.getTime(), concurrency: width,
     goldRevision: gold.goldRevision, reader: { model: reader.model }, judge: { model: judgeConfig.model, usage: { calls: judgeLlm.usage.calls, cacheHits: judgeLlm.usage.cacheHits } },
-    scores: summarize(done.rows), rows: done.rows
+    scores: summarize(done.rows, { model: reader.model, pricing }), rows: done.rows
   };
   writeFileSync(join(outDir, "history-run.json"), `${JSON.stringify(report, null, 2)}\n`);
   console.log(JSON.stringify(report.scores));
