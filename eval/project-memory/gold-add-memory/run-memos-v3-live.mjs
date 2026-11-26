@@ -325,6 +325,7 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
         item.rendered = renderTemplate3({ topics: scopedTopics, now: question.askedAt, ...names });
         await tag({ ...event, phase: "reader", step: "answer" });
         item.answer = await timed("reader", () => answer({ question: question.question, askedAt: question.askedAt }, item.rendered));
+        item.readerModel = run.reader?.model ?? null;
       } catch (error) { item.failure = fail("question", question.id, at, error); }
       run.questions.push(item);
     }
@@ -422,8 +423,16 @@ async function main() {
   });
   if (values.resume) {
     if (!["interrupted", "in_progress", "paused"].includes(run.state) || run.base !== base || run.clockBase !== clockBase ||
-        run.datasetDigest !== digest(JSON.stringify(gold)) || run.reader?.model !== reader.model || run.reader?.provider !== reader.provider) {
+        run.datasetDigest !== digest(JSON.stringify(gold))) {
       throw new Error("Resume requires an unfinished checkpoint with matching server, clock, dataset, and reader");
+    }
+    if (run.reader?.model !== reader.model || run.reader?.provider !== reader.provider) {
+      // A reader model that stopped answering may be replaced: every answer records the model that
+      // gave it, so the score report can say which answers came from a fallback.
+      if (process.env.MEMMY_EVAL_ALLOW_READER_SWITCH !== "1") throw new Error("Resume requires the same reader model (set MEMMY_EVAL_ALLOW_READER_SWITCH=1 to record a switch)");
+      (run.readerSwitches ??= []).push({ from: run.reader ?? null, to: reader, afterEvent: run.nextEvent, at: new Date().toISOString() });
+      run.reader = reader;
+      console.log(`reader switch recorded at event ${run.nextEvent}: ${run.readerSwitches.at(-1).from?.model} -> ${reader.model}`);
     }
   } else if (existsSync(partial) || existsSync(final)) {
     throw new Error(`Run directory already contains a checkpoint or result: ${outDir}`);

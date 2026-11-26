@@ -2,7 +2,8 @@
 // Profiles: ~/.deepseek.env (preferred), ~/.openai.env, ~/.claude.env, each with MODEL,
 // OPENAI_API_BASE and OPENAI_API_KEY. When a profile's model does not answer, the next profile is
 // used; an older model from the same profile is never substituted.
-//   node harness/model-env.mjs --out <run>/models.json [-- <command> [args...]]
+//   node harness/model-env.mjs --out <run>/models.json [--pin] [-- <command> [args...]]
+// --pin reuses the roles already in models.json without probing (resuming a run).
 // The command runs with MEMMY_EVAL_{READER,JUDGE}_* and MEMMY_EVAL_SUT_* set. models.json never
 // contains keys.
 import { spawnSync } from "node:child_process";
@@ -101,6 +102,39 @@ export function publicRecord({ chosen, attempts }) {
   };
 }
 
+// The recorded roles with their keys reloaded from the same profile files. A pinned reader or judge
+// that no longer answers falls back in profile order (deepseek, openai, claude); the judge still
+// skips the SUT's family. The SUT stays as recorded unless MEMMY_EVAL_SUT_PROFILE names the profile
+// the server was restarted on. Every switch is appended to record.switches.
+export async function pinnedModels(record, { home = homedir(), probeImpl = probe, sutProfile = process.env.MEMMY_EVAL_SUT_PROFILE_OVERRIDE } = {}) {
+  const chosen = {};
+  const switches = [];
+  const probes = {};
+  const works = async (config) => (probes[config.profile] ??= await probeImpl(config)).ok;
+  for (const role of ["sut", "reader", "judge"]) {
+    const view = record.roles[role];
+    const wanted = role === "sut" && sutProfile ? sutProfile : view.profile;
+    const pinned = loadProfile(wanted, home);
+    if (role === "sut") {
+      if (!pinned) throw new Error(`SUT profile ${wanted} is missing`);
+      chosen.sut = pinned;
+      if (pinned.model !== view.model) switches.push({ role, from: view.model, to: pinned.model, reason: "server restarted on another profile" });
+      continue;
+    }
+    const allowed = (config) => config && !(role === "judge" && config.family === chosen.sut.family);
+    if (allowed(pinned) && pinned.model === view.model && await works(pinned)) { chosen[role] = pinned; continue; }
+    for (const profile of ROLES[role]) {
+      const config = loadProfile(profile, home);
+      if (!allowed(config) || !(await works(config))) continue;
+      chosen[role] = config;
+      switches.push({ role, from: view.model, to: config.model, reason: probes[view.profile]?.error ?? "pinned model unavailable", at: new Date().toISOString() });
+      break;
+    }
+    if (!chosen[role]) throw new Error(`No working fallback for ${role}: ${JSON.stringify(probes)}`);
+  }
+  return { chosen, switches };
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const split = args.indexOf("--");
@@ -108,6 +142,23 @@ async function main() {
   const command = split >= 0 ? args.slice(split + 1) : [];
   const outIndex = own.indexOf("--out");
   const out = outIndex >= 0 ? resolve(own[outIndex + 1]) : null;
+  // --pin reuses the roles already recorded in --out (a resumed run must keep its reader and judge;
+  // a transient rate limit on re-probing must not switch them).
+  if (own.includes("--pin") && out && existsSync(out)) {
+    const record = JSON.parse(readFileSync(out, "utf8"));
+    const { chosen, switches } = await pinnedModels(record);
+    if (switches.length) {
+      const view = ({ profile, path, model, baseUrl, family }) => ({ profile, path, model, baseUrl, family });
+      record.roles = Object.fromEntries(Object.entries(chosen).map(([role, config]) => [role, view(config)]));
+      record.switches = [...record.switches ?? [], ...switches];
+      writeFileSync(out, `${JSON.stringify(record, null, 2)}\n`);
+      console.error(`model switch: ${JSON.stringify(switches)}`);
+    }
+    console.error(JSON.stringify(record.roles));
+    if (!command.length) return 0;
+    const result = spawnSync(command[0], command.slice(1), { stdio: "inherit", env: { ...process.env, ...modelEnv(chosen) } });
+    return result.status ?? 1;
+  }
   const selection = await chooseModels();
   const record = publicRecord(selection);
   if (out) { mkdirSync(dirname(out), { recursive: true }); writeFileSync(out, `${JSON.stringify(record, null, 2)}\n`); }

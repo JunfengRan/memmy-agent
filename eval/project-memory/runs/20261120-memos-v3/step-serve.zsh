@@ -15,6 +15,13 @@ stamp() { print "$(date '+%F %T') $*" | tee -a $dir/stages.log; }
 [[ -f $dir/models.json ]] || { stamp "choose models"; node $G/harness/model-env.mjs --out $dir/models.json > /dev/null || exit 1; }
 sut_profile=$(python3 -I -c "import json,sys;print(json.load(open(sys.argv[1]))['roles']['sut']['profile'])" $dir/models.json)
 sut_base=$(python3 -I -c "import json,sys;print(json.load(open(sys.argv[1]))['roles']['sut']['baseUrl'])" $dir/models.json)
+# MEMOS_SUT_PROFILE restarts the server on a backup profile (openai or claude) when the recorded SUT
+# model stops answering; step-run.zsh must then get the same value so the judge skips its family.
+if [[ -n ${MEMOS_SUT_PROFILE:-} && $MEMOS_SUT_PROFILE != $sut_profile ]]; then
+  stamp "SUT profile switch: $sut_profile -> $MEMOS_SUT_PROFILE"
+  sut_profile=$MEMOS_SUT_PROFILE
+  sut_base=$(sed -n 's/^OPENAI_API_BASE=//p' ~/.$sut_profile.env | tr -d "'\"")
+fi
 [[ -f $dir/usage/stages.json ]] || node $G/harness/memos-stages.mjs ${WT}/src/memos/project_memory > $dir/usage/stages.json
 git -C ${WT} rev-parse HEAD >> $dir/memos-commit.txt
 git -C $repo rev-parse HEAD >> $dir/eval-commit.txt
