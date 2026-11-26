@@ -1,206 +1,212 @@
-<br>
-<div align="center">
-  <a href="https://memmy.bot/">
-    <picture>
-      <img alt="Memmy Logo" src="docs/assets/banner-en.png">
-    </picture>
-  </a>
-</div>
-<br>
-<br>
-<p align="center">
-    <a href="https://memmy.bot/docs/"><img src="https://img.shields.io/badge/Docs-Get--Start-006400?labelColor=gray&style=for-the-badge&logo=googledocs&logoColor=white" alt="Docs"></a>
-    <a href="https://github.com/MemTensor/memmy-agent/releases"><img src="https://img.shields.io/badge/Download-ED8D45?labelColor=gray&style=for-the-badge&logo=applenews&logoColor=white" alt="applenews"></a>
-    <a href="https://discord.gg/zfhKKn52wP"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Fv10%2Finvites%2FzfhKKn52wP%3Fwith_counts%3Dtrue&query=%24.approximate_presence_count&suffix=%20online&label=Discord&color=404EED&labelColor=gray&style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
-    <a href="https://x.com/Memmy_ai"><img src="https://img.shields.io/badge/Follow-Memmy-000000?labelColor=gray&style=for-the-badge&logo=x&logoColor=white" alt="X"></a>
-</p>
-<p align="center">
-    <a href="https://www.producthunt.com/products/memmy?embed=true&utm_source=badge-top-post-badge&utm_medium=badge&utm_campaign=badge-memmy-agent" target="_blank" rel="noopener noreferrer"><img alt="Memmy Agent - Let every AI remember the same you. | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/top-post-badge.svg?post_id=1203499&theme=light&period=daily&t=1786083567983"></a>
-</p>
+# Memmy 项目记忆评测：v3 数据集、flush 回放与 MemOS Add 的逐事件 badcase 分析
 
-<div align="center">
-  
-## Continue the same work across DeepSeek Harness, Claude Code, Codex, and etc.
+本分支 `feat/project-memory-gold-v3-flush` 是项目记忆的**评测分支**：存放 v3 数据集、按 flush 口径推出的 gold（revision 2）、对 MemOS 的在线回放与评分，以及 2026-11-26 对 MemOS Add 做的一次逐事件 badcase review。本 README 介绍数据集和评测，汇报这次 review 的结论与改进意见。Memmy 产品本身的介绍见 [README.zh-CN.md](README.zh-CN.md) 和主分支。
 
-[Overview](#what-is-memmy) · [Quick Start](#how-to-use-memmy) · [Technical Overview](#how-is-memmy-built) · [Roadmap](#roadmap) · [Acknowledgements](#acknowledgements) · [Contributors](#contributors)
+- 逐案例笔记（证据、调用、修改意见）：[docs/project-memory/v3-flush-stepwise-notes.md](docs/project-memory/v3-flush-stepwise-notes.md)
+- 数据集与指标的细节说明：[eval/project-memory/gold-add-memory/README.md](eval/project-memory/gold-add-memory/README.md)
+- 历史运行记录：[docs/project-memory/metrics.md](docs/project-memory/metrics.md)
 
-</div>
+## 1. 结论速览
 
-<div align="center">
+被测版本：MemOS `promem_dev-rjf@3d8450ba`，SUT 模型是 `deepseek-v4.1-flash-1017`。按时间顺序逐事件回放，每次 Add 处理完、每道题答完都在线核对，出错就暂停查看现场。共跑了 148 个事件中的前 57 个，覆盖 ledger 和 catalog 两个 Space 的第一天：核对 33 次 Add、判 23 道题，答对 12 题（52%）；19 次暂停，从中归纳出 11 类根因。用户确认后续不再出现新的错误类别后，review 停止。
 
-**English** • [简体中文](README.zh-CN.md)
+1. **Topic 粒度是最大的结构性问题（案例 3、4、10）。** Topic 的名称和交付对象按建它的第一条规则生成，比如「月报金额从journal正文提取」，没有上升到「ledger 月报」这一项工作。后来同一份报表的规则在 assign 阶段都对不上，进入 staged，再由 Formation 一条规则建一个 Topic。到 19:57，gold 有 5 个 Topic，MemOS 有 15 个。Formation 还会按**结论**给 cluster 命名，把同一事项的相反立场拆进两个 Topic，于是冲突永远进不了 merge。
+2. **冲突链在 merge 环节断裂（案例 8、9）。** 「README 里写明金额还在 journal 正文」这类复述或文档任务，被当成负责人对原决策的改写。原结论进了 history，后来的反对意见失去锚点，被记成了独立的新决策。另一种情况是负责人改到和对方一致的立场后，对方的冲突项因为 `same_as` 判得太严而没有并掉，确定的规则被呈现成仍有争议。
+3. **证据校验过严，整条丢弃（案例 1、2）。** Agent 在同一轮回复里给出的规范写法（东八区 → UTC+8）和示例值（2026-10.txt），因为模型没有在 `context` 里显式引用，content 里多出一个 token，整条 decision 就被丢掉。对应的问题（时区、报告路径）直接答不出来。
+4. **抽取口径有几处和 gold 不一致（案例 5、6、7）。** 执行步骤被写成 decision，计划被写成 timeline；Agent 交代的交付约定，以及「X 会…」形式的已完成描述没有记下来；成员给记忆系统本身定的规则（「什么算冲突」）被写成了项目决策。
+5. **11 道错题里有 10 道的根因在 Add。** reader 的问题只有一类：措辞不同时拒答（案例 11）。search 只返回 Topic 内命中的条目，又用了英文 MiniLM 嵌入，会放大 Add 的问题，但不是根因。
 
-</div>
+按收益排序的修改意见见第 6 节。前三项（Topic 按工作或产出物粒度建、Formation 只按对象命名并在建后补一道「同一事项」判定、merge 不把复述当改写）预计能同时改善 topic F1、duplicateTopics、conflictAsEntry 和 conflict 类答题。
 
-<a id="what"></a>
+## 2. 数据集 v3
 
-## What Is Memmy?
+数据集模拟一个团队的多位成员，在多个 Space 里通过各自的 Agent 会话推进工作。被测系统只能通过规格接口（create_space / add / scheduler status / flush / get_memory / search）看到对话，看不到任何标注。
 
-<p align="center">
-  <img src="docs/assets/remember-card-en.png" width="32%" alt="Remember: Memmy remembers what you said and turns your local AI collaboration history into structured memory">
-  <img src="docs/assets/relay-card-en.png" width="32%" alt="Relay: switch tools without losing context—Memmy carries your project background, preferences, and progress forward">
-  <img src="docs/assets/react-card-en.png" width="32%" alt="Act: Memmy is also an Agent that can organize information, combine approaches, and continue unfinished tasks">
-</p>
+| 项 | 数量 | 说明 |
+|---|---|---|
+| Space | 6 | ledger（代码开发 / 工程规范）、catalog（代码开发 / 产品设计）、clinic、warehouse、fleet、kitchen |
+| 成员 | 7 | 林工、周工、陈工、赵工、吴工、孙工、郑工 |
+| 会话 | 17 | 写入会话和只提问的会话 |
+| Trace（一次 Add） | 113 | 每条有 `chat_time`、`reply_time`；12 条迟交（`submit_time`）、5 条重发（`resubmitOf`）、1 条先检索再写（`searchBefore`） |
+| 语义 Episode | 78 | 其中 18 个多轮，见 `dataset/episodes.json` |
+| gold Topic | 46 | 带有效期的摘要和描述要点 |
+| gold 条目 | 95 | decision 64、experience 1、timeline 30；其中 12 条 optional，5 条是「成员改了自己结论」的变更记录 |
+| 不该写入（negatives） | 25 | 执行步骤、复述、无关内容（如回复格式、「什么算冲突」） |
+| 问题 | 37 | 1 道 excluded；flush 口径下再排除 q21、q49，实问 35 道：plain 14、space-isolation 10、conflict 5、stale 4、visibility 3 |
+| 接口检查 | 4 | 不带 `space_ids` 的检索和写入必须被拒、跨 Space 隔离、未登记领域被拒 |
 
-### Cross-Agent Task Continuity
+**标注规则要点**（完整规则见数据集 README）：
 
-<table align="center">
-  <tr align="center" valign="middle">
-    <td width="100%" valign="middle">
-      <video src="https://github.com/user-attachments/assets/79318828-9b28-44a1-a940-c78dc2029dd3" width="100%" controls playsinline></video>
-    </td>
-  </tr>
-</table>
+- decision 只记范围、对外约定和共同约定；局部实现、执行步骤、未采纳方案、未决事项、复述都不写。输出约定（报告路径、导出格式）算 decision。
+- 冲突处理：只有作者本人能 `rewrite`；作者在某一项不一致结论里时是 `conflict_update`；都不是则 `conflict_append`；成员被告知各项后拍板是 `resolve`。转述别人的同意不算授权。
+- 成员改了自己的结论时，同一轮要另记一条 timeline「谁把什么改成了什么」（`changeOf`）。
 
-### Most of the Agents You're Using Can Connect to Memmy
+**gold revision 2（flush 口径，默认）**：回放在每道题检索前 flush 该题的 Space，最终读取前 flush 全部 Space。gold 据此按「提问前该 Space 的 Add 都已关段、整理并完成 Formation」推出。离线参考时钟和产品的默认计时器保持一致：空闲 15 分钟、8 轮、首轮等待 30 分钟关段；暂存累计 10 段或等待 2 小时触发 Formation。`processingBatches` 和 `visibilityEvents`（419 个）给出每条 Trace 在 gold 里的受理、关段、暂存和提交时刻，逐事件 review 就靠它们判断「此时 gold 应该是什么样」。
 
-**DeepSeek Harness, OpenClaw, Hermes, Claude Code, Codex, Cursor, WorkBuddy, OpenCode, Pi...they all work!**
+## 3. 评测方法
 
-![cross-agent-en.png](docs/assets/cross-agent-en.png)
+```mermaid
+flowchart LR
+  D[corpus + questions<br/>按时间排成 148 个事件] --> R[run-memos-v3-live.mjs]
+  R -->|/advance 逻辑时钟| C[replay_app.py<br/>关段 / 重试 / 静默 Formation]
+  R -->|create_space / add / flush / search| M[MemOS 服务<br/>project_memory 插件]
+  R -->|渲染检索结果| RD[reader 模型作答]
+  R --> L[live-run.json]
+  L --> S[run-pipeline-eval.mjs<br/>judge 归属 + 一对一匹配]
+  R -.每个事件之后.-> K[step-check.mjs<br/>在线核对 / 暂停]
+```
 
-### Data Security
+- **回放**（`eval/project-memory/gold-add-memory/run-memos-v3-live.mjs`）：
+  - 按受理时间（`submit_time ?? reply_time`）和提问时间合并成一条时间线，逐个事件推进逻辑时钟。
+  - 时钟 app（`runs/20261120-memos-v3/replay_app.py`）把 SQL 的 `now()` 钉在逻辑时间上，并且在每次推进时把到期的关段、阶段重试和静默 Space 的 Formation 都跑完。
+  - Add 事件发 `/product/add`，问题事件先 flush 该 Space、再 `/product/search`（`memory_limit_number: 9`），然后把结果按模板交给 reader 作答。MemOS 本身不负责回答。
+- **评分**（`run-pipeline-eval.mjs`）：
+  - 只看最终状态。judge 把每条写入归属为 match / stale / conflict / negative / none，再与 gold 做一对一匹配。
+  - 主要指标：`entries.{P,R,F1}`、`decisions.stateExact`（内容、冲突、历史、成员、时间全对）、`topics.bcubed.f1`、`search.recall@k`、`answers.llm`，并按冲突和非冲突分组报告。
+  - gate 要求 stateExact、topic F1、entries.f1、answers.llm 都 ≥ 0.8，recall@3 ≥ 0.85，接口检查全过，并且旧版本被当成当前、跨空间泄漏、编造原因、错误合并都为 0。
+- **模型**（`harness/model-env.mjs`）：按 deepseek → openai → claude 选择 SUT、reader 和 judge，judge 必须和 SUT 不同家族。本次加了 `--pin`：续跑时沿用 `models.json` 里记录的模型；某个模型不可用时按顺序回落，并把切换记进 `models.json.switches`。每题记录作答时用的 `readerModel`。
+- **逐事件 review**（本次新增）：
+  - `--pause-on-bad` 在每个事件之后调用 `harness/step-check.mjs`。一次 Add 要等 gold 已提交、并且 MemOS 承载它的 Episode 也都处理完（或刚被 flush）才核对：gold 的每个 op 是否存在、是否唯一、是否在对应的 Topic 里、冲突和历史的条数是否一致、flush 之后是否仍停在 staged。
+  - 新写入的条目先按最终 gold 归属，再按当时的 gold 状态复核。
+  - 答错的题会标出事实丢在哪一层（add / search / reader）。
+  - 用 gold 自身回放时零暂停，用空记忆回放时在第一个提交点暂停；这两条是核对器自身的检验。
+  - 暂停时用 `show-pause.mjs` 展示现场，用 `inspect-memos.py` 查看 add_jobs、Episode、Topic 以及每次模型调用的 prompt 和输出（经 usage proxy 记录），用 `triage-missing.py` 复现 draft 被丢弃的具体原因。
 
-![Memmy data security](docs/assets/data-security-en.png)
+## 4. 历史结果
 
-<a id="how"></a>
+| 运行 | 口径 | entries.f1 | stateExact | topic F1 | recall@3 | answers |
+|---|---|---|---|---|---|---|
+| R-20261120-01 | 计时器口径（revision 1） | 0.764 | 0.738 | 0.573 | 0.970 | 0.722 |
+| 11-24 a（merge 后） | flush | 0.76–0.78 | ~0.69 | ~0.61 | 0.63–0.71 | 0.54–0.57 |
+| 11-24 c（兄弟规则分开记） | flush | 0.73 | 0.78–0.81 | 0.55 | 0.74–0.77 | 0.51–0.69 |
+| 11-24 d（抽取 prompt D） | flush | 0.77–0.79 | 0.77–0.80 | ~0.62 | — | 0.54–0.57 |
 
-## How to Use Memmy
+11-24 的四组运行每次都有 7–15 个重复 Topic、4–7 条旧版本被当成当前、6–10 条冲突被单独写成条目；conflict 题的正确率只有 0.2–0.4，gate 全部没过。这些运行的目录随旧 worktree 一起删除了，数字来自删除前的记录。冲突组的条目 F1 约 0.4、stateExact 0.08–0.17，非冲突组约 0.9 / 0.82，说明问题集中在冲突链和 Topic 结构上，这正是这次逐事件 review 要查清的。
 
-For complete installation and configuration instructions, see the [Getting Started guide](docs/en/start/getting-started.mdx).
+## 5. 本次逐事件 review
 
-#### 1. Desktop App (Recommended)
+运行目录：`eval/project-memory/runs/20261126-stepwise/`（gitignored）。被测代码冻结在 detached worktree `MemOS-stepwise@3d8450ba`，使用独立的本地库 `add_verify_step` 和 schema `memos_v3_58100`。
 
-<p align="center">
-  <img src="docs/assets/first-scan-en.png" width="59%" align="top" style="vertical-align: top;" alt="First scan">
-  <img src="docs/assets/first-report-en.png" width="36%" align="top" style="vertical-align: top;" alt="First Meeting Report">
-</p>
+| 项 | 结果 |
+|---|---|
+| 覆盖 | event 0–56（10-21 09:17–19:57）：ledger 和 catalog 两个 Space，33 次 Add，23 道题；全程无请求失败 |
+| 答题 | 23 题答对 12 题。reader 在 event 43 因 deepseek TPM 限流切到 gpt-6-luna：deepseek 答 10 对 6，gpt-6-luna 答 13 对 6 |
+| 暂停 | 19 次，其中 3 次是核对器误报（已修复并补测试） |
+| 问题计数 | answer_wrong 11、missing 8、topic_split 8（gold 5 个 Topic 里有 4 个被拆开）、conflict_state 5、conflict_as_entry 5、negative_write 3、not_formed 2、history_state 1、unattributed 1 |
+| Topic 数 | gold 5 个，MemOS 15 个（ledger 9 个，catalog 6 个），没有错误合并 |
 
-Download Memmy from the [official website](https://memmy.bot/) or [GitHub Releases](https://github.com/MemTensor/memmy-agent/releases).
+**错题归因**：
 
-> [!TIP]
-> Sign up for Memmy to receive free tokens and try the complete Memory + Agent Runtime.<br>
-> **Trial credits:**<br>
-> Registration grants Agent task trial tokens; the current balance and usage are shown in the app.<br>
-> When the trial credits run out, switch to BYOK mode and use your own model API.
+| 题目 | 现象 | 根因 |
+|---|---|---|
+| q02、q25 | 把有争议的金额口径答成定论 | 案例 8 |
+| q04、q17 | 冲突项还是旧措辞，或者回答没有提到仍有分歧 | 案例 3、8 |
+| q09 | 只答出一方结论 | 案例 4 |
+| q15 | 漏了「样例改动已撤回」 | 案例 3（信息分散在多个 Topic） |
+| q13 | 已经一致的规则被答成「尚未确定」 | 案例 9 |
+| q07 | 导出格式还答 json | 案例 10（csv 的改写停在 staged） |
+| q26 | 时区答不出 | 案例 1 |
+| q28 | 报告路径答不出 | 案例 2 |
+| q06 | 「取整」问题拒答 | 案例 11（reader）和案例 1（content 缺 Agent 的规范写法） |
 
-#### 2. Use the `memmy` CLI / TUI
+## 6. 根因与修改意见
 
-![Memmy TUI](docs/assets/tui.png)
+按优先级排列。证据（Episode、模型调用、代码位置）见笔记里对应的案例。
 
-On Linux x64 or arm64 with an available systemd user session, use Node.js 22.23.4+ (22.x), 24.22.1+ (24.x), or 26.12.1+ (26.x). Other major versions are not accepted by the installer:
+### P0
+
+**案例 3：Topic 按单条规则建（assign 和 Formation）。**
+- 现象：assign 每次都是拿「Episode 的交付物」去比「Topic 的交付物」，而 Topic 的交付物就是它的第一条规则，所以同一工作的后续规则一律 `same_deliverable: false`，进入 staged，再由 Formation 逐条建 Topic。
+- Formation prompt 内部规则冲突：一方面说同一报表的时区、目录、精度属于同一工作，另一方面又说「拿不准时拆开」「交付对象和验收条件不同就是不同工作」。
+- 修改意见：
+  1. Topic 的交付物和名称按产出物或功能命名（ledger 月报、价格列表），具体规则只放在 decisions 里。
+  2. 去掉「拿不准时拆开」；共享文件或模块、同一产出物的子设置默认合并。
+  3. assign 对已有 Topic 的 anchor（report.ts、price.ts）给出强先验。
+
+**案例 4：Formation 按结论命名 cluster，把相反立场拆开。**
+- 修改意见：
+  1. cluster 的 name 和 deliverable 只写对象，禁止写结论（暂缓、移植、采用）；交付物相同的 cluster 必须合并。
+  2. Formation 之后、merge 之前，对新 Topic 的 decision 和同 Space 已有的 decision 补一道「是否同一事项」的 yes/no 判定（和 boundary 判定题的形式一样），判为同一事项就并入，冲突交给 merge 处理。
+
+**案例 8：merge 把复述或文档任务当成负责人改写。**
+- 修改意见：
+  1. `decision_update` 的「同一件事」不再包括「在文档或说明里写明已有结论」；可以加一道 rewrite 守卫：新内容不改变原结论的对象、取值或条件时，不允许 rewrite。
+  2. 抽取时过滤复述和文档任务。
+  3. merge 召回时带上近期的 history，错误改写之后也不丢锚点。
+  4. decision 有冲突时，metadata 摘要必须写「尚未定论」。
+
+**案例 1、2：证据校验整条丢弃（`add_extraction._draft`）。**
+- 修改意见：
+  1. 同一轮里在成员发言之后的 Agent 回复，默认作为佐证文本（只用于佐证取值，不用于授权）。
+  2. 证据里找不到的 token 先剥掉再判断，不整条丢。
+  3. `source_path` 非法时回退到 `/content`。
+  4. 被丢弃的 draft 及原因写进 Episode 的 warnings。
+
+### P1
+
+**案例 9：立场一致后冲突项不并。**
+- 修改意见：负责人 rewrite、而且这条决策有冲突项时，追加判定「新结论是否采纳了 c_i 的立场」，是就设 `merge_with`，合并 user_ids；join 仍然要求严格相同。
+
+**案例 10：Formation 拒绝后没有归宿。**
+- `insufficient_evidence`（单条 Agent 进展）和 `not_independent`（Formation 自己判断出「影响已有决策」）都会让 Episode 永远停在 staged。
+- 修改意见：
+  1. 拒绝后回退到 assign，挂到召回分最高或 anchor 匹配的 Topic，然后走 merge。
+  2. 设定 staged 的最长停留，到期后挂靠或明确丢弃，并记 warning。
+
+### P2 / P3
+
+| 案例 | 问题 | 修改意见 |
+|---|---|---|
+| 6 | Agent 交代的交付约定和「X 会…」已完成描述没记下来 | 区分描述已交付行为的「会」和表示计划的「会」；交付物的路径、文件名、格式记为 delegated 或 adopted 的 decision。需要和产品确认口径，同时在 gold 规则里写明 |
+| 7 | 给记忆系统本身定的规则被写成项目决策 | decision 排除「对记忆系统或 Agent 记录方式的规定」；这类内容如需保留，放进 Space instructions |
+| 11 | reader 在措辞不同时拒答 | reader 模板改为按问题意图判断相关性；Add 侧同案例 1，用 Agent 的规范写法补全 content |
+| 5 | 执行步骤写成 decision，计划写成 timeline | timeline 必须是完成态；prompt 里补执行步骤的反例 |
+
+### 上游 search（只记录，不在 Add 侧改）
+
+- Topic 内条目按阈值筛选后返回，同一 Topic 里相互冲突的两条决策可能只返回其中一条。案例 8 里周工的决策就没有返回。
+- 建议冲突决策成对返回。
+
+## 7. 评测和数据集本身的问题与建议
+
+- **环境兼容**：
+  - MemOS d021378f 把 Episode 状态搬进了 `add_jobs`，原来的时钟 app 查的是旧字段，已移植。
+  - create_space 现在必须传 `project_id`，检索按 tenant 读，回放用的 project id 必须等于 tenant（`memos_v3_<port>`）。
+  - 共享的 project DB 每个库只装一份固定维度的 schema，向量维度冲突时要换库（`MEMOS_V3_DB`），还需要 `btree_gist` 扩展。
+  - MemOS 的 `config.py` 会 `load_dotenv(override=True)`：在带 `.env` 的主仓库里运行时，`.env` 会覆盖启动脚本给的依赖地址，所以被测代码必须放在没有 `.env` 的 worktree 里。
+- **模型可用性**：deepseek 的 TPM 限流会让每次启动都重新探测的 model-env 中途换掉 reader。现在改为 `--pin` 加回落，并记录每次切换。本次答题分前后两段用了不同的 reader，比较时要分开看。
+- **嵌入**：回放用 all-MiniLM-L6-v2（384 维，英文），生产用 bge-m3。中文语义召回偏弱，会放大 search 层的问题；建议评测嵌入和生产保持一致。
+- **gold 口径需要写明的地方**：
+  1. Agent 交代的交付约定算 decision（如 `dec_export_format`），规则里没写清楚（案例 6）。
+  2. 「什么算冲突」一类讨论标为 `unrelated`（规格含糊处第 7 条），产品上需要确认，否则 MemOS 无从判断。
+  3. `dec_env` 的合并（含糊处第 1 条）现在 gold 接受合并或不合并两种结果，但 q13 的答案要求「已一致」，两者应该统一。
+- **judge 偏严**：q15、q17 都是要点答对了大部分但缺一点就整题判错。可以考虑在 answers.llm 之外报告逐要点覆盖率，用来区分「答错」和「答得不全」。
+- **核对器的时间口径**：gold 的提交时刻和 MemOS 的实际处理时刻会有秒级差异，MemOS 先到的写入现在记为 early。逐 Add 的核对只在双方都处理完之后进行，flush 点上双方严格对齐。
+
+## 8. 复现
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MemTensor/memmy-agent/main/scripts/install.sh | bash
-memmy
+# 依赖：colima add-verify（PG 55439 / Redis 56389 / Neo4j 57687 / Qdrant 56333）和嵌入服务 58112
+git -C ~/repos/MemOS worktree add --detach ~/repos/MemOS-stepwise 3d8450ba
+WT=~/repos/MemOS-stepwise eval/project-memory/runs/20261120-memos-v3/step-serve.zsh eval/project-memory/runs/<run> 58100
+eval/project-memory/runs/20261120-memos-v3/step-run.zsh eval/project-memory/runs/<run> 58100                # 跑到第一个 badcase 暂停（exit 3）
+node eval/project-memory/gold-add-memory/harness/show-pause.mjs eval/project-memory/runs/<run>              # 查看现场
+eval/project-memory/runs/20261120-memos-v3/step-run.zsh eval/project-memory/runs/<run> 58100 --resume --known $PWD/eval/project-memory/runs/<run>/known.json
 ```
 
-The installer enables the local Memory Service immediately as `memmy-memory.service`. The first bare `memmy` invocation opens the model setup wizard when needed, then enables `memmy-gateway.service`, waits for it to become ready, and enters the TUI. Both are `systemd --user` services bound to localhost and remain available after the TUI or terminal exits. They start again on later logins; the installer does not enable linger. Only the installer launcher activates this service management, so source-built Linux CLIs keep their existing behavior.
+- `known.json` 里可以写 `skipTypes` 和 `skipKeys`，让已经确认的根因只记录、不再暂停。
+- 全部跑完后，用 `run-pipeline-eval.mjs <run>/live-run.json --dataset 3 --gate` 出总分。
+- SUT 模型不可用时，设 `MEMOS_SUT_PROFILE=openai`（或 `claude`），用 step-serve 重启服务。时钟保存在库里，`--resume` 会从断点继续。
 
-During Gateway startup, temporary HTTP 503 responses from the bootstrap endpoint are retried until the Gateway becomes ready or the startup wait times out.
+## 9. 文件
 
-Before starting or reconnecting to the Gateway, `memmy` refreshes a private `~/.memmy/systemd/gateway.env` file (mode `0600`) with configuration-referenced environment variables, common Provider credentials, and the terminal `PATH`. If those values change, the next bare `memmy` invocation restarts the user service with the new environment.
-
-```bash
-systemctl --user status memmy-memory.service
-systemctl --user status memmy-gateway.service
-```
-
-The installer initializes Memory without changing Codex, Claude Code, Cursor, or other agents. Run `memmy-memory init` (all detected agents) or `memmy-memory init --agent <agent>` when you explicitly want to install the Memory Skill and the supported Hook/plugin for an agent.
-
-```bash
-memmy onboard                              # Configure models, providers, gateway, memory, and tools interactively
-memmy onboard --defaults                   # Initialize ~/.memmy/config.yaml and the workspace with defaults
-memmy status                               # Check the configuration, model, and provider
-memmy agent --message "Introduce the current workspace"  # Run a single-turn task
-memmy                                      # Enter the interactive TUI
-memmy serve                                # Start the OpenAI-compatible API (:18990)
-```
-
-The minimal BYOK configuration is located at `~/.memmy/config.yaml`:
-
-```yaml
-agents:
-  defaults:
-    model: openai/gpt-4.1
-    provider: openai
-    timezone: "+08:00"
-providers:
-  openai:
-    apiKey: ${OPENAI_API_KEY}
-```
-
-#### 3. Use the `memmy-memory` CLI
-
-Use it to access the local memory service from agents, scripts, and debugging workflows:
-
-```bash
-memmy-memory init
-memmy-memory health
-memmy-memory search "memory policies in this project"
-memmy-memory add "a piece of knowledge worth saving"
-memmy-memory get <id>
-```
-
-It connects to `http://127.0.0.1:18960` by default. Use `--url`, `--token`, `--config`, `--source`, and `--user-id` to specify the service and namespace.
-
-To run the memory service alone, without the Agent Runtime, build the CLI from source:
-
-```bash
-git clone https://github.com/MemTensor/memmy-agent.git
-cd memmy-agent
-npm install
-npm run memory:build
-mkdir -p ~/.local/bin
-ln -sf "$PWD/Memory/dist/src/cli/index.js" ~/.local/bin/memmy-memory
-memmy-memory install --service-only
-```
-
-`install --service-only` downloads the pinned Memory runtime, registers the user-level service, starts it, and verifies `/api/v1/health`, all without installing a Skill or adapter into any agent. Node.js `>=20` is required; use `Git Bash` on Windows. `npm run memory:binary` packages the same CLI as a portable archive under `Memory/src/cli/dist/binaries/` for the current platform, and `MEMMY_MEMORY_TARGET` selects another supported platform.
-
-#### 4. Start from the Source Code
-
-```bash
-git clone https://github.com/MemTensor/memmy-agent.git
-cd memmy-agent
-cp .env.example .env
-npm install
-npm run build
-bash scripts/dev-start.sh
-```
-
-The script installs dependencies, builds the services, and starts the development environment. Node.js `>=22` and npm are required; use `Git Bash` on Windows.
-
-<a id="architecture"></a>
-
-## How Is Memmy Built?
-
-For details about the architecture, memory service, and integration methods, see the [Memmy documentation](https://memmy.bot/docs/).
-
-<p align="center">
-  <img src="docs/assets/memmy-architecture-en.png" alt="Memmy system architecture: multiple Agents and entry points share the local Memory and Agent Runtime">
-</p>
-<br>
-
-## Roadmap
-
-Memmy is building **personal memory infrastructure**, and its scope goes beyond coding Agents:
-
-- **More memory sources** — expanding from AI conversations to browser activity, local documents, and eventually more devices and hardware.
-- **Team collaboration** — planned Agent-to-Agent collaboration, letting team members' AI assistants share knowledge under privacy protection.
-
-## Acknowledgements
-
-Memmy stands on the shoulders of a group of excellent open-source projects, and we are deeply grateful.
-
-- **[OpenClaw](https://github.com/openclaw/openclaw)** — a pioneer of open-source personal AI assistants; its exploration of multi-platform messaging channels directly inspired Memmy's channel connection design.
-- **[hermes-agent](https://github.com/NousResearch/hermes-agent)** — the self-evolving Agent built by Nous Research; its practice in persistent memory and skill self-learning showed us that an Agent can "understand you better the more you use it".
-- **[nanobot](https://github.com/HKUDS/nanobot)** — grown from a minimal prototype into a fully featured open-source Agent platform; its engineering practice around the Agent loop and MCP integration provided important references for Memmy's core design.
-
-The point of open source is to let good ideas flow, and we hope Memmy becomes part of that river.
-
-## Contributors
-
-Thanks to every contributor who makes Memmy better ❤️
-
-
-<a href="https://github.com/MemTensor/memmy-agent/graphs/contributors">  </a>
+| 路径 | 内容 |
+|---|---|
+| `eval/project-memory/gold-add-memory/dataset/` | corpus、labels、episodes、questions、conflicts、gold（revision 2） |
+| `eval/project-memory/gold-add-memory/run-memos-v3-live.mjs` | MemOS 在线回放；`--pause-on-bad`、`--stop-at`、`--known`、`--resume` |
+| `eval/project-memory/gold-add-memory/run-pipeline-eval.mjs` | 最终状态评分和 gate |
+| `eval/project-memory/gold-add-memory/harness/step-check.mjs` | 逐事件在线核对器（带测试） |
+| `eval/project-memory/gold-add-memory/harness/{show-pause.mjs,inspect-memos.py,triage-missing.py}` | 暂停现场展示、MemOS 只读查看、draft 丢弃原因复现 |
+| `eval/project-memory/gold-add-memory/harness/model-env.mjs` | 模型选择、`--pin` 与回落（带测试） |
+| `eval/project-memory/runs/20261120-memos-v3/` | `launch_eval.py`、`replay_app.py`（逻辑时钟）、`step-serve.zsh`、`step-run.zsh`、`run-e2e-wt.zsh` |
+| `docs/project-memory/v3-flush-stepwise-notes.md` | 本次 review 的逐案例笔记 |
