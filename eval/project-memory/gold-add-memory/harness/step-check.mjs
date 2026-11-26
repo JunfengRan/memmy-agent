@@ -89,7 +89,11 @@ export function createStepChecker({ ds, gold, outDir, knownPath, judge, saveJudg
   const asOf = async (item, goldNow, cache) => {
     const { label, ids } = item.attr;
     if (!["match", "stale", "conflict"].includes(label) || !ids.length) return item.attr;
-    const entry = ids.find((id) => goldNow.has(id));
+    // Check the version against a visible entry of the item's own kind first (a timeline that also
+    // restates its decision names both); the other visible ids stay attributed.
+    const visible = ids.filter((id) => goldNow.has(id))
+      .sort((a, b) => Number(goldById.get(b)?.kind === item.kind) - Number(goldById.get(a)?.kind === item.kind));
+    const entry = visible[0];
     if (!entry) return { ...item.attr, label: "early" };
     const current = goldNow.get(entry);
     const single = [{ id: entry, kind: goldById.get(entry)?.kind, text: current.content,
@@ -102,7 +106,8 @@ export function createStepChecker({ ds, gold, outDir, knownPath, judge, saveJudg
       cache[key] = verdict.label !== "none" ? verdict
         : { ...item.attr, label: label === "match" ? "early" : label, source: `${verdict.source}:final` };
     }
-    return { ...cache[key], final: item.attr };
+    const verdict = cache[key];
+    return { ...verdict, ids: verdict.label === "match" ? [...new Set([...verdict.ids, ...visible])] : verdict.ids, final: item.attr };
   };
 
   // MemOS Topic -> gold Topics by attributed entries, and the reverse.

@@ -59,3 +59,19 @@ test("a wrong answer pauses with the layer that lost the fact", async () => {
   const issue = record.issues.find((item) => item.type === "answer_wrong");
   assert.equal(issue.layer, "search", "the fact is stored but the stub search returned nothing");
 });
+
+test("a timeline that restates its decision still counts for the timeline entry", async () => {
+  const outDir = mkdtempSync(join(tmpdir(), "step-check-"));
+  const judge = { ...ruleJudge(true), attribute: async (candidate, list) => list.length > 1
+    ? { label: "match", ids: ["dec_price", "tl_price"], source: "stub" }
+    : { label: "match", ids: [list[0].id], source: "stub" } };
+  const checker = createStepChecker({ ds, gold, outDir, judge, readJobs: null });
+  const at = timeline.commitByTrace.get("t_price");
+  const topics = oracleTopics(ds, at, "space_catalog", timeline).map((topic) => ({ ...topic,
+    timeline: (topic.timeline ?? []).map((entry) => ({ ...entry, content: `${entry.content}（改写）` })) }));
+  const run = { tasks: [{ trace: "t_price", task_id: "t_price", status: "completed" }], questions: [] };
+  const event = { at, trace: ds.corpus.traces.find((trace) => trace.id === "t_price") };
+  await checker.check(run, 0, { event, readSpace: async (space) => (space === "space_catalog" ? topics : []) });
+  const issues = Object.keys(run.stepCheck.reported);
+  assert.ok(!issues.some((key) => key.startsWith("missing:t_price")), issues.join(", "));
+});
