@@ -382,13 +382,14 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
 async function main() {
   const { values } = parseArgs({ options: {
     out: { type: "string" }, resume: { type: "string" }, "no-flush": { type: "boolean" },
-    "stop-at": { type: "string" },
+    "pause-on-bad": { type: "boolean" }, "stop-at": { type: "string" }, known: { type: "string" },
     help: { type: "boolean", short: "h" }
   } });
   if (values.help) {
     console.log("Usage: node run-memos-v3-live.mjs [--out <directory>] [--resume <live-run.partial.json>] [--no-flush]\n" +
-      "  [--stop-at <trace or question id>]\n" +
-      "--stop-at pauses (exit 3) after that event. Resume a paused run with --resume.\n" +
+      "  [--pause-on-bad [--known <known.json>]] [--stop-at <trace or question id>]\n" +
+      "--pause-on-bad checks each event with harness/step-check.mjs and pauses (exit 3) after a wrong Add or answer;\n" +
+      "--stop-at pauses after that event. Resume a paused run with --resume.\n" +
       "Flushes each question's Space before it searches; --no-flush replays the timer-only processing of runner revision 1.\n" +
       "Set MEMMY_EVAL_BASE, MEMMY_EVAL_CLOCK_BASE, and MEMMY_EVAL_READER_*.");
     return 0;
@@ -451,12 +452,19 @@ async function main() {
       try { await fetch(`${proxy}/__eval/context`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(context), signal: AbortSignal.timeout(5_000) }); }
       catch (error) { console.error(`usage tag failed: ${error.message}`); }
     } : undefined;
-    const afterEvent = async (current, index, context) =>
-      values["stop-at"] === context.event.trace?.id || values["stop-at"] === context.event.question?.id ? "pause" : null;
+    const checker = values["pause-on-bad"]
+      ? await (await import("./harness/step-check.mjs")).createStepChecker({ ds, gold, outDir, knownPath: values.known })
+      : null;
+    const afterEvent = async (current, index, context) => {
+      const verdict = checker ? await checker.check(current, index, context) : null;
+      return verdict === "pause" || values["stop-at"] === context.event.trace?.id || values["stop-at"] === context.event.question?.id
+        ? "pause" : null;
+    };
     await executeReplay({ ds, gold, run, call, answer: createReader(llm).answer, tag, afterEvent,
       checkpoint: () => checkpoint(partial),
       progress: (current, total) => { if (current.nextEvent % 10 === 0) console.log(`${current.nextEvent}/${total} events · ${current.failures.length} failures`); }
     });
+    checker?.save();
     checkpoint(partial);
     if (run.state === "paused") {
       console.log(JSON.stringify({ paused: run.pausedAfter, partial, nextEvent: run.nextEvent }));
