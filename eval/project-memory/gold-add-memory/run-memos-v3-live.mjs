@@ -47,11 +47,13 @@ export function replaySchedule(ds, gold) {
 
 // Revision 2 flushes a question's Space before it searches and every Space before the final read
 // (processing "flush"); flush: false keeps revision 1's timer-only processing for comparison.
-export function createRun({ base, clockBase, runTag, gold, sutModel, reader, flush = true }) {
+export function createRun({ base, clockBase, runTag, gold, sutModel, reader, flush = true, projectId }) {
   return {
     runVersion: 2, datasetVersion: 3, datasetDigest: digest(JSON.stringify(gold)), runnerRevision: 2,
     processing: flush ? "flush" : "natural",
     kind: "live", startedAt: new Date().toISOString(), base, clockBase, runTag,
+    // MemOS records a Space under the project the request names (the gateway fills it in production).
+    projectId: projectId ?? `memmy_v3_${runTag}`,
     sut: { model: sutModel ?? null }, reader: reader ?? null,
     spaceMap: {}, tasks: [], questions: [], final: {}, apiChecks: [], requests: [], phaseMs: {}, usage: {},
     failures: [], nextEvent: 0, state: "in_progress"
@@ -103,7 +105,7 @@ function requestsFor(ds, run) {
       const conversation = conversations.get(source.conversation);
       const taskId = stableId(run.runTag, source.id);
       return {
-        task_id: taskId, user_id: conversation.user_id, agent_id: conversation.agent_id,
+        task_id: taskId, project_id: run.projectId, user_id: conversation.user_id, agent_id: conversation.agent_id,
         conversation_id: conversationId(conversation), space_ids: [run.spaceMap[conversation.space_id]],
         domains: [source.domain], allow_memory_view: ["project"], async_mode: "async",
         messages: [
@@ -116,7 +118,7 @@ function requestsFor(ds, run) {
     search(conversationKey, query) {
       const conversation = conversations.get(conversationKey);
       return {
-        user_id: conversation.user_id, conversation_id: conversationId(conversation), query,
+        project_id: run.projectId, user_id: conversation.user_id, conversation_id: conversationId(conversation), query,
         space_ids: [run.spaceMap[conversation.space_id]], include_memory_view: ["project"], memory_limit_number: 9
       };
     }
@@ -260,7 +262,7 @@ export async function executeReplay({ ds, gold, run, call, answer, checkpoint = 
     for (const space of ds.corpus.spaces) {
       if (run.spaceMap[space.space_id]) continue;
       const { data } = await call("/create_space", { phase: "setup", body: {
-        space_name: `${space.space_id}_${run.runTag}`, instructions: space.instructions,
+        project_id: run.projectId, space_name: `${space.space_id}_${run.runTag}`, instructions: space.instructions,
         domains: space.domains.map(({ domain, description }) => ({ name: domain, description }))
       } });
       if (!data?.space_id) throw new Error(`Create Space returned no id for ${space.space_id}`);
@@ -394,7 +396,8 @@ async function main() {
   const final = join(outDir, "live-run.json");
   const reader = { model: config.model, provider: config.provider };
   const run = prior ?? createRun({
-    base, clockBase, runTag: process.env.MEMMY_EVAL_RUN_TAG ?? stamp, gold, sutModel: process.env.MEMMY_EVAL_SUT_MODEL, reader, flush
+    base, clockBase, runTag: process.env.MEMMY_EVAL_RUN_TAG ?? stamp, gold, sutModel: process.env.MEMMY_EVAL_SUT_MODEL, reader, flush,
+    projectId: process.env.MEMMY_EVAL_PROJECT_ID
   });
   if (values.resume) {
     if (!["interrupted", "in_progress"].includes(run.state) || run.base !== base || run.clockBase !== clockBase ||

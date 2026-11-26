@@ -75,15 +75,16 @@ def set_time(store, at):
 
 
 def next_due(store, target):
+    # Add state lives in add_jobs: an open Episode is due at close_due_time, a stage at its retry.
     with store.transaction(readonly=True) as cursor:
         cursor.execute(
-            """SELECT MIN(CASE WHEN state = 'open' THEN LEAST(idle_due_at, max_wait_due_at)
-                               ELSE next_retry_at END) AS at
-                 FROM episodes
-                WHERE project_id = %s AND outcome = 'pending'
-                  AND (CASE WHEN state = 'open' THEN LEAST(idle_due_at, max_wait_due_at)
-                            ELSE next_retry_at END) <= %s""",
-            (store.project_id, target),
+            """SELECT MIN(CASE WHEN stage = 'episode_open' THEN close_due_time
+                               ELSE next_retry_time END) AS at
+                 FROM add_jobs
+                WHERE outcome = 'pending'
+                  AND (CASE WHEN stage = 'episode_open' THEN close_due_time
+                            ELSE next_retry_time END) <= %s""",
+            (target,),
         )
         return cursor.fetchone()["at"]
 
@@ -99,13 +100,18 @@ def settle(runtime):
         runtime.recover()
         with runtime.store.transaction(readonly=True) as cursor:
             cursor.execute(
-                """SELECT id, stage FROM episodes WHERE project_id = %s AND outcome = 'pending'
-                       AND state <> 'open' AND (next_retry_at IS NULL OR next_retry_at <= %s)""",
-                (runtime.store.project_id, logical_time),
+                """SELECT episode_id, stage FROM add_jobs WHERE outcome = 'pending'
+                       AND stage NOT IN ('episode_open', 'done')
+                       AND (next_retry_time IS NULL OR next_retry_time <= %s)""",
+                (logical_time,),
             )
             pending = cursor.fetchall()
         if not pending:
-            return closed
+            # The production timer also runs quiet-Space Formation on every scan; a Formation
+            # that ran leaves its staged Episodes committed, so settle once more after it.
+            if not any(result["ran"] for result in runtime.form_due_spaces()):
+                return closed
+            continue
         if time.monotonic() - started > 240:
             stages = sorted({row["stage"] for row in pending})
             raise HTTPException(status_code=504, detail=f"Unsettled stages at {logical_time}: {stages}")
@@ -132,9 +138,6 @@ def advance(request: Advance):
             set_time(runtime.store, target)
         counts = {}
         with runtime.store.transaction(readonly=True) as cursor:
-            cursor.execute(
-                "SELECT outcome, count(*) FROM episodes WHERE project_id = %s GROUP BY outcome",
-                (runtime.store.project_id,),
-            )
+            cursor.execute("SELECT outcome, count(*) FROM add_jobs GROUP BY outcome")
             counts.update((row["outcome"], row["count"]) for row in cursor.fetchall())
         return {"at": logical_time, "closed": closed, "outcomes": counts}

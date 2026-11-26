@@ -43,12 +43,13 @@ function fakeService(finalAt, { dropClockAfterAdd = false, firstStatusFails = fa
     assert.equal(options.headers.authorization, "Bearer product-only");
     switch (request.pathname) {
       case "/product/create_space":
+        assert.match(body.project_id, /^memmy_v3_/);
         return success({ space_id: body.space_name, domains: body.domains });
       case "/product/add": {
         if (!body.space_ids) return failure(422, "SCOPE_REQUIRED");
         if (body.domains.includes("未登记领域")) return failure(400, "DOMAIN_NOT_REGISTERED");
         assert.equal(body.async_mode, "async");
-        assert.deepEqual(Object.keys(body).sort(), ["agent_id", "allow_memory_view", "async_mode", "conversation_id", "domains", "messages", "space_ids", "task_id", "user_id"]);
+        assert.deepEqual(Object.keys(body).sort(), ["agent_id", "allow_memory_view", "async_mode", "conversation_id", "domains", "messages", "project_id", "space_ids", "task_id", "user_id"]);
         assert.equal(body.messages[0].message_id, `${body.task_id}:u`);
         assert.equal(body.messages[1].message_id, `${body.task_id}:a`);
         const original = received.get(body.task_id);
