@@ -45,6 +45,9 @@ export function replaySchedule(ds, gold) {
   return { events, finalAt: new Date(end).toISOString() };
 }
 
+// --stop-at names a Trace or question id; an absent flag never matches.
+export const stopsAt = (id, event) => Boolean(id) && (event.trace?.id ?? event.question?.id) === id;
+
 // Revision 2 flushes a question's Space before it searches and every Space before the final read
 // (processing "flush"); flush: false keeps revision 1's timer-only processing for comparison.
 export function createRun({ base, clockBase, runTag, gold, sutModel, reader, flush = true, projectId }) {
@@ -457,8 +460,7 @@ async function main() {
       : null;
     const afterEvent = async (current, index, context) => {
       const verdict = checker ? await checker.check(current, index, context) : null;
-      return verdict === "pause" || values["stop-at"] === context.event.trace?.id || values["stop-at"] === context.event.question?.id
-        ? "pause" : null;
+      return verdict === "pause" || stopsAt(values["stop-at"], context.event) ? "pause" : null;
     };
     await executeReplay({ ds, gold, run, call, answer: createReader(llm).answer, tag, afterEvent,
       checkpoint: () => checkpoint(partial),

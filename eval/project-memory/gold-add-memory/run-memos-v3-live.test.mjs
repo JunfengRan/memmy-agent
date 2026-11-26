@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { loadDataset } from "./build-gold-baseline.mjs";
 import { loadGold } from "./load-eval-set.mjs";
-import { createRun, executeReplay, makeWire, replaySchedule } from "./run-memos-v3-live.mjs";
+import { createRun, executeReplay, makeWire, replaySchedule, stopsAt } from "./run-memos-v3-live.mjs";
 
 const sourceDataset = loadDataset();
 const sourceGold = loadGold();
@@ -248,4 +248,11 @@ test("afterEvent pauses after the event it flags, and the run resumes at the nex
   assert.equal(run.pausedAfter, undefined);
   assert.deepEqual(seen, [0, 1, 2]);
   assert.equal(run.tasks.length, 3);
+});
+
+test("--stop-at matches only the named event", () => {
+  assert.equal(stopsAt(undefined, { trace: { id: "t_journal" } }), false);
+  assert.equal(stopsAt(undefined, { question: { id: "q48" } }), false);
+  assert.equal(stopsAt("q48", { question: { id: "q48" } }), true);
+  assert.equal(stopsAt("q48", { trace: { id: "t_journal" } }), false);
 });
